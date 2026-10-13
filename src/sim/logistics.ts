@@ -120,18 +120,18 @@ export class Logistics {
   }
 
   /**
-   * What a building can give up right now: the base keeps what its waiting orders
-   * claimed; other buildings keep their supply target, and a sowing building one
-   * planting's seed (it plants from drop-offs, it never asks for seed). But the base
-   * comes first: toward an order waiting there, any other building gives up everything.
+   * What a building can give up right now. Nothing that's committed is ever taken
+   * back (that's what made carts ping-pong): the base keeps what its waiting orders
+   * claimed; other buildings keep their whole supply target (queued orders, berry
+   * stash, tower ammo) and a sowing building one planting's seed.
    * Less what carts already heading there to load are going to take.
    */
-  spare(b: Building, except?: Unit, forBaseOrder = false): Stock {
+  spare(b: Building, except?: Unit): Stock {
     const out = emptyStock();
     if (!b.complete) return out;
     const isBase = b === this.w.baseOf(b.owner);
-    const keep = isBase ? this.reserve(b) : forBaseOrder ? emptyStock() : this.supplyTargets(b);
-    if (!isBase && !forBaseOrder && b.spec.sow) for (const r of b.sowing) keep[r] = Math.max(keep[r], plantKg(b.spec, r) * CAP.sowSeedFraction);
+    const keep = isBase ? this.reserve(b) : this.supplyTargets(b);
+    if (!isBase && b.spec.sow) for (const r of b.sowing) keep[r] = Math.max(keep[r], plantKg(b.spec, r) * CAP.sowSeedFraction);
     for (const r of RESOURCES) out[r] = Math.max(0, b.stock[r] - keep[r]);
     for (const u of this.w.units.values()) {
       if (u === except || u.order.kind !== 'cart' || u.order.phase !== 'load' || u.order.from !== b.id) continue;
@@ -195,7 +195,7 @@ export class Logistics {
       const src = this.w.buildings.get(o.from), dest = this.w.buildings.get(o.home);
       if (!src || !dest || src.owner !== u.owner || dest.owner !== u.owner) { o.from = 0; if (!o.pinned) o.home = 0; return false; }
       if (!this.w.moveToBuilding(u, src)) return moving();
-      const spare = this.spare(src, u, dest === base && this.waiting(dest)), need = this.shortfall(dest, u);
+      const spare = this.spare(src, u), need = this.shortfall(dest, u);
       const homing = dest === base && need[o.res] < 1; // just bringing surplus home
       for (const r of [o.res, ...RESOURCES.filter((x) => x !== o.res)]) {
         const want = homing ? (r === o.res ? spare[r] : 0) : need[r] + 0.999;
@@ -210,7 +210,6 @@ export class Logistics {
     const mine = [...this.w.buildings.values()].filter((b) => b.owner === u.owner);
     const sources = mine.filter((b) => b.complete);
     const spareOf = new Map(sources.map((b) => [b.id, this.spare(b)]));
-    const spareForBase = new Map(sources.map((b) => [b.id, this.spare(b, undefined, true)]));
     const d = (ax: number, ay: number, b: Building) => Math.hypot(b.ox + b.size / 2 - ax, b.oy + b.size / 2 - ay);
     let best: { from: Building; to: Building; r: ResourceKind; score: number } | null = null;
     const offer = (from: Building, to: Building, r: ResourceKind, urgency: number) => {
@@ -223,12 +222,11 @@ export class Logistics {
     for (const to of sinks) {
       const need = this.shortfall(to);
       const target = to.complete ? this.supplyTargets(to) : { food: 0, wood: to.stats.totalCost, crystal: 0 };
-      const waits = this.waiting(to);
-      const pool = waits && to === base ? spareForBase : spareOf; // the base comes first
-      const urgency = waits ? 2 : 1;
+      // waiting orders first, and the base's (workers, carts) before anyone else's
+      const urgency = (this.waiting(to) ? 2 : 1) * (to === base ? 2 : 1);
       for (const r of RESOURCES) {
         if (need[r] <= 0.5) continue;
-        for (const from of sources) if (from !== to && pool.get(from.id)![r] >= 1) offer(from, to, r, (need[r] / Math.max(1, target[r])) * urgency);
+        for (const from of sources) if (from !== to && spareOf.get(from.id)![r] >= 1) offer(from, to, r, (need[r] / Math.max(1, target[r])) * urgency);
       }
     }
     if (!best && !o.pinned && u.carter) {
