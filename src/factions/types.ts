@@ -93,7 +93,10 @@ export interface BuildingSpec {
   requires?: string[];
   trains?: string[];
   researches?: string[];
-  /** Size of the cart pool this building keeps. Its carts load here and supply other buildings. */
+  /**
+   * Carts this building keeps at minimum (replaced automatically). Its carts load
+   * here and supply other buildings; list the carter in `trains` to allow more.
+   */
   carters?: number;
   attack?: TowerSpec;
   /**

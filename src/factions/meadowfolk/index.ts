@@ -248,8 +248,8 @@ const DARK_IRON: Mat = { color: '#3a3a3a', tex: 'metal' };
 //    barracks 300 → forge 800 / den 900 → great hall 900 + 500 + 600 + 300 = 2,300
 export const buildings: MeadowBuilding[] = [
   {
-    id: 'town-center', name: 'Town Center', description: 'Trains villagers. Keeps a pool of 3 mule carts that load here and supply whichever building is shortest.',
-    size: 3, materials: 1350, trains: ['villager'], researches: ['villager-tools'], carters: 3, unbuildable: true, model: models.townCenter,
+    id: 'town-center', name: 'Town Center', description: 'Trains villagers and mule carts. Always keeps at least 3 carts, which load here and supply whichever building is shortest; train more for faster logistics.',
+    size: 3, materials: 1350, trains: ['villager', 'mule'], researches: ['villager-tools'], carters: 3, unbuildable: true, model: models.townCenter,
   },
   {
     id: 'barracks', name: 'Barracks', description: 'Trains slingers and crystal macemen.',

@@ -677,7 +677,8 @@ export class World {
         if (item.kind === 'unit') {
           const u = this.spawnUnit(b.owner, item.specId, b);
           if (u) {
-            if (u.carter && item.home) u.order = { kind: 'cart', base: item.home, home: 0, pinned: false, phase: 'load', res: 'food' };
+            // carts join the pool of the building that made them (or the nearest one with a pool)
+            if (u.carter) u.order = { kind: 'cart', base: item.home || ((b.spec.carters ?? 0) > 0 ? b.id : 0), home: 0, pinned: false, phase: 'load', res: 'food' };
             this.events.push({ type: 'trained', id: u.id, owner: u.owner });
           }
         } else {

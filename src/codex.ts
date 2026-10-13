@@ -130,7 +130,7 @@ function renderTree(): void {
               <span class="bname"><b>${esc(b.name)}</b><small>${n0(st.totalCost)} ${res('wood')} · supports ≤${f1(st.maxRefinement, 2)}×</small></span>
             </button>
             <div class="badges">${badges(b)}</div>
-            ${(b.trains?.length || b.carters) ? `<div class="chips">${(b.trains ?? []).map((id) => unitChip(id)).join('')}${b.carters && faction.carterId ? unitChip(faction.carterId, `auto · pool of ${b.carters}`) : ''}</div>` : ''}
+            ${(b.trains?.length || b.carters) ? `<div class="chips">${(b.trains ?? []).map((id) => unitChip(id, id === faction.carterId && b.carters ? `${derive(unitById(id)!).foodCost} ${res('food')} · keeps ≥${b.carters}` : '')).join('')}${b.carters && faction.carterId && !b.trains?.includes(faction.carterId) ? unitChip(faction.carterId, `auto · pool of ${b.carters}`) : ''}</div>` : ''}
             ${b.researches?.length ? `<div class="chips">${b.researches.map(techChip).join('')}</div>` : ''}
           </div>`;
         }).join('')}

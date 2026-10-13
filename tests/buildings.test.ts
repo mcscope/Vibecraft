@@ -153,7 +153,20 @@ describe('carters, training, research, towers', () => {
     expect(tc.queue.filter((q) => q.kind === 'unit' && q.specId === 'villager').length).toBe(0);
   });
 
-  test('villagers carry no crystal', () => {
+  test('carts can be trained by hand beyond the automatic pool, and join it', () => {
+    const w = newWorld();
+    const tc = w.baseOf(0)!;
+    tc.stock.food = 3000;
+    run(w, 20 * 90); // automatic pool of 3
+    const pool = () => [...w.units.values()].filter((u) => u.owner === 0 && u.carter);
+    expect(pool().length).toBe(3);
+    w.enqueue({ player: 0, cmd: { type: 'train', building: tc.id, specId: 'mule' } });
+    run(w, 20 * 40);
+    expect(pool().length).toBe(4);
+    expect(pool().every((u) => u.order.kind === 'cart' && u.order.base === tc.id)).toBe(true);
+  });
+
+    test('villagers carry no crystal', () => {
     const w = newWorld();
     const v = w.unitsOf(0).find((u) => u.specId === 'villager')!;
     expect(v.stats.crystalCost).toBe(0);

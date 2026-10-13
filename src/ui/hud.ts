@@ -177,7 +177,7 @@ export class Hud {
         st.tower ? `Throws ${spec.attack!.crystalMass} kg crystals for ${n0(st.tower.damage)} damage, range ${fmt(st.tower.range, 1)}` : '',
         spec.gatherBoost ? `Gathering within ${spec.gatherBoost.radius} tiles ×${fmt(st.gatherBoost, 2)}` : '',
         spec.sow ? `Sows ${spec.sow.resources.map((r) => this.names()[r].toLowerCase()).join(' and ')} within ${spec.sow.radius} tiles` : '',
-        spec.carters ? `Keeps ${spec.carters} cart${spec.carters > 1 ? 's' : ''} supplying it` : '',
+        spec.carters ? `Always keeps ${spec.carters} cart${spec.carters > 1 ? 's' : ''}; train more by hand` : '',
       ].filter(Boolean).join(' · ');
       this.tooltip.innerHTML = `<h3>${spec.name}</h3><p>${spec.description}</p>
         <div class="stats">
@@ -308,7 +308,7 @@ export class Hud {
     if (carts) {
       let pool = 0;
       for (const u of w.units.values()) if (u.carter && u.order.kind === 'cart' && u.order.base === b.id) pool++;
-      carts.textContent = b.spec.carters ? `Cart pool ${pool} / ${b.spec.carters}` : `Carts on the way: ${w.cartsServing(b)}`;
+      carts.textContent = b.spec.carters ? `Carts: ${pool} (always keeps ${b.spec.carters}; train more for faster supply)` : `Carts on the way: ${w.cartsServing(b)}`;
     }
     const ammo = this.panel.querySelector<HTMLElement>('[data-ammo]');
     if (ammo && b.spec.attack) {
