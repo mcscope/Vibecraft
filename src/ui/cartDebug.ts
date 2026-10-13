@@ -5,8 +5,9 @@ import type { Stock } from '../factions/types';
 import { RESOURCES, type Building, type Unit, type World } from '../sim/world';
 import { settings, updateSettings } from './settings';
 
-const n0 = (v: number) => Math.round(v).toString();
-const stock = (s: Stock) => RESOURCES.map((r) => n0(s[r]).padStart(4)).join('');
+/** Plain integers (no separators) so the monospace columns line up. */
+const int = (v: number) => Math.round(v).toString();
+const stock = (s: Stock) => RESOURCES.map((r) => int(s[r]).padStart(4)).join('');
 const ZERO = (s: Stock) => RESOURCES.every((r) => Math.abs(s[r]) < 0.5);
 const PHASE_COLOR: Record<string, string> = { load: '#c8c0a8', deliver: '#7aff7a' };
 
@@ -76,7 +77,7 @@ export class CartDebug {
       }
       let el = this.labels.get(u.id);
       if (!el) { el = document.createElement('div'); el.className = 'cd-label'; this.layer.appendChild(el); this.labels.set(u.id, el); }
-      const cargo = `${n0(u.food)}f ${n0(u.wood)}w ${n0(u.crystal)}c`;
+      const cargo = `${int(u.food)}f ${int(u.wood)}w ${int(u.crystal)}c`;
       const job = o.phase === 'load'
         ? (o.from ? `loading ${o.res} at ${this.name(w.buildings.get(o.from))} for ${this.name(w.buildings.get(o.home))}` : 'idle: nothing needed')
         : `delivering to ${this.name(w.buildings.get(o.home))}`;
@@ -102,8 +103,8 @@ export class CartDebug {
     if (base) {
       out.push(`BASE ${this.name(base)}`);
       out.push(`  stock                      ${stock(base.stock)}`);
-      out.push(`  reserved for queue         ${stock(w.reserve(base))}`);
-      out.push(`  spare to send out          ${stock(w.spare(base))}`);
+      out.push(`  reserved for queue         ${stock(w.logistics.reserve(base))}`);
+      out.push(`  spare to send out          ${stock(w.logistics.spare(base))}`);
       out.push(`  queue: ${base.queue.map((q) => (q.kind === 'unit' ? `${q.specId}${q.paid ? '' : '(waiting)'}` : q.techId)).join(', ') || '—'}`);
     }
     out.push('');
@@ -112,7 +113,7 @@ export class CartDebug {
       if (u.order.kind !== 'cart') continue;
       const o = u.order;
       const idleCart = o.phase === 'load' && !o.from;
-      out.push(`  #${String(u.id).padEnd(5)} ${(u.carter ? u.specId : `${u.specId}*`).padEnd(9)} ${idleCart ? 'idle (nothing needed)'.padEnd(15) : `${o.phase.padEnd(7)} ${o.res.padEnd(7)}`} ${idleCart ? ''.padEnd(27) : `home ${this.name(w.buildings.get(o.home)).padEnd(22)}`} cargo ${n0(u.food)}f/${n0(u.wood)}w/${n0(u.crystal)}c free ${n0(w.freeCapacity(u))}${o.pinned ? ' pinned' : ''}`);
+      out.push(`  #${String(u.id).padEnd(5)} ${(u.carter ? u.specId : `${u.specId}*`).padEnd(9)} ${idleCart ? 'idle (nothing needed)'.padEnd(15) : `${o.phase.padEnd(7)} ${o.res.padEnd(7)}`} ${idleCart ? ''.padEnd(27) : `home ${this.name(w.buildings.get(o.home)).padEnd(22)}`} cargo ${int(u.food)}f/${int(u.wood)}w/${int(u.crystal)}c free ${int(w.freeCapacity(u))}${o.pinned ? ' pinned' : ''}`);
     }
     const idle = [...w.units.values()].filter((u) => u.owner === this.player && u.carter && u.order.kind !== 'cart');
     if (idle.length) out.push(`  not on cart duty: ${idle.map((u) => `#${u.id} ${u.order.kind}`).join(', ')}`);
@@ -120,9 +121,9 @@ export class CartDebug {
     out.push(`BUILDINGS                    food wood crys`);
     for (const b of w.buildingsOf(this.player)) {
       if (b === base) continue;
-      out.push(`${this.name(b)}${b.complete ? '' : ` (building ${n0(b.built)}/${n0(b.stats.totalCost)})`}  carts→ ${w.cartsServing(b)}`);
+      out.push(`${this.name(b)}${b.complete ? '' : ` (building ${int(b.built)}/${int(b.stats.totalCost)})`}  carts→ ${w.logistics.cartsServing(b)}`);
       out.push(`  stock                      ${stock(b.stock)}`);
-      const t = w.supplyTargets(b), s = w.shortfall(b), sp = w.spare(b);
+      const t = w.logistics.supplyTargets(b), s = w.logistics.shortfall(b), sp = w.logistics.spare(b);
       if (!ZERO(t)) out.push(`  target                     ${stock(t)}`);
       if (!ZERO(s)) out.push(`  short (after inbound)      ${stock(s)}`);
       if (!ZERO(sp)) out.push(`  spare (carts can take)     ${stock(sp)}`);

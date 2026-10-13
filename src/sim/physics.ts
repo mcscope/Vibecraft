@@ -301,8 +301,6 @@ export interface TowerStats {
   damage: number;
   range: number;
   cooldown: number;
-  calPerShot: number;
-  foodPerShot: number;
 }
 
 export interface BuildingStats {
@@ -350,8 +348,7 @@ export function towerStats(t: BuildingSpec['attack']): TowerStats | null {
   const vy = v * Math.SQRT1_2;
   const range = Math.min(K.maxThrowRange + h, vy * ((vy + Math.sqrt(vy * vy + 2 * K.gravity * h)) / K.gravity));
   const cooldown = Math.max(K.minCooldown, energy / (K.powerPerMuscleKg * m)) + K.throwReload;
-  const calPerShot = energy / K.muscleEfficiency;
-  return { energy, velocity: v, damage, range, cooldown, calPerShot, foodPerShot: calPerShot / K.calPerFood };
+  return { energy, velocity: v, damage, range, cooldown };
 }
 
 export function deriveBuilding(spec: BuildingSpec, faction: FactionSpec): BuildingStats {

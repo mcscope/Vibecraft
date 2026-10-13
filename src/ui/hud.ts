@@ -2,6 +2,7 @@
 import type { ResourceKind, UnitSpec } from '../factions/types';
 import { MAX_QUEUE, plantKg, RESOURCES, type Building, type Unit, type World } from '../sim/world';
 import { CAP, capitalFor, derive, type DerivedStats } from '../sim/physics';
+import { fmt, have, n0, need, pct } from './format';
 import { TEAM_COLORS, unitFrame } from '../render/renderer';
 import { blit, spriteIcon, spriteToCanvas } from '../art/draw';
 import { unitSprite } from '../art/contract';
@@ -20,12 +21,6 @@ export interface HudActions {
   setSowing(buildingId: number, resources: Array<'food' | 'wood'>): void;
 }
 
-const fmt = (n: number, d = 0) => n.toFixed(d);
-const n0 = (n: number) => Math.round(n).toLocaleString();
-/** Resources are shown whole: amounts you hold round down, amounts you need round up. */
-const have = (n: number) => Math.floor(n + 1e-6).toLocaleString();
-const need = (n: number) => Math.ceil(n - 1e-6).toLocaleString();
-const pct = (a: number, b: number) => `${Math.max(0, Math.min(100, (a / b) * 100)).toFixed(1)}%`;
 
 export function statsTable(spec: UnitSpec, stats: DerivedStats = derive(spec)): string {
   const d = stats;
@@ -299,7 +294,7 @@ export class Hud {
       if (label) label.textContent = item && item.kind === 'unit' && !item.paid ? `Waiting for ${this.missing(b, item.food, item.crystal)} here — ${this.supplyNote(b, item.food, item.crystal)}` : '';
     }
     const names = this.names();
-    const target = w.supplyTargets(b);
+    const target = w.logistics.supplyTargets(b);
     for (const r of RESOURCES) {
       const max = target[r] > 1 ? target[r] : Math.max(1, b.stats.cacheCap);
       this.setBar(`stock-${r}`, b.stock[r], max, target[r] > 1 ? `${names[r]} ${have(b.stock[r])} / ${need(target[r])}` : `${names[r]} ${have(b.stock[r])}`);
@@ -308,7 +303,7 @@ export class Hud {
     if (carts) {
       let pool = 0;
       for (const u of w.units.values()) if (u.carter && u.order.kind === 'cart' && u.order.base === b.id) pool++;
-      carts.textContent = b.spec.carters ? `Carts: ${pool} (always keeps ${b.spec.carters}; train more for faster supply)` : `Carts on the way: ${w.cartsServing(b)}`;
+      carts.textContent = b.spec.carters ? `Carts: ${pool} (always keeps ${b.spec.carters}; train more for faster supply)` : `Carts on the way: ${w.logistics.cartsServing(b)}`;
     }
     const ammo = this.panel.querySelector<HTMLElement>('[data-ammo]');
     if (ammo && b.spec.attack) {
@@ -342,12 +337,12 @@ export class Hud {
   private supplyNote(b: Building, food: number, crystal: number): string {
     const w = this.world;
     const short = (['food', 'crystal'] as const).filter((r) => (r === 'food' ? food : crystal) > b.stock[r] + 1e-6);
-    const coming = short.reduce((n, r) => n + w.cartsBringing(b, r), 0);
+    const coming = short.reduce((n, r) => n + w.logistics.cartsBringing(b, r), 0);
     if (coming) return `${coming} cart${coming > 1 ? 's' : ''} bringing it`;
     const base = w.baseOf(b.owner);
     if (b === base || (b.spec.carters ?? 0) > 0) return 'gather more (nothing spare elsewhere)';
     if (!base) return 'no Town Center to supply it';
-    if (short.some((r) => w.spare(base)[r] < 1)) return `the ${base.spec.name} has none to spare`;
+    if (short.some((r) => w.logistics.spare(base)[r] < 1)) return `the ${base.spec.name} has none to spare`;
     return 'waiting for a free cart';
   }
 
@@ -484,7 +479,7 @@ export class Hud {
       ${st.tower ? '<div class="ammo" data-ammo></div>' : ''}
       ${b.spec.gatherBoost ? `<div class="state">Gathering nearby ×${fmt(st.gatherBoost, 2)} (within ${b.spec.gatherBoost.radius} tiles)</div>` : ''}
       ${b.spec.sow && own ? `<div class="sow">Sowing ${b.spec.sow.resources.map((r) => `<button data-sow="${r}" data-building="${b.id}" class="${b.sowing.includes(r) ? 'on' : ''}" title="Plants a ${plantKg(b.spec, r)} kg ${r === 'food' ? 'bush' : 'tree'} for ${need(plantKg(b.spec, r) * CAP.sowSeedFraction)} ${names[r].toLowerCase()} of seed from this building; it grows over ${CAP.sowGrowSec} s">${names[r]} ${b.sowing.includes(r) ? 'on' : 'off'}</button>`).join(' ')}</div>` : ''}
-      ${st.tower ? `<div class="state">Tower: ${n0(st.tower.damage)} dmg · range ${fmt(st.tower.range, 1)} · ${fmt(st.tower.cooldown, 1)} s · uses ${b.spec.attack!.crystalMass} kg crystal per shot, ${need(st.tower.foodPerShot * 10)} food per 10 shots</div>` : ''}`;
+      ${st.tower ? `<div class="state">Tower: ${n0(st.tower.damage)} dmg · range ${fmt(st.tower.range, 1)} · ${fmt(st.tower.cooldown, 1)} s · uses ${b.spec.attack!.crystalMass} kg crystal per shot</div>` : ''}`;
     if (!own) return `<div class="building-panel"><div class="info">${head}${info}</div></div>`;
     const km = keymap();
     const train = (b.spec.trains ?? []).map((id, i) => {

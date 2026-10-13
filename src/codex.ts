@@ -10,6 +10,7 @@ import { training } from './factions/training';
 import { capitalFor, CAP, derive, deriveBuilding, prerequisites, techCost, techGate, techStart, techTime } from './sim/physics';
 import { TEAM_COLORS } from './render/artbank';
 import { statsTable } from './ui/hud';
+import { esc, f1, n0 } from './ui/format';
 
 const FACTIONS: FactionSpec[] = [meadowfolk, training];
 const ANIMS: ArtAnim[] = ['idle', 'walk', 'attack', 'gather', 'eat', 'tired', 'die', 'carryFood', 'carryWood', 'carryCrystal'];
@@ -28,9 +29,6 @@ let sel: Sel | null = null;
 /** What the big viewer is playing. */
 const view = { anim: 'idle' as ArtAnim, facing: null as number | null, canvas: null as HTMLCanvasElement | null, unit: null as string | null, t0: performance.now() };
 
-const n0 = (v: number) => Math.round(v).toLocaleString();
-const f1 = (v: number, d = 1) => (Math.round(v * 10 ** d) / 10 ** d).toString();
-const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const resName = (r: ResourceKind) => faction.resourceNames?.[r] ?? { food: 'Food', wood: 'Wood', crystal: 'Crystal' }[r];
 const res = (r: ResourceKind) => resName(r).toLowerCase();
 
@@ -219,7 +217,7 @@ function buildingAbilities(b: BuildingSpec): string[] {
   if (b.trains?.length) out.push(`<b>Trains</b> ${b.trains.map((id) => link('unit', id, unitById(id)?.name ?? id)).join(', ')}.`);
   if (b.researches?.length) out.push(`<b>Researches</b> ${b.researches.map((id) => link('tech', id, techById(id)?.name ?? id)).join(', ')}.`);
   if (b.carters && faction.carterId) out.push(`<b>Cart pool.</b> Keeps ${b.carters} ${link('unit', faction.carterId, unitById(faction.carterId)?.name ?? 'carts')} that load here and supply other buildings.`);
-  if (b.attack && st.tower) out.push(`<b>Tower.</b> ${b.attack.mechanism} kg mechanism throws ${b.attack.crystalMass} kg crystals from ${b.attack.height} m: ${n0(st.tower.damage)} damage, range ${f1(st.tower.range)}, every ${f1(st.tower.cooldown)} s. Burns ${f1(st.tower.foodPerShot, 2)} ${res('food')} per shot from its own stock.`);
+  if (b.attack && st.tower) out.push(`<b>Tower.</b> ${b.attack.mechanism} kg mechanism throws ${b.attack.crystalMass} kg crystals from ${b.attack.height} m: ${n0(st.tower.damage)} damage, range ${f1(st.tower.range)}, every ${f1(st.tower.cooldown)} s. Each shot uses one crystal from its own stock.`);
   if (b.gatherBoost) out.push(`<b>Gathering ×${f1(st.gatherBoost, 2)}</b> for ${b.gatherBoost.resources.map(res).join(', ')} within ${b.gatherBoost.radius} tiles, from its own capital. Lose the building, lose the boost.`);
   if (b.sow) out.push(`<b>Sows</b> ${b.sow.resources.map(res).join(' and ')} within ${b.sow.radius} tiles. Its ${b.sow.mechanism} kg sowing mechanism plants ${f1(st.sowRate)} kg of future yield per second; seed costs ${Math.round(CAP.sowSeedFraction * 100)}% of the yield from its own stock, and plants grow to full in ${CAP.sowGrowSec} s.`);
   out.push(`<b>Drop-off and store.</b> Holds up to ${n0(st.cacheCap)} kg.`);

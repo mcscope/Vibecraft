@@ -475,7 +475,7 @@ export class Renderer {
       if (b.spec.attack && b.complete && b.owner === 0) {
         // tower ammo: one pip per throw in stock (up to what it keeps on hand)
         const per = b.spec.attack.crystalMass;
-        const max = Math.max(1, Math.round(world.supplyTargets(b).crystal / per));
+        const max = Math.max(1, Math.round(world.logistics.supplyTargets(b).crystal / per));
         const have = Math.min(max, Math.floor(b.stock.crystal / per + 1e-6));
         const pw = Math.max(2, (w - (max - 1)) / max), top = sy - 175 * cam.zoom + 6;
         rect(sx - w / 2 - 1, top - 1, w + 2, 4, 0x000000, 0.8);

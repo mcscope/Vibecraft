@@ -269,7 +269,7 @@ export const buildings: MeadowBuilding[] = [
     sow: { mechanism: 60, radius: 5, resources: ['food', 'wood'] }, model: models.gatheringCamp,
   },
   {
-    id: 'watchtower', name: 'Watchtower', description: 'A throwing arm on stilts. Height adds energy and range; it burns food and crystal from its own stock.',
+    id: 'watchtower', name: 'Watchtower', description: 'A throwing arm on stilts. Height adds energy and range; it throws crystals from its own stock.',
     size: 1, materials: 150, attack: { mechanism: 20, crystalMass: 0.5, height: 4 }, model: models.watchtower,
   },
 ];

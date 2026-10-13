@@ -74,7 +74,7 @@ export interface TowerSpec {
   crystalMass: number;
   /** metres the crystal is launched from. Adds m·g·h energy and range; costs mechanism·h/4. */
   height: number;
-  /** Shots' worth of ammo and food the building asks to keep on hand (default 40). */
+  /** Shots' worth of crystal ammo the building asks to keep on hand (default 40). */
   stockShots?: number;
 }
 
