@@ -2,7 +2,8 @@
 // like a human or a remote player, so it works unchanged in lockstep multiplayer.
 // Faction-agnostic: it reads the faction's buildings and what they train.
 
-import type { ResourceKind } from '../factions/types';
+import type { FactionSpec, ResourceKind } from '../factions/types';
+import { prerequisites } from '../sim/physics';
 import type { Command } from '../sim/commands';
 import { TICK_RATE, type Building, type Unit, type World } from '../sim/world';
 
@@ -10,8 +11,22 @@ export class SkirmishAI {
   private waveSize = 6;
   private attacking = new Set<number>();
   private trainIndex = new Map<number, number>();
+  private plan: Array<[string, number]> | null = null;
 
   constructor(readonly player: number, private thinkEvery = TICK_RATE) {}
+
+  /**
+   * Build order for any faction: buildings that train or research first (by tier,
+   * then cost), then the rest (towers, camps...). Each unlocks at a worker count.
+   */
+  static buildOrder(f: FactionSpec): Array<[string, number]> {
+    const tier = (b: NonNullable<FactionSpec['buildings']>[number]) => prerequisites(b, f).length;
+    const producer = (b: NonNullable<FactionSpec['buildings']>[number]) => (b.trains?.length || b.researches?.length ? 0 : 1);
+    return (f.buildings ?? [])
+      .filter((b) => !b.unbuildable)
+      .sort((a, b) => producer(a) - producer(b) || tier(a) - tier(b) || a.materials - b.materials || (a.id < b.id ? -1 : 1))
+      .map((b, i) => [b.id, 7 + 2 * i]);
+  }
 
   /** CommandSource interface for the lockstep driver. */
   poll(w: World): Command[] {
@@ -32,8 +47,8 @@ export class SkirmishAI {
     const minutes = w.tick / TICK_RATE / 60;
     const stock = w.stockOf(this.player);
 
-    // ── Construction: a fixed build order, gated on worker count.
-    const plan: Array<[string, number]> = [['barracks', 7], ['lynx-den', 10], ['forge', 12], ['watchtower', 13], ['great-hall', 14]];
+    // ── Construction: a build order derived from the faction, gated on worker count.
+    const plan = (this.plan ??= SkirmishAI.buildOrder(faction));
     const builders = new Set(workers.filter((u) => u.order.kind === 'build').map((u) => u.id));
     for (const [id, atWorkers] of plan) {
       if (!tc || workers.length < atWorkers || !w.buildingSpecOf(this.player, id)) continue;

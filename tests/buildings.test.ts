@@ -139,23 +139,7 @@ describe('carters, training, research, towers', () => {
     expect(w.unitsOf(0).some((u) => u.specId === 'villager')).toBe(true);
   });
 
-  test('a waiting town center can take a sowing camp\'s seed', () => {
-    const w = newWorld();
-    const tc = w.baseOf(0)!;
-    for (const u of w.unitsOf(0)) if (!u.carter) w.units.delete(u.id);
-    tc.stock = { food: 1000, wood: 0, crystal: 0 };
-    run(w, 20 * 60);
-    tc.stock = { food: 0, wood: 0, crystal: 0 };
-    const camp = w.addBuilding(0, 'gathering-camp', tc.ox + 8, tc.oy)!;
-    camp.sowing = ['food'];
-    camp.sowProgress = 1e9; // busy: holds its seed, plants nothing
-    camp.stock = { food: 90, wood: 0, crystal: 0 }; // barely more than one planting's seed
-    w.enqueue({ player: 0, cmd: { type: 'train', building: tc.id, specId: 'villager' } });
-    run(w, 20 * 60);
-    expect(w.unitsOf(0).some((u) => u.specId === 'villager')).toBe(true);
-  });
-
-    test('any queue item can be cancelled, and a waiting order does not block paid ones', () => {
+  test('any queue item can be cancelled, and a waiting order does not block paid ones', () => {
     const w = newWorld();
     const tc = w.baseOf(0)!;
     tc.stock = { food: 0, wood: 0, crystal: 0 };
@@ -198,21 +182,32 @@ describe('carters, training, research, towers', () => {
     expect(v.order.kind).toBe('idle');
   });
 
-  test('a cart brings a building everything it is short of in one trip', () => {
+  test('a new tower is fully stocked with food and ammo within a few trips', () => {
     const w = newWorld();
     const tc = w.baseOf(0)!;
     tc.stock = { food: 1000, wood: 0, crystal: 100 };
     run(w, 20 * 50); // first cart
     const t = w.addBuilding(0, 'watchtower', tc.ox + 8, tc.oy)!;
+    run(w, 20 * 30);
+    const want = w.supplyTargets(t);
+    expect(t.stock.food).toBeGreaterThanOrEqual(want.food - 1);
+    expect(t.stock.crystal).toBeGreaterThanOrEqual(want.crystal - 1);
+  });
+
+  test('a lone cart brings everything a building is short of in one trip', () => {
+    const w = newWorld();
+    const tc = w.baseOf(0)!;
+    tc.stock = { food: 1000, wood: 0, crystal: 100 };
+    run(w, 20 * 50);
+    const carts = w.unitsOf(0).filter((u) => u.carter);
+    for (const c of carts.slice(1)) w.units.delete(c.id); // just one cart, so nobody splits the job
+    w.addBuilding(0, 'watchtower', tc.ox + 8, tc.oy);
     let both = false;
-    for (let i = 0; i < 20 * 60 && !both; i++) {
-      w.step();
-      both = [...w.units.values()].some((u) => u.carter && u.order.kind === 'cart' && u.order.home === t.id && u.food > 0 && u.crystal > 0);
-    }
+    for (let i = 0; i < 20 * 10 && !both; i++) { w.step(); both = carts[0].food > 0 && carts[0].crystal > 0; }
     expect(both).toBe(true);
   });
 
-    test('a villager drops its berries before hauling or chopping wood', () => {
+  test('a villager drops its berries before hauling or chopping wood', () => {
     const w = newWorld();
     const v = w.unitsOf(0).find((u) => u.specId === 'villager')!;
     v.food = 12;
@@ -224,18 +219,24 @@ describe('carters, training, research, towers', () => {
     expect(v.food).toBeLessThan(0.05);
   });
 
-    test('clicking a growing bush sets the villager on the nearest ripe one in that patch', () => {
+    test('sown bushes start holding their seed, can be picked while growing, and vanish when picked bare', () => {
     const w = newWorld();
     const tc = w.baseOf(0)!;
-    const ripe = [...w.nodes.values()].filter((n) => n.type === 'food' && !n.shard).sort((a, b) => Math.hypot(a.x - tc.ox, a.y - tc.oy) - Math.hypot(b.x - tc.ox, b.y - tc.oy))[0];
-    const sapling = w.addNode({ type: 'food', x: Math.floor(ripe.x) + 2.5, y: Math.floor(ripe.y) + 0.5, amount: 0, shard: false, tree: false });
-    sapling.maxAmount = 200; sapling.growLeft = 200; sapling.growRate = 0.001;
+    const camp = w.addBuilding(0, 'gathering-camp', tc.ox + 8, tc.oy)!;
+    camp.sowing = ['food'];
+    camp.stock = { food: 100, wood: 0, crystal: 0 };
+    run(w, 2);
+    const bush = [...w.nodes.values()].find((n) => n.sownBy === camp.id)!;
+    expect(bush.amount).toBeGreaterThan(60); // the seed went into it: never an empty bush
+    expect(bush.growLeft).toBeGreaterThan(0);
     const v = w.unitsOf(0).find((u) => u.specId === 'villager')!;
-    w.enqueue({ player: 0, cmd: { type: 'gather', units: [v.id], node: sapling.id } });
-    run(w, 20 * 8);
-    // working a ripe bush in that patch, not standing at the sapling
-    expect(v.order.kind === 'gather' && v.order.node !== sapling.id).toBe(true);
+    w.enqueue({ player: 0, cmd: { type: 'gather', units: [v.id], node: bush.id } });
+    run(w, 20 * 10);
+    expect(v.order.kind).toBe('gather');
     expect(v.food).toBeGreaterThan(0);
+    bush.amount = 0.5; bush.growRate = 0; // nearly picked bare
+    run(w, 20 * 3);
+    expect(w.nodes.has(bush.id)).toBe(false);
   });
 
     test('villagers carry no crystal', () => {

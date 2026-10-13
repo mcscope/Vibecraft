@@ -74,6 +74,8 @@ export interface TowerSpec {
   crystalMass: number;
   /** metres the crystal is launched from. Adds m·g·h energy and range; costs mechanism·h/4. */
   height: number;
+  /** Shots' worth of ammo and food the building asks to keep on hand (default 40). */
+  stockShots?: number;
 }
 
 /**
@@ -111,7 +113,15 @@ export interface BuildingSpec {
    * capital) sets the planting rate. Each planting costs a third of its eventual
    * yield as seed from this building's stock; the plant then grows to full.
    */
-  sow?: { mechanism: number; radius: number; resources: Array<'food' | 'wood'> };
+  sow?: {
+    mechanism: number;
+    radius: number;
+    resources: Array<'food' | 'wood'>;
+    /** kg a sown plant grows to (default 200 for bushes, 100 for trees). */
+    plantKg?: Partial<Record<'food' | 'wood', number>>;
+    /** Most living plants of each kind it keeps going (default 6 bushes, 8 trees). */
+    maxPlants?: Partial<Record<'food' | 'wood', number>>;
+  };
   /** Players can't place it (e.g. a starting-only building). */
   unbuildable?: boolean;
 }

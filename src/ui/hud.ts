@@ -1,7 +1,7 @@
 // DOM overlay: resources, selection panel, build / train / research buttons, tooltips.
 import type { ResourceKind, UnitSpec } from '../factions/types';
-import { MAX_QUEUE, RESOURCES, type Building, type Unit, type World } from '../sim/world';
-import { capitalFor, derive, type DerivedStats } from '../sim/physics';
+import { MAX_QUEUE, plantKg, RESOURCES, type Building, type Unit, type World } from '../sim/world';
+import { CAP, capitalFor, derive, type DerivedStats } from '../sim/physics';
 import { TEAM_COLORS, unitFrame } from '../render/renderer';
 import { blit, spriteIcon, spriteToCanvas } from '../art/draw';
 import { unitSprite } from '../art/contract';
@@ -347,7 +347,7 @@ export class Hud {
     const base = w.baseOf(b.owner);
     if (b === base || (b.spec.carters ?? 0) > 0) return 'gather more (nothing spare elsewhere)';
     if (!base) return 'no Town Center to supply it';
-    if (short.some((r) => w.baseSpare(base)[r] < 1)) return `the ${base.spec.name} has none to spare`;
+    if (short.some((r) => w.spare(base)[r] < 1)) return `the ${base.spec.name} has none to spare`;
     return 'waiting for a free cart';
   }
 
@@ -483,7 +483,7 @@ export class Hud {
       <div class="state" data-carts></div>
       ${st.tower ? '<div class="ammo" data-ammo></div>' : ''}
       ${b.spec.gatherBoost ? `<div class="state">Gathering nearby ×${fmt(st.gatherBoost, 2)} (within ${b.spec.gatherBoost.radius} tiles)</div>` : ''}
-      ${b.spec.sow && own ? `<div class="sow">Sowing ${b.spec.sow.resources.map((r) => `<button data-sow="${r}" data-building="${b.id}" class="${b.sowing.includes(r) ? 'on' : ''}" title="Plants a ${r === 'food' ? '200 kg bush' : '100 kg tree'} for ${need((r === 'food' ? 200 : 100) / 3)} ${names[r].toLowerCase()} of seed from this building; it grows over 90 s">${names[r]} ${b.sowing.includes(r) ? 'on' : 'off'}</button>`).join(' ')}</div>` : ''}
+      ${b.spec.sow && own ? `<div class="sow">Sowing ${b.spec.sow.resources.map((r) => `<button data-sow="${r}" data-building="${b.id}" class="${b.sowing.includes(r) ? 'on' : ''}" title="Plants a ${plantKg(b.spec, r)} kg ${r === 'food' ? 'bush' : 'tree'} for ${need(plantKg(b.spec, r) * CAP.sowSeedFraction)} ${names[r].toLowerCase()} of seed from this building; it grows over ${CAP.sowGrowSec} s">${names[r]} ${b.sowing.includes(r) ? 'on' : 'off'}</button>`).join(' ')}</div>` : ''}
       ${st.tower ? `<div class="state">Tower: ${n0(st.tower.damage)} dmg · range ${fmt(st.tower.range, 1)} · ${fmt(st.tower.cooldown, 1)} s · uses ${b.spec.attack!.crystalMass} kg crystal per shot, ${need(st.tower.foodPerShot * 10)} food per 10 shots</div>` : ''}`;
     if (!own) return `<div class="building-panel"><div class="info">${head}${info}</div></div>`;
     const km = keymap();
@@ -545,7 +545,6 @@ export function describeOrder(w: World, u: Unit): string {
       const home = w.buildings.get(o.home);
       if (!home) return 'Waiting for a delivery';
       if (!u.carter) return `Hauling supplies for the ${home.spec.name}`;
-      if (o.phase === 'fetch') return `Collecting ${o.res} from the ${home.spec.name}`;
       return `${o.phase === 'deliver' ? 'Delivering' : 'Fetching'} ${o.res} for the ${home.spec.name}${o.pinned ? ' (pinned)' : ''}`;
     }
   }

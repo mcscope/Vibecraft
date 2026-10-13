@@ -242,6 +242,8 @@ export class Renderer {
         continue;
       }
       this.setFrame(sp, this.nodeSprite(n));
+      // sown bushes start as small seedlings and grow to full size
+      if (!n.shard && n.growLeft !== undefined) sp.scale.set((0.35 + 0.65 * Math.min(1, (n.maxAmount - n.growLeft) / n.maxAmount)) / this.nodeSprite(n).q);
       if (n.shard) sp.scale.set(Math.min(1.6, 0.6 + Math.cbrt(n.amount) * 0.3) / this.bank.biome.shard.q);
     }
     for (const [id, sp] of seen) if (!this.world.nodes.has(id)) { sp.destroy(); seen.delete(id); }

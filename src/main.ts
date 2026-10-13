@@ -91,7 +91,7 @@ async function start(m: Mode): Promise<void> {
 
   if (m === 'demo') {
     renderer.cam.centerOn(22, 26);
-    input.setSelection(world.unitsOf(HUMAN).filter((u) => u.specId !== 'villager').map((u) => u.id));
+    input.setSelection(world.unitsOf(HUMAN).filter((u) => u.specId !== world.factionOf(HUMAN).workerId).map((u) => u.id));
   } else {
     const tc = world.buildingsOf(HUMAN)[0];
     renderer.cam.centerOn(tc.ox + 3, tc.oy + 3);
