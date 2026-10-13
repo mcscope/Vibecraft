@@ -151,7 +151,8 @@ export class SkirmishAI {
 
   private tryTrain(w: World, b: Building, specId: string, out: Command[]): boolean {
     const s = w.specOf(this.player, specId);
-    if (!s || b.stock.food < s.stats.foodCost || b.stock.crystal < s.stats.crystalCost) return false;
+    // queue like a player: at most one order per building waiting on supplies (it gets first claim on them)
+    if (!s || b.queue.some((q) => q.kind === 'unit' && !q.paid)) return false;
     out.push({ type: 'train', building: b.id, specId });
     return true;
   }

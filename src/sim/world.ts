@@ -23,7 +23,6 @@ export const SOW_YIELD: Record<'food' | 'wood', number> = { food: 200, wood: 100
 export const SOW_MAX: Record<'food' | 'wood', number> = { food: 6, wood: 8 };
 export const RESOURCES: ResourceKind[] = ['food', 'wood', 'crystal'];
 /** Carters leave this much at the base so it can keep training workers. */
-export const BASE_RESERVE: Stock = { food: 150, wood: 100, crystal: 40 };
 
 export interface PlayerState {
   id: number;
@@ -367,12 +366,13 @@ export class World {
     let waitFood = 0, waitCrystal = 0;
     for (const q of b.queue) if (q.kind === 'unit' && !q.paid) { waitFood += q.food; waitCrystal += q.crystal; }
     if (waitFood || waitCrystal) { t.food = Math.max(t.food, waitFood + 20); t.crystal = Math.max(t.crystal, waitCrystal + 5); }
-    // sowing buildings keep two plantings' worth of seed
-    if (b.spec.sow) for (const r of b.sowing) t[r] = Math.max(t[r], 2 * SOW_YIELD[r] * CAP.sowSeedFraction + 1);
+    // sowing buildings keep one planting's worth of seed
+    if (b.spec.sow) for (const r of b.sowing) t[r] = Math.max(t[r], SOW_YIELD[r] * CAP.sowSeedFraction + 1);
     const tw = b.stats.tower;
     if (tw && b.spec.attack) {
-      t.food = Math.max(t.food, 30 * tw.foodPerShot + 10);
-      t.crystal = Math.max(t.crystal, 12 * b.spec.attack.crystalMass);
+      // about 40 shots on hand
+      t.food = Math.max(t.food, 40 * tw.foodPerShot + 10);
+      t.crystal = Math.max(t.crystal, 40 * b.spec.attack.crystalMass);
     }
     for (const id of b.spec.researches ?? []) {
       const st = this.techStatus(b.owner, id, b);
@@ -507,6 +507,18 @@ export class World {
             u.order = { kind: 'cart', base: base?.id ?? b.id, home: b.id, pinned: true, phase: 'load', res: 'food' };
             u.path = [];
           }
+        }
+        return;
+      }
+      case 'haul': {
+        const b = ownBuilding(cmd.building);
+        if (!b || !b.complete) return;
+        for (const u of mine(cmd.units)) {
+          if (u.stats.gatherRate <= 0) continue;
+          const base = this.nearestProducer(u) ?? this.baseOf(player);
+          if (!base || base === b) continue;
+          const loaded = u.food + u.wood + this.surplusCrystal(u) > 0.05;
+          set([u], { kind: 'cart', base: base.id, home: b.id, pinned: true, phase: loaded ? 'deliver' : 'load', res: 'food' });
         }
         return;
       }
@@ -708,9 +720,21 @@ export class World {
   }
 
   /** Carts currently heading to (or pinned to) a building. */
+  /** Carts actually on their way to bring `b` some of `r` (fetching it for the base counts). */
+  cartsBringing(b: Building, r: ResourceKind): number {
+    let n = 0;
+    for (const u of this.units.values()) {
+      if (u.owner !== b.owner || u.order.kind !== 'cart') continue;
+      const o = u.order;
+      const held = r === 'food' ? u.food : r === 'wood' ? u.wood : this.surplusCrystal(u);
+      if (o.phase === 'fetch' ? o.base === b.id && o.res === r : o.home === b.id && (o.phase === 'load' ? o.res === r : held > 0.05)) n++;
+    }
+    return n;
+  }
+
   cartsServing(b: Building): number {
     let n = 0;
-    for (const u of this.units.values()) if (u.carter && u.order.kind === 'cart' && u.order.home === b.id) n++;
+    for (const u of this.units.values()) if (u.order.kind === 'cart' && u.order.home === b.id) n++;
     return n;
   }
 
@@ -756,7 +780,7 @@ export class World {
     const target = this.supplyTargets(b);
     const inbound = emptyStock();
     for (const u of this.units.values()) {
-      if (!u.carter || u.order.kind !== 'cart' || u.order.home !== b.id || u.order.phase !== 'deliver') continue;
+      if (u.order.kind !== 'cart' || u.order.home !== b.id || u.order.phase !== 'deliver') continue;
       inbound.food += u.food; inbound.wood += u.wood; inbound.crystal += this.surplusCrystal(u);
     }
     const room = this.room(b);
@@ -764,17 +788,42 @@ export class World {
     return out;
   }
 
+  /** What the base must keep: the cost of its queued orders not yet paid for. Everything else can go out. */
+  baseReserve(base: Building): Stock {
+    const out = emptyStock();
+    for (const q of base.queue) if (q.kind === 'unit' && !q.paid) { out.food += q.food; out.crystal += q.crystal; }
+    return out;
+  }
+
+  /** What the base can send out right now. */
+  baseSpare(base: Building): Stock {
+    const keep = this.baseReserve(base), out = emptyStock();
+    for (const r of RESOURCES) out[r] = Math.max(0, base.stock[r] - keep[r]);
+    return out;
+  }
+
+  /** Resources the base's front waiting order is short of. */
+  baseWaitingOn(base: Building): ResourceKind[] {
+    const q = base.queue.find((x) => x.kind === 'unit' && !x.paid);
+    if (!q || q.kind !== 'unit') return [];
+    const out: ResourceKind[] = [];
+    if (base.stock.food < q.food) out.push('food');
+    if (base.stock.crystal < q.crystal) out.push('crystal');
+    return out;
+  }
+
   /**
    * What an outlying building holds beyond its own needs (e.g. what gatherers
    * dropped at a camp), less what carts are already on their way to collect.
    */
-  surplus(b: Building, except?: Unit): Stock {
+  surplus(b: Building, except?: Unit, baseFirst: ResourceKind[] = []): Stock {
     const out = emptyStock();
     if (!b.complete) return out;
     const keep = this.supplyTargets(b);
-    for (const r of RESOURCES) out[r] = Math.max(0, b.stock[r] - keep[r]);
+    // the base's waiting orders come before an outlying building's own reserve
+    for (const r of RESOURCES) out[r] = Math.max(0, b.stock[r] - (baseFirst.includes(r) ? 0 : keep[r]));
     for (const u of this.units.values()) {
-      if (u === except || !u.carter || u.order.kind !== 'cart' || u.order.phase !== 'fetch' || u.order.home !== b.id) continue;
+      if (u === except || u.order.kind !== 'cart' || u.order.phase !== 'fetch' || u.order.home !== b.id) continue;
       out[u.order.res] = Math.max(0, out[u.order.res] - this.freeCapacity(u));
     }
     return out;
@@ -1091,6 +1140,11 @@ export class World {
 
   private runGather(u: Unit, o: Extract<Order, { kind: 'gather' }>): boolean {
     let node = this.nodes.get(o.node);
+    if (o.phase === 'toNode' && node && !node.shard && (node.growLeft || node.amount < 1)) {
+      // clicked a bush that's still growing (or nearly bare): work the nearest ripe one in the same patch
+      const ripe = this.nearestNodeTo(node.x, node.y, o.nodeType, 8, node);
+      if (ripe) { o.node = ripe.id; node = ripe; }
+    }
     if (o.phase !== 'toDrop' && (!node || node.amount <= 0.001)) {
       const next = o.stopWhenArmed ? null : this.nearestNode(u, o.nodeType, 10, false, node);
       if (next) { o.node = next.id; o.phase = 'toNode'; node = next; }
@@ -1099,6 +1153,9 @@ export class World {
     }
     if (o.phase === 'toNode') {
       const n = node!;
+      // carrying a different resource? drop it off first so the whole pack is free for this one
+      const other = (o.nodeType !== 'food' ? u.food : 0) + (o.nodeType !== 'wood' ? u.wood : 0) + (o.nodeType !== 'crystal' ? this.surplusCrystal(u) : 0);
+      if (other > 0.05 && !o.stopWhenArmed && this.nearestCache(u, (b) => this.room(b) > 0.5)) { o.phase = 'toDrop'; return false; }
       // Shards lie on open ground, often under a crowd or a dummy: pick up from arm's reach.
       const reach = n.shard ? u.stats.radius + 0.45 : 1.15 + u.stats.radius;
       if (this.moveToNear(u, n.x, n.y, reach, !n.shard)) o.phase = 'harvest';
@@ -1176,7 +1233,7 @@ export class World {
   }
 
   /** Unload cargo into a building's cache, as much as fits. */
-  private deposit(u: Unit, b: Building): void {
+  private deposit(u: Unit, b: Building, only: ResourceKind[] = RESOURCES): void {
     let room = this.room(b);
     const put = (r: ResourceKind, kg: number) => {
       const amt = Math.min(kg, room);
@@ -1184,9 +1241,9 @@ export class World {
       b.stock[r] += amt; room -= amt;
       return amt;
     };
-    u.food -= put('food', u.food);
-    u.wood -= put('wood', u.wood);
-    u.crystal -= put('crystal', this.surplusCrystal(u));
+    if (only.includes('food')) u.food -= put('food', u.food);
+    if (only.includes('wood')) u.wood -= put('wood', u.wood);
+    if (only.includes('crystal')) u.crystal -= put('crystal', this.surplusCrystal(u));
   }
 
   private runGive(u: Unit, toId: number): boolean {
@@ -1246,6 +1303,15 @@ export class World {
     const needed = remaining - this.woodInFlight(site);
     if (needed <= 0.05) return false; // others are already carrying enough
     const src = this.nearestCache(u, (b) => b.stock.wood > 0.5);
+    // drop any other cargo first (berries, spare crystal) so the whole pack carries wood
+    if (u.food > 0.05 || this.surplusCrystal(u) > 0.05) {
+      const drop = src ?? this.nearestCache(u, (b) => this.room(b) > 0.5);
+      if (drop) {
+        if (!this.moveToBuilding(u, drop)) return u.x !== u.px || u.y !== u.py;
+        this.deposit(u, drop, ['food', 'crystal']);
+        if (u.food > 0.05 || this.surplusCrystal(u) > 0.05) return false; // drop was full; keep looking next tick
+      }
+    }
     if (src) {
       if (!this.moveToBuilding(u, src)) return u.x !== u.px || u.y !== u.py;
       const take = Math.min(Math.floor(this.freeCapacity(u)), Math.ceil(remaining - this.woodInFlight(site)), Math.floor(src.stock.wood));
@@ -1276,7 +1342,7 @@ export class World {
     let w = 0;
     for (const u of this.units.values()) {
       if (u.order.kind === 'build' && u.order.site === site.id) w += u.wood;
-      else if (u.carter && u.order.kind === 'cart' && u.order.home === site.id && u.order.phase === 'deliver') w += u.wood;
+      else if (u.order.kind === 'cart' && u.order.home === site.id && u.order.phase === 'deliver') w += u.wood;
     }
     return w;
   }
@@ -1310,7 +1376,7 @@ export class World {
       const src = this.buildings.get(o.home);
       if (!src || src.owner !== u.owner || !src.complete) { o.phase = 'load'; o.home = 0; return false; }
       if (!this.moveToBuilding(u, src)) return u.x !== u.px || u.y !== u.py;
-      const take = Math.floor(Math.min(this.freeCapacity(u), this.surplus(src, u)[o.res]));
+      const take = Math.floor(Math.min(this.freeCapacity(u), this.surplus(src, u, this.baseWaitingOn(base))[o.res]));
       if (take > 0) { src.stock[o.res] -= take; this.carry(u, o.res, take); }
       o.home = base.id;
       o.phase = take > 0 ? 'deliver' : 'load';
@@ -1335,6 +1401,7 @@ export class World {
     // 20 kg crystal need matters as much as 150 kg of a 300 kg food need), doubled when
     // an order is waiting on it, and discounted by distance.
     const pick: { home: Building | null; res: ResourceKind | null; need: number; score: number } = { home: null, res: null, need: 1, score: 0 };
+    const spare = this.baseSpare(base);
     const consider = (b: Building) => {
       if (b === base) return;
       const need = this.shortfall(b);
@@ -1342,7 +1409,7 @@ export class World {
       const waiting = b.queue.some((q) => q.kind === 'unit' && !q.paid) ? 2 : 1;
       const dist = Math.hypot(b.ox + b.size / 2 - u.x, b.oy + b.size / 2 - u.y);
       for (const r of RESOURCES) {
-        if (need[r] <= 0.5 || base!.stock[r] - BASE_RESERVE[r] <= 1) continue;
+        if (need[r] <= 0.5 || spare[r] < 1) continue;
         const score = (need[r] / Math.max(1, target[r])) * waiting / (1 + dist / 20);
         if (score > pick.score) { pick.score = score; pick.need = need[r]; pick.res = r; pick.home = b; }
       }
@@ -1353,18 +1420,19 @@ export class World {
     }
     if (!o.pinned) for (const b of this.buildings.values()) if (b.owner === u.owner && !(b.spec.carters ?? 0)) consider(b);
     // ...or bring an outlying building's surplus home (urgent when the base has an order waiting on it)
-    if (!o.pinned) {
+    if (!o.pinned && u.carter) {
       const baseNeed = this.supplyTargets(base);
-      const baseWaiting = base.queue.some((q) => q.kind === 'unit' && !q.paid);
+      const waitingOn = this.baseWaitingOn(base);
       let fetch: { b: Building; r: ResourceKind; score: number } | null = null;
       for (const b of this.buildings.values()) {
         if (b.owner !== u.owner || b === base || !b.complete || (b.spec.carters ?? 0)) continue;
-        const spare = this.surplus(b);
+        const spare = this.surplus(b, undefined, waitingOn);
         const dist = Math.hypot(b.ox + b.size / 2 - u.x, b.oy + b.size / 2 - u.y);
         for (const r of RESOURCES) {
-          if (spare[r] < 10) continue;
-          const short = Math.max(0, baseNeed[r] + BASE_RESERVE[r] - base.stock[r]);
-          const urgency = short > 0 ? (baseWaiting ? 2 : 1) * Math.min(1, short / Math.max(1, baseNeed[r] + BASE_RESERVE[r])) : 0.15;
+          if (spare[r] < 5) continue;
+          // the base is the hub: surplus always flows home, urgently when an order there waits on it
+          const short = Math.max(0, baseNeed[r] - base.stock[r]);
+          const urgency = waitingOn.includes(r) ? 3 : short > 0 ? 1 + Math.min(1, short / Math.max(1, baseNeed[r])) : 0.5;
           const score = urgency * Math.min(1, spare[r] / this.freeCapacity(u)) / (1 + dist / 20);
           if (score > (fetch?.score ?? 0)) fetch = { b, r, score };
         }
@@ -1376,6 +1444,8 @@ export class World {
     }
     const home = pick.home, res = pick.res, worst = pick.need;
     if (!home || !res) {
+      // a worker hauling by hand is done once its building is stocked
+      if (!u.carter) { this.finish(u); return false; }
       // nothing to deliver: wait by the pool's building
       const hx = base.ox + base.size / 2, hy = base.oy + base.size / 2;
       if ((u.x - hx) ** 2 + (u.y - hy) ** 2 > (base.size / 2 + 2.5) ** 2) this.moveToBuilding(u, base);
@@ -1384,12 +1454,30 @@ export class World {
     o.home = home.id;
     o.res = res;
     if (!this.moveToBuilding(u, base)) return u.x !== u.px || u.y !== u.py;
-    const take = Math.floor(Math.min(this.freeCapacity(u), worst + 0.999, base.stock[res] - BASE_RESERVE[res]));
+    const take = Math.floor(Math.min(this.freeCapacity(u), worst + 0.999, spare[res]));
     if (take <= 0) return false;
     base.stock[res] -= take;
     this.carry(u, res, take);
+    // fill the rest of the load with anything else that building is short of (one trip, not three)
+    const more = this.shortfall(home), left = this.baseSpare(base);
+    for (const r of RESOURCES) {
+      if (r === res) continue;
+      const k = Math.floor(Math.min(this.freeCapacity(u), more[r] + 0.999, left[r]));
+      if (k > 0) { base.stock[r] -= k; this.carry(u, r, k); }
+    }
     o.phase = 'deliver';
     return false;
+  }
+
+  /** Nearest ripe (not growing) non-shard node of a type around a point. */
+  private nearestNodeTo(x: number, y: number, type: ResourceKind, radius: number, exclude?: ResourceNode): ResourceNode | null {
+    let best: ResourceNode | null = null, bestD = radius * radius;
+    for (const n of this.nodes.values()) {
+      if (n.type !== type || n.shard || n.amount < 1 || n.growLeft || n === exclude) continue;
+      const d = (n.x - x) ** 2 + (n.y - y) ** 2;
+      if (d < bestD) { bestD = d; best = n; }
+    }
+    return best;
   }
 
   private nearestNode(u: Unit, type: ResourceKind, radius: number, shardsOnly: boolean, exclude?: ResourceNode): ResourceNode | null {

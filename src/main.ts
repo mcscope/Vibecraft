@@ -5,6 +5,7 @@ import { World, DT } from './sim/world';
 import { provingGrounds, skirmish } from './sim/scenarios';
 import { Lockstep, LocalInput, LoopbackTransport, type CommandSource } from './net/lockstep';
 import { SkirmishAI } from './ai/skirmishAI';
+import { CartDebug } from './ui/cartDebug';
 import { Renderer } from './render/renderer';
 import { ArtBank } from './render/artbank';
 import { Hud } from './ui/hud';
@@ -106,6 +107,7 @@ async function start(m: Mode): Promise<void> {
   const overlay = document.getElementById('overlay')!;
   const speedEl = document.getElementById('speed')!;
 
+  const cartDebug = new CartDebug(world, renderer.cam, HUMAN);
   let simMs = 0, drawMs = 0, perfTick = 0;
   const perfEl = document.querySelector<HTMLElement>('[data-res="fps"]')!;
   const showPerf = () => (perfEl.style.display = settings().perf ? '' : 'none');
@@ -135,6 +137,7 @@ async function start(m: Mode): Promise<void> {
     const t2 = performance.now();
     minimap.draw(renderer.cam);
     hud.update(dt, input.selected, fps);
+    cartDebug.update(input.alpha, dt);
     simMs = simMs * 0.95 + (t1 - t0) * 0.05;
     drawMs = drawMs * 0.95 + (t2 - t1) * 0.05;
     if ((perfTick += dt) > 0.5) {

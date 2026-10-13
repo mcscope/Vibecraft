@@ -34,11 +34,7 @@ const villager: MeadowUnit = {
   mass: 45,
   physique: { muscle: 0.4, frame: 0.35, reserve: 0.25 },
   model(b, p) {
-    human(b, p, villagerLook, armAngle(p), (h) => {
-      if (!p.armed) return;
-      h.limb([0, 0, 0], [0.32, 0.06, 0], 0.018, WOOD);
-      h.crystal(0.16, [0.34, 0.06, 0], [0, 0, -Math.PI / 2 + 0.1]);
-    });
+    human(b, p, villagerLook, armAngle(p), () => {}); // unarmed: empty hands
     cargoPack(b, p, 0.95);
   },
 };

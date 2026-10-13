@@ -37,13 +37,15 @@ export interface Settings {
   scrollSpeed: number;
   /** Show the fps / sim / draw readout. */
   perf: boolean;
+  /** Show the cart / supply debug overlay (F9). */
+  cartDebug: boolean;
   volume: number;
   sfxVolume: number;
   musicVolume: number;
   muted: boolean;
 }
 
-const DEFAULTS: Settings = { scheme: 'wasd', edgeScroll: true, scrollSpeed: 1, perf: true, volume: 0.8, sfxVolume: 0.9, musicVolume: 0.6, muted: false };
+const DEFAULTS: Settings = { scheme: 'wasd', edgeScroll: true, scrollSpeed: 1, perf: true, cartDebug: false, volume: 0.8, sfxVolume: 0.9, musicVolume: 0.6, muted: false };
 const KEY = 'vibecraft.settings';
 
 function load(): Settings {
@@ -87,6 +89,7 @@ export function mountSettingsDialog(): void {
       <label class="opt inline"><input type="checkbox" name="edge" ${s.edgeScroll ? 'checked' : ''}> Scroll at screen edges</label>
       <label class="opt inline">Scroll speed <input type="range" name="speed" min="0.4" max="2.5" step="0.1" value="${s.scrollSpeed}"> <span>${s.scrollSpeed.toFixed(1)}×</span></label>
       <label class="opt inline"><input type="checkbox" name="perf" ${s.perf ? 'checked' : ''}> Show performance readout</label>
+      <label class="opt inline"><input type="checkbox" name="cartDebug" ${s.cartDebug ? 'checked' : ''}> Cart debug overlay (<kbd>F9</kbd>)</label>
       <h3>Sound</h3>
       <label class="opt inline">Master <input type="range" name="volume" min="0" max="1" step="0.05" value="${s.volume}"> <span>${Math.round(s.volume * 100)}%</span></label>
       <label class="opt inline">Effects <input type="range" name="sfxVolume" min="0" max="1" step="0.05" value="${s.sfxVolume}"> <span>${Math.round(s.sfxVolume * 100)}%</span></label>
@@ -101,7 +104,7 @@ export function mountSettingsDialog(): void {
         <tr><td>Give</td><td><kbd>${keyName(km.give)}</kbd> then click a friendly unit</td></tr>
         <tr><td>Town Center</td><td><kbd>${keyName(km.home)}</kbd>, then train with ${km.train.slice(0, 5).map((k) => `<kbd>${keyName(k)}</kbd>`).join(' ')}</td></tr>
         <tr><td>Groups</td><td><kbd>Ctrl</kbd>+<kbd>1–9</kbd> set · <kbd>1–9</kbd> select · double-tap to jump</td></tr>
-        <tr><td>Other</td><td><kbd>Space</kbd> center · <kbd>P</kbd> pause · <kbd>[</kbd> <kbd>]</kbd> speed · <kbd>F10</kbd> settings</td></tr>
+        <tr><td>Other</td><td><kbd>Space</kbd> center · <kbd>P</kbd> pause · <kbd>[</kbd> <kbd>]</kbd> speed · <kbd>F9</kbd> cart debug · <kbd>F10</kbd> settings</td></tr>
       </table>`;
   };
   dlg.addEventListener('input', (e) => {
@@ -110,6 +113,7 @@ export function mountSettingsDialog(): void {
     else if (t.name === 'edge') updateSettings({ edgeScroll: t.checked });
     else if (t.name === 'speed') updateSettings({ scrollSpeed: +t.value });
     else if (t.name === 'perf') updateSettings({ perf: t.checked });
+    else if (t.name === 'cartDebug') updateSettings({ cartDebug: t.checked });
     else if (t.name === 'volume' || t.name === 'sfxVolume' || t.name === 'musicVolume') updateSettings({ [t.name]: +t.value });
     else if (t.name === 'muted') updateSettings({ muted: t.checked });
     render();

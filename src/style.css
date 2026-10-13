@@ -378,3 +378,10 @@ table.diff .up { color: #9fdc80; }
   #detail { position: static; max-height: none; }
   .codex header .links { margin-left: 0; }
 }
+
+/* ── Cart debug overlay (F9) ── */
+#cart-debug { position: fixed; left: 8px; top: 44px; z-index: 30; margin: 0; padding: 8px 10px; max-height: calc(100vh - 290px); overflow: auto; pointer-events: auto; user-select: text;
+  font: 11.5px/1.35 ui-monospace, Menlo, monospace; color: #e9dfc4; background: rgba(12,10,8,0.82); border: 1px solid #4a3d2c; border-radius: 4px; white-space: pre; }
+#cart-debug-layer { position: fixed; inset: 0; z-index: 25; pointer-events: none; }
+#cart-debug-layer svg { position: absolute; left: 0; top: 0; }
+.cd-label { position: absolute; left: 0; top: 0; white-space: nowrap; font: 11px/1.2 ui-monospace, Menlo, monospace; padding: 1px 5px; background: rgba(0,0,0,0.7); border-radius: 3px; }

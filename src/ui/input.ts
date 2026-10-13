@@ -236,7 +236,13 @@ export class Input {
       this.issue({ type: 'construct', units, site: tb.id });
       this.ping(wx, wy, '#7aff7a');
     } else if (tb && tb.owner === this.player) {
-      this.issue({ type: 'resupply', units, building: tb.id });
+      // unarmed workers haul supplies for it; armed units restock themselves there
+      const haulers = units.filter((id) => { const u = w.units.get(id); return u && !u.stats.canAttack && u.stats.gatherRate > 0; });
+      const rest = units.filter((id) => !haulers.includes(id));
+      const base = w.baseOf(this.player);
+      if (haulers.length && base && tb !== base) this.issue({ type: 'haul', units: haulers, building: tb.id });
+      else rest.push(...haulers);
+      if (rest.length) this.issue({ type: 'resupply', units: rest, building: tb.id });
       this.ping(wx, wy, '#ffd23f');
     } else if (tu && tu.owner === this.player && !this.rs.selected.has(tu.id)) {
       this.issue({ type: 'give', units, to: tu.id });

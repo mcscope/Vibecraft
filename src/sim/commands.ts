@@ -27,6 +27,8 @@ export type Command =
   | { type: 'build'; units: number[]; specId: string; ox: number; oy: number }
   /** Reassign carters to supply a different building. */
   | { type: 'assignCart'; units: number[]; building: number }
+  /** Workers carry what a building is missing from the base, trip after trip, until it's stocked. */
+  | { type: 'haul'; units: number[]; building: number }
   /** Send units to help an existing construction site. */
   | { type: 'construct'; units: number[]; site: number }
   | { type: 'rally'; building: number; x: number; y: number };

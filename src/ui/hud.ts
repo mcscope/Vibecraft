@@ -296,7 +296,7 @@ export class Hud {
     if (bar) {
       bar.querySelector<HTMLElement>('i')!.style.width = item ? pct(item.progress, item.total) : '0%';
       const label = bar.querySelector<HTMLElement>('span');
-      if (label) label.textContent = item && item.kind === 'unit' && !item.paid ? `Waiting for ${this.missing(b, item.food, item.crystal)} here — carts are bringing it` : '';
+      if (label) label.textContent = item && item.kind === 'unit' && !item.paid ? `Waiting for ${this.missing(b, item.food, item.crystal)} here — ${this.supplyNote(b, item.food, item.crystal)}` : '';
     }
     const names = this.names();
     const target = w.supplyTargets(b);
@@ -336,6 +336,19 @@ export class Hud {
       const c = btn.querySelector('.cost');
       if (c) c.textContent = st.blocker ?? `${st.cost} ${names.wood}`;
     });
+  }
+
+  /** Whether anything is actually on its way to cover a shortfall, and if not, why. */
+  private supplyNote(b: Building, food: number, crystal: number): string {
+    const w = this.world;
+    const short = (['food', 'crystal'] as const).filter((r) => (r === 'food' ? food : crystal) > b.stock[r] + 1e-6);
+    const coming = short.reduce((n, r) => n + w.cartsBringing(b, r), 0);
+    if (coming) return `${coming} cart${coming > 1 ? 's' : ''} bringing it`;
+    const base = w.baseOf(b.owner);
+    if (b === base || (b.spec.carters ?? 0) > 0) return 'gather more (nothing spare elsewhere)';
+    if (!base) return 'no Town Center to supply it';
+    if (short.some((r) => w.baseSpare(base)[r] < 1)) return `the ${base.spec.name} has none to spare`;
+    return 'waiting for a free cart';
   }
 
   /** What this building is short of for a cost, in words ("6 crystal", "20 berries + 4 crystal"), or ''. */
@@ -531,6 +544,8 @@ export function describeOrder(w: World, u: Unit): string {
     case 'cart': {
       const home = w.buildings.get(o.home);
       if (!home) return 'Waiting for a delivery';
+      if (!u.carter) return `Hauling supplies for the ${home.spec.name}`;
+      if (o.phase === 'fetch') return `Collecting ${o.res} from the ${home.spec.name}`;
       return `${o.phase === 'deliver' ? 'Delivering' : 'Fetching'} ${o.res} for the ${home.spec.name}${o.pinned ? ' (pinned)' : ''}`;
     }
   }

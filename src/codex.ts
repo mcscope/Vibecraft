@@ -192,7 +192,7 @@ function unitDetail(u: UnitSpec): string {
   const d = derive(u);
   const ua = art?.units[u.id];
   const value = d.dps > 0 ? Math.pow(d.maxHp * d.dps, 0.75) / Math.max(1, d.foodCost + d.crystalCost) : 0;
-  const anims = ua ? ANIMS.filter((a) => ua.anims[a]) : [];
+  const anims = ua ? ANIMS.filter((a) => ua.anims[a] && (a !== 'attack' || d.canAttack)) : [];
   return `
     <div class="dhead"><h2>${esc(u.name)}</h2><code>${u.id}</code></div>
     ${ua ? `<div class="viewer"><canvas id="big"></canvas>
@@ -305,7 +305,7 @@ function renderDetail(): void {
   detail.scrollTop = 0;
   if (u && art?.units[u.id]) {
     const ua = art.units[u.id];
-    if (!ua.anims[view.anim]) view.anim = 'idle';
+    if (!ua.anims[view.anim] || (view.anim === 'attack' && !derive(u).canAttack)) view.anim = 'idle';
     view.canvas = detail.querySelector<HTMLCanvasElement>('#big');
     view.unit = u.id;
   }

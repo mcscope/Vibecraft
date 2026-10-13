@@ -139,7 +139,23 @@ describe('carters, training, research, towers', () => {
     expect(w.unitsOf(0).some((u) => u.specId === 'villager')).toBe(true);
   });
 
-  test('any queue item can be cancelled, and a waiting order does not block paid ones', () => {
+  test('a waiting town center can take a sowing camp\'s seed', () => {
+    const w = newWorld();
+    const tc = w.baseOf(0)!;
+    for (const u of w.unitsOf(0)) if (!u.carter) w.units.delete(u.id);
+    tc.stock = { food: 1000, wood: 0, crystal: 0 };
+    run(w, 20 * 60);
+    tc.stock = { food: 0, wood: 0, crystal: 0 };
+    const camp = w.addBuilding(0, 'gathering-camp', tc.ox + 8, tc.oy)!;
+    camp.sowing = ['food'];
+    camp.sowProgress = 1e9; // busy: holds its seed, plants nothing
+    camp.stock = { food: 90, wood: 0, crystal: 0 }; // barely more than one planting's seed
+    w.enqueue({ player: 0, cmd: { type: 'train', building: tc.id, specId: 'villager' } });
+    run(w, 20 * 60);
+    expect(w.unitsOf(0).some((u) => u.specId === 'villager')).toBe(true);
+  });
+
+    test('any queue item can be cancelled, and a waiting order does not block paid ones', () => {
     const w = newWorld();
     const tc = w.baseOf(0)!;
     tc.stock = { food: 0, wood: 0, crystal: 0 };
@@ -164,6 +180,62 @@ describe('carters, training, research, towers', () => {
     run(w, 20 * 40);
     expect(pool().length).toBe(4);
     expect(pool().every((u) => u.order.kind === 'cart' && u.order.base === tc.id)).toBe(true);
+  });
+
+    test('a villager told to haul for a building stocks it from the town center, then stops', () => {
+    const w = newWorld();
+    const tc = w.baseOf(0)!;
+    tc.stock = { food: 400, wood: 0, crystal: 100 };
+    const t = w.addBuilding(0, 'watchtower', tc.ox + 10, tc.oy)!;
+    for (const u of [...w.units.values()]) if (u.carter) w.units.delete(u.id);
+    tc.queue = []; // no carts at all: only the villager supplies it
+    const v = w.unitsOf(0).find((u) => u.specId === 'villager')!;
+    w.enqueue({ player: 0, cmd: { type: 'haul', units: [v.id], building: t.id } });
+    run(w, 20 * 120);
+    const want = w.supplyTargets(t);
+    expect(t.stock.crystal).toBeGreaterThanOrEqual(want.crystal - 1);
+    expect(t.stock.food).toBeGreaterThanOrEqual(want.food - 1);
+    expect(v.order.kind).toBe('idle');
+  });
+
+  test('a cart brings a building everything it is short of in one trip', () => {
+    const w = newWorld();
+    const tc = w.baseOf(0)!;
+    tc.stock = { food: 1000, wood: 0, crystal: 100 };
+    run(w, 20 * 50); // first cart
+    const t = w.addBuilding(0, 'watchtower', tc.ox + 8, tc.oy)!;
+    let both = false;
+    for (let i = 0; i < 20 * 60 && !both; i++) {
+      w.step();
+      both = [...w.units.values()].some((u) => u.carter && u.order.kind === 'cart' && u.order.home === t.id && u.food > 0 && u.crystal > 0);
+    }
+    expect(both).toBe(true);
+  });
+
+    test('a villager drops its berries before hauling or chopping wood', () => {
+    const w = newWorld();
+    const v = w.unitsOf(0).find((u) => u.specId === 'villager')!;
+    v.food = 12;
+    const tree = [...w.nodes.values()].filter((n) => n.tree).sort((a, b) => Math.hypot(a.x - v.x, a.y - v.y) - Math.hypot(b.x - v.x, b.y - v.y))[0];
+    w.enqueue({ player: 0, cmd: { type: 'gather', units: [v.id], node: tree.id } });
+    let mixed = false;
+    for (let t = 0; t < 20 * 40; t++) { w.step(); if (v.food > 0.05 && v.wood > 0.05) mixed = true; }
+    expect(mixed).toBe(false);
+    expect(v.food).toBeLessThan(0.05);
+  });
+
+    test('clicking a growing bush sets the villager on the nearest ripe one in that patch', () => {
+    const w = newWorld();
+    const tc = w.baseOf(0)!;
+    const ripe = [...w.nodes.values()].filter((n) => n.type === 'food' && !n.shard).sort((a, b) => Math.hypot(a.x - tc.ox, a.y - tc.oy) - Math.hypot(b.x - tc.ox, b.y - tc.oy))[0];
+    const sapling = w.addNode({ type: 'food', x: Math.floor(ripe.x) + 2.5, y: Math.floor(ripe.y) + 0.5, amount: 0, shard: false, tree: false });
+    sapling.maxAmount = 200; sapling.growLeft = 200; sapling.growRate = 0.001;
+    const v = w.unitsOf(0).find((u) => u.specId === 'villager')!;
+    w.enqueue({ player: 0, cmd: { type: 'gather', units: [v.id], node: sapling.id } });
+    run(w, 20 * 8);
+    // working a ripe bush in that patch, not standing at the sapling
+    expect(v.order.kind === 'gather' && v.order.node !== sapling.id).toBe(true);
+    expect(v.food).toBeGreaterThan(0);
   });
 
     test('villagers carry no crystal', () => {
