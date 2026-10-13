@@ -11,7 +11,7 @@ import { keymap, onSettings } from './settings';
 export interface HudActions {
   train(buildingId: number, specId: string): void;
   research(buildingId: number, techId: string): void;
-  cancelTrain(buildingId: number): void;
+  cancelTrain(buildingId: number, index?: number): void;
   select(ids: number[]): void;
   command(kind: 'stop' | 'attackMove' | 'resupply' | 'give'): void;
   place(specId: string): void;
@@ -145,7 +145,7 @@ export class Hud {
     }
     if (el.dataset.train) this.actions.train(+el.dataset.building!, el.dataset.train);
     else if (el.dataset.research) this.actions.research(+el.dataset.building!, el.dataset.research);
-    else if (el.dataset.cancel) this.actions.cancelTrain(+el.dataset.cancel);
+    else if (el.dataset.cancel) this.actions.cancelTrain(+el.dataset.cancel, el.dataset.index ? +el.dataset.index : undefined);
     else if (el.dataset.select) this.actions.select(el.dataset.select.split(',').map(Number));
     else if (el.dataset.cmd) this.actions.command(el.dataset.cmd as 'stop');
     else if (el.dataset.place) this.actions.place(el.dataset.place);
@@ -494,7 +494,7 @@ export class Hud {
       return `<button class="tech${done ? ' done' : ''}" data-research="${id}" data-building="${b.id}">
         <b>${t.name}</b><span class="cost"></span></button>`;
     }).join('');
-    const queue = b.queue.map((q, i) => `<span class="q" ${i === b.queue.length - 1 ? `data-cancel="${b.id}" title="Cancel"` : ''}>${q.kind === 'unit' ? w.specOf(b.owner, q.specId)?.spec.name : w.techOf(b.owner, q.techId)?.name}</span>`).join('');
+    const queue = b.queue.map((q, i) => `<span class="q" data-cancel="${b.id}" data-index="${i}" title="Click to cancel">${q.kind === 'unit' ? w.specOf(b.owner, q.specId)?.spec.name : w.techOf(b.owner, q.techId)?.name}</span>`).join('');
     return `
       <div class="building-panel">
         <div class="info">

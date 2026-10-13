@@ -55,7 +55,8 @@ export type Order =
    * loads there); `home` is where the current load is going. Unpinned carts pick
    * the neediest building on every trip; pinned ones always serve `home`.
    */
-  | { kind: 'cart'; base: number; home: number; pinned: boolean; phase: 'load' | 'deliver'; res: ResourceKind };
+  /** phase 'fetch': going to `home` to collect its surplus and bring it back to `base`. */
+  | { kind: 'cart'; base: number; home: number; pinned: boolean; phase: 'load' | 'deliver' | 'fetch'; res: ResourceKind };
 
 export type UnitAnim = 'idle' | 'walk' | 'attack' | 'gather' | 'eat' | 'tired';
 
@@ -366,6 +367,8 @@ export class World {
     let waitFood = 0, waitCrystal = 0;
     for (const q of b.queue) if (q.kind === 'unit' && !q.paid) { waitFood += q.food; waitCrystal += q.crystal; }
     if (waitFood || waitCrystal) { t.food = Math.max(t.food, waitFood + 20); t.crystal = Math.max(t.crystal, waitCrystal + 5); }
+    // sowing buildings keep two plantings' worth of seed
+    if (b.spec.sow) for (const r of b.sowing) t[r] = Math.max(t[r], 2 * SOW_YIELD[r] * CAP.sowSeedFraction + 1);
     const tw = b.stats.tower;
     if (tw && b.spec.attack) {
       t.food = Math.max(t.food, 30 * tw.foodPerShot + 10);
@@ -469,7 +472,8 @@ export class World {
       case 'cancelTrain': {
         const b = ownBuilding(cmd.building);
         if (!b || b.queue.length === 0) return;
-        const item = b.queue.pop()!;
+        const at = cmd.index !== undefined && cmd.index >= 0 && cmd.index < b.queue.length ? cmd.index : b.queue.length - 1;
+        const [item] = b.queue.splice(at, 1);
         if (item.kind === 'unit') { if (item.paid) { b.stock.food += item.food; b.stock.crystal += item.crystal; } }
         else {
           b.stock.wood += item.wood;
@@ -653,11 +657,16 @@ export class World {
         b.queue.push({ kind: 'unit', specId: b.autoTrain, progress: 0, total: s.stats.trainTime, food: s.stats.foodCost, crystal: s.stats.crystalCost, home: 0, paid: false });
       }
     }
-    const item = b.queue[0];
+    let item = b.queue[0];
     if (item && item.kind === 'unit' && !item.paid && b.stock.food >= item.food - 1e-6 && b.stock.crystal >= item.crystal - 1e-6) {
       b.stock.food -= item.food;
       b.stock.crystal -= item.crystal;
       item.paid = true;
+    }
+    if (item && item.kind === 'unit' && !item.paid) {
+      // still waiting for stock: let anything already paid for behind it go first
+      const i = b.queue.findIndex((q) => q.kind === 'tech' || q.paid);
+      if (i > 0) { const [ready] = b.queue.splice(i, 1); b.queue.unshift(ready); item = ready; }
     }
     if (item) {
       const waiting = item.kind === 'unit' && !item.paid;
@@ -754,6 +763,22 @@ export class World {
     return out;
   }
 
+  /**
+   * What an outlying building holds beyond its own needs (e.g. what gatherers
+   * dropped at a camp), less what carts are already on their way to collect.
+   */
+  surplus(b: Building, except?: Unit): Stock {
+    const out = emptyStock();
+    if (!b.complete) return out;
+    const keep = this.supplyTargets(b);
+    for (const r of RESOURCES) out[r] = Math.max(0, b.stock[r] - keep[r]);
+    for (const u of this.units.values()) {
+      if (u === except || !u.carter || u.order.kind !== 'cart' || u.order.phase !== 'fetch' || u.order.home !== b.id) continue;
+      out[u.order.res] = Math.max(0, out[u.order.res] - this.freeCapacity(u));
+    }
+    return out;
+  }
+
   /** Sowing: keep the ground around the building planted, paying seed from its own stock. */
   private tickSow(b: Building): void {
     const sow = b.spec.sow!;
@@ -765,15 +790,16 @@ export class World {
       const lack = 1 - n / SOW_MAX[r];
       if (lack > best) { best = lack; res = r; }
     }
-    if (!res) { b.sowProgress = 0; return; }
+    // the mechanism is still busy with the last planting
+    if (b.sowProgress > 0) { b.sowProgress = Math.max(0, b.sowProgress - b.stats.sowRate * DT); return; }
+    if (!res) return;
     const yieldKg = SOW_YIELD[res];
-    if (b.sowProgress < yieldKg) { b.sowProgress += b.stats.sowRate * DT; return; }
     const seed = yieldKg * CAP.sowSeedFraction;
-    if (b.stock[res] < seed) return; // waits for seed
+    if (b.stock[res] < seed) return; // waits for seed (carts bring it)
     const spot = this.sowSpot(b, sow.radius, res === 'wood' ? 1.0 : 1.5);
     if (!spot) return;
     b.stock[res] -= seed;
-    b.sowProgress -= yieldKg;
+    b.sowProgress = yieldKg;
     const node = this.addNode({ type: res, x: spot[0], y: spot[1], amount: 0, shard: false, tree: res === 'wood' });
     node.maxAmount = yieldKg;
     node.growLeft = yieldKg;
@@ -1279,6 +1305,16 @@ export class World {
       o.base = base.id;
     }
     const cargo = u.food + u.wood + this.surplusCrystal(u);
+    if (o.phase === 'fetch') {
+      const src = this.buildings.get(o.home);
+      if (!src || src.owner !== u.owner || !src.complete) { o.phase = 'load'; o.home = 0; return false; }
+      if (!this.moveToBuilding(u, src)) return u.x !== u.px || u.y !== u.py;
+      const take = Math.floor(Math.min(this.freeCapacity(u), this.surplus(src, u)[o.res]));
+      if (take > 0) { src.stock[o.res] -= take; this.carry(u, o.res, take); }
+      o.home = base.id;
+      o.phase = take > 0 ? 'deliver' : 'load';
+      return false;
+    }
     if (o.phase === 'deliver' && cargo > 0.05) {
       const dest = this.buildings.get(o.home);
       const to = dest && dest.owner === u.owner ? dest : base;
@@ -1315,6 +1351,28 @@ export class World {
       if (h && h.owner === u.owner) consider(h); else { o.pinned = false; o.home = 0; }
     }
     if (!o.pinned) for (const b of this.buildings.values()) if (b.owner === u.owner && !(b.spec.carters ?? 0)) consider(b);
+    // ...or bring an outlying building's surplus home (urgent when the base has an order waiting on it)
+    if (!o.pinned) {
+      const baseNeed = this.supplyTargets(base);
+      const baseWaiting = base.queue.some((q) => q.kind === 'unit' && !q.paid);
+      let fetch: { b: Building; r: ResourceKind; score: number } | null = null;
+      for (const b of this.buildings.values()) {
+        if (b.owner !== u.owner || b === base || !b.complete || (b.spec.carters ?? 0)) continue;
+        const spare = this.surplus(b);
+        const dist = Math.hypot(b.ox + b.size / 2 - u.x, b.oy + b.size / 2 - u.y);
+        for (const r of RESOURCES) {
+          if (spare[r] < 10) continue;
+          const short = Math.max(0, baseNeed[r] + BASE_RESERVE[r] - base.stock[r]);
+          const urgency = short > 0 ? (baseWaiting ? 2 : 1) * Math.min(1, short / Math.max(1, baseNeed[r] + BASE_RESERVE[r])) : 0.15;
+          const score = urgency * Math.min(1, spare[r] / this.freeCapacity(u)) / (1 + dist / 20);
+          if (score > (fetch?.score ?? 0)) fetch = { b, r, score };
+        }
+      }
+      if (fetch && fetch.score > pick.score) {
+        o.home = fetch.b.id; o.res = fetch.r; o.phase = 'fetch';
+        return false;
+      }
+    }
     const home = pick.home, res = pick.res, worst = pick.need;
     if (!home || !res) {
       // nothing to deliver: wait by the pool's building

@@ -21,7 +21,8 @@ export type Command =
   | { type: 'autoTrain'; building: number; specId: string | null }
   /** Which resources a sowing building plants. */
   | { type: 'setSowing'; building: number; resources: Array<'food' | 'wood'> }
-  | { type: 'cancelTrain'; building: number }
+  /** Cancel a queue item (default: the last one). */
+  | { type: 'cancelTrain'; building: number; index?: number }
   /** Place a construction site; `units` start carrying wood to it. */
   | { type: 'build'; units: number[]; specId: string; ox: number; oy: number }
   /** Reassign carters to supply a different building. */

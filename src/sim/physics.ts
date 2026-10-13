@@ -8,7 +8,7 @@
 //
 // Core identities:
 //   attack energy  E = ½ · m_crystal · v²      (kinetic energy of the crystal)
-//   damage         = E · efficiency            (strike 1.0, throw 0.75)
+//   damage         = E · efficiency · scale    (strike 1.0, throw 0.75; scale sets fight pace)
 //   calories spent = E / MUSCLE_EFFICIENCY     (muscles are ~50% efficient)
 //   v              = min(limbSpeed, √(2·maxEnergy / m_crystal))
 //
@@ -50,6 +50,12 @@ export const K = {
   muscleEfficiency: 0.5,
   strikeEfficiency: 1.0,
   throwEfficiency: 0.75,
+  /**
+   * Fight pace: the share of attack energy that becomes damage, for every
+   * faction alike. 1/6 puts time-to-kill near Age of Empires II (a duel of
+   * equals lasts ~10 s, not ~2 s). Attacks still cost their full energy.
+   */
+  damageScale: 1 / 6,
   gravity: 9.8,
   maxThrowRange: 14,
   minCooldown: 0.5,
@@ -177,7 +183,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   const maxAttackEnergy = K.energyPerMuscleKg * muscleMass;
   const crystalVelocity = Math.min(limbSpeed, Math.sqrt((2 * maxAttackEnergy) / crystalMass));
   const attackEnergy = 0.5 * crystalMass * crystalVelocity * crystalVelocity;
-  const damage = canAttack ? attackEnergy * (throwing ? K.throwEfficiency : K.strikeEfficiency) * refine : 0;
+  const damage = canAttack ? attackEnergy * (throwing ? K.throwEfficiency : K.strikeEfficiency) * K.damageScale * refine : 0;
   const attackCalories = attackEnergy / K.muscleEfficiency;
   const power = K.powerPerMuscleKg * muscleMass;
   const cooldown = Math.max(K.minCooldown, attackEnergy / power) + (throwing ? K.throwReload : 0);
@@ -262,7 +268,7 @@ export const CAP = {
   /** Height costs mechanism × height × this, in building resource. */
   heightCost: 0.25,
   /** Sowing: kg of future yield planted per second, per kg of sowing mechanism. */
-  sowRatePerKg: 0.04,
+  sowRatePerKg: 0.08,
   /** Seed cost as a fraction of the yield (plants give back ~3×, slowly). */
   sowSeedFraction: 1 / 3,
   /** Seconds for a sown plant to grow to full. */
@@ -340,7 +346,7 @@ export function towerStats(t: BuildingSpec['attack']): TowerStats | null {
   const v = Math.min(limb, Math.sqrt((2 * maxE) / mc));
   const energy = 0.5 * mc * v * v;
   const h = Math.max(0, t.height);
-  const damage = (energy + mc * K.gravity * h) * K.throwEfficiency;
+  const damage = (energy + mc * K.gravity * h) * K.throwEfficiency * K.damageScale;
   const vy = v * Math.SQRT1_2;
   const range = Math.min(K.maxThrowRange + h, vy * ((vy + Math.sqrt(vy * vy + 2 * K.gravity * h)) / K.gravity));
   const cooldown = Math.max(K.minCooldown, energy / (K.powerPerMuscleKg * m)) + K.throwReload;

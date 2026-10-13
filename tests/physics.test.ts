@@ -12,7 +12,7 @@ describe('physics', () => {
 
   test('damage per second scales with what you pay for', () => {
     // A cheap unit cannot out-damage an expensive one per unit of food by more than a small margin.
-    const plain = meadowfolk.units.filter((s) => !s.role && (s.refinement ?? 1) === 1);
+    const plain = meadowfolk.units.filter((s) => !s.role && (s.refinement ?? 1) === 1 && derive(s).canAttack);
     const ratios = plain.map((s) => { const d = derive(s); return d.dps / d.foodCost; });
     expect(Math.max(...ratios) / Math.min(...ratios)).toBeLessThan(4);
   });

@@ -27,6 +27,8 @@ if (mode) start(mode);
 else {
   menu.style.display = 'flex';
   menu.addEventListener('click', (e) => {
+    const href = (e.target as HTMLElement).closest<HTMLElement>('[data-href]')?.dataset.href;
+    if (href) { location.href = href; return; }
     const m = (e.target as HTMLElement).closest<HTMLElement>('[data-mode]')?.dataset.mode as Mode | undefined;
     if (!m) return;
     history.replaceState(null, '', `?mode=${m}`);
@@ -77,7 +79,7 @@ async function start(m: Mode): Promise<void> {
     idleWorker: () => input.nextIdleWorker(),
     autoTrain: (building, specId) => local.issue({ type: 'autoTrain', building, specId }),
     setSowing: (building, resources) => local.issue({ type: 'setSowing', building, resources }),
-    cancelTrain: (building) => local.issue({ type: 'cancelTrain', building }),
+    cancelTrain: (building, index) => local.issue({ type: 'cancelTrain', building, index }),
     select: (ids) => input.setSelection(ids),
     command: (kind) => input.hudCommand(kind),
   });

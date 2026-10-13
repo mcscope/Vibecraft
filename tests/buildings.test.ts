@@ -112,14 +112,52 @@ describe('carters, training, research, towers', () => {
     const tc = w.baseOf(0)!;
     tc.stock = { food: 0, wood: 0, crystal: 0 };
     const b = w.addBuilding(0, 'barracks', tc.ox + 6, tc.oy)!;
-    b.stock = { food: 400, wood: 0, crystal: 4 }; // plenty of food, not enough crystal for a maceman (10)
+    b.stock = { food: 400, wood: 0, crystal: 1 }; // plenty of food, not enough crystal for a maceman (2)
     w.enqueue({ player: 0, cmd: { type: 'train', building: b.id, specId: 'maceman' } });
     run(w, 20 * 30);
     expect(b.queue.length).toBe(1);
     expect(b.queue[0].kind === 'unit' && b.queue[0].paid).toBe(false);
-    b.stock.crystal = 10;
+    b.stock.crystal = 2;
     run(w, 20 * 25);
     expect(w.unitsOf(0).some((u) => u.specId === 'maceman')).toBe(true);
+  });
+
+    test('carts bring an outlying building\'s surplus home to a waiting town center', () => {
+    const w = newWorld();
+    const tc = w.baseOf(0)!;
+    for (const u of w.unitsOf(0)) if (!u.carter) w.units.delete(u.id); // nobody gathering
+    tc.stock = { food: 1000, wood: 0, crystal: 0 };
+    run(w, 20 * 60); // the pool of carts gets trained
+    expect(w.unitsOf(0).some((u) => u.carter)).toBe(true);
+    tc.stock = { food: 0, wood: 0, crystal: 0 };
+    const camp = w.addBuilding(0, 'gathering-camp', tc.ox + 8, tc.oy)!;
+    camp.sowing = [];
+    camp.stock = { food: 400, wood: 0, crystal: 0 }; // what villagers dropped there
+    w.enqueue({ player: 0, cmd: { type: 'train', building: tc.id, specId: 'villager' } });
+    run(w, 20 * 60);
+    expect(camp.stock.food).toBeLessThan(400);
+    expect(w.unitsOf(0).some((u) => u.specId === 'villager')).toBe(true);
+  });
+
+  test('any queue item can be cancelled, and a waiting order does not block paid ones', () => {
+    const w = newWorld();
+    const tc = w.baseOf(0)!;
+    tc.stock = { food: 0, wood: 0, crystal: 0 };
+    w.enqueue({ player: 0, cmd: { type: 'train', building: tc.id, specId: 'villager' } });
+    run(w, 2);
+    tc.queue.push({ kind: 'unit', specId: 'villager', progress: 0, total: 1, food: 0, crystal: 0, home: 0, paid: true });
+    run(w, 30);
+    expect(tc.queue.length).toBe(1); // the paid one went ahead and finished
+    w.enqueue({ player: 0, cmd: { type: 'cancelTrain', building: tc.id, index: 0 } });
+    run(w, 1);
+    expect(tc.queue.filter((q) => q.kind === 'unit' && q.specId === 'villager').length).toBe(0);
+  });
+
+  test('villagers carry no crystal', () => {
+    const w = newWorld();
+    const v = w.unitsOf(0).find((u) => u.specId === 'villager')!;
+    expect(v.stats.crystalCost).toBe(0);
+    expect(v.crystal).toBe(0);
   });
 
     test('gathering camp boosts gathering nearby and sows plants that grow', () => {
@@ -132,7 +170,7 @@ describe('carters, training, research, towers', () => {
     expect(w.gatherBoostAt(0, cx + 20, cy, 'food')).toBe(1);
     expect(w.gatherBoostAt(1, cx + 3, cy, 'food')).toBe(1);
     camp.stock = { food: 300, wood: 300, crystal: 0 };
-    run(w, 20 * 140); // 60 kg of sowing mechanism plants 2.4 kg/s of yield: a bush, then a tree
+    run(w, 20 * 140); // 60 kg of sowing mechanism plants 4.8 kg/s of yield: a bush, then a tree
     const sown = [...w.nodes.values()].filter((n) => n.sownBy === camp.id);
     expect(sown.some((n) => n.type === 'food')).toBe(true);
     expect(sown.some((n) => n.type === 'wood')).toBe(true);

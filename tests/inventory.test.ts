@@ -5,7 +5,9 @@ import { K } from '../src/sim/physics';
 
 function setup() {
   const w = new World({ seed: 7, players: [{ name: 'A', faction: meadowfolk }, { name: 'B', faction: meadowfolk }] });
-  const [a, b] = w.unitsOf(0);
+  // villagers are unarmed; use two macemen (each swings a crystal it carries)
+  const tc = w.baseOf(0)!;
+  const a = w.spawnUnit(0, 'maceman', tc)!, b = w.spawnUnit(0, 'maceman', tc)!;
   return { w, a, b };
 }
 const run = (w: World, ticks: number) => { for (let i = 0; i < ticks; i++) w.step(); };
@@ -13,20 +15,23 @@ const run = (w: World, ticks: number) => { for (let i = 0; i < ticks; i++) w.ste
 describe('shared carry capacity', () => {
   test('weapon crystal counts against capacity and slows the unit', () => {
     const { w, a } = setup();
-    expect(w.packLoad(a)).toBeCloseTo(1); // sprout's 1 kg crystal
-    expect(w.freeCapacity(a)).toBeCloseTo(a.stats.carryCapacity - 1);
+    const kit = a.stats.loadoutCrystal;
+    expect(kit).toBeGreaterThan(0);
+    expect(w.packLoad(a)).toBeCloseTo(kit); // its mace's crystal
+    expect(w.freeCapacity(a)).toBeCloseTo(a.stats.carryCapacity - kit);
   });
 
   test('give hands over surplus, receiver tops up its loadout first', () => {
     const { w, a, b } = setup();
     a.food = 8;
-    a.crystal = 1 + 5; // 5 kg surplus beyond its weapon
+    const kit = a.stats.loadoutCrystal;
+    a.crystal = kit + 5; // 5 kg surplus beyond its weapon
     b.crystal = 0; // b lost its weapon
     w.enqueue({ player: 0, cmd: { type: 'give', units: [a.id], to: b.id } });
     run(w, 60);
-    expect(b.crystal).toBeGreaterThanOrEqual(1);
+    expect(b.crystal).toBeGreaterThanOrEqual(5);
     expect(b.food).toBeCloseTo(8);
-    expect(a.crystal).toBeCloseTo(1); // kept its own weapon
+    expect(a.crystal).toBeCloseTo(kit); // kept its own weapon
     expect(w.packLoad(b)).toBeLessThanOrEqual(b.stats.carryCapacity + 1e-6);
   });
 

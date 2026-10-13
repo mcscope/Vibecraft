@@ -30,10 +30,9 @@ const villagerLook: HumanLook = {
 const villager: MeadowUnit = {
   id: 'villager',
   name: 'Villager',
-  description: 'Gathers berries and crystal, hauls them home, and can defend itself with a crystal-headed hammer.',
+  description: 'Gathers berries, wood and crystal, hauls them home and raises buildings. Unarmed.',
   mass: 45,
   physique: { muscle: 0.4, frame: 0.35, reserve: 0.25 },
-  attack: { style: 'strike', crystalMass: 1 },
   model(b, p) {
     human(b, p, villagerLook, armAngle(p), (h) => {
       if (!p.armed) return;
@@ -73,23 +72,23 @@ const slinger: MeadowUnit = {
 const maceman: MeadowUnit = {
   id: 'maceman',
   name: 'Crystal Maceman',
-  description: 'Heavy infantry in mail, swinging a 10 kg crystal-headed mace. Slow to swing, hard to stop.',
-  mass: 160,
+  description: 'Infantry in mail with a shield, swinging a 2 kg crystal-headed mace. Hard to stop.',
+  mass: 80,
   physique: { muscle: 0.45, frame: 0.45, reserve: 0.1 },
-  attack: { style: 'strike', crystalMass: 10 },
+  attack: { style: 'strike', crystalMass: 2 },
   refinement: 1.3,
   model(b, p) {
     const look: HumanLook = {
-      skin: '#c08e6c', hair: '#3a2a1c', head: 'helmet', scale: 1.12, bulk: 1.35, tabard: true, pads: true, beard: true,
+      skin: '#c08e6c', hair: '#3a2a1c', head: 'helmet', scale: 1.02, bulk: 1.15, tabard: true, pads: true, beard: true,
       tunic: IRON, trousers: { color: '#4a4038', tex: 'cloth' }, boots: LEATHER,
     };
     human(b, p, look, armAngle(p), (h) => {
       if (!p.armed) return;
       h.limb([-0.08, -0.01, 0], [0.55, 0.08, 0], 0.03, WOOD);
       h.sphere(0.06, [0.5, 0.07, 0], IRON);
-      h.crystal(0.32, [0.56, 0.08, 0], [0, 0, -Math.PI / 2 + 0.08]);
-      h.crystal(0.2, [0.52, 0.08, 0.06], [0.6, 0, -Math.PI / 2]);
-      h.crystal(0.2, [0.52, 0.08, -0.06], [-0.6, 0, -Math.PI / 2]);
+      h.crystal(0.22, [0.55, 0.08, 0], [0, 0, -Math.PI / 2 + 0.08]);
+      h.crystal(0.14, [0.52, 0.08, 0.05], [0.6, 0, -Math.PI / 2]);
+      h.crystal(0.14, [0.52, 0.08, -0.05], [-0.6, 0, -Math.PI / 2]);
     }, (h) => {
       // round shield, team-painted
       h.joint([0.05, -0.05, 0.08], [Math.PI / 2, 0, 0], (s) => {
@@ -275,7 +274,7 @@ export const buildings: MeadowBuilding[] = [
   },
   {
     id: 'watchtower', name: 'Watchtower', description: 'A throwing arm on stilts. Height adds energy and range; it burns food and crystal from its own stock.',
-    size: 1, materials: 150, attack: { mechanism: 120, crystalMass: 3, height: 5 }, model: models.watchtower,
+    size: 1, materials: 150, attack: { mechanism: 20, crystalMass: 0.5, height: 4 }, model: models.watchtower,
   },
 ];
 
