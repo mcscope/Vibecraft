@@ -18,7 +18,6 @@ describe('capital curve', () => {
     const hall = deriveBuilding(meadowfolk.buildings!.find((b) => b.id === 'great-hall')!, meadowfolk);
     expect(hall.effectiveCapital).toBe(2300);
     expect(hall.maxHp).toBe(6 * 900);
-    expect(hall.cacheCap).toBe(1800);
   });
 
   test('a design that its building cannot support is rejected', () => {

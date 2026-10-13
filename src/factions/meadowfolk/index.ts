@@ -45,7 +45,7 @@ const slinger: MeadowUnit = {
   description: 'Light skirmisher who whirls a sling of crystal chips. Fragile, but hits from range — then has to collect the spent crystals.',
   mass: 32,
   physique: { muscle: 0.5, frame: 0.25, reserve: 0.25 },
-  attack: { style: 'throw', crystalMass: 1.2, ammo: 8 },
+  attack: { style: 'throw', crystalMass: 1.2, ammo: 6 },
   model(b, p) {
     const look: HumanLook = {
       skin: '#b9875f', hair: '#2b1d14', head: 'band', scale: 0.88, bulk: 0.9,
@@ -200,8 +200,8 @@ const hurlhorn: MeadowUnit = {
 const mule: MeadowUnit = {
   id: 'mule',
   name: 'Mule Cart',
-  description: 'A patient mule hauling a two-wheeled cart. Keeps outlying buildings stocked from the town center.',
-  mass: 140,
+  description: 'A small, patient mule hauling a two-wheeled cart. Keeps outlying buildings stocked from the town center.',
+  mass: 80,
   physique: { muscle: 0.55, frame: 0.3, reserve: 0.15 },
   wheeled: true,
   canGather: false,

@@ -5,41 +5,29 @@
 import type { ResourceKind, Stock } from '../factions/types';
 import { CAP } from './physics';
 import {
-  MAX_QUEUE, plantKg, RESOURCES, TOWER_STOCK_SHOTS, emptyStock,
+  itemCost, MAX_QUEUE, plantKg, RESOURCES, TOWER_STOCK_SHOTS, emptyStock,
   type Building, type Order, type Unit, type World,
 } from './world';
+
+/** Berries kept where units are made, for them to eat. */
+export const FOOD_STASH = 20;
 
 export class Logistics {
   constructor(private readonly w: World) {}
 
   /** Stock a building wants kept on hand (carters fill up to this). */
+  /**
+   * What a building wants on hand: exactly what its queued orders still need
+   * (nothing is stocked ahead of time), a small berry stash where units are made
+   * (for them to eat), and a tower's ammo.
+   */
   supplyTargets(b: Building): Stock {
     const t = emptyStock();
     if (!b.complete) return t;
-    for (const id of b.spec.trains ?? []) {
-      const s = this.w.specOf(b.owner, id);
-      if (!s) continue;
-      // enough for the next unit, plus a little for crews/visitors to eat
-      t.food = Math.max(t.food, s.stats.foodCost + 20);
-      t.crystal = Math.max(t.crystal, s.stats.crystalCost + 10);
-    }
-    // orders waiting for stock come first
-    let waitFood = 0, waitCrystal = 0;
-    for (const q of b.queue) if (q.kind === 'unit' && !q.paid) { waitFood += q.food; waitCrystal += q.crystal; }
-    if (waitFood || waitCrystal) { t.food = Math.max(t.food, waitFood + 20); t.crystal = Math.max(t.crystal, waitCrystal + 5); }
-    // sowing buildings keep one planting's worth of seed
-    if (b.spec.sow) for (const r of b.sowing) t[r] = Math.max(t[r], plantKg(b.spec, r) * CAP.sowSeedFraction + 1);
-    if (b.stats.tower && b.spec.attack) {
-      const shots = b.spec.attack.stockShots ?? TOWER_STOCK_SHOTS;
-      t.crystal = Math.max(t.crystal, shots * b.spec.attack.crystalMass);
-    }
-    for (const id of b.spec.researches ?? []) {
-      const st = this.w.techStatus(b.owner, id, b);
-      if (!st.blocker) t.wood = Math.max(t.wood, st.cost);
-    }
-    // never ask for more than the cache can hold
-    const total = t.food + t.wood + t.crystal;
-    if (total > b.stats.cacheCap) for (const r of RESOURCES) t[r] *= b.stats.cacheCap / total;
+    const queued = this.reserve(b);
+    for (const r of RESOURCES) t[r] = queued[r];
+    if (b.spec.trains?.length) t.food += FOOD_STASH;
+    if (b.stats.tower && b.spec.attack) t.crystal += (b.spec.attack.stockShots ?? TOWER_STOCK_SHOTS) * b.spec.attack.crystalMass;
     return t;
   }
 
@@ -57,7 +45,7 @@ export class Logistics {
     for (const u of this.w.units.values()) {
       if (u.owner !== b.owner || u.order.kind !== 'cart') continue;
       const o = u.order;
-      const held = r === 'food' ? u.food : r === 'wood' ? u.wood : this.w.surplusCrystal(u);
+      const held = r === 'food' ? u.food : r === 'wood' ? u.wood : u.crystal;
       if (o.home === b.id && (o.phase === 'load' ? !!o.from && o.res === r : held > 0.05)) n++;
     }
     return n;
@@ -115,27 +103,27 @@ export class Logistics {
       const c = this.cartInbound(u);
       for (const r of RESOURCES) inbound[r] += c[r];
     }
-    const room = this.w.room(b);
-    for (const r of RESOURCES) out[r] = Math.max(0, Math.min(target[r] - b.stock[r] - inbound[r], room));
+    for (const r of RESOURCES) out[r] = Math.max(0, target[r] - b.stock[r] - inbound[r]);
     return out;
   }
 
   /** What a building's own waiting orders have claimed (queued, not yet paid for). */
   reserve(b: Building): Stock {
     const out = emptyStock();
-    for (const q of b.queue) if (q.kind === 'unit' && !q.paid) { out.food += q.food; out.crystal += q.crystal; }
+    for (const q of b.queue) if (!q.paid) { const c = itemCost(q); for (const r of RESOURCES) out[r] += c[r]; }
     return out;
   }
 
   /** Does this building have an order waiting for stock? */
   waiting(b: Building): boolean {
-    return b.queue.some((q) => q.kind === 'unit' && !q.paid);
+    return b.queue.some((q) => !q.paid);
   }
 
   /**
    * What a building can give up right now: the base keeps what its waiting orders
-   * claimed, other buildings keep their supply target. But the base comes first:
-   * toward an order waiting there, any other building gives up everything it has.
+   * claimed; other buildings keep their supply target, and a sowing building one
+   * planting's seed (it plants from drop-offs, it never asks for seed). But the base
+   * comes first: toward an order waiting there, any other building gives up everything.
    * Less what carts already heading there to load are going to take.
    */
   spare(b: Building, except?: Unit, forBaseOrder = false): Stock {
@@ -143,17 +131,13 @@ export class Logistics {
     if (!b.complete) return out;
     const isBase = b === this.w.baseOf(b.owner);
     const keep = isBase ? this.reserve(b) : forBaseOrder ? emptyStock() : this.supplyTargets(b);
+    if (!isBase && !forBaseOrder && b.spec.sow) for (const r of b.sowing) keep[r] = Math.max(keep[r], plantKg(b.spec, r) * CAP.sowSeedFraction);
     for (const r of RESOURCES) out[r] = Math.max(0, b.stock[r] - keep[r]);
     for (const u of this.w.units.values()) {
       if (u === except || u.order.kind !== 'cart' || u.order.phase !== 'load' || u.order.from !== b.id) continue;
       out[u.order.res] = Math.max(0, out[u.order.res] - this.w.freeCapacity(u));
     }
     return out;
-  }
-
-  /** Is this building below its supply target for a resource? */
-  wants(b: Building, r: ResourceKind): boolean {
-    return this.supplyTargets(b)[r] - b.stock[r] > 1;
   }
 
   /** Wood already in the packs of units building this site. */
@@ -171,7 +155,7 @@ export class Logistics {
   cartInbound(u: Unit): Stock {
     const out = emptyStock();
     if (u.order.kind !== 'cart') return out;
-    if (u.order.phase === 'deliver') { out.food = u.food; out.wood = u.wood; out.crystal = this.w.surplusCrystal(u); }
+    if (u.order.phase === 'deliver') { out.food = u.food; out.wood = u.wood; out.crystal = u.crystal; }
     else if (u.order.from) out[u.order.res] = this.w.freeCapacity(u);
     return out;
   }
@@ -194,7 +178,7 @@ export class Logistics {
     if (o.phase === 'deliver') {
       const dest = this.w.buildings.get(o.home);
       const to = dest && dest.owner === u.owner ? dest : base;
-      if (u.food + u.wood + this.w.surplusCrystal(u) > 0.05) {
+      if (u.food + u.wood + u.crystal > 0.05) {
         if (!this.w.moveToBuilding(u, to)) return moving();
         if (to.complete) this.w.deposit(u, to);
         else {
@@ -218,7 +202,7 @@ export class Logistics {
         const k = Math.floor(Math.min(this.w.freeCapacity(u), want, spare[r]));
         if (k > 0) { src.stock[r] -= k; this.w.carry(u, r, k); }
       }
-      if (u.food + u.wood + this.w.surplusCrystal(u) > 0.05) o.phase = 'deliver';
+      if (u.food + u.wood + u.crystal > 0.05) o.phase = 'deliver';
       else o.from = 0; // nothing there after all: choose again
       return false;
     }

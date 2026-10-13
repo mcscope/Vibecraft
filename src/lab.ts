@@ -70,7 +70,6 @@ async function main(): Promise<void> {
           <div class="st"><span>With links</span><b>${st.effectiveCapital}</b></div>
           <div class="st"><span>Supports refinement</span><b>≤ ${st.maxRefinement.toFixed(2)}×</b></div>
           <div class="st"><span>Hit points</span><b>${st.maxHp}</b></div>
-          <div class="st"><span>Cache</span><b>${st.cacheCap} kg</b></div>
           <div class="st"><span>Footprint</span><b>${b.size}×${b.size}</b></div>
           ${st.tower ? `<div class="st"><span>Tower damage</span><b>${Math.round(st.tower.damage)}</b></div><div class="st"><span>Tower range</span><b>${st.tower.range.toFixed(1)}</b></div>` : ''}
         </div>`;

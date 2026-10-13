@@ -124,12 +124,12 @@ export class SkirmishAI {
       if (this.tryTrain(w, b, trains[i % trains.length], out)) this.trainIndex.set(b.id, i + 1);
     }
 
-    // ── Research whatever is affordable.
+    // ── Research: queue the next available tech when the building is idle (it waits for its wood).
     for (const b of buildings) {
       if (!b.complete || b.queue.length > 0) continue;
       for (const id of b.spec.researches ?? []) {
         const st = w.techStatus(this.player, id, b);
-        if (!st.blocker && b.stock.wood >= st.cost) { out.push({ type: 'research', building: b.id, techId: id }); break; }
+        if (!st.blocker) { out.push({ type: 'research', building: b.id, techId: id }); break; }
       }
     }
 

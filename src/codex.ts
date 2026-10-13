@@ -7,7 +7,7 @@ import { unitSprite } from './art/contract';
 import { blit, spriteIcon } from './art/draw';
 import { meadowfolk } from './factions/meadowfolk';
 import { training } from './factions/training';
-import { capitalFor, CAP, derive, deriveBuilding, prerequisites, techCost, techGate, techStart, techTime } from './sim/physics';
+import { capitalFor, CAP, derive, deriveBuilding, K, prerequisites, techCost, techGate, techStart, techTime } from './sim/physics';
 import { TEAM_COLORS } from './render/artbank';
 import { statsTable } from './ui/hud';
 import { esc, f1, n0 } from './ui/format';
@@ -179,7 +179,7 @@ function unitAbilities(u: UnitSpec): string[] {
       : `<b>Strikes</b> with a ${u.attack.crystalMass} kg crystal. ${n0(d.damage)} damage, reach ${f1(d.range)}, ${f1(d.dps)} per second.`);
   } else if (!u.dummy) out.push('<b>Unarmed.</b>');
   if (u.role === 'carter') out.push(`<b>Supply cart.</b> Produced automatically; loads ${n0(d.carryCapacity)} kg at its home building and carries it to whichever building needs it most.`);
-  if (u.wheeled) out.push('<b>Wheeled.</b> Carries twice as much; a full load slows it less and costs fewer calories to haul.');
+  if (u.wheeled) out.push(`<b>Wheeled.</b> Carries ${K.wheelCarry}× as much for its muscle; a full load slows it less and costs fewer calories to haul.`);
   if ((u.canGather ?? true) && !u.dummy && u.role !== 'carter') out.push(`<b>Gathers</b> ${f1(d.gatherRate, 2)} kg/s and carries ${n0(d.carryCapacity)} kg; also builds.`);
   if ((u.refinement ?? 1) > 1) out.push(`<b>Refined ${f1(u.refinement!, 2)}×</b> in combat: HP and damage ×${f1(Math.pow(u.refinement!, 2 / 3), 2)}. Its building needs ${n0(capitalFor(u.refinement!))} capital.`);
   if ((u.workRefinement ?? 1) > 1) out.push(`<b>Work-refined ${f1(u.workRefinement!, 2)}×</b>: gathers and walks that much faster.`);
@@ -220,7 +220,7 @@ function buildingAbilities(b: BuildingSpec): string[] {
   if (b.attack && st.tower) out.push(`<b>Tower.</b> ${b.attack.mechanism} kg mechanism throws ${b.attack.crystalMass} kg crystals from ${b.attack.height} m: ${n0(st.tower.damage)} damage, range ${f1(st.tower.range)}, every ${f1(st.tower.cooldown)} s. Each shot uses one crystal from its own stock.`);
   if (b.gatherBoost) out.push(`<b>Gathering ×${f1(st.gatherBoost, 2)}</b> for ${b.gatherBoost.resources.map(res).join(', ')} within ${b.gatherBoost.radius} tiles, from its own capital. Lose the building, lose the boost.`);
   if (b.sow) out.push(`<b>Sows</b> ${b.sow.resources.map(res).join(' and ')} within ${b.sow.radius} tiles. Its ${b.sow.mechanism} kg sowing mechanism plants ${f1(st.sowRate)} kg of future yield per second; seed costs ${Math.round(CAP.sowSeedFraction * 100)}% of the yield from its own stock, and plants grow to full in ${CAP.sowGrowSec} s.`);
-  out.push(`<b>Drop-off and store.</b> Holds up to ${n0(st.cacheCap)} kg.`);
+  out.push(`<b>Drop-off and store.</b> Gatherers unload at the nearest building; it holds any amount.`);
   return out;
 }
 
@@ -251,7 +251,6 @@ function buildingDetail(b: BuildingSpec): string {
       ${row('With links', n0(st.effectiveCapital), 'Plus every prerequisite, counted once')}
       ${row('Supports', `≤ ${f1(st.maxRefinement, 2)}×`, 'Highest refinement it can train or research toward')}
       ${row('Hit points', n0(st.maxHp), `${CAP.hpPerMaterial} per kg of materials`)}
-      ${row('Store', `${n0(st.cacheCap)} kg`)}
       ${row('Footprint', `${b.size}×${b.size}`)}
       ${st.attackCost ? row('Equipment', `${n0(st.attackCost)} ${res('wood')}`, 'Weapon, height and sowing mechanism; not capital') : ''}
     </div>`;

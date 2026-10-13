@@ -38,9 +38,9 @@ export const K = {
   minSpeed: 0.35,
   maxSpeed: 4.0,
   loadSlowdown: 0.6, // full pack => speed × (1 - 0.6)
-  carryPerMuscleKg: 1.0,
+  carryPerMuscleKg: 0.5,
   /** Wheels: capacity multiplier, and how much of the usual load penalty / haul cost remains. */
-  wheelCarry: 2,
+  wheelCarry: 4,
   wheelLoadSlowdown: 0.35,
   wheelHaulCost: 0.3,
   // Attack
@@ -96,6 +96,8 @@ export interface DerivedStats {
   carryCapacity: number;
   /** kg of crystal the unit keeps as its loadout (weapon or ammo). */
   loadoutCrystal: number;
+  /** kg the cargo pack holds: carry capacity less the weapon pack (loadout). */
+  cargoCapacity: number;
   radius: number;
   sight: number;
 
@@ -204,7 +206,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
 
   return {
     mass, physique, muscleMass, frameMass, reserveMass,
-    maxHp, maxCalories, speed, canAttack, wheeled, carryCapacity, loadoutCrystal, radius, sight,
+    maxHp, maxCalories, speed, canAttack, wheeled, carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, sight,
     limbSpeed, maxAttackEnergy, crystalVelocity, attackEnergy, damage, attackCalories, cooldown, range,
     dps: damage / cooldown,
     gatherRate,
@@ -264,7 +266,6 @@ export const CAP = {
   techMinSec: 10,
   hpPerMaterial: 6,
   kgPerTile: 150,
-  cachePerMaterial: 2,
   /** Height costs mechanism × height × this, in building resource. */
   heightCost: 0.25,
   /** Sowing: kg of future yield planted per second, per kg of sowing mechanism. */
@@ -309,7 +310,6 @@ export interface BuildingStats {
   effectiveCapital: number;
   /** Highest unit refinement this building can train. */
   maxRefinement: number;
-  cacheCap: number;
   /** Building resource for equipment — weapon, its height, sowing mechanism (not capital). */
   attackCost: number;
   /** kg of yield planted per second (0 if it doesn't sow). */
@@ -360,7 +360,6 @@ export function deriveBuilding(spec: BuildingSpec, faction: FactionSpec): Buildi
     capital,
     effectiveCapital,
     maxRefinement: refinementFor(effectiveCapital),
-    cacheCap: CAP.cachePerMaterial * capital,
     attackCost,
     totalCost: Math.ceil(capital + attackCost),
     minSize: Math.ceil(Math.sqrt(capital / CAP.kgPerTile)),

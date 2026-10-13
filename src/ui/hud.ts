@@ -1,8 +1,8 @@
 // DOM overlay: resources, selection panel, build / train / research buttons, tooltips.
-import type { ResourceKind, UnitSpec } from '../factions/types';
-import { MAX_QUEUE, plantKg, RESOURCES, type Building, type Unit, type World } from '../sim/world';
+import type { ResourceKind, Stock, UnitSpec } from '../factions/types';
+import { itemCost, MAX_QUEUE, plantKg, RESOURCES, type Building, type Unit, type World } from '../sim/world';
 import { CAP, capitalFor, derive, type DerivedStats } from '../sim/physics';
-import { fmt, have, n0, need, pct } from './format';
+import { f1, fmt, have, n0, need, pct } from './format';
 import { TEAM_COLORS, unitFrame } from '../render/renderer';
 import { blit, spriteIcon, spriteToCanvas } from '../art/draw';
 import { unitSprite } from '../art/contract';
@@ -34,7 +34,7 @@ export function statsTable(spec: UnitSpec, stats: DerivedStats = derive(spec)): 
       ${row('Hit points', fmt(d.maxHp), 'From frame mass × refinement^⅔')}
       ${row('Calories', fmt(d.maxCalories), 'From reserve mass')}
       ${row('Speed', `${fmt(d.speed, 2)} t/s`, 'Unloaded; packs slow you down')}
-      ${row('Carry', `${have(d.carryCapacity)} kg`, 'Shared by weapon, ammo and cargo')}
+      ${row('Carry', d.loadoutCrystal > 0 ? `${have(d.cargoCapacity)} kg + ${f1(d.loadoutCrystal)} kg weapon` : `${have(d.cargoCapacity)} kg`, 'Cargo pack, plus the weapon pack for its crystals')}
       ${row('Crystal', spec.attack && d.canAttack ? `${spec.attack.crystalMass} kg ${spec.attack.style}${spec.attack.style === 'throw' ? ` ×${Math.round(d.loadoutCrystal / spec.attack.crystalMass)}` : ''}` : 'none')}
       ${row('Damage', fmt(d.damage), '½·m·v² × efficiency × refinement^⅔')}
       ${row('Dmg / sec', fmt(d.dps, 1))}
@@ -180,7 +180,6 @@ export class Hud {
           <div class="st"><span>With links</span><b>${n0(st.effectiveCapital)}</b></div>
           <div class="st"><span>Supports refinement</span><b>≤ ${fmt(st.maxRefinement, 2)}×</b></div>
           <div class="st"><span>Hit points</span><b>${n0(st.maxHp)}</b></div>
-          <div class="st"><span>Cache</span><b>${n0(st.cacheCap)} kg</b></div>
           <div class="st"><span>Footprint</span><b>${spec.size}×${spec.size}</b></div>
           ${st.attackCost ? `<div class="st"><span>Weapon + height</span><b>${n0(st.attackCost)}</b></div>` : ''}
         </div>
@@ -254,13 +253,13 @@ export class Hud {
     this.setBar('hp', u.hp, u.stats.maxHp, `${Math.ceil(u.hp)} / ${Math.round(u.stats.maxHp)}`);
     if (!u.dummy) {
       this.setBar('cal', u.cal, u.stats.maxCalories, `${Math.floor(u.cal)} / ${Math.round(u.stats.maxCalories)} cal${u.exhausted ? ' — exhausted' : u.cal < u.stats.maxCalories * 0.2 ? ' — hungry' : ''}`);
-      const load = w.packLoad(u);
+      const load = w.cargo(u);
       const names = this.names();
       const parts = ([['crystal', u.crystal], ['food', u.food], ['wood', u.wood]] as Array<[ResourceKind, number]>).filter(([, v]) => v > 0.05).map(([k, v]) => `${names[k]} ${have(v)}`).join(' · ');
       const pack = this.panel.querySelector<HTMLElement>('[data-bar="pack"]');
       if (pack) {
-        // one segment per resource, each in its own colour
-        const cap = u.stats.carryCapacity;
+        // the cargo pack: one segment per resource, each in its own colour (weapon pack shown separately)
+        const cap = u.stats.cargoCapacity;
         for (const [r, v] of [['crystal', u.crystal], ['food', u.food], ['wood', u.wood]] as Array<[ResourceKind, number]>) {
           const seg = pack.querySelector<HTMLElement>(`i.${r}`);
           if (seg) seg.style.width = pct(v, cap);
@@ -271,7 +270,7 @@ export class Hud {
     const ammo = this.panel.querySelector<HTMLElement>('[data-ammo]');
     if (ammo) {
       const max = Math.max(1, Math.round(u.stats.loadoutCrystal / u.crystalMass));
-      const have = Math.min(max, Math.floor(u.crystal / u.crystalMass + 1e-6));
+      const have = Math.min(max, Math.floor(u.ammo / u.crystalMass + 1e-6));
       const sig = `${have}/${max}`;
       if (ammo.dataset.sig !== sig) {
         ammo.dataset.sig = sig;
@@ -291,12 +290,12 @@ export class Hud {
     if (bar) {
       bar.querySelector<HTMLElement>('i')!.style.width = item ? pct(item.progress, item.total) : '0%';
       const label = bar.querySelector<HTMLElement>('span');
-      if (label) label.textContent = item && item.kind === 'unit' && !item.paid ? `Waiting for ${this.missing(b, item.food, item.crystal)} here — ${this.supplyNote(b, item.food, item.crystal)}` : '';
+      if (label) label.textContent = item && !item.paid ? `Waiting for ${this.missing(b, itemCost(item))} here — ${this.supplyNote(b, itemCost(item))}` : '';
     }
     const names = this.names();
     const target = w.logistics.supplyTargets(b);
     for (const r of RESOURCES) {
-      const max = target[r] > 1 ? target[r] : Math.max(1, b.stats.cacheCap);
+      const max = Math.max(1, target[r], b.stock[r]);
       this.setBar(`stock-${r}`, b.stock[r], max, target[r] > 1 ? `${names[r]} ${have(b.stock[r])} / ${need(target[r])}` : `${names[r]} ${have(b.stock[r])}`);
     }
     const carts = this.panel.querySelector('[data-carts]');
@@ -318,7 +317,7 @@ export class Hud {
     this.panel.querySelectorAll<HTMLElement>('[data-train]').forEach((btn) => {
       const s = w.specOf(this.player, btn.dataset.train!)!.stats;
       btn.classList.toggle('poor', b.queue.length >= MAX_QUEUE);
-      const miss = this.missing(b, s.foodCost, s.crystalCost);
+      const miss = this.missing(b, { food: s.foodCost, wood: 0, crystal: s.crystalCost });
       btn.classList.toggle('short', !!miss);
       const note = btn.querySelector<HTMLElement>('.need');
       if (note) note.textContent = miss ? `needs ${miss} here` : '';
@@ -327,16 +326,19 @@ export class Hud {
     this.panel.querySelectorAll<HTMLElement>('[data-research]').forEach((btn) => {
       const st = w.techStatus(this.player, btn.dataset.research!, b);
       btn.classList.toggle('locked', !!st.blocker);
-      btn.classList.toggle('poor', !st.blocker && b.stock.wood < st.cost);
+      const miss = st.blocker ? '' : this.missing(b, { food: 0, wood: st.cost, crystal: 0 });
+      btn.classList.toggle('short', !!miss);
       const c = btn.querySelector('.cost');
       if (c) c.textContent = st.blocker ?? `${st.cost} ${names.wood}`;
+      const note = btn.querySelector<HTMLElement>('.need');
+      if (note) note.textContent = miss ? `needs ${miss} here` : '';
     });
   }
 
   /** Whether anything is actually on its way to cover a shortfall, and if not, why. */
-  private supplyNote(b: Building, food: number, crystal: number): string {
+  private supplyNote(b: Building, cost: Stock): string {
     const w = this.world;
-    const short = (['food', 'crystal'] as const).filter((r) => (r === 'food' ? food : crystal) > b.stock[r] + 1e-6);
+    const short = RESOURCES.filter((r) => cost[r] > b.stock[r] + 1e-6);
     const coming = short.reduce((n, r) => n + w.logistics.cartsBringing(b, r), 0);
     if (coming) return `${coming} cart${coming > 1 ? 's' : ''} bringing it`;
     const base = w.baseOf(b.owner);
@@ -347,12 +349,9 @@ export class Hud {
   }
 
   /** What this building is short of for a cost, in words ("6 crystal", "20 berries + 4 crystal"), or ''. */
-  private missing(b: Building, food: number, crystal: number): string {
+  private missing(b: Building, cost: Stock): string {
     const n = this.names();
-    return [
-      food > b.stock.food + 1e-6 ? `${need(food - b.stock.food)} ${n.food.toLowerCase()}` : '',
-      crystal > b.stock.crystal + 1e-6 ? `${need(crystal - b.stock.crystal)} ${n.crystal.toLowerCase()}` : '',
-    ].filter(Boolean).join(' + ');
+    return RESOURCES.filter((r) => cost[r] > b.stock[r] + 1e-6).map((r) => `${need(cost[r] - b.stock[r])} ${n[r].toLowerCase()}`).join(' + ');
   }
 
   private setBar(name: string, v: number, max: number, label: string): void {
@@ -377,7 +376,7 @@ export class Hud {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
       const live = p.unit && this.world.units.has(p.unit.id) ? p.unit : undefined;
-      const f = live ? unitFrame(this.world, live) : { anim: 'idle' as const, time: this.t };
+      const f = live ? unitFrame(live) : { anim: 'idle' as const, time: this.t };
       const sprite = unitSprite(sheet, f.anim, live ? live.heading : 1, f);
       const zoom = Math.min(2.4, (h * 0.78) / sheet.height);
       ctx.imageSmoothingQuality = 'high';
@@ -500,7 +499,7 @@ export class Hud {
       if (!t) return '';
       const done = w.players[this.player].researched.includes(id);
       return `<button class="tech${done ? ' done' : ''}" data-research="${id}" data-building="${b.id}">
-        <b>${t.name}</b><span class="cost"></span></button>`;
+        <b>${t.name}</b><span class="cost"></span><span class="need"></span></button>`;
     }).join('');
     const queue = b.queue.map((q, i) => `<span class="q" data-cancel="${b.id}" data-index="${i}" title="Click to cancel">${q.kind === 'unit' ? w.specOf(b.owner, q.specId)?.spec.name : w.techOf(b.owner, q.techId)?.name}</span>`).join('');
     return `

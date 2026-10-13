@@ -33,11 +33,10 @@ export interface RenderOptions {
 }
 
 /** Which animation a unit is showing, and how far into it (seconds for loops, progress for one-shots). */
-export function unitFrame(w: World, u: Unit): { anim: ArtAnim; time?: number; progress?: number } {
+export function unitFrame(u: Unit): { anim: ArtAnim; time?: number; progress?: number } {
   switch (u.anim) {
     case 'walk': {
-      const surplus = w.surplusCrystal(u);
-      const most = Math.max(u.food, u.wood, surplus);
+      const most = Math.max(u.food, u.wood, u.crystal); // what the cargo pack mostly holds
       const anim: ArtAnim = most <= 0.5 ? 'walk' : most === u.food ? 'carryFood' : most === u.wood ? 'carryWood' : 'carryCrystal';
       // stride rate follows actual speed
       return { anim, time: u.animT * Math.max(0.5, u.stats.speed) / 1.7 };
@@ -289,7 +288,7 @@ export class Renderer {
       sp.zIndex = x + y;
       const art = this.bank.unit(u.owner, u.specId);
       if (art) {
-        const f = unitFrame(this.world, u);
+        const f = unitFrame(u);
         this.setFrame(sp, unitSprite(art, f.anim, u.heading, f));
       }
       // no crystal to fight with: visibly greyed out
@@ -458,7 +457,7 @@ export class Renderer {
       if (u.throws) {
         // ammo: one pip per throw left
         const max = Math.max(1, Math.round(u.stats.loadoutCrystal / u.crystalMass));
-        const have = Math.min(max, Math.floor(u.crystal / u.crystalMass + 1e-6));
+        const have = Math.min(max, Math.floor(u.ammo / u.crystalMass + 1e-6));
         const pw = Math.max(2, (w - (max - 1)) / max);
         top += 3;
         rect(sx - w / 2 - 1, top - 1, w + 2, 4, 0x000000, 0.8);

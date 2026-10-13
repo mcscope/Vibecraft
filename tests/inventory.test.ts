@@ -12,27 +12,39 @@ function setup() {
 }
 const run = (w: World, ticks: number) => { for (let i = 0; i < ticks; i++) w.step(); };
 
-describe('shared carry capacity', () => {
-  test('weapon crystal counts against capacity and slows the unit', () => {
+describe('weapon pack and cargo pack', () => {
+  test('the weapon sits in its own pack: it weighs on the unit but leaves the cargo pack free', () => {
     const { w, a } = setup();
     const kit = a.stats.loadoutCrystal;
     expect(kit).toBeGreaterThan(0);
-    expect(w.packLoad(a)).toBeCloseTo(kit); // its mace's crystal
-    expect(w.freeCapacity(a)).toBeCloseTo(a.stats.carryCapacity - kit);
+    expect(a.ammo).toBeCloseTo(kit); // its mace's crystal
+    expect(a.crystal).toBe(0);
+    expect(w.packLoad(a)).toBeCloseTo(kit); // still slows it down
+    expect(w.freeCapacity(a)).toBeCloseTo(a.stats.cargoCapacity);
+    expect(a.stats.cargoCapacity).toBeCloseTo(a.stats.carryCapacity - kit);
   });
 
-  test('give hands over surplus, receiver tops up its loadout first', () => {
+  test('crystal in the cargo pack re-arms an empty weapon pack', () => {
+    const { w, a } = setup();
+    a.ammo = 0; a.crystal = 5; a.order = { kind: 'idle' };
+    run(w, 1);
+    expect(a.ammo).toBeCloseTo(a.stats.loadoutCrystal);
+    expect(a.crystal).toBeCloseTo(5 - a.stats.loadoutCrystal);
+  });
+
+  test('give hands over cargo; crystal re-arms the receiver first', () => {
     const { w, a, b } = setup();
     a.food = 8;
     const kit = a.stats.loadoutCrystal;
-    a.crystal = kit + 5; // 5 kg surplus beyond its weapon
-    b.crystal = 0; // b lost its weapon
+    a.crystal = 5; // cargo
+    b.ammo = 0; // b lost its weapon
     w.enqueue({ player: 0, cmd: { type: 'give', units: [a.id], to: b.id } });
     run(w, 60);
-    expect(b.crystal).toBeGreaterThanOrEqual(5);
+    expect(b.ammo).toBeCloseTo(kit);
+    expect(b.crystal).toBeCloseTo(5 - kit);
     expect(b.food).toBeCloseTo(8);
-    expect(a.crystal).toBeCloseTo(kit); // kept its own weapon
-    expect(w.packLoad(b)).toBeLessThanOrEqual(b.stats.carryCapacity + 1e-6);
+    expect(a.ammo).toBeCloseTo(kit); // kept its own weapon
+    expect(w.cargo(b)).toBeLessThanOrEqual(b.stats.cargoCapacity + 1e-6);
   });
 
   test("can't give to an enemy", () => {
@@ -66,10 +78,10 @@ describe('shared carry capacity', () => {
     const target = w.unitsOf(1)[0];
     target.x = p.x + 4; target.y = p.y; target.px = target.x; target.py = target.y;
     target.order = { kind: 'idle' };
-    const before = p.crystal;
+    const before = p.ammo;
     w.enqueue({ player: 0, cmd: { type: 'attack', units: [p.id], target: target.id } });
     run(w, 20 * 3);
-    expect(p.crystal).toBeLessThan(before);
+    expect(p.ammo).toBeLessThan(before);
     const shards = [...w.nodes.values()].filter((n) => n.shard);
     expect(shards.length).toBeGreaterThan(0);
   });
@@ -82,11 +94,11 @@ describe('big units picking up crystals', () => {
     const w = new World({ seed: 3, scenario: provingGrounds(), players: [{ name: 'A', faction: meadowfolk }, { name: 'T', faction: training }] });
     const horn = w.unitsOf(0).find((u) => u.specId === 'hurlhorn')!;
     const dummy = w.unitsOf(1)[0];
-    horn.crystal = 0;
+    horn.ammo = 0; horn.crystal = 0;
     horn.x = horn.px = dummy.x - 4; horn.y = horn.py = dummy.y;
     const shard = w.addNode({ type: 'crystal', x: dummy.x, y: dummy.y, amount: 12, shard: true, tree: false });
     w.enqueue({ player: 0, cmd: { type: 'gather', units: [horn.id], node: shard.id } });
     run(w, 20 * 15);
-    expect(horn.crystal).toBeGreaterThanOrEqual(12 - 1e-6);
+    expect(horn.ammo + horn.crystal).toBeGreaterThanOrEqual(12 - 1e-6);
   });
 });

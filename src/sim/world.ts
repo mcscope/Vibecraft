@@ -83,10 +83,12 @@ export interface Unit {
   hp: number;
   cal: number;
   exhausted: boolean;
-  /** Pack contents (kg). Crystal includes the weapon / ammo loadout. */
+  /** Cargo pack (kg): what it gathers or hauls. */
   food: number;
   wood: number;
   crystal: number;
+  /** Weapon pack (kg of crystal): its weapon, or its throwing crystals. Up to stats.loadoutCrystal. */
+  ammo: number;
   order: Order;
   /** Order to return to after an automatic detour (eating, rearming). */
   resume: Order | null;
@@ -110,10 +112,15 @@ export interface Unit {
   gatherAcc: number;
 }
 
+/** `paid` false: queued, still waiting for this building's stock to cover it (units and techs alike). */
 export type QueueItem =
-  /** `paid` false: queued but still waiting for this building's stock to cover it. */
   | { kind: 'unit'; specId: string; progress: number; total: number; food: number; crystal: number; home: number; paid: boolean }
-  | { kind: 'tech'; techId: string; progress: number; total: number; wood: number };
+  | { kind: 'tech'; techId: string; progress: number; total: number; wood: number; paid: boolean };
+
+/** What a queue item costs. */
+export function itemCost(q: QueueItem): Stock {
+  return q.kind === 'unit' ? { food: q.food, wood: 0, crystal: q.crystal } : { food: 0, wood: q.wood, crystal: 0 };
+}
 
 export interface Building {
   id: number;
@@ -282,18 +289,19 @@ export class World {
     }
     return first;
   }
-  /** Sum of every cache the player owns. */
+  /** Sum of every finished building's stock the player owns. */
   stockOf(owner: number): Stock {
     const s = emptyStock();
     for (const b of this.buildings.values()) if (b.owner === owner && b.complete) for (const r of RESOURCES) s[r] += b.stock[r];
     return s;
   }
-  stored(b: Building): number { return b.stock.food + b.stock.wood + b.stock.crystal; }
-  room(b: Building): number { return b.complete ? Math.max(0, b.stats.cacheCap - this.stored(b)) : 0; }
-  packLoad(u: Unit): number { return u.food + u.wood + u.crystal; }
-  freeCapacity(u: Unit): number { return Math.max(0, u.stats.carryCapacity - this.packLoad(u)); }
-  armed(u: Unit): boolean { return u.stats.canAttack && u.crystal >= u.crystalMass - 1e-6; }
-  surplusCrystal(u: Unit): number { return Math.max(0, u.crystal - u.stats.loadoutCrystal); }
+  /** Everything carried, both packs (it all slows you down). */
+  packLoad(u: Unit): number { return this.cargo(u) + u.ammo; }
+  /** The cargo pack: what's gathered or hauled. */
+  cargo(u: Unit): number { return u.food + u.wood + u.crystal; }
+  /** Room left in the cargo pack (the weapon pack is separate). */
+  freeCapacity(u: Unit): number { return Math.max(0, u.stats.cargoCapacity - this.cargo(u)); }
+  armed(u: Unit): boolean { return u.stats.canAttack && u.ammo >= u.crystalMass - 1e-6; }
 
   /** Current refinement of a unit type for a player (design + techs). */
   refinementOf(owner: number, unitId: string, channel: 'combat' | 'work' = 'combat'): number {
@@ -444,10 +452,10 @@ export class World {
         const b = ownBuilding(cmd.building);
         if (!b || !b.complete || b.queue.length >= MAX_QUEUE || !b.spec.researches?.includes(cmd.techId)) return;
         const st = this.techStatus(player, cmd.techId, b);
-        if (st.blocker || b.stock.wood < st.cost) return;
-        b.stock.wood -= st.cost;
+        if (st.blocker) return;
+        // queued like a unit: paid from this building's stock when it reaches the front
         this.players[player].techs.push(cmd.techId);
-        b.queue.push({ kind: 'tech', techId: cmd.techId, progress: 0, total: techTime(st.cost), wood: st.cost });
+        b.queue.push({ kind: 'tech', techId: cmd.techId, progress: 0, total: techTime(st.cost), wood: st.cost, paid: false });
         return;
       }
       case 'cancelTrain': {
@@ -455,12 +463,8 @@ export class World {
         if (!b || b.queue.length === 0) return;
         const at = cmd.index !== undefined && cmd.index >= 0 && cmd.index < b.queue.length ? cmd.index : b.queue.length - 1;
         const [item] = b.queue.splice(at, 1);
-        if (item.kind === 'unit') { if (item.paid) { b.stock.food += item.food; b.stock.crystal += item.crystal; } }
-        else {
-          b.stock.wood += item.wood;
-          const p = this.players[player];
-          p.techs = p.techs.filter((t) => t !== item.techId);
-        }
+        if (item.paid) { const c = itemCost(item); for (const r of RESOURCES) b.stock[r] += c[r]; }
+        if (item.kind === 'tech') { const p = this.players[player]; p.techs = p.techs.filter((t) => t !== item.techId); }
         return;
       }
       case 'rally': {
@@ -498,7 +502,7 @@ export class World {
           if (u.stats.gatherRate <= 0) continue;
           const base = this.logistics.nearestProducer(u) ?? this.baseOf(player);
           if (!base || base === b) continue;
-          const loaded = u.food + u.wood + this.surplusCrystal(u) > 0.05;
+          const loaded = u.food + u.wood + u.crystal > 0.05;
           set([u], { kind: 'cart', base: base.id, home: b.id, pinned: true, phase: loaded ? 'deliver' : 'load', res: 'food' });
         }
         return;
@@ -580,7 +584,7 @@ export class World {
       crystalMass: s.stats.canAttack ? Math.min(s.stats.carryCapacity, spec.attack!.crystalMass) : 0,
       x, y, px: x, py: y,
       hp: s.stats.maxHp, cal: s.stats.maxCalories, exhausted: false,
-      food: 0, wood: 0, crystal: s.stats.loadoutCrystal,
+      food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
       order: { kind: 'idle' }, resume: null, engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
       cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0,
@@ -651,18 +655,17 @@ export class World {
       }
     }
     let item = b.queue[0];
-    if (item && item.kind === 'unit' && !item.paid && b.stock.food >= item.food - 1e-6 && b.stock.crystal >= item.crystal - 1e-6) {
-      b.stock.food -= item.food;
-      b.stock.crystal -= item.crystal;
-      item.paid = true;
+    if (item && !item.paid) {
+      const c = itemCost(item);
+      if (RESOURCES.every((r) => b.stock[r] >= c[r] - 1e-6)) { for (const r of RESOURCES) b.stock[r] -= c[r]; item.paid = true; }
     }
-    if (item && item.kind === 'unit' && !item.paid) {
+    if (item && !item.paid) {
       // still waiting for stock: let anything already paid for behind it go first
-      const i = b.queue.findIndex((q) => q.kind === 'tech' || q.paid);
+      const i = b.queue.findIndex((q) => q.paid);
       if (i > 0) { const [ready] = b.queue.splice(i, 1); b.queue.unshift(ready); item = ready; }
     }
     if (item) {
-      const waiting = item.kind === 'unit' && !item.paid;
+      const waiting = !item.paid;
       const capped = item.kind === 'unit' && this.unitsOf(b.owner).length >= MAX_UNITS_PER_PLAYER;
       if (!capped && !waiting) item.progress += DT;
       if (item.progress >= item.total) {
@@ -778,6 +781,8 @@ export class World {
     if (u.repathIn > 0) u.repathIn--;
     if (u.exhausted && u.cal > st.maxCalories * K.exhaustedRecoverFraction) u.exhausted = false;
     if (u.cal <= 0) { u.cal = 0; u.exhausted = true; }
+    // re-arm from its own cargo: crystal it carries tops up the weapon pack
+    if (u.crystal > 0 && u.ammo < st.loadoutCrystal) { const k = Math.min(u.crystal, st.loadoutCrystal - u.ammo); u.crystal -= k; u.ammo += k; }
 
     let anim: UnitAnim = 'idle';
     const moved = this.runOrder(u);
@@ -921,7 +926,7 @@ export class World {
     u.swing = Math.min(0.45, u.stats.cooldown * 0.8);
     this.events.push({ type: 'attack', x: u.x, y: u.y, owner: u.owner, specId: u.specId, style: u.throws ? 'throw' : 'strike', kg: u.crystalMass });
     if (u.throws) {
-      u.crystal -= u.crystalMass;
+      u.ammo -= u.crystalMass;
       const flight = Math.max(0.25, Math.sqrt((tx - u.x) ** 2 + (ty - u.y) ** 2) / (u.stats.crystalVelocity * 0.7));
       let ax = tx, ay = ty;
       if (tu) { ax += ((tu.x - tu.px) / DT) * flight; ay += ((tu.y - tu.py) / DT) * flight; } // lead the target
@@ -1009,14 +1014,14 @@ export class World {
     if (o.phase !== 'toDrop' && (!node || node.amount <= 0.001)) {
       const next = o.stopWhenArmed ? null : this.nearestNode(u, o.nodeType, 10, false, node);
       if (next) { o.node = next.id; o.phase = 'toNode'; node = next; }
-      else if (this.packLoad(u) - u.stats.loadoutCrystal > 0.5 && !o.stopWhenArmed) o.phase = 'toDrop';
+      else if (this.cargo(u) > 0.5 && !o.stopWhenArmed) o.phase = 'toDrop';
       else { this.finish(u); return false; }
     }
     if (o.phase === 'toNode') {
       const n = node!;
       // carrying a different resource? drop it off first so the whole pack is free for this one
-      const other = (o.nodeType !== 'food' ? u.food : 0) + (o.nodeType !== 'wood' ? u.wood : 0) + (o.nodeType !== 'crystal' ? this.surplusCrystal(u) : 0);
-      if (other > 0.05 && !o.stopWhenArmed && this.nearestCache(u, (b) => this.room(b) > 0.5)) { o.phase = 'toDrop'; return false; }
+      const other = (o.nodeType !== 'food' ? u.food : 0) + (o.nodeType !== 'wood' ? u.wood : 0) + (o.nodeType !== 'crystal' ? u.crystal : 0);
+      if (other > 0.05 && !o.stopWhenArmed && this.nearestCache(u, () => true)) { o.phase = 'toDrop'; return false; }
       // Shards lie on open ground, often under a crowd or a dummy: pick up from arm's reach.
       const reach = n.shard ? u.stats.radius + 0.45 : 1.15 + u.stats.radius;
       if (this.moveToNear(u, n.x, n.y, reach, !n.shard)) o.phase = 'harvest';
@@ -1029,36 +1034,33 @@ export class World {
       const rate = n.shard ? Math.max(2, u.stats.gatherRate * 4) : u.stats.gatherRate * this.gatherBoostAt(u.owner, n.x, n.y, n.type);
       let want: number;
       if (n.shard) {
-        // spent crystals are picked up whole
-        want = Math.min(rate * DT, n.amount, this.freeCapacity(u));
-        if (o.stopWhenArmed) want = Math.min(want, Math.max(0, u.stats.loadoutCrystal - u.crystal));
+        // spent crystals are picked up whole; re-arming fills the weapon pack, gathering the cargo pack
+        want = Math.min(rate * DT, n.amount, o.stopWhenArmed ? Math.max(0, u.stats.loadoutCrystal - u.ammo) : this.freeCapacity(u));
       } else want = this.gatherUnits(u, rate, n.amount);
       if (want > 0) {
         n.amount -= want;
-        this.carry(u, n.type, want);
+        if (o.stopWhenArmed) u.ammo += want; else this.carry(u, n.type, want);
         u.cal -= K.gatherCalPerKg * want;
         u.busy = true;
       }
       if (n.amount <= 0.001) this.removeNode(n);
       const full = this.freeCapacity(u) < (n.shard ? 0.05 : 1 - 1e-6);
       if (o.stopWhenArmed) {
-        if (u.crystal >= u.stats.loadoutCrystal - 1e-6 || full || n.amount <= 0.001) this.finish(u);
+        if (u.ammo >= u.stats.loadoutCrystal - 1e-6 || n.amount <= 0.001) this.finish(u);
       } else if (full) {
         o.phase = 'toDrop';
       }
       return false;
     }
-    // toDrop: the base, or a nearer building that's short of what we carry
-    const base = this.baseOf(u.owner);
-    const drop = this.nearestCache(u, (b) => this.room(b) > 1 && (b === base || this.logistics.wants(b, o.nodeType))) ?? this.nearestCache(u, (b) => this.room(b) > 1);
-    if (!drop) { return false; } // every cache is full: wait
+    // toDrop: the nearest finished building (carts move it on from there)
+    const drop = this.nearestCache(u, () => true);
+    if (!drop) return false;
     if (this.moveToBuilding(u, drop)) {
       this.deposit(u, drop);
       if (u.cal < u.stats.maxCalories * 0.5 && drop.stock.food > 1) {
         this.detour(u, { kind: 'resupply', building: drop.id });
         return false;
       }
-      if (this.packLoad(u) - u.stats.loadoutCrystal > 0.5) return false; // still carrying; try the next cache
       o.phase = 'toNode';
       if (!this.nodes.get(o.node)) {
         const next = this.nearestNode(u, o.nodeType, 14, false);
@@ -1074,8 +1076,8 @@ export class World {
     if (!this.moveToBuilding(u, b)) return u.x !== u.px || u.y !== u.py;
     this.deposit(u, b);
     // Restock loadout crystal from this building's stock.
-    const need = Math.min(Math.max(0, u.stats.loadoutCrystal - u.crystal), this.freeCapacity(u), b.stock.crystal);
-    if (need > 0) { u.crystal += need; b.stock.crystal -= need; }
+    const need = Math.min(Math.max(0, u.stats.loadoutCrystal - u.ammo), b.stock.crystal);
+    if (need > 0) { u.ammo += need; b.stock.crystal -= need; }
     if (!this.eat(u, b)) this.finish(u);
     return false;
   }
@@ -1093,19 +1095,11 @@ export class World {
     return true;
   }
 
-  /** Unload cargo into a building's cache, as much as fits. */
-  /** @internal sim helper, also used by logistics */
+  /** Unload cargo into a building (buildings hold any amount). @internal also used by logistics */
   deposit(u: Unit, b: Building, only: ResourceKind[] = RESOURCES): void {
-    let room = this.room(b);
-    const put = (r: ResourceKind, kg: number) => {
-      const amt = Math.min(kg, room);
-      if (amt <= 0) return 0;
-      b.stock[r] += amt; room -= amt;
-      return amt;
-    };
-    if (only.includes('food')) u.food -= put('food', u.food);
-    if (only.includes('wood')) u.wood -= put('wood', u.wood);
-    if (only.includes('crystal')) u.crystal -= put('crystal', this.surplusCrystal(u));
+    if (only.includes('food')) { b.stock.food += u.food; u.food = 0; }
+    if (only.includes('wood')) { b.stock.wood += u.wood; u.wood = 0; }
+    if (only.includes('crystal')) { const c = u.crystal; b.stock.crystal += c; u.crystal -= c; }
   }
 
   private runGive(u: Unit, toId: number): boolean {
@@ -1118,20 +1112,15 @@ export class World {
     return false;
   }
 
-  /** Hand over everything the giver doesn't need. Receiver tops up its own loadout first. */
+  /** Hand over the giver's cargo. Crystal tops up the receiver's weapon pack first, then its cargo. */
   transfer(from: Unit, to: Unit): void {
+    const arm = Math.min(from.crystal, Math.max(0, to.stats.loadoutCrystal - to.ammo));
+    from.crystal -= arm; to.ammo += arm;
     let room = this.freeCapacity(to);
-    const giveCrystal = (kg: number) => {
-      const amt = Math.min(kg, this.surplusCrystal(from), room);
-      if (amt <= 0) return;
-      from.crystal -= amt; to.crystal += amt; room -= amt;
-    };
-    giveCrystal(Math.max(0, to.stats.loadoutCrystal - to.crystal));
-    const f = Math.min(from.food, room);
-    from.food -= f; to.food += f; room -= f;
-    const w = Math.min(from.wood, room);
-    from.wood -= w; to.wood += w; room -= w;
-    giveCrystal(Infinity);
+    for (const r of ['crystal', 'food', 'wood'] as const) {
+      const amt = Math.min(from[r], room);
+      from[r] -= amt; to[r] += amt; room -= amt;
+    }
   }
 
   /** Construction: fetch wood from a stockpile (or chop it), carry it to the site. */
@@ -1166,12 +1155,12 @@ export class World {
     if (needed <= 0.05) return false; // others are already carrying enough
     const src = this.nearestCache(u, (b) => b.stock.wood > 0.5);
     // drop any other cargo first (berries, spare crystal) so the whole pack carries wood
-    if (u.food > 0.05 || this.surplusCrystal(u) > 0.05) {
-      const drop = src ?? this.nearestCache(u, (b) => this.room(b) > 0.5);
+    if (u.food > 0.05 || u.crystal > 0.05) {
+      const drop = src ?? this.nearestCache(u, () => true);
       if (drop) {
         if (!this.moveToBuilding(u, drop)) return u.x !== u.px || u.y !== u.py;
         this.deposit(u, drop, ['food', 'crystal']);
-        if (u.food > 0.05 || this.surplusCrystal(u) > 0.05) return false; // drop was full; keep looking next tick
+        if (u.food > 0.05 || u.crystal > 0.05) return false; // drop was full; keep looking next tick
       }
     }
     if (src) {
@@ -1370,7 +1359,7 @@ export class World {
     for (const u of this.units.values()) {
       if (u.hp > 0) continue;
       this.units.delete(u.id);
-      this.dropShard(u.x, u.y, u.crystal);
+      this.dropShard(u.x, u.y, u.crystal + u.ammo);
       this.events.push({ type: 'death', x: u.x, y: u.y, id: u.id, owner: u.owner, specId: u.specId, heading: u.heading });
     }
     for (const b of this.buildings.values()) {
@@ -1397,7 +1386,7 @@ export class World {
   hash(): number {
     let h = 2166136261 ^ this.tick;
     const mix = (v: number) => { h = Math.imul(h ^ (Math.round(v * 1000) | 0), 16777619); };
-    for (const u of this.units.values()) { mix(u.id); mix(u.x); mix(u.y); mix(u.hp); mix(u.cal); mix(u.crystal); mix(u.food); mix(u.wood); }
+    for (const u of this.units.values()) { mix(u.id); mix(u.x); mix(u.y); mix(u.hp); mix(u.cal); mix(u.crystal); mix(u.ammo); mix(u.food); mix(u.wood); }
     for (const b of this.buildings.values()) { mix(b.id); mix(b.hp); mix(b.built); mix(b.queue.length); mix(b.stock.food); mix(b.stock.wood); mix(b.stock.crystal); }
     for (const n of this.nodes.values()) { mix(n.id); mix(n.amount); }
     return h >>> 0;

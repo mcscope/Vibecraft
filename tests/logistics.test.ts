@@ -5,15 +5,31 @@ const run = (w: World, ticks: number) => { for (let i = 0; i < ticks; i++) w.ste
 const newWorld = () => new World({ seed: 7, players: [{ name: 'A', faction: meadowfolk }, { name: 'B', faction: meadowfolk }] });
 
 describe('carts', () => {
-  test('the town center keeps a pool of carts that stock whichever building is short', () => {
+  test('the town center keeps a pool of carts that bring a building what its queue needs', () => {
     const w = newWorld();
     const tc = w.baseOf(0)!;
     tc.stock = { food: 2500, wood: 0, crystal: 300 };
     const b = w.addBuilding(0, 'barracks', tc.ox + 6, tc.oy)!;
-    run(w, 20 * 90);
-    const carts = w.unitsOf(0).filter((u) => u.carter);
-    expect(carts.length).toBe(3);
-    expect(b.stock.food).toBeGreaterThan(100);
+    run(w, 20 * 60);
+    expect(w.unitsOf(0).filter((u) => u.carter).length).toBe(3);
+    // nothing queued: only the small berry stash, no speculative stock
+    expect(w.logistics.supplyTargets(b)).toEqual({ food: 20, wood: 0, crystal: 0 });
+    expect(b.stock.food).toBeLessThan(40);
+    w.enqueue({ player: 0, cmd: { type: 'train', building: b.id, specId: 'maceman' } });
+    run(w, 20 * 40);
+    expect(w.unitsOf(0).some((u) => u.specId === 'maceman')).toBe(true);
+  });
+
+  test('a queued technology waits for its wood, then researches', () => {
+    const w = newWorld();
+    const tc = w.baseOf(0)!;
+    tc.stock = { food: 0, wood: 0, crystal: 0 };
+    w.enqueue({ player: 0, cmd: { type: 'research', building: tc.id, techId: 'villager-tools' } });
+    run(w, 20 * 5);
+    expect(tc.queue[0]?.kind === 'tech' && !tc.queue[0].paid).toBe(true);
+    tc.stock.wood = 500;
+    run(w, 20 * 30);
+    expect(w.players[0].researched).toContain('villager-tools');
   });
 
   test('carts can be pinned to a building, and unpinned with stop', () => {
@@ -95,7 +111,8 @@ describe('supply', () => {
     run(w, 20 * 50);
     const carts = w.unitsOf(0).filter((u) => u.carter);
     for (const c of carts.slice(1)) w.units.delete(c.id); // just one cart, so nobody splits the job
-    w.addBuilding(0, 'barracks', tc.ox + 8, tc.oy); // needs berries and crystal
+    const b = w.addBuilding(0, 'barracks', tc.ox + 8, tc.oy)!;
+    w.enqueue({ player: 0, cmd: { type: 'train', building: b.id, specId: 'maceman' } }); // needs berries and crystal
     let both = false;
     for (let i = 0; i < 20 * 10 && !both; i++) { w.step(); both = carts[0].food > 0 && carts[0].crystal > 0; }
     expect(both).toBe(true);

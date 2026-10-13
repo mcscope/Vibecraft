@@ -41,7 +41,7 @@ export interface UnitSpec {
   physique: Physique;
   /** Omit for units that can't fight (e.g. carts). */
   attack?: AttackSpec;
-  /** Wheels bear the load: carry capacity ×2, and a full load slows it less and costs fewer calories to haul. */
+  /** Wheels bear the load: carry capacity ×4 (K.wheelCarry), and a full load slows it less and costs fewer calories to haul. */
   wheeled?: boolean;
   /** Can this unit harvest resource nodes? Default true. */
   canGather?: boolean;
