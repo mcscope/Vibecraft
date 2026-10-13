@@ -1,6 +1,6 @@
 // 3D models for map objects. Same lighting as units, baked once at load.
 // Model units: 1 tile = 2 units; origin = centre of the object's footprint.
-import type { Mat, ModelBuilder } from '../../factions/types';
+import type { Mat, ModelBuilder } from '../../kits/bake3d/types';
 
 const WOOD: Mat = { color: '#5e4128', tex: 'wood' };
 const DARKWOOD: Mat = { color: '#3d2a1a', tex: 'wood' };
@@ -83,10 +83,6 @@ export function projectile(b: ModelBuilder): void {
   b.crystal(0.35, [0, 0, 0], [0.5, 0, 0.9]);
 }
 
-export function rallyFlag(b: ModelBuilder): void {
-  b.cylinder(0.035, 0.04, 1.6, [0, 0.8, 0], DARKWOOD, undefined, 8);
-  b.box([0.03, 0.4, 0.6], [0, 1.38, 0.3], { team: 'primary', tex: 'cloth' });
-}
 
 // ── ground clutter: tiny props painted into the terrain (render-only, never blocks) ──
 

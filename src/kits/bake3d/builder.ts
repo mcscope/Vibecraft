@@ -1,7 +1,8 @@
 // Implements ModelBuilder on top of three.js. Geometries and materials are
 // cached and shared; each frame just builds a fresh tree of Mesh objects.
 import * as THREE from 'three';
-import type { Mat, ModelBuilder, TeamColors, Vec3 } from '../../factions/types';
+import type { TeamColors } from '../../art/contract';
+import type { Mat, ModelBuilder, Vec3 } from './types';
 import { texture } from './textures';
 
 const geoCache = new Map<string, THREE.BufferGeometry>();
@@ -11,23 +12,53 @@ function geo(key: string, make: () => THREE.BufferGeometry): THREE.BufferGeometr
   return g;
 }
 
+/** Texture repeats per model unit: tiles textures at a steady density so big walls aren't smeared and small parts aren't noise. */
+const TEX_PER_UNIT = 0.55;
+
+export interface BuildOpts {
+  /** 0..1 soot/darkening (damaged buildings). */
+  grime?: number;
+  /** Clip planes applied to this geometry (construction / collapse). */
+  clip?: THREE.Plane[];
+  clipKey?: string;
+}
+
 const matCache = new Map<string, THREE.Material>();
-function material(m: Mat, team: TeamColors): THREE.Material {
+const texCache = new Map<string, THREE.Texture>();
+function tiled(t: THREE.Texture, ru: number, rv: number, key: string): THREE.Texture {
+  let c = texCache.get(key);
+  if (!c) {
+    c = t.clone();
+    c.repeat.set(ru, rv);
+    c.needsUpdate = true;
+    texCache.set(key, c);
+  }
+  return c;
+}
+function material(m: Mat, team: TeamColors, rep: [number, number], o: BuildOpts): THREE.Material {
   const color = m.team ? team[m.team] : (m.color ?? '#888888');
   const tex = m.tex ?? 'none';
-  const key = `${color}|${tex}|${m.rough ?? -1}|${m.metal ?? -1}|${m.emissive ?? ''}`;
+  const q = (v: number) => Math.max(0.25, Math.round(v * 4) / 4);
+  const ru = q(rep[0] * TEX_PER_UNIT), rv = q(rep[1] * TEX_PER_UNIT);
+  const grime = o.grime ?? 0;
+  const key = `${color}|${tex}|${m.rough ?? -1}|${m.metal ?? -1}|${m.emissive ?? ''}|${tex === 'none' ? '' : `${ru}x${rv}`}|${grime}|${o.clipKey ?? ''}`;
   let mat = matCache.get(key);
   if (!mat) {
     const t = tex === 'none' ? null : texture(tex);
+    const c = new THREE.Color(color);
+    if (grime) c.lerp(new THREE.Color('#1c1814'), grime);
     mat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(color),
+      color: c,
       roughness: m.rough ?? (tex === 'metal' ? 0.45 : 0.85),
       metalness: m.metal ?? (tex === 'metal' ? 0.6 : 0),
-      map: t?.map ?? null,
-      bumpMap: t?.bump ?? null,
-      bumpScale: t ? 2.2 : 0,
+      map: t ? tiled(t.map, ru, rv, `${tex}/map/${ru}x${rv}`) : null,
+      bumpMap: t ? tiled(t.bump, ru, rv, `${tex}/bump/${ru}x${rv}`) : null,
+      bumpScale: t ? 2.6 : 0,
       emissive: new THREE.Color(m.emissive ?? '#000000'),
       emissiveIntensity: m.emissive ? 0.6 : 0,
+      clippingPlanes: o.clip ?? [],
+      clipShadows: !!o.clip,
+      side: o.clip ? THREE.DoubleSide : THREE.FrontSide,
     });
     matCache.set(key, mat);
   }
@@ -56,10 +87,12 @@ function rockGeometry(seed: number): THREE.BufferGeometry {
 }
 
 export class Builder implements ModelBuilder {
-  constructor(readonly team: TeamColors, private parent: THREE.Object3D) {}
+  constructor(readonly team: TeamColors, private parent: THREE.Object3D, private opts: BuildOpts = {}) {}
 
-  private add(g: THREE.BufferGeometry, m: Mat, at: Vec3, scale: Vec3, rot?: Vec3): THREE.Mesh {
-    const mesh = new THREE.Mesh(g, material(m, this.team));
+  /** `rep`: the surface's real size in model units (u, v), for texture tiling. */
+  private add(g: THREE.BufferGeometry, m: Mat, at: Vec3, scale: Vec3, rot?: Vec3, rep?: [number, number]): THREE.Mesh {
+    const r: [number, number] = rep ?? [Math.max(Math.abs(scale[0]), Math.abs(scale[2])), Math.abs(scale[1])];
+    const mesh = new THREE.Mesh(g, material(m, this.team, r, this.opts));
     mesh.position.set(at[0], at[1], at[2]);
     mesh.scale.set(scale[0], scale[1], scale[2]);
     if (rot) mesh.rotation.set(rot[0], rot[1], rot[2]);
@@ -69,13 +102,20 @@ export class Builder implements ModelBuilder {
     return mesh;
   }
 
+  /** Build part of a model with extra options (clipping, grime) — kit-internal, used for building states. */
+  withOpts(extra: BuildOpts, build: (b: ModelBuilder) => void): void {
+    const g = new THREE.Group();
+    this.parent.add(g);
+    build(new Builder(this.team, g, { ...this.opts, ...extra }));
+  }
+
   joint(at: Vec3, rot: Vec3, build: (b: ModelBuilder) => void, scale = 1): void {
     const g = new THREE.Group();
     g.position.set(at[0], at[1], at[2]);
     g.rotation.set(rot[0], rot[1], rot[2]);
     g.scale.setScalar(scale);
     this.parent.add(g);
-    build(new Builder(this.team, g));
+    build(new Builder(this.team, g, this.opts));
   }
 
   box(size: Vec3, at: Vec3, mat: Mat, rot?: Vec3): void {
@@ -84,14 +124,14 @@ export class Builder implements ModelBuilder {
 
   sphere(radius: number | Vec3, at: Vec3, mat: Mat, rot?: Vec3): void {
     const r: Vec3 = typeof radius === 'number' ? [radius, radius, radius] : radius;
-    this.add(geo('sphere', () => new THREE.SphereGeometry(1, 20, 14)), mat, at, r, rot);
+    this.add(geo('sphere', () => new THREE.SphereGeometry(1, 20, 14)), mat, at, r, rot, [Math.PI * (r[0] + r[2]), Math.PI * r[1]]);
   }
 
   cylinder(rTop: number, rBottom: number, height: number, at: Vec3, mat: Mat, rot?: Vec3, sides = 16): void {
     const ratio = rBottom > 0 ? rTop / rBottom : 1;
     const g = geo(`cyl${ratio.toFixed(3)}:${sides}`, () => new THREE.CylinderGeometry(ratio, 1, 1, sides));
     const rb = rBottom > 0 ? rBottom : rTop;
-    this.add(g, mat, at, [rb, height, rb], rot);
+    this.add(g, mat, at, [rb, height, rb], rot, [2 * Math.PI * rb, height]);
   }
 
   cone(radius: number, height: number, at: Vec3, mat: Mat, rot?: Vec3, sides = 16): void {
@@ -105,7 +145,7 @@ export class Builder implements ModelBuilder {
     const mid = va.clone().add(vb).multiplyScalar(0.5);
     const ratio = radiusB / radius;
     const g = geo(`limb${ratio.toFixed(3)}`, () => new THREE.CylinderGeometry(1, ratio, 1, 12));
-    const mesh = this.add(g, mat, [mid.x, mid.y, mid.z], [radius, len, radius]);
+    const mesh = this.add(g, mat, [mid.x, mid.y, mid.z], [radius, len, radius], undefined, [2 * Math.PI * radius, len]);
     // cylinder axis is +y; rotate it onto a→b
     mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), vb.clone().sub(va).normalize());
     this.sphere(radius, a, mat);

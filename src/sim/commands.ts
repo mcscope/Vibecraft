@@ -17,6 +17,8 @@ export type Command =
   | { type: 'stop'; units: number[] }
   | { type: 'train'; building: number; specId: string }
   | { type: 'research'; building: number; techId: string }
+  /** Keep training this unit whenever the queue is empty and stock allows (null = off). */
+  | { type: 'autoTrain'; building: number; specId: string | null }
   | { type: 'cancelTrain'; building: number }
   /** Place a construction site; `units` start carrying wood to it. */
   | { type: 'build'; units: number[]; specId: string; ox: number; oy: number }

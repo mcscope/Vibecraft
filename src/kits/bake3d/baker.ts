@@ -4,41 +4,31 @@
 // upper-left casting soft shadows down-right, sky/ground fill light. Each unit
 // is baked in all 8 facings (mirroring would flip the baked shadows).
 import * as THREE from 'three';
-import type { AnimName, ModelBuilder, Pose, TeamColors, UnitSpec } from '../../factions/types';
-import { Builder } from './builder';
+import type { AnimArt, ArtAnim, BuildingArt, Sprite, TeamColors, UnitArt } from '../../art/contract';
+import type { BuildingModel, ModelBuilder, Pose, UnitModel } from './types';
+import { Builder, type BuildOpts } from './builder';
 
 /** Model units per map tile. A 1.7-unit person is a bit under a tile tall. */
 export const UNITS_PER_TILE = 2;
 /** Screen px per model unit at zoom 1 (one tile = 64×32 px). */
 export const PX_PER_UNIT = 32 * Math.SQRT2 / UNITS_PER_TILE;
 
-export type BakedAnim = AnimName | 'carryFood' | 'carryWood' | 'carryCrystal';
+export type BakedAnim = ArtAnim;
 
 const FRAMES: Record<BakedAnim, number> = {
   idle: 4, walk: 8, attack: 8, gather: 6, eat: 4, tired: 2, die: 6, carryFood: 8, carryWood: 8, carryCrystal: 8,
 };
+const FPS: Partial<Record<BakedAnim, number>> = { idle: 2.5, walk: 8, gather: 7, eat: 4, tired: 1.5, carryFood: 8, carryWood: 8, carryCrystal: 8 };
+
+export interface UnitBakeOptions {
+  /** Inert units only get idle + die. */
+  dummy?: boolean;
+  /** Also bake walking with food / wood / crystal loads. */
+  withCarry?: boolean;
+}
 
 /** Game octants (0 = +x, counting toward +y), one sheet row each. */
 const BAKED_DIRS = [0, 1, 2, 3, 4, 5, 6, 7];
-
-export interface Sprite {
-  img: CanvasImageSource;
-  sx: number; sy: number; sw: number; sh: number;
-  /** Anchor (feet / footprint centre) within the source rect, in source px. */
-  ax: number; ay: number;
-  /** Source px per screen px at zoom 1. */
-  q: number;
-}
-
-export interface UnitSheet {
-  frames(anim: BakedAnim): number;
-  frame(anim: BakedAnim, octant: number, index: number): { sprite: Sprite; mirror: boolean };
-  /** On-screen height of the idle sprite at zoom 1 (for picking / bars). */
-  height: number;
-  has(anim: BakedAnim): boolean;
-  /** The underlying sheet images (for GPU pre-upload). */
-  sources(): CanvasImageSource[];
-}
 
 interface Extent { left: number; right: number; top: number; bottom: number }
 
@@ -62,6 +52,7 @@ export class Baker {
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    this.renderer.localClippingEnabled = true; // construction / collapse looks
 
     this.scene.add(new THREE.HemisphereLight('#d6e4ff', '#5d5236', 1.25));
     this.sun = new THREE.DirectionalLight('#fff0d6', 2.8);
@@ -159,25 +150,56 @@ export class Baker {
   }
 
   /** Bake a static object (building, tree, mine...). Origin = footprint centre. */
-  bakeStatic(build: (b: ModelBuilder) => void, team: TeamColors, shadow = true): Sprite {
+  bakeStatic(build: (b: ModelBuilder) => void, team: TeamColors, shadow = true, opts: BuildOpts = {}, minRadius = 0): Sprite {
     this.ground.visible = shadow;
     const pose: Pose = { anim: 'idle', phase: 0, team, armed: true, cargo: null };
-    const { r, h } = this.measure((b) => build(b), team, [pose]);
+    let { r, h } = this.measure((b) => build(b), team, [pose]);
+    r = Math.max(r, minRadius);
     const ext = this.extent(r, h);
     const canvas = document.createElement('canvas');
     canvas.width = Math.ceil((ext.left + ext.right) * this.q);
     canvas.height = Math.ceil((ext.top + ext.bottom) * this.q);
     this.clearStage();
-    build(new Builder(team, this.stage));
+    build(new Builder(team, this.stage, opts));
     this.shoot(ext, canvas.getContext('2d')!, 0, 0, r, h);
     this.ground.visible = true;
     return { img: canvas, sx: 0, sy: 0, sw: canvas.width, sh: canvas.height, ax: ext.left * this.q, ay: ext.top * this.q, q: this.q };
   }
 
+  /**
+   * All the looks of a building: 3 construction stages, finished, 2 damage
+   * levels. Unless `custom`, construction is the model clipped at rising
+   * heights inside generic scaffolding, and damage is soot, rubble and (badly
+   * hurt) a sheared-off corner. With `custom`, the model draws every state.
+   */
+  bakeBuilding(model: BuildingModel, size: number, team: TeamColors, custom = false): BuildingArt {
+    const { h } = this.measure((b) => model(b), team, [{ anim: 'idle', phase: 0, team, armed: true, cargo: null }]);
+    const reach = size * Math.SQRT2 + 1.1; // scaffolding + timber pile stick out past the footprint
+    const scoped = (b: ModelBuilder, o: BuildOpts, fn: (m: ModelBuilder) => void) => (b as Builder).withOpts(o, fn);
+    const construction = [0.18, 0.45, 0.78].map((f, level) => this.bakeStatic((b) => {
+      const state = { phase: 'construction' as const, level };
+      if (custom) { model(b, state); return; }
+      groundworks(b, size);
+      scaffold(b, size, f * h + 0.3);
+      scoped(b, { clip: [new THREE.Plane(new THREE.Vector3(0, -1, 0), f * h)], clipKey: `cut${level}` }, (m) => model(m, state));
+    }, team, true, {}, reach));
+    const complete = this.bakeStatic((b) => model(b), team, true, {}, reach);
+    const n = new THREE.Vector3(0.42, -1, 0.3).normalize();
+    const collapse = new THREE.Plane(n, -n.dot(new THREE.Vector3(size * 0.35, h * 0.7, -size * 0.25)));
+    const damaged = [1, 2].map((level) => this.bakeStatic((b) => {
+      const state = { phase: 'damaged' as const, level };
+      if (custom) { model(b, state); return; }
+      scoped(b, level === 2 ? { grime: 0.42, clip: [collapse], clipKey: 'collapse' } : { grime: 0.22 }, (m) => model(m, state));
+      rubble(b, size, level, h);
+    }, team, true, {}, reach));
+    return { construction, complete, damaged };
+  }
+
   /** Bake every animation × facing for a unit. Yields between rows so the page stays responsive. */
-  async bakeUnit(spec: UnitSpec, team: TeamColors, withCarry: boolean, onFrame?: () => void): Promise<UnitSheet> {
-    const anims: BakedAnim[] = spec.dummy ? ['idle', 'die'] : ['idle', 'walk', 'attack', 'gather', 'eat', 'tired', 'die'];
-    if (withCarry && !spec.dummy) anims.push('carryFood', 'carryWood', 'carryCrystal');
+  async bakeUnit(model: UnitModel, team: TeamColors, opts: UnitBakeOptions = {}, onFrame?: () => void): Promise<UnitArt> {
+    const withCarry = !!opts.withCarry;
+    const anims: BakedAnim[] = opts.dummy ? ['idle', 'die'] : ['idle', 'walk', 'attack', 'gather', 'eat', 'tired', 'die'];
+    if (withCarry && !opts.dummy) anims.push('carryFood', 'carryWood', 'carryCrystal');
     const poseFor = (anim: BakedAnim, phase: number): Pose => ({
       anim: anim === 'carryFood' || anim === 'carryWood' || anim === 'carryCrystal' ? 'walk' : anim,
       phase, team, armed: true,
@@ -185,7 +207,7 @@ export class Baker {
     });
     const samples = [poseFor('idle', 0), poseFor('walk', 0.25), poseFor('attack', 0.3), poseFor('attack', 0.6), poseFor('gather', 0.5)];
     if (withCarry) samples.push(poseFor('carryFood', 0.25));
-    let { r, h } = this.measure(spec.model, team, samples);
+    let { r, h } = this.measure(model, team, samples);
     r = Math.max(r, h * 1.05); // room to fall over
     const ext = this.extent(r, h);
     const fw = Math.ceil((ext.left + ext.right) * this.q), fh = Math.ceil((ext.top + ext.bottom) * this.q);
@@ -214,7 +236,7 @@ export class Baker {
           this.clearStage();
           const body = new THREE.Group();
           this.stage.add(body);
-          spec.model(new Builder(team, body), poseFor(anim === 'die' ? 'idle' : anim, anim === 'die' ? 0 : phase));
+          model(new Builder(team, body), poseFor(anim === 'die' ? 'idle' : anim, anim === 'die' ? 0 : phase));
           if (anim === 'die') {
             // generic topple onto the left side
             const k = phase * phase;
@@ -273,30 +295,85 @@ export class Baker {
     // GPU-resident bitmap: plain canvases get re-uploaded on every draw
     const img = await createImageBitmap(atlas);
     const q = this.q;
-    const frames = new Map<BakedAnim, Sprite[]>();
-    for (const [anim, list] of crops) frames.set(anim, list.map((c) => ({ img, sx: c.dx, sy: c.dy, sw: c.w, sh: c.h, ax: c.ax, ay: c.ay, q })));
-
-    return {
-      height: (h * Math.cos(Math.PI / 6)) * PX_PER_UNIT,
-      has: (a) => frames.has(a),
-      sources: () => [img],
-      frames: (a) => (frames.has(a) ? FRAMES[a] : FRAMES.idle),
-      frame(anim, octant, index) {
-        const a = frames.has(anim) ? anim : 'idle';
-        const row = ((octant % 8) + 8) % 8;
-        const n = FRAMES[a];
-        const i = ((index % n) + n) % n;
-        return { sprite: frames.get(a)![row * n + i], mirror: false };
-      },
-    };
+    const out: Partial<Record<BakedAnim, AnimArt>> = {};
+    for (const [anim, list] of crops) {
+      const n = FRAMES[anim];
+      const frames: Sprite[][] = [];
+      for (let di = 0; di < rows; di++) frames.push(list.slice(di * n, di * n + n).map((c) => ({ img, sx: c.dx, sy: c.dy, sw: c.w, sh: c.h, ax: c.ax, ay: c.ay, q })));
+      out[anim] = { frames, fps: FPS[anim] };
+    }
+    return { height: (h * Math.cos(Math.PI / 6)) * PX_PER_UNIT, anims: out as UnitArt['anims'] };
   }
 
-  /** Frames this unit will need, for progress bars. */
-  static frameCount(spec: UnitSpec, withCarry: boolean): number {
-    if (spec.dummy) return (FRAMES.idle + FRAMES.die) * BAKED_DIRS.length;
+  /** Frames a unit bake renders, for progress bars. */
+  static frameCount(opts: UnitBakeOptions = {}): number {
+    const withCarry = !!opts.withCarry;
+    if (opts.dummy) return (FRAMES.idle + FRAMES.die) * BAKED_DIRS.length;
     let n = FRAMES.idle + FRAMES.walk + FRAMES.attack + FRAMES.gather + FRAMES.eat + FRAMES.tired + FRAMES.die;
     if (withCarry) n += FRAMES.carryFood + FRAMES.carryWood + FRAMES.carryCrystal;
     return n * BAKED_DIRS.length;
+  }
+}
+
+// ───────────────────────────── generic building states ─────────────────────────────
+
+const TIMBER = { color: '#8a6a44', tex: 'plank' } as const;
+const DARK_TIMBER = { color: '#5e4128', tex: 'wood' } as const;
+
+/** Packed-earth foundation plus a pile of timber waiting to be used. */
+function groundworks(b: ModelBuilder, size: number): void {
+  b.box([size * 2 + 0.2, 0.1, size * 2 + 0.2], [0, 0.05, 0], { color: '#7a6a52', tex: 'stone' });
+  const px = size + 0.55, pz = size * 0.4;
+  for (let i = 0; i < 6; i++) {
+    const row = i < 3 ? 0 : 1, k = i % 3;
+    b.limb([px - 0.1, 0.11 + row * 0.19, pz - 0.7 + k * 0.2 + row * 0.1], [px + 0.15, 0.11 + row * 0.19, pz + 0.7 + k * 0.2 + row * 0.1], 0.09, DARK_TIMBER);
+  }
+  for (let i = 0; i < 4; i++) b.box([0.12, 0.04, 1.3], [px + 0.55, 0.03 + i * 0.045, pz - 0.2], TIMBER, [0, 0.05 * i, 0]);
+}
+
+/** Poles, ledgers, braces and a ladder up to `top`, just outside the footprint. */
+function scaffold(b: ModelBuilder, size: number, top: number): void {
+  const e = size + 0.12;
+  const n = Math.max(2, Math.round((2 * e) / 1.5));
+  const along = (i: number) => -e + (i / n) * 2 * e;
+  for (let i = 0; i <= n; i++) {
+    for (const [x, z] of [[e, along(i)], [along(i), e], [-e, along(i)], [along(i), -e]] as const) b.cylinder(0.035, 0.04, top + 0.4, [x, (top + 0.4) / 2, z], DARK_TIMBER, undefined, 6);
+  }
+  for (let y = 0.9; y < top + 0.2; y += 0.9) {
+    b.box([0.07, 0.05, 2 * e], [e, y, 0], TIMBER);
+    b.box([2 * e, 0.05, 0.07], [0, y, e], TIMBER);
+    b.box([0.34, 0.035, 2 * e], [e + 0.17, y - 0.02, 0], TIMBER); // walkway planks
+  }
+  b.limb([e, 0.1, -e], [e, Math.min(top, 2.6), e * 0.2], 0.025, DARK_TIMBER);
+  b.limb([-e, 0.1, e], [e * 0.3, Math.min(top, 2.6), e], 0.025, DARK_TIMBER);
+  // ladder
+  for (const z of [0.55, 0.85]) b.limb([e + 0.35, 0, z], [e + 0.2, top, z], 0.02, DARK_TIMBER);
+  for (let y = 0.3; y < top; y += 0.3) b.limb([e + 0.35 - (y / top) * 0.15, y, 0.55], [e + 0.35 - (y / top) * 0.15, y, 0.85], 0.012, DARK_TIMBER);
+}
+
+/** Broken stone and planks around a damaged building; more and bigger when badly hurt. */
+function rubble(b: ModelBuilder, size: number, level: number, h: number): void {
+  let s = 977 + level * 131;
+  const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  const n = level === 2 ? 22 : 9;
+  for (let i = 0; i < n; i++) {
+    const a = rnd() * Math.PI * 2, d = size * (0.95 + rnd() * 0.45);
+    const x = Math.cos(a) * d, z = Math.sin(a) * d, k = 0.08 + rnd() * (level === 2 ? 0.22 : 0.12);
+    if (rnd() < 0.55) b.rock([k * 1.3, k, k], [x, k * 0.4, z], { color: rnd() < 0.5 ? '#7d786f' : '#5f5a52', tex: 'stone' }, i);
+    else b.box([0.08, 0.05, 0.5 + rnd() * 0.6], [x, 0.04, z], { color: '#4a3424', tex: 'wood' }, [0, rnd() * 3, rnd() * 0.3]);
+  }
+  // scorch marks
+  for (let i = 0; i < (level === 2 ? 4 : 2); i++) {
+    const a = rnd() * Math.PI * 2, d = size * (0.6 + rnd() * 0.5);
+    b.box([0.8 + rnd(), 0.012, 0.6 + rnd()], [Math.cos(a) * d, 0.012, Math.sin(a) * d], { color: '#221c18' }, [0, rnd() * 3, 0]);
+  }
+  if (level === 2) {
+    // beams fallen from the collapsed corner
+    for (let i = 0; i < 4; i++) {
+      const z = -size * 0.6 + i * 0.4;
+      b.limb([size * 0.9, 0.1, z], [size * 0.35, h * 0.45, z + 0.3], 0.07, { color: '#3a2a1c', tex: 'wood' });
+    }
+    b.rock([0.5, 0.35, 0.6], [size * 0.85, 0.15, -size * 0.3], { color: '#6f6a62', tex: 'stone' }, 3);
   }
 }
 

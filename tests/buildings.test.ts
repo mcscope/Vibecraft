@@ -89,7 +89,22 @@ describe('carters, training, research, towers', () => {
     expect(cart.order.kind === 'cart' && !cart.order.pinned).toBe(true); // rejoined the pool
   });
 
-  test('research raises refinement for existing units everywhere', () => {
+  test('auto-train keeps a building producing while its stock lasts', () => {
+    const w = newWorld();
+    const tc = w.baseOf(0)!;
+    tc.stock = { food: 0, wood: 0, crystal: 0 }; // no carts topping it up mid-test
+    const b = w.addBuilding(0, 'barracks', tc.ox + 6, tc.oy)!;
+    b.stock = { food: 200, wood: 0, crystal: 50 };
+    w.enqueue({ player: 0, cmd: { type: 'autoTrain', building: b.id, specId: 'slinger' } });
+    run(w, 20 * 60);
+    expect(w.unitsOf(0).filter((u) => u.specId === 'slinger').length).toBe(3); // 200 food buys 3 slingers (60 each)
+    w.enqueue({ player: 0, cmd: { type: 'autoTrain', building: b.id, specId: null } });
+    b.stock.food = 500;
+    run(w, 20 * 30);
+    expect(w.unitsOf(0).filter((u) => u.specId === 'slinger').length).toBe(3);
+  });
+
+    test('research raises refinement for existing units everywhere', () => {
     const w = newWorld();
     const tc = w.baseOf(0)!;
     tc.stock.wood = 500;

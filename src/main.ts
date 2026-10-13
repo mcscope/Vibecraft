@@ -6,10 +6,11 @@ import { provingGrounds, skirmish } from './sim/scenarios';
 import { Lockstep, LocalInput, LoopbackTransport, type CommandSource } from './net/lockstep';
 import { SkirmishAI } from './ai/skirmishAI';
 import { Renderer } from './render/renderer';
-import { SpriteBank } from './render/sprites';
+import { ArtBank } from './render/artbank';
 import { Hud } from './ui/hud';
 import { Input } from './ui/input';
 import { Minimap } from './ui/minimap';
+import { AudioEngine } from './audio/engine';
 import { mountSettingsDialog, onSettings, settings } from './ui/settings';
 
 type Mode = 'demo' | 'skirmish' | 'spectate';
@@ -42,7 +43,8 @@ async function start(m: Mode): Promise<void> {
 
   const bar = loading.querySelector<HTMLElement>('.fill')!;
   const label = loading.querySelector<HTMLElement>('.label')!;
-  const bank = await SpriteBank.build(world, (f, text) => {
+  // the map's biome art, loaded lazily like faction art (it brings the 3D kit with it)
+  const bank = await ArtBank.build(world, (p) => import('./biomes/meadow').then((m) => m.bakeMeadow(p)), (f, text) => {
     bar.style.width = `${Math.round(f * 100)}%`;
     label.textContent = text;
   });
@@ -57,11 +59,23 @@ async function start(m: Mode): Promise<void> {
   const renderer = new Renderer(canvas, world, bank, { damageNumbers: m === 'demo' }, m === 'demo' ? [[18, 26, 4], [31, 26, 5]] : []);
   await renderer.init();
   const minimap = new Minimap(document.getElementById('minimap') as HTMLCanvasElement, world);
-  const input = new Input(canvas, world, renderer, minimap, HUMAN, (cmd) => local.issue(cmd));
+  const audio = new AudioEngine(world, bank, HUMAN);
+  const input = new Input(canvas, world, renderer, minimap, HUMAN, (cmd) => {
+    local.issue(cmd);
+    // the first unit given an order answers it
+    const first = 'units' in cmd ? cmd.units.map((id) => world.units.get(id)).find((u) => u && u.owner === HUMAN) : undefined;
+    if (first) audio.unitLine(first.owner, first.specId, 'acknowledge');
+  });
+  input.onSelect = (ids) => {
+    const u = ids.map((id) => world.units.get(id)).find((x) => x && x.owner === HUMAN);
+    if (u) audio.unitLine(u.owner, u.specId, 'select');
+  };
   const hud = new Hud(world, HUMAN, bank, {
     train: (building, specId) => local.issue({ type: 'train', building, specId }),
     research: (building, techId) => local.issue({ type: 'research', building, techId }),
     place: (specId) => input.startPlacing(specId),
+    idleWorker: () => input.nextIdleWorker(),
+    autoTrain: (building, specId) => local.issue({ type: 'autoTrain', building, specId }),
     cancelTrain: (building) => local.issue({ type: 'cancelTrain', building }),
     select: (ids) => input.setSelection(ids),
     command: (kind) => input.hudCommand(kind),
@@ -111,6 +125,7 @@ async function start(m: Mode): Promise<void> {
     const t1 = performance.now();
     input.alpha = Math.min(1, acc / DT);
     renderer.consumeEvents(world.events);
+    audio.handle(world.events, renderer.cam);
     world.events = [];
     input.update(dt);
     renderer.draw(input.alpha, dt, input.rs);

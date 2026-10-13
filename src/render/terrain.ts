@@ -4,7 +4,7 @@
 import { TERRAIN_SAND, TERRAIN_WATER } from '../sim/map';
 import type { World } from '../sim/world';
 import { TILE_H, TILE_W, isoX, isoY } from './camera';
-import type { Sprite } from './bake/baker';
+import type { Sprite } from '../art/contract';
 
 /** Terrain is painted at this many pixels per screen pixel (zoom 1), for crispness. */
 export const TERRAIN_SCALE = 1.5;

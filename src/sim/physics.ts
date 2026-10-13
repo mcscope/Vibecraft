@@ -39,6 +39,10 @@ export const K = {
   maxSpeed: 4.0,
   loadSlowdown: 0.6, // full pack => speed × (1 - 0.6)
   carryPerMuscleKg: 1.0,
+  /** Wheels: capacity multiplier, and how much of the usual load penalty / haul cost remains. */
+  wheelCarry: 2,
+  wheelLoadSlowdown: 0.35,
+  wheelHaulCost: 0.3,
   // Attack
   limbSpeedBase: 8, // m/s at 70 kg, muscle 0.4
   energyPerMuscleKg: 3, // max cal per single attack
@@ -79,6 +83,9 @@ export interface DerivedStats {
   maxCalories: number;
   /** Unloaded top speed, tiles/s. */
   speed: number;
+  /** Can this unit attack at all? */
+  canAttack: boolean;
+  wheeled: boolean;
   /** kg. Shared by weapon crystal, ammo, and cargo. */
   carryCapacity: number;
   /** kg of crystal the unit keeps as its loadout (weapon or ammo). */
@@ -151,19 +158,22 @@ export function derive(spec: UnitSpec, techRefinement = 0): DerivedStats {
   const maxHp = (K.hpPerFrameKg * frameMass + K.hpPerKg * mass) * refine;
   const maxCalories = K.calPerReserveKg * reserveMass + K.calPerKg * mass;
   const speed = clamp(K.baseSpeed * Math.pow(muscleRel, 0.8) * massSpeedFactor(mass), K.minSpeed, K.maxSpeed);
-  const carryCapacity = Math.max(1, K.carryPerMuscleKg * muscleMass);
+  const wheeled = !!spec.wheeled;
+  const carryCapacity = Math.max(1, K.carryPerMuscleKg * muscleMass * (wheeled ? K.wheelCarry : 1));
 
-  const throwing = spec.attack.style === 'throw';
-  const crystalMass = Math.min(carryCapacity, Math.max(LIMITS.minCrystal, spec.attack.crystalMass));
+  const atk = spec.attack;
+  const canAttack = !!atk;
+  const throwing = atk?.style === 'throw';
+  const crystalMass = Math.min(carryCapacity, Math.max(LIMITS.minCrystal, atk?.crystalMass ?? LIMITS.minCrystal));
   const maxAmmo = Math.max(1, Math.floor(carryCapacity / crystalMass));
-  const ammo = throwing ? Math.min(maxAmmo, LIMITS.maxAmmo, Math.max(1, Math.floor(spec.attack.ammo ?? 1))) : 1;
-  const loadoutCrystal = crystalMass * ammo;
+  const ammo = throwing ? Math.min(maxAmmo, LIMITS.maxAmmo, Math.max(1, Math.floor(atk?.ammo ?? 1))) : 1;
+  const loadoutCrystal = canAttack ? crystalMass * ammo : 0;
 
   const limbSpeed = K.limbSpeedBase * Math.pow(mass / 70, 0.1) * Math.sqrt(muscleRel);
   const maxAttackEnergy = K.energyPerMuscleKg * muscleMass;
   const crystalVelocity = Math.min(limbSpeed, Math.sqrt((2 * maxAttackEnergy) / crystalMass));
   const attackEnergy = 0.5 * crystalMass * crystalVelocity * crystalVelocity;
-  const damage = attackEnergy * (throwing ? K.throwEfficiency : K.strikeEfficiency) * refine;
+  const damage = canAttack ? attackEnergy * (throwing ? K.throwEfficiency : K.strikeEfficiency) * refine : 0;
   const attackCalories = attackEnergy / K.muscleEfficiency;
   const power = K.powerPerMuscleKg * muscleMass;
   const cooldown = Math.max(K.minCooldown, attackEnergy / power) + (throwing ? K.throwReload : 0);
@@ -184,7 +194,7 @@ export function derive(spec: UnitSpec, techRefinement = 0): DerivedStats {
 
   return {
     mass, physique, muscleMass, frameMass, reserveMass,
-    maxHp, maxCalories, speed, carryCapacity, loadoutCrystal, radius, sight,
+    maxHp, maxCalories, speed, canAttack, wheeled, carryCapacity, loadoutCrystal, radius, sight,
     limbSpeed, maxAttackEnergy, crystalVelocity, attackEnergy, damage, attackCalories, cooldown, range,
     dps: damage / cooldown,
     gatherRate,
@@ -197,7 +207,7 @@ export function derive(spec: UnitSpec, techRefinement = 0): DerivedStats {
 
 /** Speed after pack weight is accounted for. Load includes the weapon crystal. */
 export function loadedSpeed(stats: DerivedStats, loadKg: number): number {
-  const frac = Math.min(1, loadKg / stats.carryCapacity);
+  const frac = Math.min(1, loadKg / stats.carryCapacity) * (stats.wheeled ? K.wheelLoadSlowdown : 1);
   return stats.speed * (1 - K.loadSlowdown * frac);
 }
 
@@ -211,13 +221,14 @@ export function validate(spec: UnitSpec): string[] {
     if (!(spec.physique[k] > 0)) errs.push(`physique.${k} must be > 0`);
   }
   const s = derive(spec);
-  if (spec.attack.crystalMass > s.carryCapacity)
-    errs.push(`crystal ${spec.attack.crystalMass} kg exceeds carry capacity ${s.carryCapacity.toFixed(1)} kg`);
-  if (spec.attack.style === 'throw') {
-    const want = spec.attack.ammo ?? 1;
-    const fit = Math.floor(s.carryCapacity / spec.attack.crystalMass);
-    if (want * spec.attack.crystalMass > s.carryCapacity)
-      errs.push(`ammo ${want} × ${spec.attack.crystalMass} kg exceeds carry capacity (fits ${fit})`);
+  const atk = spec.attack;
+  if (atk && atk.crystalMass > s.carryCapacity)
+    errs.push(`crystal ${atk.crystalMass} kg exceeds carry capacity ${s.carryCapacity.toFixed(1)} kg`);
+  if (atk && atk.style === 'throw') {
+    const want = atk.ammo ?? 1;
+    const fit = Math.floor(s.carryCapacity / atk.crystalMass);
+    if (want * atk.crystalMass > s.carryCapacity)
+      errs.push(`ammo ${want} × ${atk.crystalMass} kg exceeds carry capacity (fits ${fit})`);
   }
   return errs;
 }

@@ -1,6 +1,6 @@
 // Reusable rigs for building unit models out of primitives.
 // Convention: unit faces +x, +y up, +z is its left. A person is ~1.7 tall.
-import type { Mat, ModelBuilder, Pose, Vec3 } from '../types';
+import type { Mat, ModelBuilder, Pose, Vec3 } from '../../kits/bake3d/types';
 
 const TAU = Math.PI * 2;
 
@@ -44,6 +44,9 @@ export interface HumanLook {
   /** Team-coloured cloth: shoulders/hood/tabard. */
   tabard?: boolean;
   mounted?: boolean;
+  /** Metal shoulder pads (armoured units). */
+  pads?: boolean;
+  beard?: boolean;
 }
 
 /**
@@ -81,6 +84,7 @@ export function human(
         const ankle: Vec3 = [0.22, hipY - 0.55, z + 0.24 * side];
         b.limb(hip, knee, 0.075 * bulk, look.trousers, 0.06);
         b.limb(knee, ankle, 0.06, look.boots, 0.05);
+        b.cylinder(0.068, 0.068, 0.05, [knee[0] + (ankle[0] - knee[0]) * 0.3, knee[1] + (ankle[1] - knee[1]) * 0.3, knee[2] + (ankle[2] - knee[2]) * 0.3], look.boots, undefined, 10);
         continue;
       }
       const a = stride * side;
@@ -89,6 +93,10 @@ export function human(
       const ankle = swing(knee, 0.42, a - lift);
       b.limb(hip, knee, 0.075 * bulk, look.trousers, 0.06);
       b.limb(knee, ankle, 0.06, look.boots, 0.05);
+      // boot top cuff and laces
+      const cuff: Vec3 = [knee[0] + (ankle[0] - knee[0]) * 0.35, knee[1] + (ankle[1] - knee[1]) * 0.35, knee[2] + (ankle[2] - knee[2]) * 0.35];
+      b.cylinder(0.066, 0.07, 0.05, cuff, look.boots, undefined, 10);
+      b.box([0.012, 0.012, 0.05], [cuff[0] + 0.06, cuff[1] - 0.08, cuff[2]], { color: '#2a1d14' });
       b.box([0.2, 0.07, 0.09], [ankle[0] + 0.06, ankle[1] - 0.02, ankle[2]], look.boots);
     }
 
@@ -100,8 +108,16 @@ export function human(
       // chest
       u.sphere([0.17 * bulk, 0.33, tw * 1.08], [0, 0.3, 0], look.tunic);
       u.cylinder(tw * 1.02, tw * 1.02, 0.06, [0, 0.08, 0], { color: '#4a3424', tex: 'leather' });
+      u.box([0.02, 0.05, 0.06], [tw * 1.0, 0.08, 0], { color: '#b89a4a', tex: 'metal' }); // buckle
+      u.sphere([0.05, 0.06, 0.035], [0.02, 0.0, tw * 1.05], { color: '#5a3f28', tex: 'leather' }); // belt pouch
+      u.box([0.012, 0.035, 0.03], [0.06, 0.04, tw * 1.08], { color: '#b89a4a', tex: 'metal' });
+      u.cylinder(0.075, 0.09, 0.05, [0, 0.58, 0], { color: '#3a2a1c', tex: 'cloth' }); // collar
       if (look.tabard) {
         u.box([0.05, 0.5, tw * 1.25], [0.15 * bulk, 0.22, 0], { team: 'primary', tex: 'cloth' });
+        // trim stripes and a sewn emblem
+        u.box([0.052, 0.5, 0.025], [0.152 * bulk, 0.22, tw * 0.6], { team: 'secondary', tex: 'cloth' });
+        u.box([0.052, 0.5, 0.025], [0.152 * bulk, 0.22, -tw * 0.6], { team: 'secondary', tex: 'cloth' });
+        u.box([0.054, 0.1, 0.1], [0.153 * bulk, 0.3, 0], { team: 'secondary', tex: 'cloth' }, [Math.PI / 4, 0, 0]);
         u.sphere([0.13 * bulk, 0.08, 0.26 * bulk], [0, 0.55, 0], { team: 'primary', tex: 'cloth' });
       }
       // neck + head
@@ -109,6 +125,9 @@ export function human(
       u.cylinder(0.05, 0.06, 0.1, [0, 0.62, 0], skin);
       u.sphere([0.115, 0.13, 0.11], [0.01, headY, 0], skin);
       u.sphere(0.025, [0.115, headY - 0.01, 0], skin); // nose
+      u.sphere(0.012, [0.1, headY + 0.03, 0.04], { color: '#1a1410' }); // eyes
+      u.sphere(0.012, [0.1, headY + 0.03, -0.04], { color: '#1a1410' });
+      if (look.beard) u.sphere([0.06, 0.07, 0.085], [0.07, headY - 0.07, 0], { color: look.hair, tex: 'hair' });
       switch (look.head ?? 'bare') {
         case 'hood':
           u.sphere([0.135, 0.13, 0.13], [-0.02, headY + 0.03, 0], { team: 'primary', tex: 'cloth' });
@@ -137,6 +156,8 @@ export function human(
         u.sphere(0.075 * bulk, shoulder, look.tunic);
         u.limb(shoulder, elbow, 0.058 * bulk, look.tunic, 0.05);
         u.limb(elbow, wrist, 0.048, skin, 0.042);
+        u.sphere([0.052, 0.03, 0.052], [wrist[0] + (elbow[0] - wrist[0]) * 0.2, wrist[1] + (elbow[1] - wrist[1]) * 0.2, wrist[2]], { color: '#4a3424', tex: 'leather' }); // bracer
+        if (look.pads) u.sphere([0.11 * bulk, 0.07, 0.1 * bulk], [shoulder[0], shoulder[1] + 0.03, shoulder[2]], { color: '#8d939a', tex: 'metal' });
         u.joint(wrist, [0, 0, a + 0.25], (h) => {
           h.sphere(0.05, [0, 0, 0], skin);
           if (hand) hand(h);

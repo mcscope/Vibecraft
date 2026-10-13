@@ -1,6 +1,9 @@
 // Training dummies for the Proving Grounds. They obey the same physics: HP comes
 // from their mass and frame, so heavier dummies soak up more crystal.
-import type { FactionSpec, Mat, ModelBuilder, UnitSpec } from '../types';
+import type { FactionSpec, UnitSpec } from '../types';
+import type { Mat, ModelBuilder, UnitModel } from '../../kits/bake3d/types';
+
+export type DummyUnit = UnitSpec & { model: UnitModel };
 
 const WOOD: Mat = { color: '#6b4a2e', tex: 'wood' };
 const STRAW: Mat = { color: '#c9a961', tex: 'thatch' };
@@ -34,7 +37,7 @@ function strawman(b: ModelBuilder, armored: boolean): void {
   }
 }
 
-const strawDummy: UnitSpec = {
+const strawDummy: DummyUnit = {
   id: 'straw',
   name: 'Straw Dummy',
   description: 'A light practice target. 40 kg of straw on a post.',
@@ -45,7 +48,7 @@ const strawDummy: UnitSpec = {
   model: (b) => strawman(b, false),
 };
 
-const armoredDummy: UnitSpec = {
+const armoredDummy: DummyUnit = {
   id: 'armored',
   name: 'Armored Dummy',
   description: 'A straw man in scrap plate. 150 kg — mostly frame.',
@@ -56,7 +59,7 @@ const armoredDummy: UnitSpec = {
   model: (b) => strawman(b, true),
 };
 
-const bales: UnitSpec = {
+const bales: DummyUnit = {
   id: 'bales',
   name: 'Siege Bales',
   description: 'A 600 kg stack of bound hay with a painted target. Bring something heavy.',
@@ -109,5 +112,13 @@ export const training: FactionSpec = {
   workerId: 'straw',
   townCenterId: 'fort',
   units: [strawDummy, armoredDummy, bales],
-  buildings: [{ id: 'fort', name: 'Target Fort', description: 'A practice fort. Knock it down; it gets rebuilt.', size: 3, materials: 1350, unbuildable: true, model: fort }],
+  buildings: [{ id: 'fort', name: 'Target Fort', description: 'A practice fort. Knock it down; it gets rebuilt.', size: 3, materials: 1350, unbuildable: true }],
+  art: (team, onProgress) => import('../../kits/bake3d/baker').then(async ({ Baker }) => {
+    const baker = new Baker();
+    const art = { units: {} as Record<string, import('../../art/contract').UnitArt>, buildings: { fort: baker.bakeBuilding(fort, 3, team) }, flag: baker.bakeStatic(fort, team) };
+    const list = [strawDummy, armoredDummy, bales];
+    for (const [i, u] of list.entries()) { onProgress?.(i / list.length, `Setting up ${u.name}`); art.units[u.id] = await baker.bakeUnit(u.model, team, { dummy: true }); }
+    baker.dispose();
+    return art;
+  }),
 };

@@ -4,7 +4,7 @@ import type { World } from '../sim/world';
 import type { Renderer, RenderState } from '../render/renderer';
 import { TEAM_COLORS } from '../render/renderer';
 import type { Minimap } from './minimap';
-import { keymap, settings, settingsOpen } from './settings';
+import { keymap, settings, settingsOpen, updateSettings } from './settings';
 
 /** resupplyDest: units were just sent to resupply; a ground click picks where they go afterwards. */
 type Mode = 'attackMove' | 'give' | 'resupplyDest' | 'place' | null;
@@ -64,8 +64,13 @@ export class Input {
     return [...this.rs.selected].filter((id) => this.world.units.get(id)?.owner === this.player);
   }
 
+  /** Called when the player's own selection changes (for unit voice lines). */
+  onSelect?: (ids: number[]) => void;
+
   setSelection(ids: number[]): void {
+    const before = [...this.rs.selected].join(',');
     this.rs.selected = new Set(ids);
+    if (ids.length && ids.join(',') !== before) this.onSelect?.(ids);
   }
 
   update(dt: number): void {
@@ -302,6 +307,8 @@ export class Input {
     if (k === km.home && base) { this.setSelection([base.id]); this.centerOnSelection(); return; }
     switch (k) {
       case ' ': e.preventDefault(); this.centerOnSelection(); break;
+      case '.': this.nextIdleWorker(); break;
+      case 'm': updateSettings({ muted: !settings().muted }); break;
       case 'escape': if (this.mode) this.mode = null; else this.setSelection([]); break;
       case 'p': this.paused = !this.paused; break;
       case '[': this.speed = Math.max(0.25, this.speed / 2); break;
@@ -318,6 +325,18 @@ export class Input {
       if (p) { x += p[0]; y += p[1]; n++; }
     }
     if (n) this.renderer.cam.centerOn(x / n, y / n);
+  }
+
+  private idleCursor = 0;
+
+  /** Select the next idle worker and jump the camera to it. */
+  nextIdleWorker(): void {
+    const wid = this.world.factionOf(this.player).workerId;
+    const idle = this.world.unitsOf(this.player).filter((u) => u.specId === wid && u.order.kind === 'idle');
+    if (!idle.length) return;
+    const u = idle[this.idleCursor++ % idle.length];
+    this.setSelection([u.id]);
+    this.renderer.cam.centerOn(u.x, u.y);
   }
 
   /** Start placing a building (from the HUD build menu). */

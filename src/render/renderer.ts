@@ -4,8 +4,8 @@
 import { Application, Container, ImageSource, Rectangle, Sprite as PixiSprite, Text, Texture, type TextureSource } from 'pixi.js';
 import { type Building, type ResourceNode, type Unit, type World, type WorldEvent } from '../sim/world';
 import { Camera, isoX, isoY } from './camera';
-import type { BakedAnim, Sprite } from './bake/baker';
-import { BUSH_LEVELS, MINE_LEVELS, TEAM_COLORS, TREE_VARIANTS, type SpriteBank } from './sprites';
+import { buildingSprite, unitSprite, type ArtAnim, type Sprite } from '../art/contract';
+import { TEAM_COLORS, type ArtBank } from './artbank';
 import { paintTerrain, TERRAIN_SCALE } from './terrain';
 
 export { TEAM_COLORS };
@@ -32,24 +32,21 @@ export interface RenderOptions {
   damageNumbers: boolean;
 }
 
-/** Which baked animation and frame a unit is showing right now. */
-export function unitFrame(w: World, u: Unit): { anim: BakedAnim; index: number } {
+/** Which animation a unit is showing, and how far into it (seconds for loops, progress for one-shots). */
+export function unitFrame(w: World, u: Unit): { anim: ArtAnim; time?: number; progress?: number } {
   switch (u.anim) {
     case 'walk': {
       const surplus = w.surplusCrystal(u);
       const most = Math.max(u.food, u.wood, surplus);
-      const anim: BakedAnim = most <= 0.5 ? 'walk' : most === u.food ? 'carryFood' : most === u.wood ? 'carryWood' : 'carryCrystal';
-      const speed = Math.max(0.5, u.stats.speed);
-      return { anim, index: Math.floor(u.animT * 8 * speed / 1.7) };
+      const anim: ArtAnim = most <= 0.5 ? 'walk' : most === u.food ? 'carryFood' : most === u.wood ? 'carryWood' : 'carryCrystal';
+      // stride rate follows actual speed
+      return { anim, time: u.animT * Math.max(0.5, u.stats.speed) / 1.7 };
     }
     case 'attack': {
       const dur = Math.min(0.45, u.stats.cooldown * 0.8);
-      return { anim: 'attack', index: Math.min(7, Math.floor((1 - u.swing / dur) * 8)) };
+      return { anim: 'attack', progress: 1 - u.swing / dur };
     }
-    case 'gather': return { anim: 'gather', index: Math.floor(u.animT * 7) };
-    case 'eat': return { anim: 'eat', index: Math.floor(u.animT * 4) };
-    case 'tired': return { anim: 'tired', index: Math.floor(u.animT * 1.5) };
-    default: return { anim: 'idle', index: Math.floor(u.animT * 2.5) };
+    default: return { anim: u.anim, time: u.animT };
   }
 }
 
@@ -99,6 +96,10 @@ export class Renderer {
   private air = new Container();
   private screenLayer = new Container({ isRenderGroup: true });
   private groundPool = new Pool(this.groundLayer);
+  private fxLayer = new Container({ isRenderGroup: true });
+  private fxPool = new Pool(this.fxLayer);
+  /** Smoke and flame puffs rising from damaged buildings (world iso coords). */
+  private puffs: Array<{ x: number; y: number; t: number; life: number; fire: boolean; drift: number; size: number }> = [];
   private screenPool = new Pool(this.screenLayer);
   private ringTex!: Texture;
   private discTex!: Texture;
@@ -115,8 +116,8 @@ export class Renderer {
   private ghostSprite: PixiSprite | null = null;
   private textPool: Text[] = [];
 
-  constructor(private canvas: HTMLCanvasElement, private world: World, readonly bank: SpriteBank, private opts: RenderOptions, extraDirt: Array<[number, number, number]> = []) {
-    this.terrainCanvas = paintTerrain(world, extraDirt, bank.doodads);
+  constructor(private canvas: HTMLCanvasElement, private world: World, readonly bank: ArtBank, private opts: RenderOptions, extraDirt: Array<[number, number, number]> = []) {
+    this.terrainCanvas = paintTerrain(world, extraDirt, bank.biome.doodads);
   }
 
   async init(): Promise<void> {
@@ -131,7 +132,7 @@ export class Renderer {
     this.trees.sortableChildren = true;
     // Trees live in their own cached layer: they never move, so Pixi never has to
     // re-sort or rebuild them. (Units behind a tree draw over it, AoE-style.)
-    this.worldLayer.addChild(this.ground, this.groundLayer, this.corpses, this.trees, this.objects, this.air);
+    this.worldLayer.addChild(this.ground, this.groundLayer, this.corpses, this.trees, this.objects, this.air, this.fxLayer);
     this.ringTex = shapeTexture((c, w, h) => { c.strokeStyle = '#fff'; c.lineWidth = 7; c.beginPath(); c.ellipse(w / 2, h / 2, w / 2 - 5, h / 2 - 5, 0, 0, Math.PI * 2); c.stroke(); });
     this.discTex = shapeTexture((c, w, h) => {
       const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
@@ -217,6 +218,7 @@ export class Renderer {
     this.syncUnits(alpha);
     this.syncProjectiles(alpha);
     this.drawGround(alpha, dt, rs);
+    this.drawFire(dt);
     this.drawEffects(dt);
     this.drawScreen(alpha, rs);
     this.app.render();
@@ -236,16 +238,17 @@ export class Renderer {
       }
       if (n.tree) continue; // trees never change
       this.setFrame(sp, this.nodeSprite(n));
-      if (n.shard) sp.scale.set(Math.min(1.6, 0.6 + Math.cbrt(n.amount) * 0.3) / this.bank.shard.q);
+      if (n.shard) sp.scale.set(Math.min(1.6, 0.6 + Math.cbrt(n.amount) * 0.3) / this.bank.biome.shard.q);
     }
     for (const [id, sp] of seen) if (!this.world.nodes.has(id)) { sp.destroy(); seen.delete(id); }
   }
 
   private nodeSprite(n: ResourceNode): Sprite {
-    if (n.tree) return this.bank.trees[n.id % TREE_VARIANTS];
-    if (n.shard) return this.bank.shard;
-    if (n.type === 'food') return this.bank.bushes[Math.min(BUSH_LEVELS - 1, Math.ceil((n.amount / n.maxAmount) * (BUSH_LEVELS - 1)))];
-    return this.bank.mines[Math.min(MINE_LEVELS - 1, Math.ceil((n.amount / n.maxAmount) * (MINE_LEVELS - 1)))];
+    const b = this.bank.biome;
+    const level = (list: Sprite[]) => list[Math.min(list.length - 1, Math.ceil((n.amount / n.maxAmount) * (list.length - 1)))];
+    if (n.tree) return b.trees[n.id % b.trees.length];
+    if (n.shard) return b.shard;
+    return level(n.type === 'food' ? b.bushes : b.mines);
   }
 
   private syncBuildings(): void {
@@ -256,21 +259,13 @@ export class Renderer {
         const cx = b.ox + b.size / 2, cy = b.oy + b.size / 2;
         sp.position.set(isoX(cx, cy), isoY(cx, cy));
         sp.zIndex = b.ox + b.oy + b.size;
-        const art = this.bank.building(b.owner, b.specId);
-        if (art) this.setFrame(sp, art);
         this.objects.addChild(sp);
         this.buildingSprites.set(b.id, sp);
       }
-      // construction sites: a translucent, darkened silhouette that firms up as wood arrives
-      if (b.complete) {
-        sp.alpha = 1;
-        sp.tint = b.spec.attack && b.stock.crystal < b.spec.attack.crystalMass ? 0x808080 : 0xffffff; // tower out of ammo
-      }
-      else {
-        const f = b.built / b.stats.totalCost;
-        sp.alpha = 0.3 + 0.6 * f;
-        sp.tint = 0x8a7a66;
-      }
+      // the faction supplies the looks; we pick construction stage / damage level
+      const art = this.bank.building(b.owner, b.specId);
+      if (art) this.setFrame(sp, buildingSprite(art, b.complete, b.built / b.stats.totalCost, b.hp, b.maxHp));
+      sp.tint = b.complete && b.spec.attack && b.stock.crystal < b.spec.attack.crystalMass ? 0x808080 : 0xffffff; // tower out of ammo
     }
     for (const [id, sp] of this.buildingSprites) if (!this.world.buildings.has(id)) { sp.destroy(); this.buildingSprites.delete(id); }
   }
@@ -286,10 +281,10 @@ export class Renderer {
       const x = u.px + (u.x - u.px) * alpha, y = u.py + (u.y - u.py) * alpha;
       sp.position.set(isoX(x, y), isoY(x, y));
       sp.zIndex = x + y;
-      const sheet = this.bank.unit(u.owner, u.specId);
-      if (sheet) {
-        const { anim, index } = unitFrame(this.world, u);
-        this.setFrame(sp, sheet.frame(anim, u.heading, index).sprite);
+      const art = this.bank.unit(u.owner, u.specId);
+      if (art) {
+        const f = unitFrame(this.world, u);
+        this.setFrame(sp, unitSprite(art, f.anim, u.heading, f));
       }
       // no crystal to fight with: visibly greyed out
       const disarmed = !u.dummy && !u.carter && !this.world.armed(u) && u.specId !== this.world.factionOf(u.owner).workerId;
@@ -303,8 +298,8 @@ export class Renderer {
       let sp = this.projSprites.get(p.id);
       if (!sp) {
         sp = new PixiSprite();
-        this.setFrame(sp, this.bank.projectile);
-        sp.scale.set((0.55 + Math.cbrt(p.crystalKg) * 0.35) / this.bank.projectile.q);
+        this.setFrame(sp, this.bank.biome.projectile);
+        sp.scale.set((0.55 + Math.cbrt(p.crystalKg) * 0.35) / this.bank.biome.projectile.q);
         this.air.addChild(sp);
         this.projSprites.set(p.id, sp);
       }
@@ -316,6 +311,35 @@ export class Renderer {
       sp.rotation = this.time * 14 + p.id;
     }
     for (const [id, sp] of this.projSprites) if (!this.world.projectiles.has(id)) { sp.destroy(); this.projSprites.delete(id); }
+  }
+
+  /** Damaged buildings smoke; badly damaged ones burn. */
+  private drawFire(dt: number): void {
+    for (const b of this.world.buildings.values()) {
+      if (!b.complete) continue;
+      const hurt = 1 - b.hp / b.maxHp;
+      if (hurt < 0.34) continue;
+      const rate = (hurt > 0.66 ? 9 : 3) * b.size * dt; // puffs this frame
+      for (let n = rate + Math.random(); n >= 1; n--) {
+        const px = b.ox + 0.3 + Math.random() * (b.size - 0.6), py = b.oy + 0.3 + Math.random() * (b.size - 0.6);
+        const fire = hurt > 0.66 && Math.random() < 0.4;
+        this.puffs.push({ x: isoX(px, py), y: isoY(px, py) - 30 - Math.random() * 40 * b.size, t: 0, life: fire ? 0.6 : 2.6, fire, drift: 6 + Math.random() * 10, size: fire ? 5 : 8 + Math.random() * 6 });
+      }
+    }
+    const P = this.fxPool;
+    P.begin();
+    this.puffs = this.puffs.filter((p) => (p.t += dt) < p.life);
+    for (const p of this.puffs) {
+      const k = p.t / p.life;
+      const s = P.get(this.discTex);
+      s.anchor.set(0.5);
+      s.position.set(p.x + p.drift * k * 2, p.y - k * (p.fire ? 18 : 60));
+      const r = p.size * (p.fire ? 1 - k * 0.5 : 1 + k * 2.2);
+      s.width = r * 2; s.height = r * 1.6;
+      s.tint = p.fire ? (k < 0.4 ? 0xffd27a : 0xff6a2a) : 0x3a3530;
+      s.alpha = p.fire ? 0.9 * (1 - k) : 0.45 * (1 - k) * Math.min(1, k * 5);
+    }
+    P.end();
   }
 
   /** Selection rings, order pings, rally flag, projectile shadows — all on the ground plane. */
@@ -367,7 +391,7 @@ export class Renderer {
     if (gh) {
       const cx = gh.ox + gh.size / 2, cy = gh.oy + gh.size / 2;
       ellipse(this.diamondTex, isoX(cx, cy), isoY(cx, cy), gh.size * 32, gh.size * 16, gh.ok ? 0x7aff7a : 0xff5a4a, 0.95);
-      const art = this.bank.building(0, gh.specId);
+      const art = this.bank.building(0, gh.specId)?.complete;
       if (art) {
         if (!this.ghostSprite) { this.ghostSprite = new PixiSprite(); this.objects.addChild(this.ghostSprite); }
         this.setFrame(this.ghostSprite, art);
@@ -382,7 +406,7 @@ export class Renderer {
     // rally flag
     if (rally) {
       if (!this.flagSprite) { this.flagSprite = new PixiSprite(); this.objects.addChild(this.flagSprite); }
-      this.setFrame(this.flagSprite, this.bank.flags[rally.owner]);
+      this.setFrame(this.flagSprite, this.bank.flag(rally.owner));
       this.flagSprite.position.set(isoX(rally.rallyX, rally.rallyY), isoY(rally.rallyX, rally.rallyY));
       this.flagSprite.zIndex = rally.rallyX + rally.rallyY;
       this.flagSprite.visible = true;
@@ -412,8 +436,7 @@ export class Renderer {
       const x = u.px + (u.x - u.px) * alpha, y = u.py + (u.y - u.py) * alpha;
       const [sx, sy] = cam.toScreen(x, y);
       if (sx < -50 || sy < -50 || sx > cam.width + 50 || sy > cam.height + 200) continue;
-      const sheet = this.bank.unit(u.owner, u.specId);
-      let top = sy - ((sheet?.height ?? 40) + 8) * cam.zoom;
+      let top = sy - ((this.bank.unit(u.owner, u.specId)?.height ?? 40) + 8) * cam.zoom;
       const w = Math.max(20, 24 * Math.cbrt(u.stats.mass / 70)) * Math.min(1.3, cam.zoom);
       const f = u.hp / u.stats.maxHp;
       bar(sx - w / 2, top, w, 3, f, f > 0.5 ? 0x3fcf4a : f > 0.25 ? 0xe8c547 : 0xd9352b);
@@ -476,15 +499,14 @@ export class Renderer {
       }
       keep.push(e);
       if (e.kind === 'corpse') {
-        const sheet = this.bank.unit(e.owner!, e.specId!);
-        if (!sheet) continue;
+        const art = this.bank.unit(e.owner!, e.specId!);
+        if (!art) continue;
         if (!e.sprite) {
           e.sprite = new PixiSprite();
           e.sprite.position.set(isoX(e.x, e.y), isoY(e.x, e.y));
           this.corpses.addChild(e.sprite);
         }
-        const n = sheet.frames('die');
-        this.setFrame(e.sprite, sheet.frame('die', e.heading!, Math.min(n - 1, Math.floor((e.t / 0.6) * n))).sprite);
+        this.setFrame(e.sprite, unitSprite(art, 'die', e.heading!, { progress: Math.min(1, e.t / 0.6) }));
         e.sprite.alpha = e.t > e.life - 2 ? (e.life - e.t) / 2 : 1;
       } else if (e.kind === 'text') {
         if (!e.label) {

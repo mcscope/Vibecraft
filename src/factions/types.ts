@@ -6,9 +6,11 @@
 // these numbers by src/sim/physics.ts — players never set stats directly.
 // That is the balance guarantee.
 //
-// Visuals are a little 3D model built from primitives (see ModelBuilder). At
-// load time the game lights it and pre-renders it into sprite sheets in 8
-// facings — the same trick Age of Empires II and StarCraft used.
+// Visuals are NOT part of the spec: a faction supplies finished art through
+// `FactionSpec.art` (see src/art/contract.ts). How it makes that art — a 3D
+// bake, hand-drawn sheets, generated images — is up to the faction.
+
+import type { ArtLoader } from '../art/contract';
 
 export type AttackStyle = 'strike' | 'throw';
 
@@ -37,7 +39,10 @@ export interface UnitSpec {
   /** Total body mass in kg. */
   mass: number;
   physique: Physique;
-  attack: AttackSpec;
+  /** Omit for units that can't fight (e.g. carts). */
+  attack?: AttackSpec;
+  /** Wheels bear the load: carry capacity ×2, and a full load slows it less and costs fewer calories to haul. */
+  wheeled?: boolean;
   /** Can this unit harvest resource nodes? Default true. */
   canGather?: boolean;
   /** Training dummy: never moves, eats or fights. Only for scenarios. */
@@ -50,66 +55,7 @@ export interface UnitSpec {
   refinement?: number;
   /** 'carter': auto-produced supply hauler; never fights, never gathers. */
   role?: 'carter';
-  /** Builds the unit's 3D model for one animation frame. Never affects simulation. */
-  model: UnitModel;
 }
-
-export type AnimName = 'idle' | 'walk' | 'attack' | 'gather' | 'eat' | 'tired' | 'die';
-
-export interface TeamColors {
-  primary: string;
-  secondary: string;
-  dark: string;
-}
-
-export interface Pose {
-  anim: AnimName;
-  /** 0..1 progress through the animation loop (or through the swing / fall). */
-  phase: number;
-  team: TeamColors;
-  /** Is the unit holding a crystal it can strike/throw with? */
-  armed: boolean;
-  /** What it's hauling, if anything. */
-  cargo: 'food' | 'wood' | 'crystal' | null;
-}
-
-export type Vec3 = [number, number, number];
-
-/** Surface look. `tex` adds a procedural texture; `team: true` paints it in the team colour. */
-export interface Mat {
-  color?: string;
-  tex?: 'cloth' | 'fur' | 'wood' | 'stone' | 'thatch' | 'leather' | 'metal' | 'skin' | 'hair' | 'leaf' | 'none';
-  rough?: number;
-  metal?: number;
-  team?: 'primary' | 'secondary';
-  emissive?: string;
-}
-
-/**
- * Model coordinates: metres-ish. The unit stands on y = 0, faces +x, y is up,
- * +z is its left. A person is ~1.7 tall. Rotations are [x, y, z] radians.
- */
-export interface ModelBuilder {
-  readonly team: TeamColors;
-  /** Children built inside `build` are positioned relative to this joint. */
-  joint(at: Vec3, rot: Vec3, build: (b: ModelBuilder) => void, scale?: number): void;
-  box(size: Vec3, at: Vec3, mat: Mat, rot?: Vec3): void;
-  /** Ellipsoid when radius is a Vec3. */
-  sphere(radius: number | Vec3, at: Vec3, mat: Mat, rot?: Vec3): void;
-  /** Upright cylinder centred at `at`. Use `sides` 4 for a square pyramid-ish block, 6 for hex. */
-  cylinder(rTop: number, rBottom: number, height: number, at: Vec3, mat: Mat, rot?: Vec3, sides?: number): void;
-  cone(radius: number, height: number, at: Vec3, mat: Mat, rot?: Vec3, sides?: number): void;
-  /** A rounded rod from `a` to `b` — arms, legs, staffs, horns. */
-  limb(a: Vec3, b: Vec3, radius: number, mat: Mat, radiusB?: number): void;
-  /** Hip roof / pyramid with a rectangular base of size [w, h, d], base centred at `at`. */
-  roof(size: Vec3, at: Vec3, mat: Mat, rot?: Vec3): void;
-  /** Lumpy boulder. */
-  rock(size: Vec3, at: Vec3, mat: Mat, seed?: number): void;
-  /** A glowing faceted crystal of the given length. */
-  crystal(length: number, at: Vec3, rot?: Vec3): void;
-}
-
-export type UnitModel = (b: ModelBuilder, pose: Pose) => void;
 
 export type ResourceKind = 'food' | 'wood' | 'crystal';
 export type Stock = Record<ResourceKind, number>;
@@ -146,7 +92,6 @@ export interface BuildingSpec {
   attack?: TowerSpec;
   /** Players can't place it (e.g. a starting-only building). */
   unbuildable?: boolean;
-  model: (b: ModelBuilder) => void;
 }
 
 /** Raises one unit type's refinement for its owner, everywhere. Cost derives from the curve. */
@@ -173,4 +118,6 @@ export interface FactionSpec {
   techs?: TechSpec[];
   /** What this faction calls its resources (they're identical underneath). */
   resourceNames?: Partial<Record<ResourceKind, string>>;
+  /** Supplies the faction's art (sprites, building looks, flag, sounds, music) for a team colour. */
+  art?: ArtLoader;
 }

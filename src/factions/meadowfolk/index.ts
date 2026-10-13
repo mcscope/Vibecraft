@@ -4,8 +4,17 @@
 // heavy it is, how that body is built, and what crystal it fights with.
 // Run `npm run stats` to see what the physics makes of them, and open
 // /lab.html to see the baked sprites.
+//
+// Art: the Meadowfolk build their units and buildings as little 3D models
+// (the `model` fields below, using the bake3d kit) and bake them into sprites
+// in ./art.ts. The game only ever sees the finished sprites.
 
-import type { BuildingSpec, FactionSpec, Mat, TechSpec, UnitSpec } from '../types';
+import type { BuildingSpec, FactionSpec, TechSpec, UnitSpec } from '../types';
+import type { BuildingModel, Mat, UnitModel } from '../../kits/bake3d/types';
+
+/** Meadowfolk specs carry their 3D models; the engine ignores the extra field. */
+export type MeadowUnit = UnitSpec & { model: UnitModel };
+export type MeadowBuilding = BuildingSpec & { model: BuildingModel };
 import { armAngle, cargoPack, human, quadLegs, swing, type HumanLook } from './body';
 import * as models from './buildings';
 
@@ -14,11 +23,11 @@ const LEATHER: Mat = { color: '#5a3f28', tex: 'leather' };
 const IRON: Mat = { color: '#8d939a', tex: 'metal' };
 
 const villagerLook: HumanLook = {
-  skin: '#c99a76', hair: '#4a3020', head: 'hood', scale: 0.95,
+  skin: '#c99a76', hair: '#4a3020', head: 'hood', scale: 0.95, beard: true,
   tunic: { color: '#8a7350', tex: 'cloth' }, trousers: { color: '#5d5040', tex: 'cloth' }, boots: LEATHER,
 };
 
-const villager: UnitSpec = {
+const villager: MeadowUnit = {
   id: 'villager',
   name: 'Villager',
   description: 'Gathers berries and crystal, hauls them home, and can defend itself with a crystal-headed hammer.',
@@ -35,7 +44,7 @@ const villager: UnitSpec = {
   },
 };
 
-const slinger: UnitSpec = {
+const slinger: MeadowUnit = {
   id: 'slinger',
   name: 'Slinger',
   description: 'Light skirmisher who whirls a sling of crystal chips. Fragile, but hits from range — then has to collect the spent crystals.',
@@ -61,7 +70,7 @@ const slinger: UnitSpec = {
   },
 };
 
-const maceman: UnitSpec = {
+const maceman: MeadowUnit = {
   id: 'maceman',
   name: 'Crystal Maceman',
   description: 'Heavy infantry in mail, swinging a 10 kg crystal-headed mace. Slow to swing, hard to stop.',
@@ -71,7 +80,7 @@ const maceman: UnitSpec = {
   refinement: 1.3,
   model(b, p) {
     const look: HumanLook = {
-      skin: '#c08e6c', hair: '#3a2a1c', head: 'helmet', scale: 1.12, bulk: 1.35, tabard: true,
+      skin: '#c08e6c', hair: '#3a2a1c', head: 'helmet', scale: 1.12, bulk: 1.35, tabard: true, pads: true, beard: true,
       tunic: IRON, trousers: { color: '#4a4038', tex: 'cloth' }, boots: LEATHER,
     };
     human(b, p, look, armAngle(p), (h) => {
@@ -92,7 +101,7 @@ const maceman: UnitSpec = {
   },
 };
 
-const lynx: UnitSpec = {
+const lynx: MeadowUnit = {
   id: 'lynx',
   name: 'Lynx Lancer',
   description: 'A lancer riding a great lynx, crystal-tipped lance couched. Fast and fierce, but eats like a horse.',
@@ -129,7 +138,7 @@ const lynx: UnitSpec = {
       // rider (hip sits on the saddle)
       c.joint([-0.08, 1.5 - 0.9 * 0.9, 0], [0, 0, 0], (r) => {
         const look: HumanLook = {
-          skin: '#c99a76', hair: '#3a2a1c', head: 'helmet', scale: 0.9, mounted: true, tabard: true,
+          skin: '#c99a76', hair: '#3a2a1c', head: 'helmet', scale: 0.9, mounted: true, tabard: true, pads: true,
           tunic: IRON, trousers: { color: '#4a4038', tex: 'cloth' }, boots: LEATHER,
         };
         human(r, { ...p, anim: p.anim === 'walk' ? 'idle' : p.anim }, look, armAngle(p, 'lance'), (h) => {
@@ -143,7 +152,7 @@ const lynx: UnitSpec = {
   },
 };
 
-const hurlhorn: UnitSpec = {
+const hurlhorn: MeadowUnit = {
   id: 'hurlhorn',
   name: 'Hurlhorn',
   description: 'A shaggy war-beast carrying a throwing-arm on its back. Lobs 12 kg crystals across the field. Helpless up close.',
@@ -193,13 +202,13 @@ const hurlhorn: UnitSpec = {
   },
 };
 
-const mule: UnitSpec = {
+const mule: MeadowUnit = {
   id: 'mule',
   name: 'Mule Cart',
   description: 'A patient mule hauling a two-wheeled cart. Keeps outlying buildings stocked from the town center.',
   mass: 140,
   physique: { muscle: 0.55, frame: 0.3, reserve: 0.15 },
-  attack: { style: 'strike', crystalMass: 0.2 },
+  wheeled: true,
   canGather: false,
   role: 'carter',
   model(b, p) {
@@ -238,7 +247,7 @@ const DARK_IRON: Mat = { color: '#3a3a3a', tex: 'metal' };
 
 // ── Buildings. Capital = materials; links count prerequisites at 100%.
 //    barracks 300 → forge 800 / den 900 → great hall 900 + 500 + 600 + 300 = 2,300
-const buildings: BuildingSpec[] = [
+export const buildings: MeadowBuilding[] = [
   {
     id: 'town-center', name: 'Town Center', description: 'Trains villagers. Keeps a pool of 3 mule carts that load here and supply whichever building is shortest.',
     size: 3, materials: 1350, trains: ['villager'], researches: ['villager-tools'], carters: 3, unbuildable: true, model: models.townCenter,
@@ -272,14 +281,18 @@ const techs: TechSpec[] = [
   { id: 'lynx-breeding', name: 'Lynx Breeding', description: 'Lynx Lancers +0.3 refinement.', unit: 'lynx', refinement: 0.3 },
 ];
 
+export const units: MeadowUnit[] = [villager, slinger, maceman, lynx, hurlhorn, mule];
+
 export const meadowfolk: FactionSpec = {
   id: 'meadowfolk',
   name: 'The Meadowfolk',
   workerId: 'villager',
   carterId: 'mule',
   townCenterId: 'town-center',
-  units: [villager, slinger, maceman, lynx, hurlhorn, mule],
+  units,
   buildings,
   techs,
   resourceNames: { food: 'Berries', wood: 'Wood', crystal: 'Crystal' },
+  // loaded lazily so the 3D tooling only arrives when art is needed
+  art: (team, onProgress) => import('./art').then((m) => m.bakeArt(team, onProgress)),
 };

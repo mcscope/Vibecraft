@@ -1,6 +1,6 @@
 // Meadowfolk building models. 1 tile = 2 model units; origin = footprint centre,
 // so a building of `size` tiles spans ±size units on x and z.
-import type { Mat, ModelBuilder } from '../types';
+import type { Mat, ModelBuilder } from '../../kits/bake3d/types';
 
 const WOOD: Mat = { color: '#5e4128', tex: 'wood' };
 const DARKWOOD: Mat = { color: '#3d2a1a', tex: 'wood' };
@@ -193,4 +193,10 @@ export function watchtower(b: ModelBuilder): void {
   b.cylinder(0.12, 0.08, 0.07, [1.3, h + 1.12, 0], { color: '#5a3f28', tex: 'leather' });
   b.crystal(0.18, [1.3, h + 1.16, 0]);
   b.box([0.04, 0.5, 0.3], [0.8, h - 0.35, 0], BANNER);
+}
+
+/** Rally-point marker in team colours. */
+export function rallyFlag(b: ModelBuilder): void {
+  b.cylinder(0.035, 0.04, 1.6, [0, 0.8, 0], DARKWOOD, undefined, 8);
+  b.box([0.03, 0.4, 0.6], [0, 1.38, 0.3], { team: 'primary', tex: 'cloth' });
 }

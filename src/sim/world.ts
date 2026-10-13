@@ -89,6 +89,8 @@ export interface Unit {
   /** Training dummy: inert target. */
   dummy: boolean;
   carter: boolean;
+  /** Progress toward the next whole kilogram being gathered. */
+  gatherAcc: number;
 }
 
 export type QueueItem =
@@ -113,6 +115,8 @@ export interface Building {
   stock: Stock;
   rallyX: number; rallyY: number;
   cooldown: number;
+  /** Unit this building re-queues automatically, if any. */
+  autoTrain: string | null;
 }
 
 export interface ResourceNode {
@@ -141,6 +145,8 @@ export interface Projectile {
 
 export type WorldEvent =
   | { type: 'hit'; x: number; y: number; damage: number; target: number }
+  /** A swing or a throw (for sound). specId is absent for towers. */
+  | { type: 'attack'; x: number; y: number; owner: number; specId?: string; style: 'strike' | 'throw'; kg: number }
   | { type: 'death'; x: number; y: number; id: number; owner: number; specId: string; heading: number }
   | { type: 'trained'; id: number; owner: number }
   | { type: 'built'; id: number; owner: number }
@@ -257,7 +263,7 @@ export class World {
   room(b: Building): number { return b.complete ? Math.max(0, b.stats.cacheCap - this.stored(b)) : 0; }
   packLoad(u: Unit): number { return u.food + u.wood + u.crystal; }
   freeCapacity(u: Unit): number { return Math.max(0, u.stats.carryCapacity - this.packLoad(u)); }
-  armed(u: Unit): boolean { return u.crystal >= u.crystalMass - 1e-6; }
+  armed(u: Unit): boolean { return u.stats.canAttack && u.crystal >= u.crystalMass - 1e-6; }
   surplusCrystal(u: Unit): number { return Math.max(0, u.crystal - u.stats.loadoutCrystal); }
 
   /** Current refinement of a unit type for a player (design + techs). */
@@ -406,6 +412,12 @@ export class World {
         b.queue.push({ kind: 'unit', specId: cmd.specId, progress: 0, total: s.stats.trainTime, food: s.stats.foodCost, crystal: s.stats.crystalCost, home: 0 });
         return;
       }
+      case 'autoTrain': {
+        const b = ownBuilding(cmd.building);
+        if (!b || (cmd.specId && !b.spec.trains?.includes(cmd.specId))) return;
+        b.autoTrain = cmd.specId;
+        return;
+      }
       case 'research': {
         const b = ownBuilding(cmd.building);
         if (!b || !b.complete || b.queue.length >= MAX_QUEUE || !b.spec.researches?.includes(cmd.techId)) return;
@@ -484,7 +496,7 @@ export class World {
       hp: complete ? stats.maxHp : 1, maxHp: stats.maxHp,
       built: complete ? stats.totalCost : 0, complete,
       queue: [], stock: emptyStock(),
-      rallyX: ox + size + 1, rallyY: oy + size + 1, cooldown: 0,
+      rallyX: ox + size + 1, rallyY: oy + size + 1, cooldown: 0, autoTrain: null,
     };
     this.buildings.set(b.id, b);
     for (let y = oy; y < oy + size; y++) for (let x = ox; x < ox + size; x++) this.grid.block(x, y, 1);
@@ -528,8 +540,8 @@ export class World {
     const spec = s.spec;
     const u: Unit = {
       id: this.nextId++, owner, specId, stats: s.stats,
-      throws: spec.attack.style === 'throw',
-      crystalMass: Math.min(s.stats.carryCapacity, spec.attack.crystalMass),
+      throws: s.stats.canAttack && spec.attack?.style === 'throw',
+      crystalMass: s.stats.canAttack ? Math.min(s.stats.carryCapacity, spec.attack!.crystalMass) : 0,
       x, y, px: x, py: y,
       hp: s.stats.maxHp, cal: s.stats.maxCalories, exhausted: false,
       food: 0, wood: 0, crystal: s.stats.loadoutCrystal,
@@ -538,6 +550,7 @@ export class World {
       cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0,
       dummy: !!spec.dummy,
       carter: spec.role === 'carter',
+      gatherAcc: 0,
     };
     this.units.set(u.id, u);
     return u;
@@ -589,6 +602,14 @@ export class World {
 
   private tickBuilding(b: Building): void {
     if (!b.complete) return;
+    if (b.autoTrain && b.queue.length === 0) {
+      const s = this.specOf(b.owner, b.autoTrain);
+      if (s && b.stock.food >= s.stats.foodCost && b.stock.crystal >= s.stats.crystalCost && this.unitsOf(b.owner).length < MAX_UNITS_PER_PLAYER) {
+        b.stock.food -= s.stats.foodCost;
+        b.stock.crystal -= s.stats.crystalCost;
+        b.queue.push({ kind: 'unit', specId: b.autoTrain, progress: 0, total: s.stats.trainTime, food: s.stats.foodCost, crystal: s.stats.crystalCost, home: 0 });
+      }
+    }
     const item = b.queue[0];
     if (item) {
       const capped = item.kind === 'unit' && this.unitsOf(b.owner).length >= MAX_UNITS_PER_PLAYER;
@@ -701,6 +722,7 @@ export class World {
     b.stock.crystal -= atk.crystalMass;
     b.stock.food -= tw.foodPerShot;
     b.cooldown = tw.cooldown;
+    this.events.push({ type: 'attack', x: cx, y: cy, owner: b.owner, style: 'throw', kg: atk.crystalMass });
     const dist = Math.sqrt(bestD);
     const flight = Math.max(0.3, dist / (tw.velocity * 0.7));
     const p: Projectile = {
@@ -859,6 +881,7 @@ export class World {
     u.busy = true;
     u.cooldown = u.stats.cooldown;
     u.swing = Math.min(0.45, u.stats.cooldown * 0.8);
+    this.events.push({ type: 'attack', x: u.x, y: u.y, owner: u.owner, specId: u.specId, style: u.throws ? 'throw' : 'strike', kg: u.crystalMass });
     if (u.throws) {
       u.crystal -= u.crystalMass;
       const flight = Math.max(0.25, Math.sqrt((tx - u.x) ** 2 + (ty - u.y) ** 2) / (u.stats.crystalVelocity * 0.7));
@@ -925,6 +948,19 @@ export class World {
 
   // ───────────────────────────── economy ─────────────────────────────
 
+  /**
+   * Gathering is quantized: work accumulates, and resources come off the node a
+   * whole kilogram at a time (the last scrap of a node comes off as-is).
+   */
+  private gatherUnits(u: Unit, rate: number, available: number): number {
+    if (this.freeCapacity(u) < 1 - 1e-6 && available >= 1) { u.gatherAcc = 0; return 0; }
+    u.gatherAcc += rate * DT;
+    u.busy = true;
+    if (u.gatherAcc < 1) return 0;
+    u.gatherAcc -= 1;
+    return Math.min(1, available, Math.max(this.freeCapacity(u), available < 1 ? available : 0));
+  }
+
   private carry(u: Unit, r: ResourceKind, kg: number): void {
     if (r === 'food') u.food += kg; else if (r === 'wood') u.wood += kg; else u.crystal += kg;
   }
@@ -949,8 +985,12 @@ export class World {
       if (u.exhausted) return false;
       this.face(u, n.x - u.x, n.y - u.y);
       const rate = n.shard ? Math.max(2, u.stats.gatherRate * 4) : u.stats.gatherRate;
-      let want = Math.min(rate * DT, n.amount, this.freeCapacity(u));
-      if (o.stopWhenArmed) want = Math.min(want, Math.max(0, u.stats.loadoutCrystal - u.crystal));
+      let want: number;
+      if (n.shard) {
+        // spent crystals are picked up whole
+        want = Math.min(rate * DT, n.amount, this.freeCapacity(u));
+        if (o.stopWhenArmed) want = Math.min(want, Math.max(0, u.stats.loadoutCrystal - u.crystal));
+      } else want = this.gatherUnits(u, rate, n.amount);
       if (want > 0) {
         n.amount -= want;
         this.carry(u, n.type, want);
@@ -958,7 +998,7 @@ export class World {
         u.busy = true;
       }
       if (n.amount <= 0.001) this.removeNode(n);
-      const full = this.freeCapacity(u) < 0.05;
+      const full = this.freeCapacity(u) < (n.shard ? 0.05 : 1 - 1e-6);
       if (o.stopWhenArmed) {
         if (u.crystal >= u.stats.loadoutCrystal - 1e-6 || full || n.amount <= 0.001) this.finish(u);
       } else if (full) {
@@ -1070,12 +1110,12 @@ export class World {
       if (!this.moveToNear(u, tree.x, tree.y, 1.15 + u.stats.radius, true)) return u.x !== u.px || u.y !== u.py;
       if (u.exhausted) return false;
       this.face(u, tree.x - u.x, tree.y - u.y);
-      const want = Math.min(u.stats.gatherRate * DT, tree.amount, this.freeCapacity(u), remaining - u.wood);
+      const want = Math.min(this.gatherUnits(u, u.stats.gatherRate, tree.amount), Math.max(0, Math.ceil(remaining - u.wood)));
       if (want > 0) {
         tree.amount -= want; u.wood += want; u.cal -= K.gatherCalPerKg * want; u.busy = true;
       }
       if (tree.amount <= 0.001) this.removeNode(tree);
-      if (this.freeCapacity(u) < 0.05 || u.wood >= remaining - 1e-6 || tree.amount <= 0.001) o.phase = 'deliver';
+      if (this.freeCapacity(u) < 1 - 1e-6 || u.wood >= remaining - 1e-6 || tree.amount <= 0.001) o.phase = 'deliver';
       return false;
     }
     // fetch: nearest stockpile with wood, else the nearest tree to the site
@@ -1084,7 +1124,7 @@ export class World {
     const src = this.nearestCache(u, (b) => b.stock.wood > 0.5);
     if (src) {
       if (!this.moveToBuilding(u, src)) return u.x !== u.px || u.y !== u.py;
-      const take = Math.min(this.freeCapacity(u), remaining - this.woodInFlight(site), src.stock.wood);
+      const take = Math.min(Math.floor(this.freeCapacity(u)), Math.ceil(remaining - this.woodInFlight(site)), Math.floor(src.stock.wood));
       if (take <= 0) return false;
       src.stock.wood -= take; u.wood += take;
       o.phase = 'deliver';
@@ -1181,7 +1221,7 @@ export class World {
     o.home = home.id;
     o.res = res;
     if (!this.moveToBuilding(u, base)) return u.x !== u.px || u.y !== u.py;
-    const take = Math.min(this.freeCapacity(u), worst, base.stock[res] - BASE_RESERVE[res]);
+    const take = Math.floor(Math.min(this.freeCapacity(u), worst + 0.999, base.stock[res] - BASE_RESERVE[res]));
     if (take <= 0) return false;
     base.stock[res] -= take;
     this.carry(u, res, take);
@@ -1283,7 +1323,7 @@ export class World {
     else { u.path = []; return; }
     this.face(u, dx, dy);
     if (!u.exhausted) {
-      u.cal -= u.stats.moveCalPerTile * dist * (1 + this.packLoad(u) / u.stats.mass);
+      u.cal -= u.stats.moveCalPerTile * dist * (1 + (this.packLoad(u) / u.stats.mass) * (u.stats.wheeled ? K.wheelHaulCost : 1));
       u.busy = true;
     }
   }
