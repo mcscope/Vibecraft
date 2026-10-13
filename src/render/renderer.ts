@@ -1,0 +1,538 @@
+// Draws the world with WebGL (PixiJS) from pre-baked sprites. Sprites persist
+// between frames and are batched by the GPU, so thousands of trees and units
+// stay cheap. Reads simulation state, never writes it.
+import { Application, Container, ImageSource, Rectangle, Sprite as PixiSprite, Text, Texture, type TextureSource } from 'pixi.js';
+import { type Building, type ResourceNode, type Unit, type World, type WorldEvent } from '../sim/world';
+import { Camera, isoX, isoY } from './camera';
+import type { BakedAnim, Sprite } from './bake/baker';
+import { BUSH_LEVELS, MINE_LEVELS, TEAM_COLORS, TREE_VARIANTS, type SpriteBank } from './sprites';
+import { paintTerrain, TERRAIN_SCALE } from './terrain';
+
+export { TEAM_COLORS };
+
+interface Effect {
+  kind: 'text' | 'spark' | 'corpse';
+  x: number; y: number; t: number; life: number;
+  text?: string;
+  owner?: number; specId?: string; heading?: number;
+  sprite?: PixiSprite; label?: Text;
+}
+
+export interface RenderState {
+  selected: Set<number>;
+  hoverId: number;
+  box: { x0: number; y0: number; x1: number; y1: number } | null;
+  ping: { x: number; y: number; t: number; color: string } | null;
+  /** Building placement preview. */
+  ghost: { specId: string; ox: number; oy: number; size: number; ok: boolean } | null;
+}
+
+export interface RenderOptions {
+  /** Float damage numbers (handy on the proving grounds). */
+  damageNumbers: boolean;
+}
+
+/** Which baked animation and frame a unit is showing right now. */
+export function unitFrame(w: World, u: Unit): { anim: BakedAnim; index: number } {
+  switch (u.anim) {
+    case 'walk': {
+      const surplus = w.surplusCrystal(u);
+      const most = Math.max(u.food, u.wood, surplus);
+      const anim: BakedAnim = most <= 0.5 ? 'walk' : most === u.food ? 'carryFood' : most === u.wood ? 'carryWood' : 'carryCrystal';
+      const speed = Math.max(0.5, u.stats.speed);
+      return { anim, index: Math.floor(u.animT * 8 * speed / 1.7) };
+    }
+    case 'attack': {
+      const dur = Math.min(0.45, u.stats.cooldown * 0.8);
+      return { anim: 'attack', index: Math.min(7, Math.floor((1 - u.swing / dur) * 8)) };
+    }
+    case 'gather': return { anim: 'gather', index: Math.floor(u.animT * 7) };
+    case 'eat': return { anim: 'eat', index: Math.floor(u.animT * 4) };
+    case 'tired': return { anim: 'tired', index: Math.floor(u.animT * 1.5) };
+    default: return { anim: 'idle', index: Math.floor(u.animT * 2.5) };
+  }
+}
+
+const hexNum = (c: string) => parseInt(c.slice(1), 16);
+
+/**
+ * Reusable sprites for per-frame overlays (bars, rings, shadows). Rebuilding
+ * vector Graphics every frame is expensive in Pixi; recycling sprites is not.
+ */
+class Pool {
+  private items: PixiSprite[] = [];
+  private used = 0;
+  constructor(readonly layer: Container) {}
+  begin(): void { this.used = 0; }
+  get(tex: Texture): PixiSprite {
+    let s = this.items[this.used];
+    if (!s) { s = new PixiSprite(); this.layer.addChild(s); this.items.push(s); }
+    this.used++;
+    s.texture = tex;
+    s.visible = true;
+    s.rotation = 0;
+    return s;
+  }
+  end(): void { for (let i = this.used; i < this.items.length; i++) this.items[i].visible = false; }
+}
+
+function shapeTexture(draw: (ctx: CanvasRenderingContext2D, w: number, h: number) => void, w = 256, h = 128): Texture {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  draw(c.getContext('2d')!, w, h);
+  return Texture.from(c);
+}
+
+export class Renderer {
+  readonly cam = new Camera();
+  private app = new Application();
+  private terrainCanvas: HTMLCanvasElement | null;
+  private effects: Effect[] = [];
+  private time = 0;
+
+  private worldLayer = new Container();
+  private ground = new Container();
+  private groundLayer = new Container({ isRenderGroup: true });
+  private trees = new Container({ isRenderGroup: true });
+  private corpses = new Container();
+  private objects = new Container({ isRenderGroup: true });
+  private air = new Container();
+  private screenLayer = new Container({ isRenderGroup: true });
+  private groundPool = new Pool(this.groundLayer);
+  private screenPool = new Pool(this.screenLayer);
+  private ringTex!: Texture;
+  private discTex!: Texture;
+  private diamondTex!: Texture;
+  private texts = new Container();
+
+  private sources = new Map<CanvasImageSource, TextureSource>();
+  private textures = new Map<TextureSource, Map<string, Texture>>();
+  private nodeSprites = new Map<number, PixiSprite>();
+  private unitSprites = new Map<number, PixiSprite>();
+  private buildingSprites = new Map<number, PixiSprite>();
+  private projSprites = new Map<number, PixiSprite>();
+  private flagSprite: PixiSprite | null = null;
+  private ghostSprite: PixiSprite | null = null;
+  private textPool: Text[] = [];
+
+  constructor(private canvas: HTMLCanvasElement, private world: World, readonly bank: SpriteBank, private opts: RenderOptions, extraDirt: Array<[number, number, number]> = []) {
+    this.terrainCanvas = paintTerrain(world, extraDirt, bank.doodads);
+  }
+
+  async init(): Promise<void> {
+    await this.app.init({
+      canvas: this.canvas, preference: 'webgl', background: '#000000', antialias: false,
+      // sprites are baked at ≤2× so rendering finer than that only costs fill rate
+      autoStart: false, autoDensity: true, resolution: Math.min(2, window.devicePixelRatio || 1),
+      width: window.innerWidth, height: window.innerHeight,
+    });
+    this.app.stage.addChild(this.worldLayer, this.screenLayer, this.texts);
+    this.objects.sortableChildren = true;
+    this.trees.sortableChildren = true;
+    // Trees live in their own cached layer: they never move, so Pixi never has to
+    // re-sort or rebuild them. (Units behind a tree draw over it, AoE-style.)
+    this.worldLayer.addChild(this.ground, this.groundLayer, this.corpses, this.trees, this.objects, this.air);
+    this.ringTex = shapeTexture((c, w, h) => { c.strokeStyle = '#fff'; c.lineWidth = 7; c.beginPath(); c.ellipse(w / 2, h / 2, w / 2 - 5, h / 2 - 5, 0, 0, Math.PI * 2); c.stroke(); });
+    this.discTex = shapeTexture((c, w, h) => {
+      const g = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+      g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.7, 'rgba(255,255,255,0.8)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+      c.setTransform(1, 0, 0, h / w, 0, 0); c.fillStyle = g; c.fillRect(0, 0, w, w);
+    });
+    this.diamondTex = shapeTexture((c, w, h) => { c.strokeStyle = '#fff'; c.lineWidth = 5; c.beginPath(); c.moveTo(w / 2, 3); c.lineTo(w - 4, h / 2); c.lineTo(w / 2, h - 3); c.lineTo(4, h / 2); c.closePath(); c.stroke(); });
+    // terrain → chunked textures
+    const t = this.terrainCanvas!;
+    const C = 1024;
+    const H = this.world.grid.height;
+    for (let y = 0; y < t.height; y += C) for (let x = 0; x < t.width; x += C) {
+      const w = Math.min(C, t.width - x), h = Math.min(C, t.height - y);
+      const bmp = await createImageBitmap(t, x, y, w, h);
+      const s = new PixiSprite(new Texture({ source: new ImageSource({ resource: bmp, autoGenerateMipmaps: true, scaleMode: 'linear' }) }));
+      s.position.set(x / TERRAIN_SCALE - H * 32, y / TERRAIN_SCALE);
+      s.scale.set(1 / TERRAIN_SCALE);
+      this.ground.addChild(s);
+    }
+    this.terrainCanvas = null;
+    // Upload every sprite sheet now, so the first swing or death of each unit
+    // doesn't hitch mid-battle while its sheet goes to the GPU.
+    for (const img of this.bank.allImages()) this.app.renderer.texture.initSource(this.source(img));
+  }
+
+  private source(img: CanvasImageSource): TextureSource {
+    let src = this.sources.get(img);
+    if (!src) {
+      src = new ImageSource({ resource: img as ImageBitmap, autoGenerateMipmaps: true, scaleMode: 'linear' });
+      this.sources.set(img, src);
+      this.textures.set(src, new Map());
+    }
+    return src;
+  }
+
+  resize(w: number, h: number, _dpr: number): void {
+    this.app.renderer.resize(w, h);
+    this.cam.width = w;
+    this.cam.height = h;
+  }
+
+  private texture(s: Sprite): Texture {
+    const src = this.source(s.img);
+    const cache = this.textures.get(src)!;
+    const key = `${s.sx},${s.sy}`;
+    let t = cache.get(key);
+    if (!t) cache.set(key, (t = new Texture({ source: src, frame: new Rectangle(s.sx, s.sy, s.sw, s.sh) })));
+    return t;
+  }
+
+  /** Point a pixi sprite at a baked frame, anchored at the frame's foot point. */
+  private setFrame(p: PixiSprite, s: Sprite): void {
+    const t = this.texture(s);
+    if (p.texture !== t) {
+      p.texture = t;
+      p.anchor.set(s.ax / s.sw, s.ay / s.sh);
+      p.scale.set(1 / s.q);
+    }
+  }
+
+  consumeEvents(events: WorldEvent[]): void {
+    for (const e of events) {
+      if (e.type === 'hit') {
+        if (this.opts.damageNumbers) this.effects.push({ kind: 'text', x: e.x, y: e.y, t: 0, life: 1.1, text: `${Math.round(e.damage)}` });
+        this.effects.push({ kind: 'spark', x: e.x, y: e.y, t: 0, life: 0.35 });
+      } else if (e.type === 'death') {
+        this.effects.push({ kind: 'corpse', x: e.x, y: e.y, t: 0, life: 7, owner: e.owner, specId: e.specId, heading: e.heading });
+      }
+    }
+  }
+
+  // ───────────────────────────── frame ─────────────────────────────
+
+  draw(alpha: number, dt: number, rs: RenderState): void {
+    this.time += dt;
+    const { cam } = this;
+    const z = cam.zoom;
+    this.worldLayer.scale.set(z);
+    this.worldLayer.position.set(cam.width / 2 - cam.cx * z, cam.height / 2 - cam.cy * z);
+
+    this.syncNodes();
+    this.syncBuildings();
+    this.syncUnits(alpha);
+    this.syncProjectiles(alpha);
+    this.drawGround(alpha, dt, rs);
+    this.drawEffects(dt);
+    this.drawScreen(alpha, rs);
+    this.app.render();
+  }
+
+  private syncNodes(): void {
+    const seen = this.nodeSprites;
+    for (const n of this.world.nodes.values()) {
+      let sp = seen.get(n.id);
+      if (!sp) {
+        sp = new PixiSprite();
+        sp.position.set(isoX(n.x, n.y), isoY(n.x, n.y));
+        sp.zIndex = n.x + n.y;
+        (n.tree ? this.trees : this.objects).addChild(sp);
+        seen.set(n.id, sp);
+        this.setFrame(sp, this.nodeSprite(n));
+      }
+      if (n.tree) continue; // trees never change
+      this.setFrame(sp, this.nodeSprite(n));
+      if (n.shard) sp.scale.set(Math.min(1.6, 0.6 + Math.cbrt(n.amount) * 0.3) / this.bank.shard.q);
+    }
+    for (const [id, sp] of seen) if (!this.world.nodes.has(id)) { sp.destroy(); seen.delete(id); }
+  }
+
+  private nodeSprite(n: ResourceNode): Sprite {
+    if (n.tree) return this.bank.trees[n.id % TREE_VARIANTS];
+    if (n.shard) return this.bank.shard;
+    if (n.type === 'food') return this.bank.bushes[Math.min(BUSH_LEVELS - 1, Math.ceil((n.amount / n.maxAmount) * (BUSH_LEVELS - 1)))];
+    return this.bank.mines[Math.min(MINE_LEVELS - 1, Math.ceil((n.amount / n.maxAmount) * (MINE_LEVELS - 1)))];
+  }
+
+  private syncBuildings(): void {
+    for (const b of this.world.buildings.values()) {
+      let sp = this.buildingSprites.get(b.id);
+      if (!sp) {
+        sp = new PixiSprite();
+        const cx = b.ox + b.size / 2, cy = b.oy + b.size / 2;
+        sp.position.set(isoX(cx, cy), isoY(cx, cy));
+        sp.zIndex = b.ox + b.oy + b.size;
+        const art = this.bank.building(b.owner, b.specId);
+        if (art) this.setFrame(sp, art);
+        this.objects.addChild(sp);
+        this.buildingSprites.set(b.id, sp);
+      }
+      // construction sites: a translucent, darkened silhouette that firms up as wood arrives
+      if (b.complete) {
+        sp.alpha = 1;
+        sp.tint = b.spec.attack && b.stock.crystal < b.spec.attack.crystalMass ? 0x808080 : 0xffffff; // tower out of ammo
+      }
+      else {
+        const f = b.built / b.stats.totalCost;
+        sp.alpha = 0.3 + 0.6 * f;
+        sp.tint = 0x8a7a66;
+      }
+    }
+    for (const [id, sp] of this.buildingSprites) if (!this.world.buildings.has(id)) { sp.destroy(); this.buildingSprites.delete(id); }
+  }
+
+  private syncUnits(alpha: number): void {
+    for (const u of this.world.units.values()) {
+      let sp = this.unitSprites.get(u.id);
+      if (!sp) {
+        sp = new PixiSprite();
+        this.objects.addChild(sp);
+        this.unitSprites.set(u.id, sp);
+      }
+      const x = u.px + (u.x - u.px) * alpha, y = u.py + (u.y - u.py) * alpha;
+      sp.position.set(isoX(x, y), isoY(x, y));
+      sp.zIndex = x + y;
+      const sheet = this.bank.unit(u.owner, u.specId);
+      if (sheet) {
+        const { anim, index } = unitFrame(this.world, u);
+        this.setFrame(sp, sheet.frame(anim, u.heading, index).sprite);
+      }
+      // no crystal to fight with: visibly greyed out
+      const disarmed = !u.dummy && !u.carter && !this.world.armed(u) && u.specId !== this.world.factionOf(u.owner).workerId;
+      sp.tint = disarmed ? 0x707070 : 0xffffff;
+    }
+    for (const [id, sp] of this.unitSprites) if (!this.world.units.has(id)) { sp.destroy(); this.unitSprites.delete(id); }
+  }
+
+  private syncProjectiles(alpha: number): void {
+    for (const p of this.world.projectiles.values()) {
+      let sp = this.projSprites.get(p.id);
+      if (!sp) {
+        sp = new PixiSprite();
+        this.setFrame(sp, this.bank.projectile);
+        sp.scale.set((0.55 + Math.cbrt(p.crystalKg) * 0.35) / this.bank.projectile.q);
+        this.air.addChild(sp);
+        this.projSprites.set(p.id, sp);
+      }
+      const t = Math.min(1, (p.t + alpha / 20) / p.duration);
+      const x = p.sx + (p.tx - p.sx) * t, y = p.sy + (p.ty - p.sy) * t;
+      const dist = Math.hypot(p.tx - p.sx, p.ty - p.sy);
+      const h = (10 + dist * 6) * 4 * t * (1 - t) + (26 + p.sz * 16) * (1 - t);
+      sp.position.set(isoX(x, y), isoY(x, y) - h);
+      sp.rotation = this.time * 14 + p.id;
+    }
+    for (const [id, sp] of this.projSprites) if (!this.world.projectiles.has(id)) { sp.destroy(); this.projSprites.delete(id); }
+  }
+
+  /** Selection rings, order pings, rally flag, projectile shadows — all on the ground plane. */
+  private drawGround(alpha: number, dt: number, rs: RenderState): void {
+    const P = this.groundPool;
+    const w = this.world;
+    P.begin();
+    const ellipse = (tex: Texture, x: number, y: number, rx: number, ry: number, color: number, a: number) => {
+      const s = P.get(tex);
+      s.anchor.set(0.5);
+      s.position.set(x, y);
+      s.width = rx * 2; s.height = ry * 2;
+      s.tint = color; s.alpha = a;
+    };
+    const ring = (x: number, y: number, r: number, color: number, a: number) => {
+      const rx = Math.max(9, r * 64 * 0.75);
+      ellipse(this.ringTex, isoX(x, y), isoY(x, y), rx, rx * 0.5, color, a);
+    };
+    let rally: Building | null = null;
+    for (const id of rs.selected) {
+      const u = w.units.get(id);
+      if (u) {
+        const x = u.px + (u.x - u.px) * alpha, y = u.py + (u.y - u.py) * alpha;
+        ring(x, y, u.stats.radius, u.owner === 0 ? 0xffffff : 0xff7864, 0.9);
+      }
+      const b = w.buildings.get(id);
+      if (b) {
+        const cx = b.ox + b.size / 2, cy = b.oy + b.size / 2;
+        ellipse(this.diamondTex, isoX(cx, cy), isoY(cx, cy), b.size * 32, b.size * 16, 0xffffff, 0.85);
+        if (b.owner === 0) rally = b;
+      }
+    }
+    if (rs.hoverId && !rs.selected.has(rs.hoverId)) {
+      const u = w.units.get(rs.hoverId);
+      if (u) ring(u.x, u.y, u.stats.radius, 0xffffff, 0.4);
+    }
+    if (rs.ping) {
+      const p = rs.ping;
+      p.t += dt;
+      if (p.t > 0.6) rs.ping = null;
+      else for (const k of [1, 0.55]) ellipse(this.ringTex, isoX(p.x, p.y), isoY(p.x, p.y), (14 - p.t * 12) * k, (7 - p.t * 6) * k, hexNum(p.color), 1 - p.t / 0.6);
+    }
+    for (const p of w.projectiles.values()) {
+      const t = Math.min(1, (p.t + alpha / 20) / p.duration);
+      const x = p.sx + (p.tx - p.sx) * t, y = p.sy + (p.ty - p.sy) * t;
+      ellipse(this.discTex, isoX(x, y), isoY(x, y), 4, 2, 0x000000, 0.35);
+    }
+    const gh = rs.ghost;
+    if (gh) {
+      const cx = gh.ox + gh.size / 2, cy = gh.oy + gh.size / 2;
+      ellipse(this.diamondTex, isoX(cx, cy), isoY(cx, cy), gh.size * 32, gh.size * 16, gh.ok ? 0x7aff7a : 0xff5a4a, 0.95);
+      const art = this.bank.building(0, gh.specId);
+      if (art) {
+        if (!this.ghostSprite) { this.ghostSprite = new PixiSprite(); this.objects.addChild(this.ghostSprite); }
+        this.setFrame(this.ghostSprite, art);
+        this.ghostSprite.position.set(isoX(cx, cy), isoY(cx, cy));
+        this.ghostSprite.zIndex = gh.ox + gh.oy + gh.size;
+        this.ghostSprite.alpha = 0.55;
+        this.ghostSprite.tint = gh.ok ? 0xc8ffc8 : 0xff9a8a;
+        this.ghostSprite.visible = true;
+      }
+    } else if (this.ghostSprite) this.ghostSprite.visible = false;
+    P.end();
+    // rally flag
+    if (rally) {
+      if (!this.flagSprite) { this.flagSprite = new PixiSprite(); this.objects.addChild(this.flagSprite); }
+      this.setFrame(this.flagSprite, this.bank.flags[rally.owner]);
+      this.flagSprite.position.set(isoX(rally.rallyX, rally.rallyY), isoY(rally.rallyX, rally.rallyY));
+      this.flagSprite.zIndex = rally.rallyX + rally.rallyY;
+      this.flagSprite.visible = true;
+    } else if (this.flagSprite) this.flagSprite.visible = false;
+  }
+
+  /** Health / calorie / ammo bars, sparks and the drag box, in screen space. */
+  private drawScreen(alpha: number, rs: RenderState): void {
+    const P = this.screenPool;
+    const { cam, world } = this;
+    P.begin();
+    const rect = (x: number, y: number, w: number, h: number, color: number, a = 1) => {
+      const s = P.get(Texture.WHITE);
+      s.anchor.set(0);
+      s.position.set(x, y);
+      s.width = w; s.height = h;
+      s.tint = color; s.alpha = a;
+    };
+    const bar = (x: number, y: number, w: number, h: number, frac: number, color: number) => {
+      rect(x - 1, y - 1, w + 2, h + 2, 0x000000, 0.8);
+      rect(x, y, w, h, 0x5a1a14);
+      rect(x, y, w * Math.max(0, Math.min(1, frac)), h, color);
+    };
+    for (const u of world.units.values()) {
+      const sel = rs.selected.has(u.id);
+      if (!sel && u.hp >= u.stats.maxHp - 0.5 && rs.hoverId !== u.id) continue;
+      const x = u.px + (u.x - u.px) * alpha, y = u.py + (u.y - u.py) * alpha;
+      const [sx, sy] = cam.toScreen(x, y);
+      if (sx < -50 || sy < -50 || sx > cam.width + 50 || sy > cam.height + 200) continue;
+      const sheet = this.bank.unit(u.owner, u.specId);
+      let top = sy - ((sheet?.height ?? 40) + 8) * cam.zoom;
+      const w = Math.max(20, 24 * Math.cbrt(u.stats.mass / 70)) * Math.min(1.3, cam.zoom);
+      const f = u.hp / u.stats.maxHp;
+      bar(sx - w / 2, top, w, 3, f, f > 0.5 ? 0x3fcf4a : f > 0.25 ? 0xe8c547 : 0xd9352b);
+      if (!sel || u.owner !== 0 || u.dummy) continue;
+      top += 4;
+      bar(sx - w / 2, top, w, 2, u.cal / u.stats.maxCalories, u.exhausted ? 0x8a7a5a : 0xe09a3a);
+      if (u.throws) {
+        // ammo: one pip per throw left
+        const max = Math.max(1, Math.round(u.stats.loadoutCrystal / u.crystalMass));
+        const have = Math.min(max, Math.floor(u.crystal / u.crystalMass + 1e-6));
+        const pw = Math.max(2, (w - (max - 1)) / max);
+        top += 3;
+        rect(sx - w / 2 - 1, top - 1, w + 2, 4, 0x000000, 0.8);
+        for (let i = 0; i < max; i++) rect(sx - w / 2 + i * (pw + 1), top, pw, 2, i < have ? 0x8fe6ff : 0x2a3a40);
+      }
+    }
+    for (const b of world.buildings.values()) {
+      if (!rs.selected.has(b.id) && b.hp >= b.maxHp) continue;
+      const [sx, sy] = cam.toScreen(b.ox + b.size / 2, b.oy + b.size / 2);
+      const w = 70 * cam.zoom;
+      bar(sx - w / 2, sy - 175 * cam.zoom, w, 4, b.hp / b.maxHp, 0x3fcf4a);
+      const item = b.queue[0];
+      if (item) bar(sx - w / 2, sy - 169 * cam.zoom, w, 3, item.progress / item.total, 0xd8c27a);
+      if (b.spec.attack && b.complete && b.owner === 0) {
+        // tower ammo: one pip per throw in stock (up to what it keeps on hand)
+        const per = b.spec.attack.crystalMass;
+        const max = Math.max(1, Math.round(world.supplyTargets(b).crystal / per));
+        const have = Math.min(max, Math.floor(b.stock.crystal / per + 1e-6));
+        const pw = Math.max(2, (w - (max - 1)) / max), top = sy - 175 * cam.zoom + 6;
+        rect(sx - w / 2 - 1, top - 1, w + 2, 4, 0x000000, 0.8);
+        for (let i = 0; i < max; i++) rect(sx - w / 2 + i * (pw + 1), top, pw, 2, i < have ? 0x8fe6ff : 0x2a3a40);
+      }
+    }
+    for (const e of this.effects) {
+      if (e.kind !== 'spark') continue;
+      const [sx, sy] = cam.toScreen(e.x, e.y);
+      const k = e.t / e.life;
+      for (let i = 0; i < 7; i++) {
+        const a = i * 0.9 + e.x * 3;
+        const r = (3 + k * 16) * cam.zoom;
+        rect(sx + Math.cos(a) * r, sy - 18 * cam.zoom + Math.sin(a) * r * 0.6 + k * k * 10 * cam.zoom, 2 * cam.zoom, 2 * cam.zoom, 0xaaebff, 1 - k);
+      }
+    }
+    if (rs.box) {
+      const b = rs.box;
+      const x = Math.min(b.x0, b.x1), y = Math.min(b.y0, b.y1), w = Math.abs(b.x1 - b.x0), h = Math.abs(b.y1 - b.y0);
+      rect(x, y, w, 1, 0xffffff); rect(x, y + h, w, 1, 0xffffff); rect(x, y, 1, h, 0xffffff); rect(x + w, y, 1, h + 1, 0xffffff);
+    }
+    P.end();
+  }
+
+  private drawEffects(dt: number): void {
+    const keep: Effect[] = [];
+    for (const e of this.effects) {
+      e.t += dt;
+      if (e.t >= e.life) {
+        e.sprite?.destroy();
+        if (e.label) { e.label.visible = false; this.textPool.push(e.label); }
+        continue;
+      }
+      keep.push(e);
+      if (e.kind === 'corpse') {
+        const sheet = this.bank.unit(e.owner!, e.specId!);
+        if (!sheet) continue;
+        if (!e.sprite) {
+          e.sprite = new PixiSprite();
+          e.sprite.position.set(isoX(e.x, e.y), isoY(e.x, e.y));
+          this.corpses.addChild(e.sprite);
+        }
+        const n = sheet.frames('die');
+        this.setFrame(e.sprite, sheet.frame('die', e.heading!, Math.min(n - 1, Math.floor((e.t / 0.6) * n))).sprite);
+        e.sprite.alpha = e.t > e.life - 2 ? (e.life - e.t) / 2 : 1;
+      } else if (e.kind === 'text') {
+        if (!e.label) {
+          e.label = this.textPool.pop() ?? new Text({ text: '', style: { fontFamily: 'Alegreya Sans, sans-serif', fontWeight: '700', fontSize: 14, fill: 0xf3e6c0, stroke: { color: 0x000000, width: 3 } } });
+          if (!e.label.parent) this.texts.addChild(e.label);
+          e.label.anchor.set(0.5, 1);
+          e.label.text = e.text!;
+          e.label.visible = true;
+        }
+        const [sx, sy] = this.cam.toScreen(e.x, e.y);
+        const k = e.t / e.life;
+        e.label.position.set(sx, sy - (34 + k * 26) * this.cam.zoom);
+        e.label.alpha = Math.min(1, (1 - k) * 2);
+      }
+    }
+    this.effects = keep;
+  }
+
+  /** Screen-space hit test. Returns the id of the topmost thing under the cursor. */
+  pick(sx: number, sy: number, alpha: number): number {
+    const { cam, world } = this;
+    let best = 0, bestDepth = -Infinity;
+    for (const u of world.units.values()) {
+      const x = u.px + (u.x - u.px) * alpha, y = u.py + (u.y - u.py) * alpha;
+      const [ux, uy] = cam.toScreen(x, y);
+      const h = (this.bank.unit(u.owner, u.specId)?.height ?? 40) * cam.zoom;
+      const w = Math.max(10, Math.min(h * 0.45, 40 * cam.zoom));
+      if (Math.abs(sx - ux) < w && sy < uy + 6 && sy > uy - h - 4 && x + y > bestDepth) { best = u.id; bestDepth = x + y; }
+    }
+    if (best) return best;
+    const [wx, wy] = cam.toWorld(sx, sy);
+    for (const b of world.buildings.values()) {
+      const [mx, my] = cam.toScreen(b.ox + b.size / 2, b.oy + b.size / 2);
+      const inFoot = wx >= b.ox && wx <= b.ox + b.size && wy >= b.oy && wy <= b.oy + b.size;
+      const inSprite = Math.abs(sx - mx) < 80 * cam.zoom && sy < my + 10 && sy > my - 150 * cam.zoom;
+      if (inFoot || inSprite) return b.id;
+    }
+    let tree = 0, treeDepth = -Infinity;
+    for (const n of world.nodes.values()) {
+      const [nx, ny] = cam.toScreen(n.x, n.y);
+      if (n.tree) {
+        // trunk-ish region; the frontmost tree under the cursor wins
+        if (Math.abs(sx - nx) < 16 * cam.zoom && sy < ny + 6 * cam.zoom && sy > ny - 60 * cam.zoom && n.x + n.y > treeDepth) { tree = n.id; treeDepth = n.x + n.y; }
+        continue;
+      }
+      const r = (n.shard ? 14 : 26) * cam.zoom;
+      if (Math.abs(sx - nx) < r && sy < ny + 10 * cam.zoom && sy > ny - r * 1.5) return n.id;
+    }
+    return tree;
+  }
+}

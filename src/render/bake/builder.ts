@@ -1,0 +1,138 @@
+// Implements ModelBuilder on top of three.js. Geometries and materials are
+// cached and shared; each frame just builds a fresh tree of Mesh objects.
+import * as THREE from 'three';
+import type { Mat, ModelBuilder, TeamColors, Vec3 } from '../../factions/types';
+import { texture } from './textures';
+
+const geoCache = new Map<string, THREE.BufferGeometry>();
+function geo(key: string, make: () => THREE.BufferGeometry): THREE.BufferGeometry {
+  let g = geoCache.get(key);
+  if (!g) geoCache.set(key, (g = make()));
+  return g;
+}
+
+const matCache = new Map<string, THREE.Material>();
+function material(m: Mat, team: TeamColors): THREE.Material {
+  const color = m.team ? team[m.team] : (m.color ?? '#888888');
+  const tex = m.tex ?? 'none';
+  const key = `${color}|${tex}|${m.rough ?? -1}|${m.metal ?? -1}|${m.emissive ?? ''}`;
+  let mat = matCache.get(key);
+  if (!mat) {
+    const t = tex === 'none' ? null : texture(tex);
+    mat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(color),
+      roughness: m.rough ?? (tex === 'metal' ? 0.45 : 0.85),
+      metalness: m.metal ?? (tex === 'metal' ? 0.6 : 0),
+      map: t?.map ?? null,
+      bumpMap: t?.bump ?? null,
+      bumpScale: t ? 2.2 : 0,
+      emissive: new THREE.Color(m.emissive ?? '#000000'),
+      emissiveIntensity: m.emissive ? 0.6 : 0,
+    });
+    matCache.set(key, mat);
+  }
+  return mat;
+}
+
+const CRYSTAL: Mat = { color: '#8fe6ff', rough: 0.12, metal: 0.15, emissive: '#2a8fc0' };
+
+function rockGeometry(seed: number): THREE.BufferGeometry {
+  return geo(`rock${seed}`, () => {
+    const g = new THREE.IcosahedronGeometry(1, 1);
+    const pos = g.attributes.position;
+    let s = seed * 9301 + 49297;
+    const rnd = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
+    // Displace shared vertices consistently (icosahedron is non-indexed, so key by position).
+    const offsets = new Map<string, number>();
+    for (let i = 0; i < pos.count; i++) {
+      const k = `${pos.getX(i).toFixed(3)},${pos.getY(i).toFixed(3)},${pos.getZ(i).toFixed(3)}`;
+      if (!offsets.has(k)) offsets.set(k, 0.75 + rnd() * 0.45);
+      const f = offsets.get(k)!;
+      pos.setXYZ(i, pos.getX(i) * f, pos.getY(i) * f * 0.8, pos.getZ(i) * f);
+    }
+    g.computeVertexNormals();
+    return g;
+  });
+}
+
+export class Builder implements ModelBuilder {
+  constructor(readonly team: TeamColors, private parent: THREE.Object3D) {}
+
+  private add(g: THREE.BufferGeometry, m: Mat, at: Vec3, scale: Vec3, rot?: Vec3): THREE.Mesh {
+    const mesh = new THREE.Mesh(g, material(m, this.team));
+    mesh.position.set(at[0], at[1], at[2]);
+    mesh.scale.set(scale[0], scale[1], scale[2]);
+    if (rot) mesh.rotation.set(rot[0], rot[1], rot[2]);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    this.parent.add(mesh);
+    return mesh;
+  }
+
+  joint(at: Vec3, rot: Vec3, build: (b: ModelBuilder) => void, scale = 1): void {
+    const g = new THREE.Group();
+    g.position.set(at[0], at[1], at[2]);
+    g.rotation.set(rot[0], rot[1], rot[2]);
+    g.scale.setScalar(scale);
+    this.parent.add(g);
+    build(new Builder(this.team, g));
+  }
+
+  box(size: Vec3, at: Vec3, mat: Mat, rot?: Vec3): void {
+    this.add(geo('box', () => new THREE.BoxGeometry(1, 1, 1)), mat, at, size, rot);
+  }
+
+  sphere(radius: number | Vec3, at: Vec3, mat: Mat, rot?: Vec3): void {
+    const r: Vec3 = typeof radius === 'number' ? [radius, radius, radius] : radius;
+    this.add(geo('sphere', () => new THREE.SphereGeometry(1, 20, 14)), mat, at, r, rot);
+  }
+
+  cylinder(rTop: number, rBottom: number, height: number, at: Vec3, mat: Mat, rot?: Vec3, sides = 16): void {
+    const ratio = rBottom > 0 ? rTop / rBottom : 1;
+    const g = geo(`cyl${ratio.toFixed(3)}:${sides}`, () => new THREE.CylinderGeometry(ratio, 1, 1, sides));
+    const rb = rBottom > 0 ? rBottom : rTop;
+    this.add(g, mat, at, [rb, height, rb], rot);
+  }
+
+  cone(radius: number, height: number, at: Vec3, mat: Mat, rot?: Vec3, sides = 16): void {
+    this.add(geo(`cone${sides}`, () => new THREE.ConeGeometry(1, 1, sides)), mat, at, [radius, height, radius], rot);
+  }
+
+  limb(a: Vec3, b: Vec3, radius: number, mat: Mat, radiusB = radius): void {
+    const va = new THREE.Vector3(...a), vb = new THREE.Vector3(...b);
+    const len = va.distanceTo(vb);
+    if (len < 1e-4) return;
+    const mid = va.clone().add(vb).multiplyScalar(0.5);
+    const ratio = radiusB / radius;
+    const g = geo(`limb${ratio.toFixed(3)}`, () => new THREE.CylinderGeometry(1, ratio, 1, 12));
+    const mesh = this.add(g, mat, [mid.x, mid.y, mid.z], [radius, len, radius]);
+    // cylinder axis is +y; rotate it onto a→b
+    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), vb.clone().sub(va).normalize());
+    this.sphere(radius, a, mat);
+    this.sphere(radiusB, b, mat);
+  }
+
+  roof(size: Vec3, at: Vec3, mat: Mat, rot?: Vec3): void {
+    // 4-sided cone rotated 45° = square pyramid; scale makes it rectangular.
+    const g = geo('roof', () => {
+      const c = new THREE.ConeGeometry(Math.SQRT1_2, 1, 4, 1);
+      c.rotateY(Math.PI / 4);
+      c.translate(0, 0.5, 0);
+      return c;
+    });
+    this.add(g, mat, at, size, rot);
+  }
+
+  rock(size: Vec3, at: Vec3, mat: Mat, seed = 1): void {
+    this.add(rockGeometry(seed % 7), mat, at, size, [0, seed * 1.3, 0]);
+  }
+
+  crystal(length: number, at: Vec3, rot?: Vec3): void {
+    this.joint(at, rot ?? [0, 0, 0], (b) => {
+      const r = length * 0.22;
+      b.cylinder(r, r, length * 0.6, [0, length * 0.3, 0], CRYSTAL, undefined, 6);
+      b.cone(r, length * 0.4, [0, length * 0.8, 0], CRYSTAL, undefined, 6);
+      b.cone(r, length * 0.15, [0, -length * 0.075, 0], CRYSTAL, [Math.PI, 0, 0], 6);
+    });
+  }
+}

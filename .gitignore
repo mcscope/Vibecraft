@@ -1,0 +1,19 @@
+# Godot 4 generated files
+.godot/
+
+# Android export
+android/
+
+# OS-specific
+.DS_Store
+*.swp
+*.swo
+*~
+
+# Export builds
+*.apk
+*.aab
+
+# Web
+node_modules/
+dist/
