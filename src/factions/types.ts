@@ -53,6 +53,12 @@ export interface UnitSpec {
    * ≥ capitalFor(refinement) (see physics.ts). HP and damage each scale by r^(2/3).
    */
   refinement?: number;
+  /**
+   * Work refinement: multiplies gather rate and movement speed, so a worker's
+   * whole trip is that much faster. Same capital curve as combat refinement; the
+   * training building must cover whichever of the two is higher.
+   */
+  workRefinement?: number;
   /** 'carter': auto-produced supply hauler; never fights, never gathers. */
   role?: 'carter';
 }
@@ -90,6 +96,19 @@ export interface BuildingSpec {
   /** Size of the cart pool this building keeps. Its carts load here and supply other buildings. */
   carters?: number;
   attack?: TowerSpec;
+  /**
+   * Infrastructure: gathering these resources within `radius` tiles goes faster
+   * by refinementFor(this building's capital). The capital stays on the map —
+   * lose the building, lose the boost. Boosts don't stack; the best one applies.
+   */
+  gatherBoost?: { radius: number; resources: ResourceKind[] };
+  /**
+   * Sowing: plants new berry bushes / trees on open ground within `radius`.
+   * `mechanism` (kg of sowing machinery, paid like a tower's mechanism, not
+   * capital) sets the planting rate. Each planting costs a third of its eventual
+   * yield as seed from this building's stock; the plant then grows to full.
+   */
+  sow?: { mechanism: number; radius: number; resources: Array<'food' | 'wood'> };
   /** Players can't place it (e.g. a starting-only building). */
   unbuildable?: boolean;
 }
@@ -102,6 +121,8 @@ export interface TechSpec {
   unit: string;
   /** Refinement added. */
   refinement: number;
+  /** Which refinement it raises: 'combat' (HP and damage, default) or 'work' (gather rate and speed). */
+  channel?: 'combat' | 'work';
 }
 
 export interface FactionSpec {

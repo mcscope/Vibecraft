@@ -236,7 +236,11 @@ export class Renderer {
         seen.set(n.id, sp);
         this.setFrame(sp, this.nodeSprite(n));
       }
-      if (n.tree) continue; // trees never change
+      if (n.tree) {
+        // sown saplings grow into full trees
+        if (n.growLeft !== undefined) sp.scale.set((0.35 + 0.65 * Math.min(1, (n.maxAmount - n.growLeft) / n.maxAmount)) / this.nodeSprite(n).q);
+        continue;
+      }
       this.setFrame(sp, this.nodeSprite(n));
       if (n.shard) sp.scale.set(Math.min(1.6, 0.6 + Math.cbrt(n.amount) * 0.3) / this.bank.biome.shard.q);
     }
@@ -369,6 +373,9 @@ export class Renderer {
       if (b) {
         const cx = b.ox + b.size / 2, cy = b.oy + b.size / 2;
         ellipse(this.diamondTex, isoX(cx, cy), isoY(cx, cy), b.size * 32, b.size * 16, 0xffffff, 0.85);
+        // infrastructure reach
+        const reach = Math.max(b.spec.gatherBoost?.radius ?? 0, b.spec.sow?.radius ?? 0);
+        if (reach) ellipse(this.ringTex, isoX(cx, cy), isoY(cx, cy), (reach + b.size / 2) * 45.25, (reach + b.size / 2) * 22.6, 0xa8e070, 0.6);
         if (b.owner === 0) rally = b;
       }
     }
@@ -391,6 +398,9 @@ export class Renderer {
     if (gh) {
       const cx = gh.ox + gh.size / 2, cy = gh.oy + gh.size / 2;
       ellipse(this.diamondTex, isoX(cx, cy), isoY(cx, cy), gh.size * 32, gh.size * 16, gh.ok ? 0x7aff7a : 0xff5a4a, 0.95);
+      const gs = this.world.buildingSpecOf(0, gh.specId);
+      const reach = Math.max(gs?.gatherBoost?.radius ?? 0, gs?.sow?.radius ?? 0);
+      if (reach) ellipse(this.ringTex, isoX(cx, cy), isoY(cx, cy), (reach + gh.size / 2) * 45.25, (reach + gh.size / 2) * 22.6, 0xa8e070, 0.6);
       const art = this.bank.building(0, gh.specId)?.complete;
       if (art) {
         if (!this.ghostSprite) { this.ghostSprite = new PixiSprite(); this.objects.addChild(this.ghostSprite); }

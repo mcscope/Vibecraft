@@ -8,7 +8,7 @@ import type { Grid } from './map';
 import { skirmish, type Scenario } from './scenarios';
 import { findPath } from './pathfinding';
 import {
-  derive, deriveBuilding, loadedSpeed, K, techCost, techGate, techTime,
+  derive, deriveBuilding, loadedSpeed, CAP, K, techCost, techGate, techTime,
   type BuildingStats, type DerivedStats,
 } from './physics';
 
@@ -18,6 +18,9 @@ export const DT = 1 / TICK_RATE;
 export const MAX_QUEUE = 5;
 export const MAX_UNITS_PER_PLAYER = 150;
 export const TREE_WOOD = 100;
+/** What a sown plant grows to, and how many a building keeps going at once. */
+export const SOW_YIELD: Record<'food' | 'wood', number> = { food: 200, wood: 100 };
+export const SOW_MAX: Record<'food' | 'wood', number> = { food: 6, wood: 8 };
 export const RESOURCES: ResourceKind[] = ['food', 'wood', 'crystal'];
 /** Carters leave this much at the base so it can keep training workers. */
 export const BASE_RESERVE: Stock = { food: 150, wood: 100, crystal: 40 };
@@ -29,6 +32,8 @@ export interface PlayerState {
   defeated: boolean;
   /** Refinement added to each unit type by researched technologies. */
   refine: Record<string, number>;
+  /** Work refinement added by technologies. */
+  refineWork: Record<string, number>;
   /** Technologies researched or in progress. */
   techs: string[];
   researched: string[];
@@ -94,7 +99,8 @@ export interface Unit {
 }
 
 export type QueueItem =
-  | { kind: 'unit'; specId: string; progress: number; total: number; food: number; crystal: number; home: number }
+  /** `paid` false: queued but still waiting for this building's stock to cover it. */
+  | { kind: 'unit'; specId: string; progress: number; total: number; food: number; crystal: number; home: number; paid: boolean }
   | { kind: 'tech'; techId: string; progress: number; total: number; wood: number };
 
 export interface Building {
@@ -117,6 +123,10 @@ export interface Building {
   cooldown: number;
   /** Unit this building re-queues automatically, if any. */
   autoTrain: string | null;
+  /** Resources this building is currently sowing (subset of spec.sow.resources). */
+  sowing: Array<'food' | 'wood'>;
+  /** kg of planting work accumulated toward the next plant. */
+  sowProgress: number;
 }
 
 export interface ResourceNode {
@@ -128,6 +138,11 @@ export interface ResourceNode {
   /** Shards (dropped/thrown crystals) don't block and can be walked over. */
   shard: boolean;
   tree: boolean;
+  /** Still growing: kg yet to grow, and kg per second. */
+  growLeft?: number;
+  growRate?: number;
+  /** Building that sowed it. */
+  sownBy?: number;
 }
 
 export interface Projectile {
@@ -199,7 +214,7 @@ export class World {
     }
     opts.players.forEach((p, i) => {
       this.factions.set(p.faction.id, p.faction);
-      this.players.push({ id: i, name: p.name, factionId: p.faction.id, defeated: false, refine: {}, techs: [], researched: [] });
+      this.players.push({ id: i, name: p.name, factionId: p.faction.id, defeated: false, refine: {}, refineWork: {}, techs: [], researched: [] });
       for (const s of p.faction.units) this.unitSpecs.set(`${i}/${s.id}`, { spec: s, stats: derive(s) });
       for (const b of p.faction.buildings ?? []) this.buildingStats.set(`${p.faction.id}/${b.id}`, deriveBuilding(b, p.faction));
     });
@@ -267,9 +282,24 @@ export class World {
   surplusCrystal(u: Unit): number { return Math.max(0, u.crystal - u.stats.loadoutCrystal); }
 
   /** Current refinement of a unit type for a player (design + techs). */
-  refinementOf(owner: number, unitId: string): number {
+  refinementOf(owner: number, unitId: string, channel: 'combat' | 'work' = 'combat'): number {
     const s = this.specOf(owner, unitId);
-    return (s?.spec.refinement ?? 1) + (this.players[owner].refine[unitId] ?? 0);
+    const p = this.players[owner];
+    return channel === 'work'
+      ? (s?.spec.workRefinement ?? 1) + (p.refineWork[unitId] ?? 0)
+      : (s?.spec.refinement ?? 1) + (p.refine[unitId] ?? 0);
+  }
+
+  /** Best gather-rate boost a player's infrastructure gives at a spot, for a resource. */
+  gatherBoostAt(owner: number, x: number, y: number, res: ResourceKind): number {
+    let best = 1;
+    for (const b of this.buildings.values()) {
+      const gb = b.spec.gatherBoost;
+      if (b.owner !== owner || !b.complete || !gb || !gb.resources.includes(res)) continue;
+      const r = gb.radius + b.size / 2;
+      if ((b.ox + b.size / 2 - x) ** 2 + (b.oy + b.size / 2 - y) ** 2 <= r * r) best = Math.max(best, b.stats.gatherBoost);
+    }
+    return best;
   }
 
   /** Why a player can't place this building right now, or null if they can. */
@@ -307,7 +337,7 @@ export class World {
     const t = this.techOf(owner, techId);
     if (!t) return { cost: 0, gate: 0, blocker: 'unknown tech' };
     const p = this.players[owner];
-    const from = this.refinementOf(owner, t.unit);
+    const from = this.refinementOf(owner, t.unit, t.channel ?? 'combat');
     const cost = techCost(from, t.refinement), gate = techGate(from, t.refinement);
     let blocker: string | null = null;
     if (p.researched.includes(techId)) blocker = 'researched';
@@ -332,6 +362,10 @@ export class World {
       t.food = Math.max(t.food, s.stats.foodCost + 20);
       t.crystal = Math.max(t.crystal, s.stats.crystalCost + 10);
     }
+    // orders waiting for stock come first
+    let waitFood = 0, waitCrystal = 0;
+    for (const q of b.queue) if (q.kind === 'unit' && !q.paid) { waitFood += q.food; waitCrystal += q.crystal; }
+    if (waitFood || waitCrystal) { t.food = Math.max(t.food, waitFood + 20); t.crystal = Math.max(t.crystal, waitCrystal + 5); }
     const tw = b.stats.tower;
     if (tw && b.spec.attack) {
       t.food = Math.max(t.food, 30 * tw.foodPerShot + 10);
@@ -406,10 +440,14 @@ export class World {
         const b = ownBuilding(cmd.building);
         const s = this.specOf(player, cmd.specId);
         if (!b || !b.complete || !s || b.queue.length >= MAX_QUEUE || !b.spec.trains?.includes(cmd.specId)) return;
-        if (b.stock.food < s.stats.foodCost || b.stock.crystal < s.stats.crystalCost) return;
-        b.stock.food -= s.stats.foodCost;
-        b.stock.crystal -= s.stats.crystalCost;
-        b.queue.push({ kind: 'unit', specId: cmd.specId, progress: 0, total: s.stats.trainTime, food: s.stats.foodCost, crystal: s.stats.crystalCost, home: 0 });
+        // Always queue; it's paid from this building's stock when it reaches the front and the stock covers it.
+        b.queue.push({ kind: 'unit', specId: cmd.specId, progress: 0, total: s.stats.trainTime, food: s.stats.foodCost, crystal: s.stats.crystalCost, home: 0, paid: false });
+        return;
+      }
+      case 'setSowing': {
+        const b = ownBuilding(cmd.building);
+        if (!b || !b.spec.sow) return;
+        b.sowing = cmd.resources.filter((r) => b.spec.sow!.resources.includes(r));
         return;
       }
       case 'autoTrain': {
@@ -432,7 +470,7 @@ export class World {
         const b = ownBuilding(cmd.building);
         if (!b || b.queue.length === 0) return;
         const item = b.queue.pop()!;
-        if (item.kind === 'unit') { b.stock.food += item.food; b.stock.crystal += item.crystal; }
+        if (item.kind === 'unit') { if (item.paid) { b.stock.food += item.food; b.stock.crystal += item.crystal; } }
         else {
           b.stock.wood += item.wood;
           const p = this.players[player];
@@ -497,6 +535,7 @@ export class World {
       built: complete ? stats.totalCost : 0, complete,
       queue: [], stock: emptyStock(),
       rallyX: ox + size + 1, rallyY: oy + size + 1, cooldown: 0, autoTrain: null,
+      sowing: [...(spec.sow?.resources ?? [])], sowProgress: 0,
     };
     this.buildings.set(b.id, b);
     for (let y = oy; y < oy + size; y++) for (let x = ox; x < ox + size; x++) this.grid.block(x, y, 1);
@@ -560,7 +599,7 @@ export class World {
   private refreshStats(owner: number, unitId: string): void {
     const s = this.specOf(owner, unitId);
     if (!s) return;
-    const stats = derive(s.spec, this.players[owner].refine[unitId] ?? 0);
+    const stats = derive(s.spec, this.players[owner].refine[unitId] ?? 0, this.players[owner].refineWork[unitId] ?? 0);
     this.unitSpecs.set(`${owner}/${unitId}`, { spec: s.spec, stats });
     for (const u of this.units.values()) {
       if (u.owner !== owner || u.specId !== unitId) continue;
@@ -595,6 +634,12 @@ export class World {
     for (const u of this.units.values()) this.tickUnit(u);
     this.separate();
     for (const p of this.projectiles.values()) this.tickProjectile(p);
+    for (const n of this.nodes.values()) {
+      if (!n.growLeft) continue;
+      const g = Math.min(n.growLeft, (n.growRate ?? 0) * DT);
+      n.amount += g;
+      n.growLeft -= g;
+    }
     this.reap();
     this.scenario.tick?.(this);
     this.tick++;
@@ -604,16 +649,20 @@ export class World {
     if (!b.complete) return;
     if (b.autoTrain && b.queue.length === 0) {
       const s = this.specOf(b.owner, b.autoTrain);
-      if (s && b.stock.food >= s.stats.foodCost && b.stock.crystal >= s.stats.crystalCost && this.unitsOf(b.owner).length < MAX_UNITS_PER_PLAYER) {
-        b.stock.food -= s.stats.foodCost;
-        b.stock.crystal -= s.stats.crystalCost;
-        b.queue.push({ kind: 'unit', specId: b.autoTrain, progress: 0, total: s.stats.trainTime, food: s.stats.foodCost, crystal: s.stats.crystalCost, home: 0 });
+      if (s && this.unitsOf(b.owner).length < MAX_UNITS_PER_PLAYER) {
+        b.queue.push({ kind: 'unit', specId: b.autoTrain, progress: 0, total: s.stats.trainTime, food: s.stats.foodCost, crystal: s.stats.crystalCost, home: 0, paid: false });
       }
     }
     const item = b.queue[0];
+    if (item && item.kind === 'unit' && !item.paid && b.stock.food >= item.food - 1e-6 && b.stock.crystal >= item.crystal - 1e-6) {
+      b.stock.food -= item.food;
+      b.stock.crystal -= item.crystal;
+      item.paid = true;
+    }
     if (item) {
+      const waiting = item.kind === 'unit' && !item.paid;
       const capped = item.kind === 'unit' && this.unitsOf(b.owner).length >= MAX_UNITS_PER_PLAYER;
-      if (!capped) item.progress += DT;
+      if (!capped && !waiting) item.progress += DT;
       if (item.progress >= item.total) {
         b.queue.shift();
         if (item.kind === 'unit') {
@@ -626,7 +675,8 @@ export class World {
           const t = this.techOf(b.owner, item.techId);
           const p = this.players[b.owner];
           if (t) {
-            p.refine[t.unit] = (p.refine[t.unit] ?? 0) + t.refinement;
+            const ch = t.channel === 'work' ? p.refineWork : p.refine;
+            ch[t.unit] = (ch[t.unit] ?? 0) + t.refinement;
             p.researched.push(t.id);
             this.refreshStats(b.owner, t.unit);
             this.events.push({ type: 'researched', owner: b.owner, techId: t.id });
@@ -635,6 +685,7 @@ export class World {
       }
     }
     if (b.spec.attack) this.tickTower(b);
+    if (b.spec.sow) this.tickSow(b);
     if ((this.tick + b.id) % 40 === 0) this.requestCarters(b);
   }
 
@@ -679,7 +730,7 @@ export class World {
     if (b.stock.food < s.stats.foodCost || b.stock.crystal < s.stats.crystalCost) return;
     b.stock.food -= s.stats.foodCost;
     b.stock.crystal -= s.stats.crystalCost;
-    b.queue.push({ kind: 'unit', specId: carterId, progress: 0, total: s.stats.trainTime, food: s.stats.foodCost, crystal: s.stats.crystalCost, home: b.id });
+    b.queue.push({ kind: 'unit', specId: carterId, progress: 0, total: s.stats.trainTime, food: s.stats.foodCost, crystal: s.stats.crystalCost, home: b.id, paid: true });
   }
 
   /**
@@ -701,6 +752,52 @@ export class World {
     const room = this.room(b);
     for (const r of RESOURCES) out[r] = Math.max(0, Math.min(target[r] - b.stock[r] - inbound[r], room));
     return out;
+  }
+
+  /** Sowing: keep the ground around the building planted, paying seed from its own stock. */
+  private tickSow(b: Building): void {
+    const sow = b.spec.sow!;
+    // which enabled resource is furthest below its quota of living plants?
+    let res: 'food' | 'wood' | null = null, best = 0;
+    for (const r of b.sowing) {
+      let n = 0;
+      for (const node of this.nodes.values()) if (node.sownBy === b.id && node.type === r) n++;
+      const lack = 1 - n / SOW_MAX[r];
+      if (lack > best) { best = lack; res = r; }
+    }
+    if (!res) { b.sowProgress = 0; return; }
+    const yieldKg = SOW_YIELD[res];
+    if (b.sowProgress < yieldKg) { b.sowProgress += b.stats.sowRate * DT; return; }
+    const seed = yieldKg * CAP.sowSeedFraction;
+    if (b.stock[res] < seed) return; // waits for seed
+    const spot = this.sowSpot(b, sow.radius, res === 'wood' ? 1.0 : 1.5);
+    if (!spot) return;
+    b.stock[res] -= seed;
+    b.sowProgress -= yieldKg;
+    const node = this.addNode({ type: res, x: spot[0], y: spot[1], amount: 0, shard: false, tree: res === 'wood' });
+    node.maxAmount = yieldKg;
+    node.growLeft = yieldKg;
+    node.growRate = yieldKg / CAP.sowGrowSec;
+    node.sownBy = b.id;
+  }
+
+  /** First open tile in rings around a building, clear of buildings, units and (by `gap`) other plants. */
+  private sowSpot(b: Building, radius: number, gap: number): [number, number] | null {
+    const cx = b.ox + b.size / 2, cy = b.oy + b.size / 2;
+    for (let r = Math.ceil(b.size / 2) + 1; r <= radius + b.size / 2; r++) {
+      for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+        if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+        const tx = Math.floor(cx + dx), ty = Math.floor(cy + dy);
+        if (!this.grid.inBounds(tx, ty) || this.grid.isBlocked(tx, ty)) continue;
+        const x = tx + 0.5, y = ty + 0.5;
+        let ok = true;
+        for (const o of this.buildings.values()) if (x > o.ox - 1 && x < o.ox + o.size + 1 && y > o.oy - 1 && y < o.oy + o.size + 1) { ok = false; break; }
+        if (ok) for (const n of this.nodes.values()) if (!n.shard && (n.x - x) ** 2 + (n.y - y) ** 2 < gap * gap) { ok = false; break; }
+        if (ok) for (const u of this.units.values()) if ((u.x - x) ** 2 + (u.y - y) ** 2 < 0.8) { ok = false; break; }
+        if (ok) return [x, y];
+      }
+    }
+    return null;
   }
 
   /** A tower is a thrower without legs: crew food and crystal ammo come out of its own stock. */
@@ -984,7 +1081,7 @@ export class World {
       const n = node!;
       if (u.exhausted) return false;
       this.face(u, n.x - u.x, n.y - u.y);
-      const rate = n.shard ? Math.max(2, u.stats.gatherRate * 4) : u.stats.gatherRate;
+      const rate = n.shard ? Math.max(2, u.stats.gatherRate * 4) : u.stats.gatherRate * this.gatherBoostAt(u.owner, n.x, n.y, n.type);
       let want: number;
       if (n.shard) {
         // spent crystals are picked up whole
@@ -997,7 +1094,7 @@ export class World {
         u.cal -= K.gatherCalPerKg * want;
         u.busy = true;
       }
-      if (n.amount <= 0.001) this.removeNode(n);
+      if (n.amount <= 0.001 && !n.growLeft) this.removeNode(n);
       const full = this.freeCapacity(u) < (n.shard ? 0.05 : 1 - 1e-6);
       if (o.stopWhenArmed) {
         if (u.crystal >= u.stats.loadoutCrystal - 1e-6 || full || n.amount <= 0.001) this.finish(u);
@@ -1110,11 +1207,11 @@ export class World {
       if (!this.moveToNear(u, tree.x, tree.y, 1.15 + u.stats.radius, true)) return u.x !== u.px || u.y !== u.py;
       if (u.exhausted) return false;
       this.face(u, tree.x - u.x, tree.y - u.y);
-      const want = Math.min(this.gatherUnits(u, u.stats.gatherRate, tree.amount), Math.max(0, Math.ceil(remaining - u.wood)));
+      const want = Math.min(this.gatherUnits(u, u.stats.gatherRate * this.gatherBoostAt(u.owner, tree.x, tree.y, 'wood'), tree.amount), Math.max(0, Math.ceil(remaining - u.wood)));
       if (want > 0) {
         tree.amount -= want; u.wood += want; u.cal -= K.gatherCalPerKg * want; u.busy = true;
       }
-      if (tree.amount <= 0.001) this.removeNode(tree);
+      if (tree.amount <= 0.001 && !tree.growLeft) this.removeNode(tree);
       if (this.freeCapacity(u) < 1 - 1e-6 || u.wood >= remaining - 1e-6 || tree.amount <= 0.001) o.phase = 'deliver';
       return false;
     }
@@ -1197,13 +1294,20 @@ export class World {
     }
     o.phase = 'load';
     // choose where this load goes
-    const pick: { home: Building | null; res: ResourceKind | null; need: number } = { home: null, res: null, need: 1 };
+    // Urgency = the fraction of that resource the building is missing (so 10 kg of a
+    // 20 kg crystal need matters as much as 150 kg of a 300 kg food need), doubled when
+    // an order is waiting on it, and discounted by distance.
+    const pick: { home: Building | null; res: ResourceKind | null; need: number; score: number } = { home: null, res: null, need: 1, score: 0 };
     const consider = (b: Building) => {
       if (b === base) return;
       const need = this.shortfall(b);
+      const target = b.complete ? this.supplyTargets(b) : { food: 0, wood: b.stats.totalCost, crystal: 0 };
+      const waiting = b.queue.some((q) => q.kind === 'unit' && !q.paid) ? 2 : 1;
+      const dist = Math.hypot(b.ox + b.size / 2 - u.x, b.oy + b.size / 2 - u.y);
       for (const r of RESOURCES) {
-        if (base!.stock[r] - BASE_RESERVE[r] <= 1) continue;
-        if (need[r] > pick.need) { pick.need = need[r]; pick.res = r; pick.home = b; }
+        if (need[r] <= 0.5 || base!.stock[r] - BASE_RESERVE[r] <= 1) continue;
+        const score = (need[r] / Math.max(1, target[r])) * waiting / (1 + dist / 20);
+        if (score > pick.score) { pick.score = score; pick.need = need[r]; pick.res = r; pick.home = b; }
       }
     };
     if (o.pinned) {
@@ -1232,7 +1336,7 @@ export class World {
   private nearestNode(u: Unit, type: ResourceKind, radius: number, shardsOnly: boolean, exclude?: ResourceNode): ResourceNode | null {
     let best: ResourceNode | null = null, bestD = radius * radius;
     for (const n of this.nodes.values()) {
-      if (n.type !== type || n.amount <= 0.001 || n === exclude) continue;
+      if (n.type !== type || n.amount <= 0.001 || n === exclude || n.growLeft) continue; // let sown plants ripen
       if (shardsOnly && !n.shard) continue;
       const d = (n.x - u.x) ** 2 + (n.y - u.y) ** 2;
       if (d < bestD) { bestD = d; best = n; }

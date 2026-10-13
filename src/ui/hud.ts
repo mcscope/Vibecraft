@@ -17,6 +17,7 @@ export interface HudActions {
   place(specId: string): void;
   idleWorker(): void;
   autoTrain(buildingId: number, specId: string | null): void;
+  setSowing(buildingId: number, resources: Array<'food' | 'wood'>): void;
 }
 
 const fmt = (n: number, d = 0) => n.toFixed(d);
@@ -33,7 +34,8 @@ export function statsTable(spec: UnitSpec, stats: DerivedStats = derive(spec)): 
     <div class="stats">
       ${row('Mass', `${fmt(d.mass)} kg`, 'Body mass — everything derives from this')}
       ${row('Build', `${fmt(d.physique.muscle * 100)}/${fmt(d.physique.frame * 100)}/${fmt(d.physique.reserve * 100)}`, 'muscle / frame / reserve %')}
-      ${row('Refinement', `${fmt(d.refinement, 2)}×`, 'Value per resource beyond raw physics; paid for in building capital and research')}
+      ${row('Refinement', `${fmt(d.refinement, 2)}×`, 'Combat value per resource beyond raw physics (HP and damage); paid for in building capital and research')}
+      ${d.workRefinement > 1 ? row('Work', `${fmt(d.workRefinement, 2)}×`, 'Work refinement: gather rate and speed') : ''}
       ${row('Hit points', fmt(d.maxHp), 'From frame mass × refinement^⅔')}
       ${row('Calories', fmt(d.maxCalories), 'From reserve mass')}
       ${row('Speed', `${fmt(d.speed, 2)} t/s`, 'Unloaded; packs slow you down')}
@@ -132,8 +134,15 @@ export class Hud {
 
   private onClick(e: MouseEvent): void {
     if (this.suppressClick) { this.suppressClick = false; return; } // that was a hold, not a click
-    const el = (e.target as HTMLElement).closest('[data-train],[data-research],[data-cancel],[data-select],[data-cmd],[data-place]') as HTMLElement | null;
+    const el = (e.target as HTMLElement).closest('[data-train],[data-research],[data-cancel],[data-select],[data-cmd],[data-place],[data-sow]') as HTMLElement | null;
     if (!el || el.classList.contains('locked')) return;
+    if (el.dataset.sow) {
+      const b = this.world.buildings.get(+el.dataset.building!);
+      if (!b) return;
+      const r = el.dataset.sow as 'food' | 'wood';
+      this.actions.setSowing(b.id, b.sowing.includes(r) ? b.sowing.filter((x) => x !== r) : [...b.sowing, r]);
+      return;
+    }
     if (el.dataset.train) this.actions.train(+el.dataset.building!, el.dataset.train);
     else if (el.dataset.research) this.actions.research(+el.dataset.building!, el.dataset.research);
     else if (el.dataset.cancel) this.actions.cancelTrain(+el.dataset.cancel);
@@ -166,6 +175,8 @@ export class Hud {
         spec.trains?.length ? `Trains ${spec.trains.map((id) => w.specOf(this.player, id)?.spec.name ?? id).join(', ')}` : '',
         spec.researches?.length ? `Researches ${spec.researches.length} technologies` : '',
         st.tower ? `Throws ${spec.attack!.crystalMass} kg crystals for ${n0(st.tower.damage)} damage, range ${fmt(st.tower.range, 1)}` : '',
+        spec.gatherBoost ? `Gathering within ${spec.gatherBoost.radius} tiles ×${fmt(st.gatherBoost, 2)}` : '',
+        spec.sow ? `Sows ${spec.sow.resources.map((r) => this.names()[r].toLowerCase()).join(' and ')} within ${spec.sow.radius} tiles` : '',
         spec.carters ? `Keeps ${spec.carters} cart${spec.carters > 1 ? 's' : ''} supplying it` : '',
       ].filter(Boolean).join(' · ');
       this.tooltip.innerHTML = `<h3>${spec.name}</h3><p>${spec.description}</p>
@@ -213,7 +224,7 @@ export class Hud {
     const building = [...selected].map((id) => w.buildings.get(id)).find((b): b is Building => !!b);
     const p = w.players[this.player];
     const sig = units.length === 1 ? `u${units[0].id}`
-      : building ? `b${building.id}:${building.complete}:${building.queue.map((q) => (q.kind === 'unit' ? q.specId : q.techId)).join(',')}:${p.researched.length}:${building.owner}`
+      : building ? `b${building.id}:${building.complete}:${building.queue.map((q) => (q.kind === 'unit' ? q.specId : q.techId)).join(',')}:${p.researched.length}:${building.owner}:${building.sowing.join('')}`
       : `m${units.map((u) => u.id).join(',')}`;
     if (sig !== this.sig) {
       this.sig = sig;
@@ -281,8 +292,12 @@ export class Hud {
     this.setBar('bhp', b.hp, b.maxHp, `${Math.ceil(b.hp)} / ${b.maxHp}`);
     if (!b.complete) { this.setBar('built', b.built, b.stats.totalCost, `${have(b.built)} / ${need(b.stats.totalCost)} ${this.names().wood} delivered`); return; }
     const item = b.queue[0];
-    const el = this.panel.querySelector<HTMLElement>('[data-bar="train"] i');
-    if (el) el.style.width = item ? pct(item.progress, item.total) : '0%';
+    const bar = this.panel.querySelector<HTMLElement>('[data-bar="train"]');
+    if (bar) {
+      bar.querySelector<HTMLElement>('i')!.style.width = item ? pct(item.progress, item.total) : '0%';
+      const label = bar.querySelector<HTMLElement>('span');
+      if (label) label.textContent = item && item.kind === 'unit' && !item.paid ? `Waiting for ${this.missing(b, item.food, item.crystal)} here — carts are bringing it` : '';
+    }
     const names = this.names();
     const target = w.supplyTargets(b);
     for (const r of RESOURCES) {
@@ -307,7 +322,11 @@ export class Hud {
     }
     this.panel.querySelectorAll<HTMLElement>('[data-train]').forEach((btn) => {
       const s = w.specOf(this.player, btn.dataset.train!)!.stats;
-      btn.classList.toggle('poor', b.stock.food < s.foodCost || b.stock.crystal < s.crystalCost || b.queue.length >= MAX_QUEUE);
+      btn.classList.toggle('poor', b.queue.length >= MAX_QUEUE);
+      const miss = this.missing(b, s.foodCost, s.crystalCost);
+      btn.classList.toggle('short', !!miss);
+      const note = btn.querySelector<HTMLElement>('.need');
+      if (note) note.textContent = miss ? `needs ${miss} here` : '';
       btn.classList.toggle('auto', b.autoTrain === btn.dataset.train);
     });
     this.panel.querySelectorAll<HTMLElement>('[data-research]').forEach((btn) => {
@@ -317,6 +336,15 @@ export class Hud {
       const c = btn.querySelector('.cost');
       if (c) c.textContent = st.blocker ?? `${st.cost} ${names.wood}`;
     });
+  }
+
+  /** What this building is short of for a cost, in words ("6 crystal", "20 berries + 4 crystal"), or ''. */
+  private missing(b: Building, food: number, crystal: number): string {
+    const n = this.names();
+    return [
+      food > b.stock.food + 1e-6 ? `${need(food - b.stock.food)} ${n.food.toLowerCase()}` : '',
+      crystal > b.stock.crystal + 1e-6 ? `${need(crystal - b.stock.crystal)} ${n.crystal.toLowerCase()}` : '',
+    ].filter(Boolean).join(' + ');
   }
 
   private setBar(name: string, v: number, max: number, label: string): void {
@@ -441,6 +469,8 @@ export class Hud {
       ${RESOURCES.map((r) => `<div class="bar stock ${r}" data-bar="stock-${r}"><i></i><span></span></div>`).join('')}
       <div class="state" data-carts></div>
       ${st.tower ? '<div class="ammo" data-ammo></div>' : ''}
+      ${b.spec.gatherBoost ? `<div class="state">Gathering nearby ×${fmt(st.gatherBoost, 2)} (within ${b.spec.gatherBoost.radius} tiles)</div>` : ''}
+      ${b.spec.sow && own ? `<div class="sow">Sowing ${b.spec.sow.resources.map((r) => `<button data-sow="${r}" data-building="${b.id}" class="${b.sowing.includes(r) ? 'on' : ''}" title="Plants a ${r === 'food' ? '200 kg bush' : '100 kg tree'} for ${need((r === 'food' ? 200 : 100) / 3)} ${names[r].toLowerCase()} of seed from this building; it grows over 90 s">${names[r]} ${b.sowing.includes(r) ? 'on' : 'off'}</button>`).join(' ')}</div>` : ''}
       ${st.tower ? `<div class="state">Tower: ${n0(st.tower.damage)} dmg · range ${fmt(st.tower.range, 1)} · ${fmt(st.tower.cooldown, 1)} s · uses ${b.spec.attack!.crystalMass} kg crystal per shot, ${need(st.tower.foodPerShot * 10)} food per 10 shots</div>` : ''}`;
     if (!own) return `<div class="building-panel"><div class="info">${head}${info}</div></div>`;
     const km = keymap();
@@ -452,6 +482,7 @@ export class Hud {
         <canvas class="portrait" data-portrait="${b.owner}:${id}"></canvas>
         <span class="name">${s.spec.name}</span>
         <span class="cost">${s.stats.foodCost} ${names.food.toLowerCase()} · ${s.stats.crystalCost} crys</span>
+        <span class="need"></span>
         <span class="ref" title="Refinement ${fmt(s.stats.refinement, 2)}× (design needs ${n0(need)} capital)">${fmt(s.stats.refinement, 2)}×</span>
         <kbd>${km.train[i]?.toUpperCase() ?? ''}</kbd>
       </button>`;

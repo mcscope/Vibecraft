@@ -200,3 +200,28 @@ export function rallyFlag(b: ModelBuilder): void {
   b.cylinder(0.035, 0.04, 1.6, [0, 0.8, 0], DARKWOOD, undefined, 8);
   b.box([0.03, 0.4, 0.6], [0, 1.38, 0.3], { team: 'primary', tex: 'cloth' });
 }
+
+/** Open-sided work shed with a log pile, berry baskets, seed sacks and a crate of crystal. */
+export function gatheringCamp(b: ModelBuilder): void {
+  const base = 0.15;
+  b.box([3.7, base, 3.7], [0, base / 2, 0], { color: '#7a6a52', tex: 'stone' });
+  for (const [x, z] of [[-1.3, -1.3], [1.3, -1.3], [-1.3, 1.3], [1.3, 1.3]]) b.limb([x, base, z], [x, base + 1.7, z], 0.07, DARKWOOD);
+  b.roof([3.2, 0.9, 3.2], [0, base + 1.7, 0], THATCH);
+  b.box([2.8, 0.1, 0.1], [0, base + 1.65, 1.3], DARKWOOD);
+  b.box([0.1, 0.1, 2.8], [1.3, base + 1.65, 0], DARKWOOD);
+  for (let i = 0; i < 7; i++) {
+    const row = i < 4 ? 0 : 1, k = row ? i - 4 : i;
+    b.limb([-1.1, base + 0.12 + row * 0.2, -0.7 + k * 0.22 + row * 0.11], [0.3, base + 0.12 + row * 0.2, -0.7 + k * 0.22 + row * 0.11], 0.1, { color: '#5e4128', tex: 'wood' });
+  }
+  for (const [x, z] of [[0.7, 0.6], [1.05, 0.95], [0.5, 1.05]]) {
+    b.cylinder(0.2, 0.16, 0.3, [x, base + 0.15, z], { color: '#a5814f', tex: 'thatch' });
+    for (let i = 0; i < 5; i++) b.sphere(0.05, [x + Math.cos(i * 1.3) * 0.09, base + 0.32, z + Math.sin(i * 1.3) * 0.09], { color: i % 2 ? '#8c1f2b' : '#5a1f3c', rough: 0.4 });
+  }
+  // seed sacks and saplings waiting to go in
+  for (const [x, z] of [[0.9, -0.6], [1.1, -0.2]]) b.sphere([0.18, 0.22, 0.16], [x, base + 0.2, z], { color: '#b8a274', tex: 'cloth' });
+  for (const [x, z] of [[-1.6, 0.2], [-1.6, 0.6]]) { b.cylinder(0.1, 0.08, 0.15, [x, base + 0.07, z], { color: '#6a4a2e', tex: 'wood' }); b.cone(0.14, 0.4, [x, base + 0.35, z], { color: '#3f6a2a', tex: 'leaf' }); }
+  b.box([0.6, 0.4, 0.5], [-0.7, base + 0.2, 1.0], WOOD);
+  for (const [dx, dz, r] of [[-0.1, 0, 0.3], [0.12, 0.08, -0.4], [0.02, -0.12, 0.1]]) b.crystal(0.32, [-0.7 + dx, base + 0.38, 1.0 + dz], [r, 0, r * 0.5]);
+  b.limb([1.6, base, 1.6], [1.6, base + 2.3, 1.6], 0.035, DARKWOOD);
+  b.box([0.04, 0.4, 0.62], [1.6, base + 2.05, 1.92], BANNER);
+}

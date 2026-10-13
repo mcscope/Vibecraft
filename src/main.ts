@@ -76,6 +76,7 @@ async function start(m: Mode): Promise<void> {
     place: (specId) => input.startPlacing(specId),
     idleWorker: () => input.nextIdleWorker(),
     autoTrain: (building, specId) => local.issue({ type: 'autoTrain', building, specId }),
+    setSowing: (building, resources) => local.issue({ type: 'setSowing', building, resources }),
     cancelTrain: (building) => local.issue({ type: 'cancelTrain', building }),
     select: (ids) => input.setSelection(ids),
     command: (kind) => input.hudCommand(kind),

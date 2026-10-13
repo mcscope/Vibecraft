@@ -114,6 +114,8 @@ export interface DerivedStats {
   trainTime: number;
   /** Total refinement (design + technologies). */
   refinement: number;
+  /** Total work refinement: gather-rate and speed multiplier. */
+  workRefinement: number;
 }
 
 /** Scale to sum 1, then lift any part below the minimum, taking the difference from the others. */
@@ -143,7 +145,7 @@ function massSpeedFactor(m: number): number {
 }
 
 /** `techRefinement`: refinement added by the owner's researched technologies. */
-export function derive(spec: UnitSpec, techRefinement = 0): DerivedStats {
+export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): DerivedStats {
   const mass = clampMass(spec.mass);
   const physique = normalizePhysique(spec.physique);
   const muscleMass = mass * physique.muscle;
@@ -157,7 +159,9 @@ export function derive(spec: UnitSpec, techRefinement = 0): DerivedStats {
   const refine = Math.pow(refinement, 2 / 3);
   const maxHp = (K.hpPerFrameKg * frameMass + K.hpPerKg * mass) * refine;
   const maxCalories = K.calPerReserveKg * reserveMass + K.calPerKg * mass;
-  const speed = clamp(K.baseSpeed * Math.pow(muscleRel, 0.8) * massSpeedFactor(mass), K.minSpeed, K.maxSpeed);
+  // work refinement w speeds up both gathering and walking, so a worker's trip takes 1/w as long
+  const workRefinement = Math.max(1, (spec.workRefinement ?? 1) + techWork);
+  const speed = clamp(K.baseSpeed * Math.pow(muscleRel, 0.8) * massSpeedFactor(mass), K.minSpeed, K.maxSpeed) * workRefinement;
   const wheeled = !!spec.wheeled;
   const carryCapacity = Math.max(1, K.carryPerMuscleKg * muscleMass * (wheeled ? K.wheelCarry : 1));
 
@@ -186,7 +190,7 @@ export function derive(spec: UnitSpec, techRefinement = 0): DerivedStats {
     : reach;
   const sight = Math.max(7, range + 3);
 
-  const gatherRate = (spec.canGather ?? true) ? K.gatherKgPerSec * Math.sqrt(muscleMass / 18) : 0;
+  const gatherRate = (spec.canGather ?? true) ? K.gatherKgPerSec * Math.sqrt(muscleMass / 18) * workRefinement : 0;
 
   const foodCost = Math.round(K.foodPerKg * mass + K.foodPerMuscleKg * muscleMass + K.foodPerFrameKg * frameMass);
   const crystalCost = Math.ceil(loadoutCrystal);
@@ -201,7 +205,7 @@ export function derive(spec: UnitSpec, techRefinement = 0): DerivedStats {
     moveCalPerTile: K.moveCalPerKgTile * mass,
     restRegen: K.restRegenFraction * maxCalories,
     eatRate: K.eatRateFraction * maxCalories,
-    foodCost, crystalCost, trainTime, refinement,
+    foodCost, crystalCost, trainTime, refinement, workRefinement,
   };
 }
 
@@ -257,6 +261,12 @@ export const CAP = {
   cachePerMaterial: 2,
   /** Height costs mechanism × height × this, in building resource. */
   heightCost: 0.25,
+  /** Sowing: kg of future yield planted per second, per kg of sowing mechanism. */
+  sowRatePerKg: 0.04,
+  /** Seed cost as a fraction of the yield (plants give back ~3×, slowly). */
+  sowSeedFraction: 1 / 3,
+  /** Seconds for a sown plant to grow to full. */
+  sowGrowSec: 90,
 } as const;
 
 export function capitalFor(refinement: number): number {
@@ -296,12 +306,16 @@ export interface BuildingStats {
   /** Highest unit refinement this building can train. */
   maxRefinement: number;
   cacheCap: number;
-  /** Building resource for the weapon + its height (not capital). */
+  /** Building resource for equipment — weapon, its height, sowing mechanism (not capital). */
   attackCost: number;
+  /** kg of yield planted per second (0 if it doesn't sow). */
+  sowRate: number;
   /** Everything villagers must carry to the site. */
   totalCost: number;
   minSize: number;
   tower: TowerStats | null;
+  /** Gather-rate multiplier this building gives nearby (1 if it has no gatherBoost). */
+  gatherBoost: number;
 }
 
 /** Every building this one depends on, transitively, each counted once. */
@@ -337,7 +351,7 @@ export function towerStats(t: BuildingSpec['attack']): TowerStats | null {
 export function deriveBuilding(spec: BuildingSpec, faction: FactionSpec): BuildingStats {
   const capital = Math.max(0, spec.materials);
   const effectiveCapital = capital + prerequisites(spec, faction).reduce((a, b) => a + Math.max(0, b.materials), 0);
-  const attackCost = spec.attack ? spec.attack.mechanism + spec.attack.mechanism * spec.attack.height * CAP.heightCost : 0;
+  const attackCost = (spec.attack ? spec.attack.mechanism + spec.attack.mechanism * spec.attack.height * CAP.heightCost : 0) + (spec.sow?.mechanism ?? 0);
   return {
     maxHp: CAP.hpPerMaterial * capital,
     capital,
@@ -348,16 +362,19 @@ export function deriveBuilding(spec: BuildingSpec, faction: FactionSpec): Buildi
     totalCost: Math.ceil(capital + attackCost),
     minSize: Math.ceil(Math.sqrt(capital / CAP.kgPerTile)),
     tower: towerStats(spec.attack),
+    gatherBoost: spec.gatherBoost ? refinementFor(capital) : 1,
+    sowRate: spec.sow ? spec.sow.mechanism * CAP.sowRatePerKg : 0,
   };
 }
 
 /** Refinement each tech raises its unit from, assuming the faction's techs are researched in list order. */
 export function techStart(tech: TechSpec, faction: FactionSpec): number {
   const unit = faction.units.find((u) => u.id === tech.unit);
-  let r = unit?.refinement ?? 1;
+  const work = tech.channel === 'work';
+  let r = (work ? unit?.workRefinement : unit?.refinement) ?? 1;
   for (const t of faction.techs ?? []) {
     if (t === tech) break;
-    if (t.unit === tech.unit) r += t.refinement;
+    if (t.unit === tech.unit && (t.channel === 'work') === work) r += t.refinement;
   }
   return r;
 }
@@ -373,8 +390,9 @@ export function validateFaction(f: FactionSpec): string[] {
     for (const id of b.trains ?? []) {
       const u = f.units.find((x) => x.id === id);
       if (!u) { errs.push(`${b.id}: trains unknown unit ${id}`); continue; }
-      const need = capitalFor(u.refinement ?? 1);
-      if (need > st.effectiveCapital + 1e-6) errs.push(`${b.id}: ${u.id} at refinement ${u.refinement} needs ${Math.ceil(need)} capital, building has ${st.effectiveCapital}`);
+      // the higher of the two refinements sets the bar (mixed worker-soldiers aren't taxed twice)
+      const need = Math.max(capitalFor(u.refinement ?? 1), capitalFor(u.workRefinement ?? 1));
+      if (need > st.effectiveCapital + 1e-6) errs.push(`${b.id}: ${u.id} (refinement ${u.refinement ?? 1}, work ${u.workRefinement ?? 1}) needs ${Math.ceil(need)} capital, building has ${st.effectiveCapital}`);
     }
     for (const id of b.researches ?? []) {
       const t = f.techs?.find((x) => x.id === id);

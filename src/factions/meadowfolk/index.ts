@@ -269,13 +269,18 @@ export const buildings: MeadowBuilding[] = [
     size: 4, materials: 900, requires: ['forge', 'lynx-den'], trains: ['hurlhorn'], model: models.greatHall,
   },
   {
+    id: 'gathering-camp', name: 'Gathering Camp', description: 'A drop-off shed that speeds up gathering nearby (by its capital) and keeps sowing berry bushes and trees around it from its own seed stock.',
+    size: 2, materials: 250, gatherBoost: { radius: 6, resources: ['food', 'wood', 'crystal'] },
+    sow: { mechanism: 60, radius: 5, resources: ['food', 'wood'] }, model: models.gatheringCamp,
+  },
+  {
     id: 'watchtower', name: 'Watchtower', description: 'A throwing arm on stilts. Height adds energy and range; it burns food and crystal from its own stock.',
     size: 1, materials: 150, attack: { mechanism: 120, crystalMass: 3, height: 5 }, model: models.watchtower,
   },
 ];
 
 const techs: TechSpec[] = [
-  { id: 'villager-tools', name: 'Better Tools', description: 'Villagers +0.3 refinement.', unit: 'villager', refinement: 0.3 },
+  { id: 'villager-tools', name: 'Better Tools', description: 'Villagers gather and walk 30% faster (work refinement +0.3).', unit: 'villager', refinement: 0.3, channel: 'work' },
   { id: 'sling-drills', name: 'Sling Drills', description: 'Slingers +0.4 refinement.', unit: 'slinger', refinement: 0.4 },
   { id: 'mail-hardening', name: 'Hardened Mail', description: 'Crystal Macemen +0.4 refinement.', unit: 'maceman', refinement: 0.4 },
   { id: 'lynx-breeding', name: 'Lynx Breeding', description: 'Lynx Lancers +0.3 refinement.', unit: 'lynx', refinement: 0.3 },
