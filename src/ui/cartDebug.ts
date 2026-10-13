@@ -1,4 +1,4 @@
-// Cart debug overlay (F9): every supply carrier's current job drawn on the map,
+// Cart debug overlay (9): every supply carrier's current job drawn on the map,
 // plus a text readout of each building's stock, targets, shortfall and surplus.
 import type { Camera } from '../render/camera';
 import type { Stock } from '../factions/types';
@@ -26,7 +26,9 @@ export class CartDebug {
     this.layer.appendChild(this.svg);
     document.body.append(this.layer, this.panel);
     window.addEventListener('keydown', (e) => {
-      if (e.key === 'F9') { e.preventDefault(); updateSettings({ cartDebug: !settings().cartDebug }); }
+      if (e.key !== '9' || e.ctrlKey || e.metaKey || e.altKey || (e.target as HTMLElement)?.closest?.('input, textarea')) return;
+      e.preventDefault();
+      updateSettings({ cartDebug: !settings().cartDebug });
     });
   }
 
@@ -94,7 +96,7 @@ export class CartDebug {
     this.textT = 0;
     const base = w.baseOf(this.player);
     const out: string[] = [];
-    out.push(`CART DEBUG (F9)               food wood crys`);
+    out.push(`CART DEBUG (9)               food wood crys`);
     out.push(`  grey dashes: going to load   green: delivering`);
     out.push(`  blue: collecting surplus     gold dots: loading for`);
     if (base) {

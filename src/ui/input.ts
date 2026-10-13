@@ -283,7 +283,7 @@ export class Input {
     const myTc = this.supplyBuilding(units) ?? w.baseOf(this.player);
     const tcSelected = [...this.rs.selected].map((id) => w.buildings.get(id)).find((b) => b && b.owner === this.player && b.complete);
 
-    if (/^[0-9]$/.test(k)) {
+    if (/^[0-8]$/.test(k)) { // 9 toggles the cart debug overlay
       if (e.ctrlKey || e.metaKey) { e.preventDefault(); this.groups.set(k, [...this.rs.selected]); return; }
       const g = this.groups.get(k);
       if (g) {
