@@ -121,6 +121,8 @@ export interface Unit {
   heading: number;
   busy: boolean; // spent calories this tick (no resting)
   stuck: number; // ticks of little progress toward the current goal
+  /** Bounding gait: how far through its stride (0..1), and the last tick it was moving. */
+  stride: number; strideTick: number;
   /** Training dummy: inert target. */
   dummy: boolean;
   /** Wildlife temper (wild units only). */
@@ -737,7 +739,7 @@ export class World {
       food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
       order: { kind: 'idle' }, resume: null, engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
-      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0,
+      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1,
       dummy: !!spec.dummy,
       carter: spec.role === 'carter',
       gatherAcc: 0,
@@ -949,7 +951,7 @@ export class World {
     if (u.crystal > 0 && u.ammo < st.loadoutCrystal) { const k = Math.min(u.crystal, st.loadoutCrystal - u.ammo); u.crystal -= k; u.ammo += k; }
 
     let anim: UnitAnim = 'idle';
-    const moved = this.runOrder(u);
+    const moved = this.runOrder(u) || u.strideTick === this.tick; // a hopper crouching between bounds is still on its way
     if (moved) anim = 'walk';
     if (u.swing > 0) anim = 'attack';
     else if (((u.order.kind === 'gather' && u.order.phase === 'harvest') || (u.order.kind === 'build' && u.order.phase === 'chop')) && !moved && u.busy) anim = 'gather';
@@ -1558,6 +1560,17 @@ export class World {
     let speed = loadedSpeed(st, this.packLoad(u));
     if (u.exhausted) speed *= K.exhaustedSpeedMul;
     let budget = speed * DT;
+    let grounded = false;
+    if (st.gait) {
+      // a bounding gait: still while crouched, faster in the air, same speed on average
+      if (u.strideTick !== this.tick - 1) u.stride = 0; // set off from a crouch
+      u.strideTick = this.tick;
+      u.stride = (u.stride + DT / st.gait.period) % 1;
+      const up = (1 - st.gait.hop) * (2 / 3);
+      grounded = u.stride < up || u.stride >= up + st.gait.hop;
+      budget = grounded ? 0 : budget / st.gait.hop;
+      if (grounded) return false;
+    }
     while (budget > 0 && u.path.length > 0) {
       const [wx, wy] = u.path[0];
       const ddx = wx - u.x, ddy = wy - u.y;

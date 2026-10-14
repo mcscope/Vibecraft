@@ -38,7 +38,8 @@ export function unitFrame(u: Unit): { anim: ArtAnim; time?: number; progress?: n
     case 'walk': {
       const most = Math.max(u.food, u.wood, u.crystal); // what the cargo pack mostly holds
       const anim: ArtAnim = most <= 0.5 ? 'walk' : most === u.food ? 'carryFood' : most === u.wood ? 'carryWood' : 'carryCrystal';
-      // stride rate follows actual speed
+      // a bounding gait plays the walk by stride, in step with the sim; otherwise stride rate follows speed
+      if (u.stats.gait) return { anim, progress: u.stride };
       return { anim, time: u.animT * Math.max(0.5, u.stats.speed) / 1.7 };
     }
     case 'attack': {

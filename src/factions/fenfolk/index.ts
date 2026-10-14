@@ -31,6 +31,7 @@ const fenling: FenUnit = {
   physique: { muscle: 0.5, frame: 0.22, reserve: 0.28 },
   attack: { style: 'throw', crystalMass: 1, ammo: 3 },
   workRefinement: 1.4, // nimble: gathers, wades and carries 40% more
+  gait: { hop: 0.76, period: 0.7 }, // quick little bounds (the rig's hop is airborne 0.16–0.92)
   model(b, p) {
     body(b, p, fenLook, fenArm(p, 'sling'), (h) => {
       // a sling: two cords with a pouch
@@ -49,6 +50,7 @@ const reedguard: FenUnit = {
   mass: 38,
   physique: { muscle: 0.35, frame: 0.55, reserve: 0.1 },
   attack: { style: 'strike', crystalMass: 1 },
+  gait: { hop: 0.76, period: 0.85 }, // heavier bounds behind the shield
   model(b, p) {
     body(b, p, guardLook, fenArm(p, 'jab'), (h) => {
       h.limb([0, 0.35, 0], [0, -0.75, 0], 0.016, WILLOW);
@@ -73,9 +75,10 @@ const bogToad: FenUnit = {
   physique: { muscle: 0.55, frame: 0.3, reserve: 0.15 },
   attack: { style: 'strike', crystalMass: 2.5 },
   refinement: 1.3,
+  gait: { hop: 0.5, period: 1.1 }, // great lumbering leaps: airborne 1/3–5/6 of each stride
   model(b, p) {
-    const t = p.phase * Math.PI * 2;
-    const hop = p.anim === 'walk' ? Math.max(0, Math.sin(t)) * 0.25 : 0;
+    const ph = p.phase;
+    const hop = p.anim === 'walk' && ph > 1 / 3 && ph < 5 / 6 ? Math.sin(((ph - 1 / 3) / 0.5) * Math.PI) * 0.32 : 0;
     const lunge = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase * 1.3) * Math.PI) * 0.45 : 0;
     // haunches and forelegs
     for (const z of [1, -1]) {

@@ -182,6 +182,7 @@ function unitAbilities(u: UnitSpec): string[] {
   } else if (!u.dummy) out.push('<b>Unarmed.</b>');
   if (u.role === 'carter') out.push(`<b>Supply hauler.</b> Produced automatically; loads ${n0(d.carryCapacity)} kg at its home building and carries it to whichever building needs it most.`);
   if (u.bearer) out.push(`<b>Ammo bearer.</b> A walking pile of crystal (${n0(d.cargoCapacity)} kg): friendly throwers that run dry come and take a load, like spent crystals on the ground. Refills at any building with crystal (right-click it).`);
+  if (u.gait) out.push(`<b>Hops.</b> Bounds along, airborne ${Math.round(d.gait!.hop * 100)}% of each ${f1(d.gait!.period, 2)} s stride: still while crouched, faster in the air, the same speed on average.`);
   if (u.wheeled) out.push(`<b>Wheeled.</b> Carries ${K.wheelCarry}× as much for its muscle; a full load slows it less and costs fewer calories to haul.`);
   if ((u.canGather ?? true) && !u.dummy && u.role !== 'carter') out.push(`<b>Gathers</b> ${f1(d.gatherRate, 2)} kg/s and carries ${n0(d.carryCapacity)} kg; also builds.`);
   if ((u.refinement ?? 1) > 1) out.push(`<b>Refined ${f1(u.refinement!, 2)}×</b>: costs 1/${f1(u.refinement!, 2)} of its body's ${res('food')}. Its building needs ${n0(capitalFor(u.refinement!))} capital.`);

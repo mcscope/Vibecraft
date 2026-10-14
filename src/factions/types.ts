@@ -43,6 +43,15 @@ export interface UnitSpec {
   attack?: AttackSpec;
   /** Wheels bear the load: carry capacity ×4 (K.wheelCarry), and a full load slows it less and costs fewer calories to haul. */
   wheeled?: boolean;
+  /**
+   * How it moves. Omitted: a steady walk. `hop`: it bounds, moving only for the
+   * airborne share of each stride (`hop`, 0.3–0.95; the rest is the crouch, a little
+   * before take-off and the rest after landing), faster while in the air so its
+   * average speed is unchanged. `period`: seconds per stride (default 1). The
+   * walk animation is played by stride, so frame f/n is that point in the stride:
+   * airborne from (1 − hop) × ⅔ to that plus hop.
+   */
+  gait?: { hop: number; period?: number };
   /** Can this unit harvest resource nodes? Default true. */
   canGather?: boolean;
   /** Training dummy: never moves, eats or fights. Only for scenarios. */
