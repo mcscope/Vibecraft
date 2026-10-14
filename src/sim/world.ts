@@ -48,6 +48,8 @@ export interface PlayerState {
   researched: string[];
   /** The Wilds: owns the wildlife, never wins or loses, isn't anyone's opponent. */
   neutral?: boolean;
+  /** The town bell is ringing: workers are militia. */
+  bell?: boolean;
 }
 
 /** Wildlife tuning (engine-wide). */
@@ -57,6 +59,8 @@ export type Order =
   | { kind: 'idle' }
   /** A worker hunting a passive animal (x/y: where it was last seen). */
   | { kind: 'hunt'; target: number; x: number; y: number }
+  /** Town bell: go to a building and take a crystal to fight with. */
+  | { kind: 'muster'; building: number }
   /** Wildlife: roam around a home spot (tx/ty: current wander target, rest: ticks until the next). */
   | { kind: 'wild'; hx: number; hy: number; tx: number; ty: number; rest: number }
   | { kind: 'move'; x: number; y: number }
@@ -119,6 +123,10 @@ export interface Unit {
   dummy: boolean;
   /** Wildlife temper (wild units only). */
   wild?: 'passive' | 'aggressive';
+  /** Called up by the town bell: fights on its own while holding a crystal. */
+  militia?: boolean;
+  /** What it was doing when the bell rang (resumed when it stops). */
+  bellResume?: Order | null;
   carter: boolean;
   /** Progress toward the next whole kilogram being gathered. */
   gatherAcc: number;
@@ -379,7 +387,15 @@ export class World {
   cargo(u: Unit): number { return u.food + u.wood + u.crystal; }
   /** Room left in the cargo pack (the weapon pack is separate). */
   freeCapacity(u: Unit): number { return Math.max(0, u.stats.cargoCapacity - this.cargo(u)); }
-  armed(u: Unit): boolean { return u.stats.canAttack && u.ammo >= u.crystalMass - 1e-6; }
+  armed(u: Unit): boolean { return this.weapon(u) !== null; }
+
+  /** What a unit can hit with right now: its own weapon, or (a worker) a crystal it's carrying. */
+  weapon(u: Unit): { damage: number; cooldown: number; range: number; attackCalories: number; crystalMass: number; throws: boolean } | null {
+    const s = u.stats;
+    if (s.canAttack) return u.ammo >= u.crystalMass - 1e-6 ? { damage: s.damage, cooldown: s.cooldown, range: s.range, attackCalories: s.attackCalories, crystalMass: u.crystalMass, throws: u.throws } : null;
+    if (s.improvised && u.crystal >= s.improvised.crystalMass - 1e-6) return { ...s.improvised, throws: false };
+    return null;
+  }
 
   /** Current refinement of a unit type for a player (design + techs). */
   refinementOf(owner: number, unitId: string, channel: 'combat' | 'work' = 'combat'): number {
@@ -582,6 +598,25 @@ export class World {
           if (!base || base === b) continue;
           const loaded = u.food + u.wood + u.crystal > 0.05;
           set([u], { kind: 'cart', base: base.id, home: b.id, pinned: true, phase: loaded ? 'deliver' : 'load', res: 'food' });
+        }
+        return;
+      }
+      case 'townBell': {
+        // every worker: on → grab a crystal and stand as militia; off → back to what they were doing
+        const workers = [...this.units.values()].filter((u) => u.owner === player && !u.carter && u.stats.gatherRate > 0 && (u.stats.improvised || u.specId === this.factionOf(player).workerId));
+        this.players[player].bell = cmd.on;
+        for (const u of workers) {
+          if (cmd.on && !u.militia) {
+            u.militia = true;
+            u.bellResume = u.order.kind === 'muster' ? u.resume : u.order;
+            const b = u.stats.improvised ? this.nearestCache(u, (x) => x.stock.crystal >= u.stats.improvised!.crystalMass) : null;
+            u.order = b && u.crystal < u.stats.improvised!.crystalMass ? { kind: 'muster', building: b.id } : { kind: 'idle' };
+            u.resume = null; u.path = [];
+          } else if (!cmd.on && u.militia) {
+            u.militia = false; u.engage = 0;
+            u.order = u.bellResume ?? { kind: 'idle' };
+            u.bellResume = null; u.path = [];
+          }
         }
         return;
       }
@@ -848,11 +883,12 @@ export class World {
     if (b.stock.crystal < atk.crystalMass) return;
     const cx = b.ox + b.size / 2, cy = b.oy + b.size / 2;
     const reach = tw.range + b.size / 2;
+    const blind = tw.minRange + b.size / 2; // can't lob onto its own doorstep
     let target: Unit | null = null, bestD = reach * reach;
     for (const u of this.units.values()) {
       if (u.owner === b.owner) continue;
       const d = (u.x - cx) ** 2 + (u.y - cy) ** 2;
-      if (d < bestD) { bestD = d; target = u; }
+      if (d < bestD && d >= blind * blind) { bestD = d; target = u; }
     }
     if (!target) return;
     b.stock.crystal -= atk.crystalMass;
@@ -905,6 +941,7 @@ export class World {
       case 'idle': return this.runIdle(u);
       case 'wild': return this.runWild(u, o);
       case 'hunt': return this.runHunt(u, o);
+      case 'muster': return this.runMuster(u, o.building);
       case 'move': {
         if (this.moveTo(u, o.x, o.y, 0.3)) { this.finish(u); }
         return u.x !== u.px || u.y !== u.py;
@@ -1018,6 +1055,7 @@ export class World {
   /** Auto-acquire and fight enemies in sight. Returns true while engaged. */
   private runEngage(u: Unit): boolean {
     if (!this.armed(u) || u.exhausted || u.carter) { u.engage = 0; return false; }
+    if (!u.stats.canAttack && !u.militia && u.order.kind !== 'attackMove') { u.engage = 0; return false; } // workers don't start fights on their own
     if (u.engage) {
       const p = this.entityPos(u.engage);
       if (p && (p[0] - u.x) ** 2 + (p[1] - u.y) ** 2 < (u.stats.sight * 1.5) ** 2 && this.attackTarget(u, u.engage)) return true;
@@ -1036,12 +1074,17 @@ export class World {
     const tu = this.units.get(targetId);
     const tb = tu ? undefined : this.buildings.get(targetId);
     if (!tu && !tb) return false;
-    if (!this.armed(u)) {
+    const wpn = this.weapon(u);
+    if (!wpn) {
       if (u.throws) {
         const shard = this.nearestNode(u, 'crystal', u.stats.sight, true);
         if (shard) { this.detour(u, { kind: 'gather', node: shard.id, nodeType: 'crystal', phase: 'toNode', stopWhenArmed: true }); return true; }
         const b = this.nearestCache(u, (x) => x.stock.crystal >= u.crystalMass);
         if (b) { this.detour(u, { kind: 'resupply', building: b.id }); return true; }
+      } else if (u.stats.improvised) {
+        // a worker sent to fight grabs a crystal from the nearest building that has one
+        const b = this.nearestCache(u, (x) => x.stock.crystal >= u.stats.improvised!.crystalMass);
+        if (b) { this.detour(u, { kind: 'muster', building: b.id }); return true; }
       }
       return false;
     }
@@ -1053,7 +1096,8 @@ export class World {
       tx = b.ox + b.size / 2; ty = b.oy + b.size / 2;
       edge = Math.sqrt((cx - u.x) ** 2 + (cy - u.y) ** 2);
     }
-    const range = u.stats.range;
+    // buildings: units stop near tile centres, so anyone on a tile touching it (≤ ~0.75 from a corner) can reach
+    const range = tb ? Math.max(wpn.range, 1) : wpn.range;
     if (edge > range - 0.05) {
       if (tu) { this.moveTo(u, tx, ty, 0.05); return true; }
       // buildings: walk to the open tile nearest the closest edge point
@@ -1065,13 +1109,13 @@ export class World {
     }
     this.face(u, tx - u.x, ty - u.y);
     if (u.cooldown > 0 || u.exhausted) return true;
-    if (u.cal < u.stats.attackCalories) { u.exhausted = true; return true; }
-    u.cal -= u.stats.attackCalories;
+    if (u.cal < wpn.attackCalories) { u.exhausted = true; return true; }
+    u.cal -= wpn.attackCalories;
     u.busy = true;
-    u.cooldown = u.stats.cooldown;
-    u.swing = Math.min(0.45, u.stats.cooldown * 0.8);
-    this.events.push({ type: 'attack', x: u.x, y: u.y, owner: u.owner, specId: u.specId, style: u.throws ? 'throw' : 'strike', kg: u.crystalMass });
-    if (u.throws) {
+    u.cooldown = wpn.cooldown;
+    u.swing = Math.min(0.45, wpn.cooldown * 0.8);
+    this.events.push({ type: 'attack', x: u.x, y: u.y, owner: u.owner, specId: u.specId, style: wpn.throws ? 'throw' : 'strike', kg: wpn.crystalMass });
+    if (wpn.throws) {
       u.ammo -= u.crystalMass;
       const flight = Math.max(0.25, Math.sqrt((tx - u.x) ** 2 + (ty - u.y) ** 2) / (u.stats.crystalVelocity * 0.7));
       let ax = tx, ay = ty;
@@ -1082,7 +1126,7 @@ export class World {
       };
       this.projectiles.set(p.id, p);
     } else {
-      this.damage(targetId, u.stats.damage, tx, ty);
+      this.damage(targetId, wpn.damage, tx, ty);
     }
     return true;
   }
@@ -1214,6 +1258,22 @@ export class World {
       }
     }
     return u.x !== u.px || u.y !== u.py;
+  }
+
+  /** Take a crystal from a building to fight with (town bell, or a worker sent to attack). */
+  private runMuster(u: Unit, buildingId: number): boolean {
+    const b = this.buildings.get(buildingId);
+    const kg = u.stats.improvised?.crystalMass ?? 0;
+    if (!b || b.owner !== u.owner || !b.complete || b.stock.crystal < kg || u.crystal >= kg) {
+      if (!b || b.stock.crystal < kg) { const alt = this.nearestCache(u, (x) => x.stock.crystal >= kg); if (alt && alt !== b && u.crystal < kg) { u.order = { kind: 'muster', building: alt.id }; return false; } }
+      this.finish(u); return false;
+    }
+    if (!this.moveToBuilding(u, b)) return u.x !== u.px || u.y !== u.py;
+    this.deposit(u, b, ['food', 'wood']); // put down what it was carrying
+    const take = Math.min(kg - u.crystal, b.stock.crystal, this.freeCapacity(u));
+    if (take > 0) { b.stock.crystal -= take; u.crystal += take; }
+    this.finish(u);
+    return false;
   }
 
   private runResupply(u: Unit, buildingId: number): boolean {

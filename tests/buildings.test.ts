@@ -144,7 +144,7 @@ describe('towers and infrastructure', () => {
     const t = w.addBuilding(0, 'watchtower', 30, 30)!;
     t.stock = { food: 0, wood: 0, crystal: 30 }; // no food needed, just crystal ammo
     const enemy = w.unitsOf(1)[0];
-    enemy.x = enemy.px = 33; enemy.y = enemy.py = 31; enemy.order = { kind: 'idle' };
+    enemy.x = enemy.px = 36; enemy.y = enemy.py = 31; enemy.order = { kind: 'idle' }; // outside its blind spot
     const hp = enemy.hp;
     run(w, 20 * 4);
     expect(t.stock.crystal).toBeLessThan(30);

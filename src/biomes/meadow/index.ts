@@ -5,16 +5,26 @@ import type { BiomeArt, Sprite, TeamColors, UnitArt } from '../../art/contract';
 import { Baker } from '../../kits/bake3d/baker';
 import { toBitmaps } from '../../kits/bake3d/bitmaps';
 import * as m from './models';
-import { frostWildlife, meadowWildlife } from './wildlife';
+import { fenWildlife, frostWildlife, meadowWildlife } from './wildlife';
 
 /** Meadow variants a faction can pick for its half of the map. */
-export type MeadowVariant = 'spring' | 'autumn' | 'frost';
+export type MeadowVariant = 'spring' | 'autumn' | 'frost' | 'fen';
 
 const GROUND: Record<MeadowVariant, NonNullable<BiomeArt['ground']>> = {
   spring: { grass: ['#5d7a2f', '#6f8a37', '#4b6627'], dirt: ['#86704a', '#6d5a3a'], forest: '#3f4a22', sand: '#c2a978', shallow: '#4b8299', deep: '#24506b' },
   autumn: { grass: ['#8a7834', '#9c8a40', '#74642a'], dirt: ['#8a6a44', '#6a5236'], forest: '#5a3f20', sand: '#c9ab76', shallow: '#4f7a8a', deep: '#294a5c' },
   frost: { grass: ['#b9c4c0', '#cfd8d4', '#9eaba8'], dirt: ['#8a8070', '#6e665a'], forest: '#5e6e66', sand: '#d8d4c8', shallow: '#6a92a8', deep: '#2e5470' },
+  fen: { grass: ['#5a5e32', '#6a6a3a', '#4a4e2a'], dirt: ['#4a3e2a', '#3a3022'], forest: '#3a3e22', sand: '#7a6e4a', shallow: '#4a5e4e', deep: '#2a3a32' },
 };
+
+/** Fen: greens go murky olive and brown-green, like reeds and bog moss. */
+function fenFoliage(hex: string): string {
+  const n = parseInt(hex.slice(1), 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  if (!(g > r && g >= b)) return hex;
+  const to = (v: number) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0');
+  return `#${to(r * 1.12 + 12)}${to(g * 0.98)}${to(b * 0.55)}`; // warmer, yellower, less blue
+}
 
 /** Frost: greens go cold and pale, toward blue-green and frosted grey-green. */
 function frostFoliage(hex: string): string {
@@ -29,7 +39,7 @@ function frostFoliage(hex: string): string {
   return `#${to(cr)}${to(cg)}${to(cb)}`;
 }
 
-const WILDLIFE: Record<MeadowVariant, typeof meadowWildlife> = { spring: meadowWildlife, autumn: meadowWildlife, frost: frostWildlife };
+const WILDLIFE: Record<MeadowVariant, typeof meadowWildlife> = { spring: meadowWildlife, autumn: meadowWildlife, frost: frostWildlife, fen: fenWildlife };
 
 /** Autumn: greens turn gold, orange and rust (hue shift toward ~25-50°). */
 function autumnFoliage(hex: string): string {
@@ -56,7 +66,7 @@ export const MINE_LEVELS = 4;
 
 export async function bakeMeadow(onProgress?: (f: number, label: string) => void, variant: MeadowVariant = 'spring'): Promise<BiomeArt> {
   const baker = new Baker();
-  m.setFoliage(variant === 'autumn' ? autumnFoliage : variant === 'frost' ? frostFoliage : null);
+  m.setFoliage(variant === 'autumn' ? autumnFoliage : variant === 'frost' ? frostFoliage : variant === 'fen' ? fenFoliage : null);
   const total = TREE_VARIANTS + BUSH_LEVELS + MINE_LEVELS + 2 + Object.values(m.DOODADS).reduce((n, l) => n + l.length, 0);
   let done = 0;
   const bake = (build: Parameters<Baker['bakeStatic']>[0], shadow = true) => {

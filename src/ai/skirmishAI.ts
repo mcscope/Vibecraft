@@ -80,6 +80,28 @@ export class SkirmishAI {
       break; // one new site at a time
     }
 
+    // ── Forward bases: if a buildable building can raise workers (a hut, an outpost),
+    //    put more of them beside the resources our workers walk farthest for.
+    const outpost = (faction.buildings ?? []).filter((b) => !b.unbuildable && b.trains?.includes(faction.workerId)).sort((a, b) => a.materials - b.materials)[0];
+    if (tc && outpost && !buildings.some((b) => !b.complete) && !w.buildBlocker(this.player, outpost.id)) {
+      const have = buildings.filter((b) => b.specId === outpost.id).length;
+      const st = w.buildingStatsOf(this.player, outpost.id)!;
+      if (have < Math.min(6, 1 + Math.floor(workers.length / 6)) && stock.wood >= st.totalCost) {
+        let far: [number, number] | null = null, farD = 6;
+        for (const u of workers) {
+          if (u.order.kind !== 'gather') continue;
+          const n = w.nodes.get(u.order.node);
+          if (!n) continue;
+          let d = Infinity;
+          for (const b of buildings) d = Math.min(d, Math.hypot(b.ox + b.size / 2 - n.x, b.oy + b.size / 2 - n.y));
+          if (d > farD) { farD = d; far = [n.x, n.y]; }
+        }
+        const spot = far && w.findBuildSpot(outpost.size, far[0], far[1]);
+        const pick = spot ? this.closestFree(workers, builders, spot[0], spot[1], 2) : [];
+        if (spot && pick.length) out.push({ type: 'build', units: pick, specId: outpost.id, ox: spot[0], oy: spot[1] });
+      }
+    }
+
     // ── Economy: idle workers gather whatever we're short of.
     const counts: Record<ResourceKind, number> = { food: 0, wood: 0, crystal: 0 };
     for (const u of workers) {
@@ -116,12 +138,12 @@ export class SkirmishAI {
       if (!b.complete || b.queue.length >= 2) continue;
       const trains = (b.spec.trains ?? []).filter((id) => w.specOf(this.player, id));
       if (!trains.length) continue;
-      if (trains.includes(faction.workerId)) {
-        if (workers.length < workerTarget) this.tryTrain(w, b, faction.workerId, out);
-        continue;
-      }
+      if (trains.includes(faction.workerId) && workers.length < workerTarget) { this.tryTrain(w, b, faction.workerId, out); continue; }
+      // soldiers (a building that also raises workers trains soldiers once there are enough workers)
+      const soldiers = trains.filter((id) => id !== faction.workerId && id !== faction.carterId);
+      if (!soldiers.length) continue;
       const i = this.trainIndex.get(b.id) ?? 0;
-      if (this.tryTrain(w, b, trains[i % trains.length], out)) this.trainIndex.set(b.id, i + 1);
+      if (this.tryTrain(w, b, soldiers[i % soldiers.length], out)) this.trainIndex.set(b.id, i + 1);
     }
 
     // ── Research: queue the next available tech when the building is idle (it waits for its wood).
@@ -145,6 +167,20 @@ export class SkirmishAI {
         const defenders = army.filter((u) => !this.attacking.has(u.id) || u.order.kind === 'idle').map((u) => u.id);
         if (defenders.length) out.push({ type: 'attackMove', units: defenders, x: threat.x, y: threat.y });
       }
+    }
+
+    // ── An enemy tower near home before we have an army: ring the bell and tear it down
+    //    from under its arc (towers can't hit right below themselves).
+    if (tc) {
+      const cx = tc.ox + 1.5, cy = tc.oy + 1.5;
+      const tower = [...w.buildings.values()].find((b) => b.owner !== this.player && !w.players[b.owner]?.neutral && b.spec.attack && (b.ox + b.size / 2 - cx) ** 2 + (b.oy + b.size / 2 - cy) ** 2 < 22 * 22);
+      const fighters = army.filter((u) => w.armed(u)).length;
+      if (tower && fighters < 4) {
+        if (!me.bell) out.push({ type: 'townBell', on: true });
+        const idle = workers.filter((u) => !(u.order.kind === 'attack' && u.order.target === tower.id) && u.order.kind !== 'muster').map((u) => u.id);
+        if (idle.length) out.push({ type: 'attack', units: idle, target: tower.id });
+      } else if (!tower && me.bell) out.push({ type: 'townBell', on: false });
+      else if (tower) out.push({ type: 'attack', units: army.filter((u) => !this.attacking.has(u.id)).map((u) => u.id), target: tower.id });
     }
 
     // ── Offense: attack in growing waves.

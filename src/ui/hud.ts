@@ -20,6 +20,7 @@ export interface HudActions {
   idleWorker(): void;
   autoTrain(buildingId: number, specId: string | null): void;
   setSowing(buildingId: number, resources: Array<'food' | 'wood'>): void;
+  townBell(on: boolean): void;
 }
 
 
@@ -130,8 +131,9 @@ export class Hud {
 
   private onClick(e: MouseEvent): void {
     if (this.suppressClick) { this.suppressClick = false; return; } // that was a hold, not a click
-    const el = (e.target as HTMLElement).closest('[data-train],[data-research],[data-cancel],[data-select],[data-cmd],[data-place],[data-sow]') as HTMLElement | null;
+    const el = (e.target as HTMLElement).closest('[data-train],[data-research],[data-cancel],[data-select],[data-cmd],[data-place],[data-sow],[data-bell]') as HTMLElement | null;
     if (!el || el.classList.contains('locked')) return;
+    if (el.dataset.bell) { this.actions.townBell(el.dataset.bell === 'on'); return; }
     if (el.dataset.sow) {
       const b = this.world.buildings.get(+el.dataset.building!);
       if (!b) return;
@@ -219,7 +221,7 @@ export class Hud {
     const building = [...selected].map((id) => w.buildings.get(id)).find((b): b is Building => !!b);
     const p = w.players[this.player];
     const sig = units.length === 1 ? `u${units[0].id}`
-      : building ? `b${building.id}:${building.complete}:${building.queue.map((q) => (q.kind === 'unit' ? q.specId : q.techId)).join(',')}:${p.researched.length}:${building.owner}:${building.sowing.join('')}`
+      : building ? `b${building.id}:${building.complete}:${building.queue.map((q) => (q.kind === 'unit' ? q.specId : q.techId)).join(',')}:${p.researched.length}:${building.owner}:${building.sowing.join('')}:${w.players[building.owner]?.bell ? 1 : 0}`
       : `m${units.map((u) => u.id).join(',')}`;
     if (sig !== this.sig) {
       this.sig = sig;
@@ -479,7 +481,7 @@ export class Hud {
       ${st.tower ? '<div class="ammo" data-ammo></div>' : ''}
       ${b.spec.gatherBoost ? `<div class="state">Gathering nearby ×${fmt(st.gatherBoost, 2)} (within ${b.spec.gatherBoost.radius} tiles)</div>` : ''}
       ${b.spec.sow && own ? `<div class="sow">Sowing ${b.spec.sow.resources.map((r) => `<button data-sow="${r}" data-building="${b.id}" class="${b.sowing.includes(r) ? 'on' : ''}" title="Plants a ${plantKg(b.spec, r)} kg ${r === 'food' ? 'bush' : 'tree'} for ${need(plantKg(b.spec, r) * CAP.sowSeedFraction)} ${names[r].toLowerCase()} of seed from this building; it grows over ${CAP.sowGrowSec} s">${names[r]} ${b.sowing.includes(r) ? 'on' : 'off'}</button>`).join(' ')}</div>` : ''}
-      ${st.tower ? `<div class="state">Tower: ${n0(st.tower.damage)} dmg · range ${fmt(st.tower.range, 1)} · ${fmt(st.tower.cooldown, 1)} s · uses ${b.spec.attack!.crystalMass} kg crystal per shot</div>` : ''}`;
+      ${st.tower ? `<div class="state">Tower: ${n0(st.tower.damage)} dmg · range ${fmt(st.tower.minRange, 0)}–${fmt(st.tower.range, 1)} (can't hit right below itself) · ${fmt(st.tower.cooldown, 1)} s · ${b.spec.attack!.crystalMass} kg crystal per shot</div>` : ''}`;
     if (!own) return `<div class="building-panel"><div class="info">${head}${info}</div></div>`;
     const km = keymap();
     const train = (b.spec.trains ?? []).map((id, i) => {
@@ -522,6 +524,7 @@ export class Hud {
           ${train || research ? '<div class="bar train" data-bar="train"><i></i><span></span></div>' : ''}
         </div>
         <div class="actions">
+          ${b === w.baseOf(b.owner) ? `<button class="bell${w.players[b.owner].bell ? ' on' : ''}" data-bell="${w.players[b.owner].bell ? 'off' : 'on'}" title="Every worker grabs a crystal and fights as militia. Ring again to send them back to work.">${w.players[b.owner].bell ? '<b>Back to work</b><span>stop the town bell</span>' : '<b>Town Bell</b><span>call workers to arms</span>'}</button>` : ''}
           ${train ? `<div class="trains">${train}</div>` : ''}
           ${research ? `<div class="techs">${research}</div>` : ''}
         </div>
@@ -534,7 +537,8 @@ export function describeOrder(w: World, u: Unit): string {
   if (u.dummy) return 'Training target';
   if (u.exhausted) return 'Exhausted — resting';
   switch (o.kind) {
-    case 'idle': return u.engage ? 'Fighting' : u.carter ? 'Waiting for orders' : 'Idle';
+    case 'idle': return u.engage ? 'Fighting' : u.carter ? 'Waiting for orders' : u.militia ? (w.armed(u) ? 'Militia: ready' : 'Militia: no crystal') : 'Idle';
+    case 'muster': return 'Grabbing a crystal';
     case 'wild': return u.engage ? 'Attacking' : u.wild === 'aggressive' ? 'Prowling' : 'Grazing';
     case 'hunt': return 'Hunting';
     case 'move': return 'Moving';

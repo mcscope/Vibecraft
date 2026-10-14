@@ -124,7 +124,15 @@ export interface DerivedStats {
   refinement: number;
   /** Total work refinement: gather rate, speed and carry multiplier. */
   workRefinement: number;
+  /**
+   * Unarmed workers can still fight with a crystal they're carrying: the same
+   * physics as a strike with IMPROVISED_KG. Absent for units with a weapon (or that can't gather).
+   */
+  improvised?: { damage: number; cooldown: number; range: number; attackCalories: number; crystalMass: number };
 }
+
+/** kg of crystal a worker grabs to fight with. */
+export const IMPROVISED_KG = 1;
 
 /** Scale to sum 1, then lift any part below the minimum, taking the difference from the others. */
 export function normalizePhysique(p: Physique): Physique {
@@ -204,7 +212,12 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   const crystalCost = Math.ceil(loadoutCrystal);
   const trainTime = K.trainBaseSec + K.trainSecPerKg * mass;
 
+  const improvised = !canAttack && (spec.canGather ?? true) && !spec.dummy && spec.role !== 'carter'
+    ? (() => { const a = derive({ ...spec, attack: { style: 'strike', crystalMass: IMPROVISED_KG } }, techRefinement, techWork); return { damage: a.damage, cooldown: a.cooldown, range: a.range, attackCalories: a.attackCalories, crystalMass: IMPROVISED_KG }; })()
+    : undefined;
+
   return {
+    improvised,
     mass, physique, muscleMass, frameMass, reserveMass,
     maxHp, maxCalories, speed, canAttack, wheeled, carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, sight,
     limbSpeed, maxAttackEnergy, crystalVelocity, attackEnergy, damage, attackCalories, cooldown, range,
@@ -303,6 +316,8 @@ export interface TowerStats {
   damage: number;
   range: number;
   cooldown: number;
+  /** Lobbing from height, it can't hit right below itself: tiles from its edge. */
+  minRange: number;
 }
 
 export interface BuildingStats {
@@ -349,7 +364,7 @@ export function towerStats(t: BuildingSpec['attack']): TowerStats | null {
   const vy = v * Math.SQRT1_2;
   const range = Math.min(K.maxThrowRange + h, vy * ((vy + Math.sqrt(vy * vy + 2 * K.gravity * h)) / K.gravity));
   const cooldown = Math.max(K.minCooldown, energy / (K.powerPerMuscleKg * m)) + K.throwReload;
-  return { energy, velocity: v, damage, range, cooldown };
+  return { energy, velocity: v, damage, range, cooldown, minRange: h * 0.5 + 1 };
 }
 
 export function deriveBuilding(spec: BuildingSpec, faction: FactionSpec): BuildingStats {

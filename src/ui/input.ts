@@ -244,7 +244,7 @@ export class Input {
       this.ping(wx, wy, '#7aff7a');
     } else if (tb && tb.owner === this.player) {
       // unarmed workers haul supplies for it; armed units restock themselves there
-      const haulers = units.filter((id) => { const u = w.units.get(id); return u && !u.stats.canAttack && u.stats.gatherRate > 0; });
+      const haulers = units.filter((id) => { const u = w.units.get(id); return u && u.stats.gatherRate > 0 && (!u.stats.canAttack || u.specId === w.factionOf(u.owner).workerId); });
       const rest = units.filter((id) => !haulers.includes(id));
       const base = w.baseOf(this.player);
       if (haulers.length && base && tb !== base) this.issue({ type: 'haul', units: haulers, building: tb.id });
