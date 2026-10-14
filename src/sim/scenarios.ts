@@ -85,7 +85,7 @@ export function provingGrounds(): Scenario {
       const tc = w.addBuilding(0, 'town-center', 6, 24)!;
       tc.stock = { food: 6000, wood: 4000, crystal: 3000 }; // over the cache cap on purpose: a demo stockpile
       tc.rallyX = 13; tc.rallyY = 26;
-      // a finished tech tree to play with (Great Hall's effective capital = 2,300)
+      // a finished tech tree to play with (Great Hall's effective capital = 1,380)
       const add = (id: string, x: number, y: number, stock: Partial<Record<'food' | 'wood' | 'crystal', number>>) => {
         const b = w.addBuilding(0, id, x, y);
         if (b) Object.assign(b.stock, stock);

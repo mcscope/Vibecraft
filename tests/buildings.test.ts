@@ -7,8 +7,8 @@ const newWorld = () => new World({ seed: 7, players: [{ name: 'A', faction: mead
 
 describe('capital curve', () => {
   test('agreed numbers', () => {
-    expect(capitalFor(2)).toBeCloseTo(1200);
-    expect(capitalFor(2.5)).toBeCloseTo(2296, 0);
+    expect(capitalFor(2)).toBeCloseTo(720);
+    expect(capitalFor(2.5)).toBeCloseTo(1377.5, 0);
     expect(techCost(1, 0.3)).toBe(Math.ceil(0.7 * capitalFor(1.3)));
     expect(techGate(1.6, 0.4)).toBeCloseTo(0.5 * capitalFor(2));
   });
@@ -16,8 +16,8 @@ describe('capital curve', () => {
   test('meadowfolk tree pays for every refinement and tech', () => {
     expect(validateFaction(meadowfolk)).toEqual([]);
     const hall = deriveBuilding(meadowfolk.buildings!.find((b) => b.id === 'great-hall')!, meadowfolk);
-    expect(hall.effectiveCapital).toBe(2300);
-    expect(hall.maxHp).toBe(6 * 900);
+    expect(hall.effectiveCapital).toBe(540 + 300 + 360 + 180);
+    expect(hall.maxHp).toBe(6 * 540);
   });
 
   test('a design that its building cannot support is rejected', () => {
@@ -38,7 +38,7 @@ describe('construction', () => {
     const b = w.buildingsOf(0).find((x) => x.specId === 'barracks')!;
     expect(b.complete).toBe(true);
     expect(b.hp).toBeCloseTo(b.maxHp, 0);
-    expect(tc.stock.wood).toBeCloseTo(100, 0);
+    expect(tc.stock.wood).toBeCloseTo(400 - 180, 0); // a barracks is 180 wood
   });
 
   test('prerequisites gate placement', () => {
@@ -102,14 +102,15 @@ describe('training and research', () => {
   const tc = w.baseOf(0)!;
   tc.stock.wood = 500;
   const v = w.unitsOf(0)[0];
-  const hp0 = v.stats.maxHp, rate0 = v.stats.gatherRate, speed0 = v.stats.speed;
+  const hp0 = v.stats.maxHp, rate0 = v.stats.gatherRate, speed0 = v.stats.speed, carry0 = v.stats.carryCapacity;
   w.enqueue({ player: 0, cmd: { type: 'research', building: tc.id, techId: 'villager-tools' } });
   run(w, 20 * 20);
   expect(w.players[0].researched).toContain('villager-tools');
-  // Better Tools is a work tech: gather rate and speed ×1.3, combat untouched
+  // Better Tools is a work tech: gather rate, speed and carry ×1.3 for villagers already out there
   expect(v.stats.workRefinement).toBeCloseTo(1.3);
   expect(v.stats.gatherRate).toBeCloseTo(rate0 * 1.3);
   expect(v.stats.speed).toBeCloseTo(speed0 * 1.3);
+  expect(v.stats.carryCapacity).toBeCloseTo(carry0 * 1.3);
   expect(v.stats.refinement).toBeCloseTo(1);
   expect(v.stats.maxHp).toBeCloseTo(hp0);
   expect(tc.stock.wood).toBe(500 - techCost(1, 0.3));

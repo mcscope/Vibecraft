@@ -29,8 +29,8 @@ export function statsTable(spec: UnitSpec, stats: DerivedStats = derive(spec)): 
     <div class="stats">
       ${row('Mass', `${fmt(d.mass)} kg`, 'Body mass — everything derives from this')}
       ${row('Build', `${fmt(d.physique.muscle * 100)}/${fmt(d.physique.frame * 100)}/${fmt(d.physique.reserve * 100)}`, 'muscle / frame / reserve %')}
-      ${row('Refinement', `${fmt(d.refinement, 2)}×`, 'Combat value per resource beyond raw physics (HP and damage); paid for in building capital and research')}
-      ${d.workRefinement > 1 ? row('Work', `${fmt(d.workRefinement, 2)}×`, 'Work refinement: gather rate and speed') : ''}
+      ${row('Refinement', `${fmt(d.refinement, 2)}×`, 'Resource efficiency: the body costs 1/r of its food. Paid for once, in building capital and research')}
+      ${d.workRefinement > 1 ? row('Work', `${fmt(d.workRefinement, 2)}×`, 'Work refinement: gather rate, speed and carry') : ''}
       ${row('Hit points', fmt(d.maxHp), 'From frame mass × refinement^⅔')}
       ${row('Calories', fmt(d.maxCalories), 'From reserve mass')}
       ${row('Speed', `${fmt(d.speed, 2)} t/s`, 'Unloaded; packs slow you down')}

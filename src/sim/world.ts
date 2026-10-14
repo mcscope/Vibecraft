@@ -607,6 +607,11 @@ export class World {
       u.hp *= stats.maxHp / u.stats.maxHp;
       u.stats = stats;
     }
+    // orders not yet paid for get the new (cheaper) price
+    for (const b of this.buildings.values()) {
+      if (b.owner !== owner) continue;
+      for (const q of b.queue) if (q.kind === 'unit' && !q.paid && q.specId === unitId) { q.food = stats.foodCost; q.crystal = stats.crystalCost; }
+    }
   }
 
   private dropShard(x: number, y: number, kg: number): void {

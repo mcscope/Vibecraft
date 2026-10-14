@@ -241,36 +241,36 @@ const mule: MeadowUnit = {
 const DARK_IRON: Mat = { color: '#3a3a3a', tex: 'metal' };
 
 // ── Buildings. Capital = materials; links count prerequisites at 100%.
-//    barracks 300 → forge 800 / den 900 → great hall 900 + 500 + 600 + 300 = 2,300
+//    barracks 180 → forge 480 / den 540 → great hall 540 + 300 + 360 + 180 = 1,380
 export const buildings: MeadowBuilding[] = [
   {
     id: 'town-center', name: 'Town Center', description: 'Trains villagers and mule carts. Always keeps at least 3 carts, which load here and supply whichever building is shortest; train more for faster logistics.',
-    size: 3, materials: 1350, trains: ['villager', 'mule'], researches: ['villager-tools'], carters: 3, unbuildable: true, model: models.townCenter,
+    size: 3, materials: 810, trains: ['villager', 'mule'], researches: ['villager-tools'], carters: 3, unbuildable: true, model: models.townCenter,
   },
   {
     id: 'barracks', name: 'Barracks', description: 'Trains slingers and crystal macemen.',
-    size: 3, materials: 300, trains: ['slinger', 'maceman'], model: models.barracks,
+    size: 3, materials: 180, trains: ['slinger', 'maceman'], model: models.barracks,
   },
   {
     id: 'forge', name: 'Crystal Forge', description: 'Researches better slings, mail and lynx breeding.',
-    size: 2, materials: 500, requires: ['barracks'], researches: ['sling-drills', 'mail-hardening', 'lynx-breeding'], model: models.forge,
+    size: 2, materials: 300, requires: ['barracks'], researches: ['sling-drills', 'mail-hardening', 'lynx-breeding'], model: models.forge,
   },
   {
     id: 'lynx-den', name: 'Lynx Den', description: 'Raises and trains lynx lancers.',
-    size: 3, materials: 600, requires: ['barracks'], trains: ['lynx'], model: models.lynxDen,
+    size: 3, materials: 360, requires: ['barracks'], trains: ['lynx'], model: models.lynxDen,
   },
   {
     id: 'great-hall', name: 'Great Hall', description: 'The top of the tree. Its capital (with everything beneath it) supports the refined Hurlhorn.',
-    size: 4, materials: 900, requires: ['forge', 'lynx-den'], trains: ['hurlhorn'], model: models.greatHall,
+    size: 4, materials: 540, requires: ['forge', 'lynx-den'], trains: ['hurlhorn'], model: models.greatHall,
   },
   {
     id: 'gathering-camp', name: 'Gathering Camp', description: 'A drop-off shed that speeds up gathering nearby (by its capital) and keeps sowing berry bushes and trees around it from its own seed stock.',
-    size: 2, materials: 250, gatherBoost: { radius: 6, resources: ['food', 'wood', 'crystal'] },
+    size: 2, materials: 150, gatherBoost: { radius: 6, resources: ['food', 'wood', 'crystal'] },
     sow: { mechanism: 60, radius: 5, resources: ['food', 'wood'] }, model: models.gatheringCamp,
   },
   {
     id: 'watchtower', name: 'Watchtower', description: 'A throwing arm on stilts. Height adds energy and range; it throws crystals from its own stock.',
-    size: 1, materials: 150, attack: { mechanism: 20, crystalMass: 0.5, height: 4 }, model: models.watchtower,
+    size: 1, materials: 90, attack: { mechanism: 20, crystalMass: 0.5, height: 4 }, model: models.watchtower,
   },
 ];
 

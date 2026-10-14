@@ -50,12 +50,13 @@ export interface UnitSpec {
   /**
    * Efficiency beyond raw physics: value per resource multiplier (1 = plain).
    * Paid for in capital: the building that trains it needs effective capital
-   * ≥ capitalFor(refinement) (see physics.ts). HP and damage each scale by r^(2/3).
+   * ≥ capitalFor(refinement) (see physics.ts). Refinement makes resources more
+   * efficient: the unit costs 1/r of its body's food. Its stats stay pure physics.
    */
   refinement?: number;
   /**
-   * Work refinement: multiplies gather rate and movement speed, so a worker's
-   * whole trip is that much faster. Same capital curve as combat refinement; the
+   * Work refinement: multiplies gather rate, movement speed and carry capacity,
+   * so a worker brings home that much more, that much sooner. Same capital curve as combat refinement; the
    * training building must cover whichever of the two is higher.
    */
   workRefinement?: number;
@@ -134,7 +135,7 @@ export interface TechSpec {
   unit: string;
   /** Refinement added. */
   refinement: number;
-  /** Which refinement it raises: 'combat' (HP and damage, default) or 'work' (gather rate and speed). */
+  /** Which refinement it raises: 'combat' (training cost ÷ r, default) or 'work' (gather rate, speed and carry). */
   channel?: 'combat' | 'work';
 }
 

@@ -112,7 +112,7 @@ export const training: FactionSpec = {
   workerId: 'straw',
   townCenterId: 'fort',
   units: [strawDummy, armoredDummy, bales],
-  buildings: [{ id: 'fort', name: 'Target Fort', description: 'A practice fort. Knock it down; it gets rebuilt.', size: 3, materials: 1350, unbuildable: true }],
+  buildings: [{ id: 'fort', name: 'Target Fort', description: 'A practice fort. Knock it down; it gets rebuilt.', size: 3, materials: 810, unbuildable: true }],
   art: (team, onProgress) => import('../../kits/bake3d/baker').then(async ({ Baker }) => {
     const baker = new Baker();
     const art = { units: {} as Record<string, import('../../art/contract').UnitArt>, buildings: { fort: baker.bakeBuilding(fort, 3, team) }, flag: baker.bakeStatic(fort, team) };

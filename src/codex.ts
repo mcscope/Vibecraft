@@ -181,8 +181,8 @@ function unitAbilities(u: UnitSpec): string[] {
   if (u.role === 'carter') out.push(`<b>Supply cart.</b> Produced automatically; loads ${n0(d.carryCapacity)} kg at its home building and carries it to whichever building needs it most.`);
   if (u.wheeled) out.push(`<b>Wheeled.</b> Carries ${K.wheelCarry}× as much for its muscle; a full load slows it less and costs fewer calories to haul.`);
   if ((u.canGather ?? true) && !u.dummy && u.role !== 'carter') out.push(`<b>Gathers</b> ${f1(d.gatherRate, 2)} kg/s and carries ${n0(d.carryCapacity)} kg; also builds.`);
-  if ((u.refinement ?? 1) > 1) out.push(`<b>Refined ${f1(u.refinement!, 2)}×</b> in combat: HP and damage ×${f1(Math.pow(u.refinement!, 2 / 3), 2)}. Its building needs ${n0(capitalFor(u.refinement!))} capital.`);
-  if ((u.workRefinement ?? 1) > 1) out.push(`<b>Work-refined ${f1(u.workRefinement!, 2)}×</b>: gathers and walks that much faster.`);
+  if ((u.refinement ?? 1) > 1) out.push(`<b>Refined ${f1(u.refinement!, 2)}×</b>: costs 1/${f1(u.refinement!, 2)} of its body's berries. Its building needs ${n0(capitalFor(u.refinement!))} capital.`);
+  if ((u.workRefinement ?? 1) > 1) out.push(`<b>Work-refined ${f1(u.workRefinement!, 2)}×</b>: gathers, walks and carries that much more.`);
   return out;
 }
 
@@ -268,15 +268,19 @@ function techDetail(t: TechSpec): string {
     const pc = prior.filter((x) => x.channel !== 'work').reduce((a, x) => a + x.refinement, 0);
     const pw = prior.filter((x) => x.channel === 'work').reduce((a, x) => a + x.refinement, 0);
     const a = derive(u, pc, pw), b = derive(u, pc + (work ? 0 : t.refinement), pw + (work ? t.refinement : 0));
-    const line = (k: string, x: number, y: number, d = 0) => (Math.abs(x - y) > 1e-6 ? `<tr><td>${k}</td><td>${f1(x, d)}</td><td>→</td><td><b>${f1(y, d)}</b></td><td class="up">+${Math.round((y / x - 1) * 100)}%</td></tr>` : '');
-    diff = `<table class="diff">${line('Hit points', a.maxHp, b.maxHp)}${line('Damage', a.damage, b.damage)}${line('Dmg / sec', a.dps, b.dps, 1)}${line('Gather kg/s', a.gatherRate, b.gatherRate, 2)}${line('Speed t/s', a.speed, b.speed, 2)}</table>`;
+    const line = (k: string, x: number, y: number, d = 0) => {
+      if (Math.abs(x - y) < 1e-6) return '';
+      const pc = Math.round((y / x - 1) * 100);
+      return `<tr><td>${k}</td><td>${f1(x, d)}</td><td>→</td><td><b>${f1(y, d)}</b></td><td class="up">${pc > 0 ? '+' : ''}${pc}%</td></tr>`;
+    };
+    diff = `<table class="diff">${line(`Training cost (${res('food')})`, a.foodCost, b.foodCost)}${line('Gather kg/s', a.gatherRate, b.gatherRate, 2)}${line('Speed t/s', a.speed, b.speed, 2)}</table>`;
   }
   return `
     <div class="dhead"><h2>${esc(t.name)}</h2><code>${t.id}</code></div>
     ${u ? `<div class="hero small">${img('unit', u.id, 140)}</div>` : ''}
     <p class="desc">${esc(t.description)}</p>
     <h3>Effect</h3>
-    <ul class="abil"><li><b>${work ? 'Work' : 'Combat'} refinement +${t.refinement}</b> for every ${u ? link('unit', u.id, u.name) : t.unit}, existing ones too: ${f1(from, 2)}× → ${f1(from + t.refinement, 2)}×. ${work ? 'Gather rate and speed.' : 'Hit points and damage.'}</li></ul>
+    <ul class="abil"><li><b>${work ? 'Work' : 'Combat'} refinement +${t.refinement}</b> for ${u ? link('unit', u.id, u.name) : t.unit}: ${f1(from, 2)}× → ${f1(from + t.refinement, 2)}×. ${work ? 'Every one of them, existing ones too, gathers and walks faster.' : 'Every one you train from now on costs less.'}</li></ul>
     ${diff}
     <h3>Research</h3>
     <div class="facts">

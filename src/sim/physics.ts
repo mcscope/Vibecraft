@@ -122,7 +122,7 @@ export interface DerivedStats {
   trainTime: number;
   /** Total refinement (design + technologies). */
   refinement: number;
-  /** Total work refinement: gather-rate and speed multiplier. */
+  /** Total work refinement: gather rate, speed and carry multiplier. */
   workRefinement: number;
 }
 
@@ -161,17 +161,16 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   const reserveMass = mass * physique.reserve;
   const muscleRel = physique.muscle / 0.4;
 
-  // Refinement r buys value per resource ∝ (HP × DPS)^0.75 = r, split evenly:
-  // HP and damage each × r^(2/3). Mass, speed and calories stay pure physics.
+  // Refinement makes resources more efficient: the body is pure physics, and it
+  // costs 1/r of the food (see foodCost below). It never adds HP or damage.
   const refinement = Math.max(1, (spec.refinement ?? 1) + techRefinement);
-  const refine = Math.pow(refinement, 2 / 3);
-  const maxHp = (K.hpPerFrameKg * frameMass + K.hpPerKg * mass) * refine;
+  const maxHp = K.hpPerFrameKg * frameMass + K.hpPerKg * mass;
   const maxCalories = K.calPerReserveKg * reserveMass + K.calPerKg * mass;
-  // work refinement w speeds up both gathering and walking, so a worker's trip takes 1/w as long
+  // work refinement w: gathers, walks and carries w× as much (applied below)
   const workRefinement = Math.max(1, (spec.workRefinement ?? 1) + techWork);
   const speed = clamp(K.baseSpeed * Math.pow(muscleRel, 0.8) * massSpeedFactor(mass), K.minSpeed, K.maxSpeed) * workRefinement;
   const wheeled = !!spec.wheeled;
-  const carryCapacity = Math.max(1, K.carryPerMuscleKg * muscleMass * (wheeled ? K.wheelCarry : 1));
+  const carryCapacity = Math.max(1, K.carryPerMuscleKg * muscleMass * (wheeled ? K.wheelCarry : 1) * workRefinement);
 
   const atk = spec.attack;
   const canAttack = !!atk;
@@ -185,7 +184,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   const maxAttackEnergy = K.energyPerMuscleKg * muscleMass;
   const crystalVelocity = Math.min(limbSpeed, Math.sqrt((2 * maxAttackEnergy) / crystalMass));
   const attackEnergy = 0.5 * crystalMass * crystalVelocity * crystalVelocity;
-  const damage = canAttack ? attackEnergy * (throwing ? K.throwEfficiency : K.strikeEfficiency) * K.damageScale * refine : 0;
+  const damage = canAttack ? attackEnergy * (throwing ? K.throwEfficiency : K.strikeEfficiency) * K.damageScale : 0;
   const attackCalories = attackEnergy / K.muscleEfficiency;
   const power = K.powerPerMuscleKg * muscleMass;
   const cooldown = Math.max(K.minCooldown, attackEnergy / power) + (throwing ? K.throwReload : 0);
@@ -200,7 +199,8 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
 
   const gatherRate = (spec.canGather ?? true) ? K.gatherKgPerSec * Math.sqrt(muscleMass / 18) * workRefinement : 0;
 
-  const foodCost = Math.round(K.foodPerKg * mass + K.foodPerMuscleKg * muscleMass + K.foodPerFrameKg * frameMass);
+  // the body's food cost, divided by refinement; crystal is the physical weapon it carries (not discounted)
+  const foodCost = Math.round((K.foodPerKg * mass + K.foodPerMuscleKg * muscleMass + K.foodPerFrameKg * frameMass) / refinement);
   const crystalCost = Math.ceil(loadoutCrystal);
   const trainTime = K.trainBaseSec + K.trainSecPerKg * mass;
 
@@ -258,7 +258,8 @@ function clamp(v: number, lo: number, hi: number): number {
 // curve step (burned, not invested) at a building with half that capital.
 
 export const CAP = {
-  K: 1200,
+  /** Capital curve scale: capitalFor(r) = K·(r−1)^P. */
+  K: 720,
   P: 1.6,
   techRate: 0.7,
   techGate: 0.5,
