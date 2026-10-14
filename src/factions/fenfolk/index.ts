@@ -109,7 +109,7 @@ export const buildings: FenBuilding[] = [
   },
   {
     id: 'reed-hut', name: 'Reed Hut', description: 'A one-tile hut on stilts: drop-off, and raises fenlings and reedguards right where they\'re needed.',
-    size: 1, materials: 60, trains: ['fenling', 'reedguard'], model: models.reedHut,
+    size: 1, materials: 60, requires: ['stilt-hall'], trains: ['fenling', 'reedguard'], model: models.reedHut,
   },
   {
     id: 'peat-farm', name: 'Peat Farm', description: 'Raised peat beds: food gathered nearby comes faster, and it keeps big, quick plots growing from its own seed.',

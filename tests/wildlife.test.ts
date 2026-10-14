@@ -12,7 +12,7 @@ describe('wildlife', () => {
     expect(w.wildsId).toBe(2);
     expect(w.players[w.wildsId].neutral).toBe(true);
     expect(wild(w, 'deer').length).toBe(2 * 3 * 3); // 2 halves × 3 herds × 3 deer
-    expect(wild(w, 'wolf').length).toBe(2 * 2 * 3);
+    expect(wild(w, 'wolf').length).toBe(2 * 2 * 2);
     for (const u of w.unitsOf(w.wildsId)) {
       for (const [hx, hy] of w.homes) expect(Math.hypot(u.x - hx, u.y - hy)).toBeGreaterThan(WILD.minFromHome - 2);
     }
@@ -25,7 +25,7 @@ describe('wildlife', () => {
     const w = newWorld();
     const wolf = wild(w, 'wolf')[0];
     const v = w.unitsOf(0).find((u) => u.specId === 'villager')!;
-    v.x = v.px = wolf.x + 2; v.y = v.py = wolf.y; v.order = { kind: 'idle' };
+    v.x = v.px = wolf.x + 1.5; v.y = v.py = wolf.y; v.order = { kind: 'idle' };
     const hp = v.hp;
     run(w, 20 * 5);
     expect(v.hp).toBeLessThan(hp);
@@ -44,7 +44,7 @@ describe('wildlife', () => {
     expect(v.food).toBeGreaterThan(0);
   });
 
-  test('idle soldiers fight wolves on their own but leave deer alone', () => {
+  test('idle soldiers leave animals alone unless one is attacking their side', () => {
     const w = newWorld();
     const deer = wild(w, 'deer')[0];
     for (const x of wild(w, 'wolf')) w.units.delete(x.id);

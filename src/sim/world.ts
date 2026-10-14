@@ -53,7 +53,7 @@ export interface PlayerState {
 }
 
 /** Wildlife tuning (engine-wide). */
-export const WILD = { wander: 5, aggro: 5, leash: 10, minFromHome: 16, apart: 8 } as const;
+export const WILD = { wander: 5, aggro: 3, leash: 6, minFromHome: 16, apart: 8 } as const;
 
 export type Order =
   | { kind: 'idle' }
@@ -1165,7 +1165,9 @@ export class World {
   private nearestEnemy(u: Unit, radius: number, includeDummies: boolean): number {
     let best = 0, bestD = radius * radius;
     for (const e of this.units.values()) {
-      if (e.owner === u.owner || (e.dummy && !includeDummies) || (e.wild === 'passive' && !includeDummies)) continue;
+      if (e.owner === u.owner || (e.dummy && !includeDummies)) continue;
+      // animals: only on an explicit attack-move, or when one is attacking one of ours (defend, don't hunt)
+      if (e.wild && !includeDummies && !(e.engage && this.units.get(e.engage)?.owner === u.owner)) continue;
       const d = (e.x - u.x) ** 2 + (e.y - u.y) ** 2;
       if (d < bestD) { bestD = d; best = e.id; }
     }
