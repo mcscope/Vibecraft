@@ -494,7 +494,18 @@ export class Hud {
         <kbd>${km.train[i]?.toUpperCase() ?? ''}</kbd>
       </button>`;
     }).join('');
-    const research = (b.spec.researches ?? []).map((id) => {
+    // one button per tech line (same unit and channel): the next level not yet researched,
+    // or the last one, shown as done; deeper levels stay hidden under it until then
+    const researched = w.players[this.player].researched;
+    const lines = new Map<string, string[]>();
+    for (const id of b.spec.researches ?? []) {
+      const t = w.techOf(this.player, id);
+      if (!t) continue;
+      const key = `${t.unit}/${t.channel ?? 'combat'}`;
+      lines.set(key, [...(lines.get(key) ?? []), id]);
+    }
+    const shown = [...lines.values()].map((ids) => ids.find((id) => !researched.includes(id)) ?? ids[ids.length - 1]);
+    const research = shown.map((id) => {
       const t = w.techOf(this.player, id);
       if (!t) return '';
       const done = w.players[this.player].researched.includes(id);

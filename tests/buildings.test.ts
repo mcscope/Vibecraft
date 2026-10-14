@@ -117,6 +117,27 @@ describe('training and research', () => {
   });
 });
 
+describe('tech levels', () => {
+  test('Better Tools II waits for I, and each level lifts villagers further', () => {
+    const w = newWorld();
+    const tc = w.baseOf(0)!;
+    tc.stock.wood = 2000;
+    const v = w.unitsOf(0).find((u) => u.specId === 'villager')!;
+    const carry0 = v.stats.carryCapacity;
+    expect(w.techStatus(0, 'villager-tools-2', tc).blocker).toBe('needs Better Tools');
+    w.enqueue({ player: 0, cmd: { type: 'research', building: tc.id, techId: 'villager-tools-2' } });
+    run(w, 2);
+    expect(tc.queue.length).toBe(0); // refused: level I first
+    for (const id of ['villager-tools', 'villager-tools-2', 'villager-tools-3']) {
+      w.enqueue({ player: 0, cmd: { type: 'research', building: tc.id, techId: id } });
+      run(w, 20 * 40);
+      expect(w.players[0].researched).toContain(id);
+    }
+    expect(v.stats.workRefinement).toBeCloseTo(1.9);
+    expect(v.stats.carryCapacity).toBeCloseTo(carry0 * 1.9);
+  });
+});
+
 describe('towers and infrastructure', () => {
   test('a stocked watchtower shoots enemies in range', () => {
     const w = newWorld();

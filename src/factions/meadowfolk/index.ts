@@ -245,23 +245,23 @@ const DARK_IRON: Mat = { color: '#3a3a3a', tex: 'metal' };
 export const buildings: MeadowBuilding[] = [
   {
     id: 'town-center', name: 'Town Center', description: 'Trains villagers and mule carts. Always keeps at least 3 carts, which load here and supply whichever building is shortest; train more for faster logistics.',
-    size: 3, materials: 810, trains: ['villager', 'mule'], researches: ['villager-tools'], carters: 3, unbuildable: true, model: models.townCenter,
+    size: 3, materials: 810, trains: ['villager', 'mule'], researches: ['villager-tools', 'villager-tools-2', 'villager-tools-3'], carters: 3, unbuildable: true, model: models.townCenter,
   },
   {
     id: 'barracks', name: 'Barracks', description: 'Trains slingers and crystal macemen.',
     size: 3, materials: 180, trains: ['slinger', 'maceman'], model: models.barracks,
   },
   {
-    id: 'forge', name: 'Crystal Forge', description: 'Researches better slings, mail and lynx breeding.',
-    size: 2, materials: 300, requires: ['barracks'], researches: ['sling-drills', 'mail-hardening', 'lynx-breeding'], model: models.forge,
+    id: 'forge', name: 'Crystal Forge', description: 'Researches better slings, mail and lynx breeding (levels I and II).',
+    size: 2, materials: 300, requires: ['barracks'], researches: ['sling-drills', 'sling-drills-2', 'mail-hardening', 'mail-hardening-2', 'lynx-breeding', 'lynx-breeding-2'], model: models.forge,
   },
   {
     id: 'lynx-den', name: 'Lynx Den', description: 'Raises and trains lynx lancers.',
     size: 3, materials: 360, requires: ['barracks'], trains: ['lynx'], model: models.lynxDen,
   },
   {
-    id: 'great-hall', name: 'Great Hall', description: 'The top of the tree. Its capital (with everything beneath it) supports the refined Hurlhorn.',
-    size: 4, materials: 540, requires: ['forge', 'lynx-den'], trains: ['hurlhorn'], model: models.greatHall,
+    id: 'great-hall', name: 'Great Hall', description: 'The top of the tree. Its capital (with everything beneath it) supports the refined Hurlhorn and the third level of every combat tech.',
+    size: 4, materials: 540, requires: ['forge', 'lynx-den'], trains: ['hurlhorn'], researches: ['sling-drills-3', 'mail-hardening-3', 'lynx-breeding-3'], model: models.greatHall,
   },
   {
     id: 'gathering-camp', name: 'Gathering Camp', description: 'A drop-off shed that speeds up gathering nearby (by its capital) and keeps sowing berry bushes and trees around it from its own seed stock.',
@@ -274,12 +274,19 @@ export const buildings: MeadowBuilding[] = [
   },
 ];
 
-const techs: TechSpec[] = [
-  { id: 'villager-tools', name: 'Better Tools', description: 'Villagers gather and walk 30% faster (work refinement +0.3).', unit: 'villager', refinement: 0.3, channel: 'work' },
-  { id: 'sling-drills', name: 'Sling Drills', description: 'Slingers +0.4 refinement.', unit: 'slinger', refinement: 0.4 },
-  { id: 'mail-hardening', name: 'Hardened Mail', description: 'Crystal Macemen +0.4 refinement.', unit: 'maceman', refinement: 0.4 },
-  { id: 'lynx-breeding', name: 'Lynx Breeding', description: 'Lynx Lancers +0.3 refinement.', unit: 'lynx', refinement: 0.3 },
-];
+// Each line has three levels; each level must follow the one before (the engine
+// prices it from where the last left off, so deeper levels cost more).
+const level = (base: TechSpec, n: 1 | 2 | 3): TechSpec => ({
+  ...base,
+  id: n === 1 ? base.id : `${base.id}-${n}`,
+  name: n === 1 ? base.name : `${base.name} ${n === 2 ? 'II' : 'III'}`,
+});
+const tools: TechSpec = { id: 'villager-tools', name: 'Better Tools', description: 'Villagers gather, walk and carry 30% more (work refinement +0.3).', unit: 'villager', refinement: 0.3, channel: 'work' };
+const sling: TechSpec = { id: 'sling-drills', name: 'Sling Drills', description: 'Slingers +0.4 refinement: cheaper to train.', unit: 'slinger', refinement: 0.4 };
+const mail: TechSpec = { id: 'mail-hardening', name: 'Hardened Mail', description: 'Crystal Macemen +0.4 refinement: cheaper to train.', unit: 'maceman', refinement: 0.4 };
+const breeding: TechSpec = { id: 'lynx-breeding', name: 'Lynx Breeding', description: 'Lynx Lancers +0.3 refinement: cheaper to train.', unit: 'lynx', refinement: 0.3 };
+
+const techs: TechSpec[] = [tools, sling, mail, breeding].flatMap((t) => [level(t, 1), level(t, 2), level(t, 3)]);
 
 export const units: MeadowUnit[] = [villager, slinger, maceman, lynx, hurlhorn, mule];
 
