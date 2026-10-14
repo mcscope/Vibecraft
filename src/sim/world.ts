@@ -32,6 +32,9 @@ export function plantKg(spec: BuildingSpec, r: 'food' | 'wood'): number {
   return spec.sow?.plantKg?.[r] ?? SOW_YIELD[r];
 }
 export const RESOURCES: ResourceKind[] = ['food', 'wood', 'crystal'];
+/** Fog of war: how often sight is refreshed (ticks), and how far a building sees beyond its walls (tiles). */
+export const VISION_EVERY = 4;
+export const BUILDING_SIGHT = 4;
 /** Carters leave this much at the base so it can keep training workers. */
 
 export interface PlayerState {
@@ -231,6 +234,8 @@ export class World {
   readonly logistics = new Logistics(this);
   readonly grid: Grid;
   readonly players: PlayerState[] = [];
+  /** Fog of war: per player, per tile: 0 never seen, 1 explored, 2 in sight now. */
+  private visionGrids: Uint8Array[] = [];
   readonly units = new Map<number, Unit>();
   readonly buildings = new Map<number, Building>();
   readonly nodes = new Map<number, ResourceNode>();
@@ -799,8 +804,41 @@ export class World {
       n.growLeft -= g;
     }
     this.reap();
+    if (this.tick % VISION_EVERY === 0) this.updateVision();
     this.scenario.tick?.(this);
     this.tick++;
+  }
+
+  /** What `player` can see of tile (x, y): 0 never seen, 1 explored, 2 in sight now. */
+  vision(player: number, x: number, y: number): number {
+    const v = this.visionGrids[player];
+    if (!v || !this.grid.inBounds(x, y)) return 0;
+    return v[Math.floor(y) * this.grid.width + Math.floor(x)];
+  }
+
+  /** Each side sees what its units and buildings can see (their sight stat; a building sees around itself, a tower out to its range). */
+  private updateVision(): void {
+    const W = this.grid.width, H = this.grid.height;
+    for (const p of this.players) {
+      if (p.neutral) continue;
+      let v = this.visionGrids[p.id];
+      if (!v) v = this.visionGrids[p.id] = new Uint8Array(W * H);
+      for (let i = 0; i < v.length; i++) if (v[i] === 2) v[i] = 1;
+    }
+    const stamp = (owner: number, x: number, y: number, r: number) => {
+      const v = this.visionGrids[owner];
+      if (!v) return;
+      const x0 = Math.max(0, Math.floor(x - r)), x1 = Math.min(W - 1, Math.floor(x + r));
+      const y0 = Math.max(0, Math.floor(y - r)), y1 = Math.min(H - 1, Math.floor(y + r));
+      for (let ty = y0; ty <= y1; ty++) for (let tx = x0; tx <= x1; tx++) {
+        if ((tx + 0.5 - x) ** 2 + (ty + 0.5 - y) ** 2 <= r * r) v[ty * W + tx] = 2;
+      }
+    };
+    for (const u of this.units.values()) stamp(u.owner, u.x, u.y, u.stats.sight);
+    for (const b of this.buildings.values()) {
+      const r = Math.max(b.size / 2 + BUILDING_SIGHT, b.complete && b.stats.tower ? b.stats.tower.range + 1 : 0);
+      stamp(b.owner, b.ox + b.size / 2, b.oy + b.size / 2, r);
+    }
   }
 
   private tickBuilding(b: Building): void {

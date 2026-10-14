@@ -11,6 +11,9 @@ export class Minimap {
   readonly size: number;
 
   /** `ground(x, y)` gives that half of the map's biome colours (defaults: the meadow). */
+  /** Whose fog of war to show; -1 shows everything. */
+  viewer = -1;
+
   constructor(readonly canvas: HTMLCanvasElement, private world: World, size = 200, private ground?: (x: number, y: number) => BiomeArt['ground']) {
     this.size = size;
     const dpr = window.devicePixelRatio || 1;
@@ -84,7 +87,22 @@ export class Minimap {
     const { ctx, world } = this;
     ctx.clearRect(0, 0, this.size, this.size / 2);
     this.staticLayer();
+    const me = this.viewer;
+    if (me >= 0) {
+      // fog: black where never seen, a veil where out of sight
+      const unseen = new Path2D(), veiled = new Path2D();
+      for (let ty = 0; ty < world.grid.height; ty++) for (let tx = 0; tx < world.grid.width; tx++) {
+        const v = world.vision(me, tx, ty);
+        if (v === 2) continue;
+        const p = v ? veiled : unseen;
+        const c = [this.toMini(tx, ty), this.toMini(tx + 1, ty), this.toMini(tx + 1, ty + 1), this.toMini(tx, ty + 1)];
+        p.moveTo(c[0][0], c[0][1]); for (let i = 1; i < 4; i++) p.lineTo(c[i][0], c[i][1]); p.closePath();
+      }
+      ctx.fillStyle = 'rgba(6,8,10,0.5)'; ctx.fill(veiled);
+      ctx.fillStyle = '#06080a'; ctx.fill(unseen);
+    }
     for (const b of world.buildings.values()) {
+      if (me >= 0 && b.owner !== me && world.vision(me, b.ox + b.size / 2, b.oy + b.size / 2) === 0) continue;
       const [x, y] = this.toMini(b.ox + b.size / 2, b.oy + b.size / 2);
       ctx.fillStyle = teamColor(this.world, b.owner).primary;
       ctx.fillRect(x - 4, y - 3, 8, 6);
@@ -92,6 +110,7 @@ export class Minimap {
       ctx.strokeRect(x - 4, y - 3, 8, 6);
     }
     for (const u of world.units.values()) {
+      if (me >= 0 && u.owner !== me && world.vision(me, u.x, u.y) !== 2) continue;
       const [x, y] = this.toMini(u.x, u.y);
       ctx.fillStyle = teamColor(this.world, u.owner).primary;
       ctx.fillRect(x - 1.5, y - 1.5, 3, 3);

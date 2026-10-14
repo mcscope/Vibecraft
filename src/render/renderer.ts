@@ -1,9 +1,9 @@
 // Draws the world with WebGL (PixiJS) from pre-baked sprites. Sprites persist
 // between frames and are batched by the GPU, so thousands of trees and units
 // stay cheap. Reads simulation state, never writes it.
-import { Application, Container, ImageSource, Rectangle, Sprite as PixiSprite, Text, Texture, type TextureSource } from 'pixi.js';
+import { Application, Container, ImageSource, Matrix, Rectangle, Sprite as PixiSprite, Text, Texture, type TextureSource } from 'pixi.js';
 import { type Building, type ResourceNode, type Unit, type World, type WorldEvent } from '../sim/world';
-import { Camera, isoX, isoY } from './camera';
+import { Camera, isoX, isoY, TILE_H, TILE_W } from './camera';
 import { buildingSprite, unitSprite, type ArtAnim, type Sprite } from '../art/contract';
 import { TEAM_COLORS, type ArtBank } from './artbank';
 import { paintTerrain, TERRAIN_SCALE } from './terrain';
@@ -118,6 +118,47 @@ export class Renderer {
   private ghostSprite: PixiSprite | null = null;
   private textPool: Text[] = [];
 
+  /** Whose fog of war to show; -1 (spectating) shows everything. */
+  viewer = -1;
+  private fog: { canvas: HTMLCanvasElement; img: ImageData; tex: Texture; sprite: PixiSprite; tick: number } | null = null;
+
+  /** Can the viewer see this spot right now? (Their own things always.) */
+  seen(owner: number, x: number, y: number): boolean {
+    return this.viewer < 0 || owner === this.viewer || this.world.vision(this.viewer, x, y) === 2;
+  }
+
+  /** Has the viewer ever seen this spot? */
+  explored(x: number, y: number): boolean {
+    return this.viewer < 0 || this.world.vision(this.viewer, x, y) > 0;
+  }
+
+  /** Black over ground never seen, a dim veil over ground out of sight. One pixel per tile, laid on the iso grid. */
+  private drawFog(): void {
+    if (this.viewer < 0) return;
+    const { grid } = this.world;
+    if (!this.fog) {
+      const canvas = document.createElement('canvas');
+      canvas.width = grid.width; canvas.height = grid.height;
+      const img = canvas.getContext('2d')!.createImageData(grid.width, grid.height);
+      const tex = Texture.from(canvas);
+      const sprite = new PixiSprite(tex);
+      sprite.setFromMatrix(new Matrix(TILE_W / 2, TILE_H / 2, -TILE_W / 2, TILE_H / 2, 0, 0));
+      this.worldLayer.addChild(sprite);
+      this.fog = { canvas, img, tex, sprite, tick: -1 };
+    }
+    const f = this.fog;
+    if (f.tick === this.world.tick) return;
+    f.tick = this.world.tick;
+    const d = f.img.data;
+    for (let y = 0; y < grid.height; y++) for (let x = 0; x < grid.width; x++) {
+      const v = this.world.vision(this.viewer, x, y), i = (y * grid.width + x) * 4;
+      d[i] = 6; d[i + 1] = 8; d[i + 2] = 10;
+      d[i + 3] = v === 2 ? 0 : v === 1 ? 120 : 255;
+    }
+    f.canvas.getContext('2d')!.putImageData(f.img, 0, 0);
+    f.tex.source.update();
+  }
+
   constructor(private canvas: HTMLCanvasElement, private world: World, readonly bank: ArtBank, private opts: RenderOptions, extraDirt: Array<[number, number, number]> = []) {
     this.terrainCanvas = paintTerrain(world, extraDirt, { biomes: bank.biomes, homes: world.homes });
   }
@@ -222,6 +263,7 @@ export class Renderer {
     this.drawGround(alpha, dt, rs);
     this.drawFire(dt);
     this.drawEffects(dt);
+    this.drawFog();
     this.drawScreen(alpha, rs);
     this.app.render();
   }
@@ -238,6 +280,7 @@ export class Renderer {
         seen.set(n.id, sp);
         this.setFrame(sp, this.nodeSprite(n));
       }
+      sp.visible = this.explored(n.x, n.y); // fog of war: not on the map until found
       if (n.tree) {
         // sown saplings grow into full trees
         if (n.growLeft !== undefined) sp.scale.set((0.35 + 0.65 * Math.min(1, (n.maxAmount - n.growLeft) / n.maxAmount)) / this.nodeSprite(n).q);
@@ -276,6 +319,7 @@ export class Renderer {
       const art = this.bank.building(b.owner, b.specId);
       if (art) this.setFrame(sp, buildingSprite(art, b.complete, b.built / b.stats.totalCost, b.hp, b.maxHp));
       sp.tint = b.complete && b.spec.attack && b.stock.crystal < b.spec.attack.crystalMass ? 0x808080 : 0xffffff; // tower out of ammo
+      sp.visible = b.owner === this.viewer || this.explored(b.ox + b.size / 2, b.oy + b.size / 2); // once found, a building stays on the map
       // your building waiting on supplies plants its faction's "needs supplies" flag at its corner
       if (b.owner === 0 && b.complete && b.queue.length && !b.queue[0].paid) {
         const s = this.bank.wantFlag(b.owner);
@@ -310,6 +354,7 @@ export class Renderer {
       // no crystal to fight with: visibly greyed out
       const disarmed = !u.dummy && !u.carter && !this.world.armed(u) && u.specId !== this.world.factionOf(u.owner).workerId;
       sp.tint = disarmed ? 0x707070 : 0xffffff;
+      sp.visible = this.seen(u.owner, u.x, u.y); // fog of war
     }
     for (const [id, sp] of this.unitSprites) if (!this.world.units.has(id)) { sp.destroy(); this.unitSprites.delete(id); }
   }
@@ -330,6 +375,7 @@ export class Renderer {
       const h = (10 + dist * 6) * 4 * t * (1 - t) + (26 + p.sz * 16) * (1 - t);
       sp.position.set(isoX(x, y), isoY(x, y) - h);
       sp.rotation = this.time * 14 + p.id;
+      sp.visible = this.seen(p.owner, x, y);
     }
     for (const [id, sp] of this.projSprites) if (!this.world.projectiles.has(id)) { sp.destroy(); this.projSprites.delete(id); }
   }
@@ -458,6 +504,7 @@ export class Renderer {
       rect(x, y, w * Math.max(0, Math.min(1, frac)), h, color);
     };
     for (const u of world.units.values()) {
+      if (!this.seen(u.owner, u.x, u.y)) continue;
       const sel = rs.selected.has(u.id);
       // your ammo bearers always show how much crystal they have left to hand out
       const bearer = u.owner === 0 && !!world.specOf(u.owner, u.specId)?.spec.bearer;
@@ -563,6 +610,7 @@ export class Renderer {
     // (so you can pick a particular unit out of a crowd)
     let best = 0, bestD = Infinity;
     for (const u of world.units.values()) {
+      if (!this.seen(u.owner, u.x, u.y)) continue;
       const x = u.px + (u.x - u.px) * alpha, y = u.py + (u.y - u.py) * alpha;
       const [ux, uy] = cam.toScreen(x, y);
       const h = (this.bank.unit(u.owner, u.specId)?.height ?? 40) * cam.zoom;
@@ -577,6 +625,7 @@ export class Renderer {
     // a building's own footprint wins; the rest of its picture only if no bush or tree is under the cursor
     let byPicture = 0;
     for (const b of world.buildings.values()) {
+      if (b.owner !== this.viewer && !this.explored(b.ox + b.size / 2, b.oy + b.size / 2)) continue;
       if (wx >= b.ox && wx <= b.ox + b.size && wy >= b.oy && wy <= b.oy + b.size) return b.id;
       const [mx, my] = cam.toScreen(b.ox + b.size / 2, b.oy + b.size / 2);
       const half = (16 + 22 * b.size) * cam.zoom; // picture width grows with footprint
@@ -584,6 +633,7 @@ export class Renderer {
     }
     let tree = 0, treeDepth = -Infinity;
     for (const n of world.nodes.values()) {
+      if (!this.explored(n.x, n.y)) continue;
       const [nx, ny] = cam.toScreen(n.x, n.y);
       if (n.tree) {
         // trunk-ish region; the frontmost tree under the cursor wins

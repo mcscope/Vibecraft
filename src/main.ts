@@ -127,6 +127,8 @@ async function run(g: GameSetup): Promise<void> {
   const renderer = new Renderer(canvas, world, bank, { damageNumbers: m === 'demo' }, m === 'demo' ? [[18, 26, 4], [31, 26, 5]] : []);
   await renderer.init();
   const minimap = new Minimap(document.getElementById('minimap') as HTMLCanvasElement, world, 200, (x, y) => bank.biomeAt(x, y).ground);
+  // fog of war for whoever's playing (spectators and the proving grounds see everything)
+  renderer.viewer = minimap.viewer = m === 'spectate' || m === 'demo' ? -1 : HUMAN;
   const audio = new AudioEngine(world, bank, HUMAN);
   const input = new Input(canvas, world, renderer, minimap, HUMAN, (cmd) => {
     local.issue(cmd);
