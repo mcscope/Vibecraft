@@ -140,7 +140,7 @@ export class SkirmishAI {
       if (!trains.length) continue;
       if (trains.includes(faction.workerId) && workers.length < workerTarget) { this.tryTrain(w, b, faction.workerId, out); continue; }
       // soldiers (a building that also raises workers trains soldiers once there are enough workers)
-      const soldiers = trains.filter((id) => id !== faction.workerId && id !== faction.carterId);
+      const soldiers = trains.filter((id) => id !== faction.workerId && id !== faction.carterId && w.specOf(this.player, id)?.stats.canAttack);
       if (!soldiers.length) continue;
       const i = this.trainIndex.get(b.id) ?? 0;
       if (this.tryTrain(w, b, soldiers[i % soldiers.length], out)) this.trainIndex.set(b.id, i + 1);

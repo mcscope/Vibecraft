@@ -99,7 +99,44 @@ const bogToad: FenUnit = {
   },
 };
 
-export const units: FenUnit[] = [fenling, reedguard, bogToad];
+const shell: Mat = { color: '#5a5a3a', tex: 'stone' };
+const tortSkin: Mat = { color: '#7a7a54', tex: 'leather' };
+const packTortoise: FenUnit = {
+  id: 'pack-tortoise',
+  name: 'Pack Tortoise',
+  description: 'A great marsh tortoise with baskets of crystal lashed to its shell. Fenlings that run dry come to it for more, like crystals on the ground.',
+  mass: 160,
+  physique: { muscle: 0.6, frame: 0.3, reserve: 0.1 },
+  canGather: false,
+  refinement: 1.5,
+  bearer: { radius: 4 },
+  model(b, p) {
+    const t = p.phase * Math.PI * 2;
+    const walking = p.anim === 'walk';
+    for (const [x, z, ph] of [[0.45, 0.4, 0], [0.45, -0.4, Math.PI], [-0.45, 0.4, Math.PI], [-0.45, -0.4, 0]] as Array<[number, number, number]>) {
+      const a = walking ? Math.sin(t + ph) * 0.35 : 0;
+      b.limb([x, 0.35, z], [x + Math.sin(a) * 0.2, 0.05, z * 1.15], 0.1, tortSkin, 0.09);
+    }
+    const bob = walking ? Math.abs(Math.sin(t)) * 0.03 : 0;
+    b.joint([0, bob, 0], [0, 0, 0], (c) => {
+      c.sphere([0.8, 0.45, 0.65], [0, 0.55, 0], shell); // domed shell
+      for (let i = 0; i < 6; i++) c.sphere([0.18, 0.06, 0.18], [Math.cos(i) * 0.35, 0.95, Math.sin(i) * 0.3], { color: '#4a4a30', tex: 'stone' });
+      c.joint([0.82, 0.45, 0], [0, 0, p.anim === 'eat' ? -0.4 : 0], (h) => {
+        h.limb([0, 0, 0], [0.25, 0.05, 0], 0.11, tortSkin, 0.09);
+        h.sphere([0.17, 0.13, 0.14], [0.32, 0.06, 0], tortSkin);
+        for (const z of [1, -1]) h.sphere(0.025, [0.42, 0.12, 0.08 * z], { color: '#1e1610' });
+      });
+      // baskets of crystal on both flanks, and a team cloth over the top
+      for (const z of [0.55, -0.55]) {
+        c.cylinder(0.22, 0.18, 0.32, [-0.05, 0.75, z], { color: '#8a7448', tex: 'thatch' }, undefined, 10);
+        for (let i = 0; i < 3; i++) c.crystal(0.16, [-0.1 + i * 0.06, 0.95, z + (i - 1) * 0.05], [0.3 * i, 0, 0.4]);
+      }
+      c.box([0.6, 0.04, 1.0], [-0.05, 1.0, 0], { team: 'primary', tex: 'cloth' });
+    });
+  },
+};
+
+export const units: FenUnit[] = [fenling, reedguard, bogToad, packTortoise];
 
 // ── Buildings (capital curve K = 720). Cheap and many, except the Elder Mound.
 export const buildings: FenBuilding[] = [
@@ -117,8 +154,8 @@ export const buildings: FenBuilding[] = [
     sow: { mechanism: 80, radius: 5, resources: ['food'], plantKg: { food: 300 }, maxPlants: { food: 10 } }, model: models.peatFarm,
   },
   {
-    id: 'toad-wallow', name: 'Toad Wallow', description: 'A pool ringed with reeds where bog toads are raised and saddled.',
-    size: 2, materials: 220, requires: ['reed-hut'], trains: ['bog-toad'], model: models.toadWallow,
+    id: 'toad-wallow', name: 'Toad Wallow', description: 'A pool ringed with reeds where bog toads are raised and saddled, and pack tortoises are loaded.',
+    size: 2, materials: 220, requires: ['reed-hut'], trains: ['bog-toad', 'pack-tortoise'], model: models.toadWallow,
   },
   {
     id: 'elder-mound', name: 'Elder Mound', description: 'Where the fen\'s lore is kept and taught: every deep technology is learned here, and only here.',

@@ -256,7 +256,12 @@ export class Input {
       if (rest.length) this.issue({ type: 'resupply', units: rest, building: tb.id });
       this.ping(wx, wy, '#ffd23f');
     } else if (tu && tu.owner === this.player && !this.rs.selected.has(tu.id)) {
-      this.issue({ type: 'give', units, to: tu.id });
+      // an ammo bearer: throwers restock from it; anyone else gives it what they carry
+      const isBearer = !!w.specOf(tu.owner, tu.specId)?.spec.bearer;
+      const throwers = isBearer ? units.filter((id) => w.units.get(id)?.throws) : [];
+      if (throwers.length) this.issue({ type: 'rearm', units: throwers, bearer: tu.id });
+      const others = units.filter((id) => !throwers.includes(id));
+      if (others.length) this.issue({ type: 'give', units: others, to: tu.id });
       this.ping(tu.x, tu.y, '#7ae7c7');
     } else {
       this.formationMove(units, wx, wy);

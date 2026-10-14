@@ -62,6 +62,13 @@ export interface UnitSpec {
   workRefinement?: number;
   /** 'carter': auto-produced supply hauler; never fights, never gathers. */
   role?: 'carter';
+  /**
+   * Ammo bearer: a walking pile of crystal. Friendly throwers that run dry come
+   * to it and take a load, just like picking spent crystals off the ground (from
+   * up to `radius` tiles beyond their sight). Refills at any of its side's
+   * buildings with crystal in stock (right-click the building).
+   */
+  bearer?: { radius: number };
 }
 
 export type ResourceKind = 'food' | 'wood' | 'crystal';
@@ -138,6 +145,14 @@ export interface TechSpec {
   /** Which refinement it raises: 'combat' (training cost ÷ r, default) or 'work' (gather rate, speed and carry). */
   channel?: 'combat' | 'work';
 }
+
+/** What a faction calls a resource (lowercase). */
+export const resourceName = (f: FactionSpec, r: ResourceKind): string =>
+  (f.resourceNames?.[r] ?? { food: 'food', wood: 'wood', crystal: 'crystal' }[r]).toLowerCase();
+/** What a faction calls its worker, its base and its supply hauler (for UI text). */
+export const workerName = (f: FactionSpec): string => f.units.find((u) => u.id === f.workerId)?.name ?? 'Worker';
+export const baseName = (f: FactionSpec): string => f.buildings?.find((b) => b.id === f.townCenterId)?.name ?? 'base';
+export const carterName = (f: FactionSpec): string => (f.carterId && f.units.find((u) => u.id === f.carterId)?.name) || 'hauler';
 
 export interface FactionSpec {
   id: string;

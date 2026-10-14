@@ -102,7 +102,7 @@ export function mountSettingsDialog(): void {
         <tr><td>Stop</td><td><kbd>${keyName(km.stop)}</kbd></td></tr>
         <tr><td>Resupply</td><td>tap <kbd>${keyName(km.resupply)}</kbd> to return after · hold + click to go elsewhere</td></tr>
         <tr><td>Give</td><td><kbd>${keyName(km.give)}</kbd> then click a friendly unit</td></tr>
-        <tr><td>Town Center</td><td><kbd>${keyName(km.home)}</kbd>, then train with ${km.train.slice(0, 5).map((k) => `<kbd>${keyName(k)}</kbd>`).join(' ')}</td></tr>
+        <tr><td>Home base</td><td><kbd>${keyName(km.home)}</kbd>, then train with ${km.train.slice(0, 5).map((k) => `<kbd>${keyName(k)}</kbd>`).join(' ')}</td></tr>
         <tr><td>Groups</td><td><kbd>Ctrl</kbd>+<kbd>1–8</kbd> set · <kbd>1–8</kbd> select · double-tap to jump</td></tr>
         <tr><td>Other</td><td><kbd>Space</kbd> center · <kbd>P</kbd> pause · <kbd>[</kbd> <kbd>]</kbd> speed · <kbd>9</kbd> cart debug · <kbd>F10</kbd> settings</td></tr>
       </table>`;

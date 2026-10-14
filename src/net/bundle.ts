@@ -125,6 +125,7 @@ export function checkSpec(s: unknown): string[] {
     if (!isNum(u.mass) || !u.physique || !isNum(u.physique.muscle) || !isNum(u.physique.frame) || !isNum(u.physique.reserve)) e.push(`${where}: bad body`);
     if (u.attack && (!['strike', 'throw'].includes(u.attack.style) || !isNum(u.attack.crystalMass) || (u.attack.ammo !== undefined && !isNum(u.attack.ammo)))) e.push(`${where}: bad attack`);
     for (const k of ['refinement', 'workRefinement'] as const) if (u[k] !== undefined && !isNum(u[k])) e.push(`${where}: bad ${k}`);
+    if (u.bearer !== undefined && (!isNum(u.bearer.radius) || u.bearer.radius <= 0 || u.bearer.radius > 12)) e.push(`${where}: bad bearer radius`);
   };
   f.units.forEach((u, i) => unit(u, `unit ${i}`));
   (f.wildlife ?? []).forEach((w, i) => {

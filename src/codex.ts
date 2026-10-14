@@ -180,10 +180,11 @@ function unitAbilities(u: UnitSpec): string[] {
       ? `<b>Throws</b> ${u.attack.crystalMass} kg crystals, ${Math.round(d.loadoutCrystal / u.attack.crystalMass)} carried. ${n0(d.damage)} damage at range ${f1(d.range)}, ${f1(d.dps)} per second.`
       : `<b>Strikes</b> with a ${u.attack.crystalMass} kg crystal. ${n0(d.damage)} damage, reach ${f1(d.range)}, ${f1(d.dps)} per second.`);
   } else if (!u.dummy) out.push('<b>Unarmed.</b>');
-  if (u.role === 'carter') out.push(`<b>Supply cart.</b> Produced automatically; loads ${n0(d.carryCapacity)} kg at its home building and carries it to whichever building needs it most.`);
+  if (u.role === 'carter') out.push(`<b>Supply hauler.</b> Produced automatically; loads ${n0(d.carryCapacity)} kg at its home building and carries it to whichever building needs it most.`);
+  if (u.bearer) out.push(`<b>Ammo bearer.</b> A walking pile of crystal (${n0(d.cargoCapacity)} kg): friendly throwers that run dry come and take a load, like spent crystals on the ground. Refills at any building with crystal (right-click it).`);
   if (u.wheeled) out.push(`<b>Wheeled.</b> Carries ${K.wheelCarry}× as much for its muscle; a full load slows it less and costs fewer calories to haul.`);
   if ((u.canGather ?? true) && !u.dummy && u.role !== 'carter') out.push(`<b>Gathers</b> ${f1(d.gatherRate, 2)} kg/s and carries ${n0(d.carryCapacity)} kg; also builds.`);
-  if ((u.refinement ?? 1) > 1) out.push(`<b>Refined ${f1(u.refinement!, 2)}×</b>: costs 1/${f1(u.refinement!, 2)} of its body's berries. Its building needs ${n0(capitalFor(u.refinement!))} capital.`);
+  if ((u.refinement ?? 1) > 1) out.push(`<b>Refined ${f1(u.refinement!, 2)}×</b>: costs 1/${f1(u.refinement!, 2)} of its body's ${res('food')}. Its building needs ${n0(capitalFor(u.refinement!))} capital.`);
   if ((u.workRefinement ?? 1) > 1) out.push(`<b>Work-refined ${f1(u.workRefinement!, 2)}×</b>: gathers, walks and carries that much more.`);
   return out;
 }
@@ -210,7 +211,7 @@ function unitDetail(u: UnitSpec): string {
       ${value ? row('Combat value', f1(value, 2), '(HP × DPS)^0.75 per resource spent: how much fight each unit of cost buys') : ''}
     </div>
     <h3>Body &amp; stats</h3>
-    ${statsTable(u, d)}`;
+    ${statsTable(u, d, res('food'))}`;
 }
 
 function buildingAbilities(b: BuildingSpec): string[] {

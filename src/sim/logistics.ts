@@ -242,8 +242,16 @@ export class Logistics {
       }
     }
     if (!best) {
-      // a worker hauling by hand is done once its building is stocked
-      if (!u.carter) { this.w.finish(u); return false; }
+      // a worker pinned to a building (right-click) waits by it for the next need;
+      // one sent without a pin is done once the building is stocked
+      if (!u.carter) {
+        if (!o.pinned) { this.w.finish(u); return false; }
+        const pin = this.w.buildings.get(o.home);
+        if (!pin) { this.w.finish(u); return false; }
+        const px = pin.ox + pin.size / 2, py = pin.oy + pin.size / 2;
+        if ((u.x - px) ** 2 + (u.y - py) ** 2 > (pin.size / 2 + 2) ** 2) this.w.moveToBuilding(u, pin);
+        return u.x !== u.px || u.y !== u.py;
+      }
       const hx = base.ox + base.size / 2, hy = base.oy + base.size / 2;
       if ((u.x - hx) ** 2 + (u.y - hy) ** 2 > (base.size / 2 + 2.5) ** 2) this.w.moveToBuilding(u, base);
       return moving();

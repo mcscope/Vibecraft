@@ -61,6 +61,8 @@ export type Order =
   | { kind: 'hunt'; target: number; x: number; y: number }
   /** Town bell: go to a building and take a crystal to fight with. */
   | { kind: 'muster'; building: number }
+  /** A dry thrower going to an ammo bearer for a load. */
+  | { kind: 'rearm'; unit: number }
   /** Wildlife: roam around a home spot (tx/ty: current wander target, rest: ticks until the next). */
   | { kind: 'wild'; hx: number; hy: number; tx: number; ty: number; rest: number }
   | { kind: 'move'; x: number; y: number }
@@ -513,8 +515,23 @@ export class World {
           else if (prev && (prev.kind === 'gather' || prev.kind === 'attackMove' || prev.kind === 'move' || prev.kind === 'attack' || prev.kind === 'build')) back = prev;
           else back = { kind: 'move', x: u.x, y: u.y };
           if (back.kind === 'gather') back = { ...back, phase: 'toNode' };
-          set([u], { kind: 'resupply', building: b.id });
+          // a thrower restocks from a friendly ammo bearer if one is nearer than the building
+          const bearer = u.throws ? this.nearestBearer(u) : null;
+          const toB = bearer ? (bearer.x - u.x) ** 2 + (bearer.y - u.y) ** 2 : Infinity;
+          const toBuilding = (b.ox + b.size / 2 - u.x) ** 2 + (b.oy + b.size / 2 - u.y) ** 2;
+          set([u], bearer && toB < toBuilding ? { kind: 'rearm', unit: bearer.id } : { kind: 'resupply', building: b.id });
           u.resume = back;
+        }
+        return;
+      }
+      case 'rearm': {
+        const bearer = this.units.get(cmd.bearer);
+        if (!bearer || bearer.owner !== player || !this.specOf(player, bearer.specId)?.spec.bearer) return;
+        for (const u of mine(cmd.units)) {
+          if (!u.throws || u === bearer) continue;
+          const prev = u.order;
+          set([u], { kind: 'rearm', unit: bearer.id });
+          u.resume = prev.kind === 'gather' || prev.kind === 'attackMove' || prev.kind === 'attack' ? prev : null;
         }
         return;
       }
@@ -957,6 +974,7 @@ export class World {
       case 'wild': return this.runWild(u, o);
       case 'hunt': return this.runHunt(u, o);
       case 'muster': return this.runMuster(u, o.building);
+      case 'rearm': return this.runRearm(u, o.unit);
       case 'move': {
         if (this.moveTo(u, o.x, o.y, 0.3)) { this.finish(u); }
         return u.x !== u.px || u.y !== u.py;
@@ -1010,12 +1028,7 @@ export class World {
     if (u.carter) { if ((this.tick + u.id) % 40 === 0) this.logistics.autoAssignCart(u); return false; }
     if (this.runEngage(u)) return u.x !== u.px || u.y !== u.py;
     // Throwers with an empty sling look for spent crystals nearby.
-    if (u.throws && !this.armed(u) && (this.tick + u.id) % 20 === 0) {
-      const shard = this.nearestNode(u, 'crystal', u.stats.sight, true);
-      if (shard) {
-        u.order = { kind: 'gather', node: shard.id, nodeType: 'crystal', phase: 'toNode', stopWhenArmed: true };
-      }
-    }
+    if (u.throws && !this.armed(u) && (this.tick + u.id) % 20 === 0) this.seekAmmo(u, false);
     return false;
   }
 
@@ -1092,8 +1105,7 @@ export class World {
     const wpn = this.weapon(u);
     if (!wpn) {
       if (u.throws) {
-        const shard = this.nearestNode(u, 'crystal', u.stats.sight, true);
-        if (shard) { this.detour(u, { kind: 'gather', node: shard.id, nodeType: 'crystal', phase: 'toNode', stopWhenArmed: true }); return true; }
+        if (this.seekAmmo(u, true)) return true; // spent crystals or a bearer close by
         const b = this.nearestCache(u, (x) => x.stock.crystal >= u.crystalMass);
         if (b) { this.detour(u, { kind: 'resupply', building: b.id }); return true; }
       } else if (u.stats.improvised) {
@@ -1277,6 +1289,42 @@ export class World {
     return u.x !== u.px || u.y !== u.py;
   }
 
+  /** The nearest friendly ammo bearer with a crystal to spare, within reach of a thrower. */
+  private nearestBearer(u: Unit): Unit | null {
+    let best: Unit | null = null, bestD = Infinity;
+    for (const b of this.units.values()) {
+      if (b.owner !== u.owner || b === u || b.crystal < u.crystalMass - 1e-6) continue;
+      const spec = this.specOf(b.owner, b.specId)?.spec.bearer;
+      if (!spec) continue;
+      const d = (b.x - u.x) ** 2 + (b.y - u.y) ** 2;
+      if (d <= (u.stats.sight + spec.radius) ** 2 && d < bestD) { bestD = d; best = b; }
+    }
+    return best;
+  }
+
+  /** A dry thrower's nearest crystal: a spent one on the ground, or a bearer to take from. Sets a detour/order; false if none. */
+  private seekAmmo(u: Unit, detour: boolean): boolean {
+    const shard = this.nearestNode(u, 'crystal', u.stats.sight, true);
+    const bearer = this.nearestBearer(u);
+    const ds = shard ? (shard.x - u.x) ** 2 + (shard.y - u.y) ** 2 : Infinity;
+    const db = bearer ? (bearer.x - u.x) ** 2 + (bearer.y - u.y) ** 2 : Infinity;
+    if (ds === Infinity && db === Infinity) return false;
+    const order: Order = db < ds ? { kind: 'rearm', unit: bearer!.id } : { kind: 'gather', node: shard!.id, nodeType: 'crystal', phase: 'toNode', stopWhenArmed: true };
+    if (detour) this.detour(u, order); else u.order = order;
+    return true;
+  }
+
+  /** Walk to an ammo bearer and take a load from it. */
+  private runRearm(u: Unit, bearerId: number): boolean {
+    const b = this.units.get(bearerId);
+    if (!b || b.owner !== u.owner || b.crystal < 1e-6 || u.ammo >= u.stats.loadoutCrystal - 1e-6) { this.finish(u); return false; }
+    if (!this.moveTo(u, b.x, b.y, u.stats.radius + b.stats.radius + 0.5)) return u.x !== u.px || u.y !== u.py;
+    const k = Math.min(u.stats.loadoutCrystal - u.ammo, b.crystal);
+    b.crystal -= k; u.ammo += k;
+    this.finish(u);
+    return false;
+  }
+
   /** Take a crystal from a building to fight with (town bell, or a worker sent to attack). */
   private runMuster(u: Unit, buildingId: number): boolean {
     const b = this.buildings.get(buildingId);
@@ -1297,10 +1345,15 @@ export class World {
     const b = this.buildings.get(buildingId);
     if (!b || b.owner !== u.owner || !b.complete) { this.finish(u); return false; }
     if (!this.moveToBuilding(u, b)) return u.x !== u.px || u.y !== u.py;
-    this.deposit(u, b);
+    this.deposit(u, b, this.specOf(u.owner, u.specId)?.spec.bearer ? ['food', 'wood'] : undefined); // a bearer keeps its crystal
     // Restock loadout crystal from this building's stock.
     const need = Math.min(Math.max(0, u.stats.loadoutCrystal - u.ammo), b.stock.crystal);
     if (need > 0) { u.ammo += need; b.stock.crystal -= need; }
+    // ammo bearers fill their cargo with crystal to hand out
+    if (this.specOf(u.owner, u.specId)?.spec.bearer) {
+      const k = Math.floor(Math.min(this.freeCapacity(u), b.stock.crystal));
+      if (k > 0) { u.crystal += k; b.stock.crystal -= k; }
+    }
     if (!this.eat(u, b)) this.finish(u);
     return false;
   }

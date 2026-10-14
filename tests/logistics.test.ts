@@ -118,7 +118,7 @@ describe('supply', () => {
     expect(both).toBe(true);
   });
 
-  test('a villager told to haul for a building stocks it from the town center, then stops', () => {
+  test('a villager told to haul for a building stocks it from the town center, then waits by it (pinned)', () => {
   const w = newWorld();
   const tc = w.baseOf(0)!;
   tc.stock = { food: 400, wood: 0, crystal: 100 };
@@ -131,7 +131,7 @@ describe('supply', () => {
   const want = w.logistics.supplyTargets(t);
   expect(t.stock.crystal).toBeGreaterThanOrEqual(want.crystal - 1);
   expect(t.stock.food).toBeGreaterThanOrEqual(want.food - 1);
-  expect(v.order.kind).toBe('idle');
+  expect(v.order.kind === 'cart' && v.order.pinned && v.order.home === t.id).toBe(true); // still pinned, waiting
   });
 
   test('a sowing camp asks for exactly its next planting\'s seed, and plants it', () => {

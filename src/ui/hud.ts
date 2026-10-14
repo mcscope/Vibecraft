@@ -1,3 +1,4 @@
+import { resourceName, workerName, baseName, carterName } from '../factions/types';
 // DOM overlay: resources, selection panel, build / train / research buttons, tooltips.
 import type { ResourceKind, Stock, UnitSpec } from '../factions/types';
 import { itemCost, MAX_QUEUE, plantKg, RESOURCES, type Building, type Unit, type World } from '../sim/world';
@@ -24,14 +25,14 @@ export interface HudActions {
 }
 
 
-export function statsTable(spec: UnitSpec, stats: DerivedStats = derive(spec)): string {
+export function statsTable(spec: UnitSpec, stats: DerivedStats = derive(spec), food = 'food'): string {
   const d = stats;
   const row = (k: string, v: string, hint = '') => `<div class="st"><span title="${hint}">${k}</span><b>${v}</b></div>`;
   return `
     <div class="stats">
       ${row('Mass', `${fmt(d.mass)} kg`, 'Body mass — everything derives from this')}
       ${row('Build', `${fmt(d.physique.muscle * 100)}/${fmt(d.physique.frame * 100)}/${fmt(d.physique.reserve * 100)}`, 'muscle / frame / reserve %')}
-      ${row('Refinement', `${fmt(d.refinement, 2)}×`, 'Resource efficiency: the body costs 1/r of its food. Paid for once, in building capital and research')}
+      ${row('Refinement', `${fmt(d.refinement, 2)}×`, `Resource efficiency: the body costs 1/r of its ${food}. Paid for once, in building capital and research`)}
       ${d.workRefinement > 1 ? row('Work', `${fmt(d.workRefinement, 2)}×`, 'Work refinement: gather rate, speed and carry') : ''}
       ${row('Hit points', fmt(d.maxHp), 'From frame mass × refinement^⅔')}
       ${row('Calories', fmt(d.maxCalories), 'From reserve mass')}
@@ -41,7 +42,7 @@ export function statsTable(spec: UnitSpec, stats: DerivedStats = derive(spec)): 
       ${row('Damage', fmt(d.damage), '½·m·v² × efficiency × refinement^⅔')}
       ${row('Dmg / sec', fmt(d.dps, 1))}
       ${row('Range', `${fmt(d.range, 1)} t`)}
-      ${row('Cost', `${d.foodCost} food · ${d.crystalCost} crys`)}
+      ${row('Cost', `${d.foodCost} ${food} · ${d.crystalCost} crys`)}
     </div>`;
 }
 
@@ -85,7 +86,7 @@ export class Hud {
       <span class="res" title="${names.wood}: buildings (their capital) and research.">${icon(spriteToCanvas(bank.biome.trees[0], 40, 1.05))}<b data-res="wood"></b></span>
       <span class="res" title="${names.crystal}: weapons and ammo.">${icon(spriteToCanvas(bank.biome.mines[bank.biome.mines.length - 1], 40, 1.1))}<b data-res="crystal"></b></span>
       <span class="res" title="Units">${villager ? icon(spriteToCanvas(unitSprite(villager, 'idle', 1, { time: 0 }), 40, 1.5)) : ''}<b data-res="pop"></b></span>
-      <button class="idle-btn" data-idle title="Select the next idle villager (.)">Idle <b data-res="idle"></b></button>
+      <button class="idle-btn" data-idle title="Select the next idle ${workerName(world.factionOf(player)).toLowerCase()} (.)">Idle <b data-res="idle"></b></button>
       <span class="res clock" data-res="clock"></span>
       <span class="res fps" data-res="fps"></span>`;
     this.top.querySelectorAll<HTMLElement>('[data-res]').forEach((el) => (this.resEls[el.dataset.res!] = el));
@@ -155,7 +156,7 @@ export class Hud {
     const w = this.world;
     if (el.dataset.train) {
       const s = w.specOf(this.player, el.dataset.train)!;
-      this.tooltip.innerHTML = `<h3>${s.spec.name}</h3><p>${s.spec.description}</p>${statsTable(s.spec, s.stats)}<p class="hint">${fmt(s.stats.trainTime)} s · paid from this building's stock · Click: train · Hold: auto-train on/off · Right-click: cancel last</p>`;
+      this.tooltip.innerHTML = `<h3>${s.spec.name}</h3><p>${s.spec.description}</p>${statsTable(s.spec, s.stats, this.names().food.toLowerCase())}<p class="hint">${fmt(s.stats.trainTime)} s · paid from this building's stock · Click: train · Hold: auto-train on/off · Right-click: cancel last</p>`;
     } else if (el.dataset.research) {
       const t = w.techOf(this.player, el.dataset.research)!;
       const b = w.buildings.get(+el.dataset.building!);
@@ -175,7 +176,7 @@ export class Hud {
         st.tower ? `Throws ${spec.attack!.crystalMass} kg crystals for ${n0(st.tower.damage)} damage, range ${fmt(st.tower.range, 1)}` : '',
         spec.gatherBoost ? `Gathering within ${spec.gatherBoost.radius} tiles ×${fmt(st.gatherBoost, 2)}` : '',
         spec.sow ? `Sows ${spec.sow.resources.map((r) => this.names()[r].toLowerCase()).join(' and ')} within ${spec.sow.radius} tiles` : '',
-        spec.carters ? `Always keeps ${spec.carters} cart${spec.carters > 1 ? 's' : ''}; train more by hand` : '',
+        spec.carters ? `Always keeps ${spec.carters} ${carterName(w.factionOf(this.player)).toLowerCase()}${spec.carters > 1 ? 's' : ''}; train more by hand` : '',
       ].filter(Boolean).join(' · ');
       this.tooltip.innerHTML = `<h3>${spec.name}</h3><p>${spec.description}</p>
         <div class="stats">
@@ -187,7 +188,7 @@ export class Hud {
           ${st.attackCost ? `<div class="st"><span>Weapon + height</span><b>${n0(st.attackCost)}</b></div>` : ''}
         </div>
         <p>${what}</p>
-        <p class="hint">Villagers carry ${n0(st.totalCost)} ${this.names().wood} to the site${spec.requires?.length ? ` · requires ${spec.requires.map((r) => w.buildingSpecOf(this.player, r)?.name ?? r).join(', ')}` : ''}${block ? ` · <span class="bad">${block}</span>` : ''}</p>`;
+        <p class="hint">${workerName(w.factionOf(this.player))}s carry ${n0(st.totalCost)} ${this.names().wood} to the site${spec.requires?.length ? ` · requires ${spec.requires.map((r) => w.buildingSpecOf(this.player, r)?.name ?? r).join(', ')}` : ''}${block ? ` · <span class="bad">${block}</span>` : ''}</p>`;
     }
     this.tooltip.style.display = 'block';
     const r = el.getBoundingClientRect();
@@ -231,7 +232,7 @@ export class Hud {
       else if (units.length > 1) this.panel.innerHTML = this.groupPanel(units);
       else {
         const km = keymap();
-        this.panel.innerHTML = `<div class="empty">Drag to select · Right-click to command · <kbd>${km.attackMove.toUpperCase()}</kbd> attack-move · <kbd>${km.stop.toUpperCase()}</kbd> stop · <kbd>${km.resupply.toUpperCase()}</kbd> resupply (hold + click: go there after) · <kbd>${km.give.toUpperCase()}</kbd> give · <kbd>${km.home.toUpperCase()}</kbd> town center · <kbd>F10</kbd> settings</div>`;
+        this.panel.innerHTML = `<div class="empty">Drag to select · Right-click to command · <kbd>${km.attackMove.toUpperCase()}</kbd> attack-move · <kbd>${km.stop.toUpperCase()}</kbd> stop · <kbd>${km.resupply.toUpperCase()}</kbd> resupply (hold + click: go there after) · <kbd>${km.give.toUpperCase()}</kbd> give · <kbd>${km.home.toUpperCase()}</kbd> ${baseName(this.world.factionOf(this.player)).toLowerCase()} · <kbd>F10</kbd> settings</div>`;
       }
       this.panel.querySelectorAll<HTMLCanvasElement>('canvas[data-portrait]').forEach((c) => {
         const [owner, specId, uid] = c.dataset.portrait!.split(':');
@@ -343,15 +344,16 @@ export class Hud {
     const w = this.world;
     const short = RESOURCES.filter((r) => cost[r] > b.stock[r] + 1e-6);
     const coming = short.reduce((n, r) => n + w.logistics.cartsBringing(b, r), 0);
-    if (coming) return `${coming} cart${coming > 1 ? 's' : ''} bringing it`;
+    const carter = carterName(w.factionOf(b.owner)).toLowerCase();
+    if (coming) return `${coming} ${carter}${coming > 1 ? 's' : ''} bringing it`;
     const base = w.baseOf(b.owner);
     if (b === base || (b.spec.carters ?? 0) > 0) return 'gather more (nothing spare elsewhere)';
-    if (!base) return 'no Town Center to supply it';
+    if (!base) return `no ${baseName(w.factionOf(b.owner))} to supply it`;
     if (short.some((r) => w.logistics.spare(base)[r] < 1)) return `the ${base.spec.name} has none to spare`;
-    return 'waiting for a free cart';
+    return `waiting for a free ${carter}`;
   }
 
-  /** What this building is short of for a cost, in words ("6 crystal", "20 berries + 4 crystal"), or ''. */
+  /** What this building is short of for a cost, in words ("6 crystal", "20 food + 4 crystal"), or ''. */
   private missing(b: Building, cost: Stock): string {
     const n = this.names();
     return RESOURCES.filter((r) => cost[r] > b.stock[r] + 1e-6).map((r) => `${need(cost[r] - b.stock[r])} ${n[r].toLowerCase()}`).join(' + ');
@@ -407,7 +409,7 @@ export class Hud {
           ${own && !u.carter ? this.commandButtons() : ''}
           ${own && u.carter ? '<div class="hint">Carts supply whichever building is shortest. Right-click a building to pin this cart to it; Stop to unpin.</div>' : ''}
         </div>
-        ${own && this.isWorker(u.specId) ? this.buildMenu() : statsTable(s.spec, s.stats)}
+        ${own && this.isWorker(u.specId) ? this.buildMenu() : statsTable(s.spec, s.stats, this.names().food.toLowerCase())}
       </div>`;
   }
 
@@ -467,9 +469,9 @@ export class Hud {
       <div class="bar hp" data-bar="bhp"><i></i><span></span></div>`;
     if (!b.complete) {
       return `<div class="building-panel"><div class="info">${head}
-        <div class="state">Under construction — villagers carry wood here</div>
+        <div class="state">Under construction — ${workerName(w.factionOf(b.owner)).toLowerCase()}s carry ${this.names().wood.toLowerCase()} here</div>
         <div class="bar built" data-bar="built"><i></i><span></span></div>
-        ${own ? '<div class="hint">Right-click it with villagers selected to help build.</div>' : ''}</div></div>`;
+        ${own ? `<div class="hint">Right-click it with ${workerName(w.factionOf(b.owner)).toLowerCase()}s selected to help build.</div>` : ''}</div></div>`;
     }
     const names = this.names();
     const info = `
@@ -539,24 +541,29 @@ export function describeOrder(w: World, u: Unit): string {
   switch (o.kind) {
     case 'idle': return u.engage ? 'Fighting' : u.carter ? 'Waiting for orders' : u.militia ? (w.armed(u) ? 'Militia: ready' : 'Militia: no crystal') : 'Idle';
     case 'muster': return 'Grabbing a crystal';
+    case 'rearm': return `Restocking from the ${w.specOf(u.owner, w.units.get(o.unit)?.specId ?? '')?.spec.name ?? 'bearer'}`;
     case 'wild': return u.engage ? 'Attacking' : u.wild === 'aggressive' ? 'Prowling' : 'Grazing';
     case 'hunt': return 'Hunting';
     case 'move': return 'Moving';
     case 'attackMove': return u.engage ? 'Fighting' : 'Attack-moving';
     case 'attack': return 'Attacking';
-    case 'gather': return o.stopWhenArmed ? 'Picking up crystals' : o.phase === 'toDrop' ? `Hauling ${o.nodeType} home` : `Gathering ${o.nodeType}`;
+    case 'gather': {
+      const r = resourceName(w.factionOf(u.owner), o.nodeType);
+      return o.stopWhenArmed ? 'Picking up crystals' : o.phase === 'toDrop' ? `Hauling ${r} home` : `Gathering ${r}`;
+    }
     case 'resupply': return u.anim === 'eat' ? 'Eating' : 'Going to resupply';
     case 'give': return 'Delivering supplies';
     case 'eatPack': return 'Eating from pack';
     case 'build': {
       const site = w.buildings.get(o.site);
       const name = site?.spec.name ?? 'building';
-      return o.phase === 'deliver' ? `Carrying wood to the ${name}` : o.phase === 'chop' ? `Chopping wood for the ${name}` : `Fetching wood for the ${name}`;
+      const r = resourceName(w.factionOf(u.owner), 'wood');
+      return o.phase === 'deliver' ? `Carrying ${r} to the ${name}` : o.phase === 'chop' ? `Gathering ${r} for the ${name}` : `Fetching ${r} for the ${name}`;
     }
     case 'cart': {
       const home = w.buildings.get(o.home);
       if (!home) return 'Waiting for a delivery';
-      if (!u.carter) return `Hauling supplies for the ${home.spec.name}`;
+      if (!u.carter) return `Hauling supplies for the ${home.spec.name}${o.pinned ? ' (pinned)' : ''}`;
       return `${o.phase === 'deliver' ? 'Delivering' : 'Fetching'} ${o.res} for the ${home.spec.name}${o.pinned ? ' (pinned)' : ''}`;
     }
   }
