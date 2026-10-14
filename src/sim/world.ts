@@ -1251,7 +1251,7 @@ export class World {
       const other = (o.nodeType !== 'food' ? u.food : 0) + (o.nodeType !== 'wood' ? u.wood : 0) + (o.nodeType !== 'crystal' ? u.crystal : 0);
       if (other > 0.05 && !o.stopWhenArmed && this.nearestCache(u, () => true)) { o.phase = 'toDrop'; return false; }
       // Shards lie on open ground, often under a crowd or a dummy: pick up from arm's reach.
-      const reach = n.shard ? u.stats.radius + 0.45 : 1.15 + u.stats.radius;
+      const reach = n.shard ? u.stats.radius + 0.45 : 0.85 + u.stats.radius;
       if (this.moveToNear(u, n.x, n.y, reach, !n.shard)) o.phase = 'harvest';
       return u.x !== u.px || u.y !== u.py;
     }
@@ -1434,7 +1434,7 @@ export class World {
     if (o.phase === 'chop') {
       const tree = this.nodes.get(o.node);
       if (!tree || tree.amount <= 0.001) { o.phase = u.wood > 0.5 ? 'deliver' : 'fetch'; return false; }
-      if (!this.moveToNear(u, tree.x, tree.y, 1.15 + u.stats.radius, true)) return u.x !== u.px || u.y !== u.py;
+      if (!this.moveToNear(u, tree.x, tree.y, 0.85 + u.stats.radius, true)) return u.x !== u.px || u.y !== u.py;
       if (u.exhausted) return false;
       this.face(u, tree.x - u.x, tree.y - u.y);
       const want = Math.min(this.gatherUnits(u, u.stats.gatherRate * this.gatherBoostAt(u.owner, tree.x, tree.y, 'wood'), tree.amount), Math.max(0, Math.ceil(remaining - u.wood)));
@@ -1611,14 +1611,26 @@ export class World {
   private moveToNear(u: Unit, x: number, y: number, reach: number, blocking: boolean): boolean {
     if ((x - u.x) ** 2 + (y - u.y) ** 2 <= reach * reach) { u.path = []; return true; }
     if (!blocking) return this.moveTo(u, x, y, reach);
-    const d = Math.sqrt((x - u.x) ** 2 + (y - u.y) ** 2);
-    // aim for a point just in front of the object on our side
-    const ax = x + ((u.x - x) / d) * 0.8, ay = y + ((u.y - y) / d) * 0.8;
-    const open = this.grid.isBlocked(ax, ay) ? this.grid.nearestOpen(ax, ay, 3) : [ax, ay];
+    // stand on an open tile right next to it (only if it's boxed in, the nearest open ground)
+    const open = this.besideSpot(u, Math.floor(x), Math.floor(y)) ?? this.grid.nearestOpen(x, y, 3);
     if (!open) return false;
     const there = this.moveTo(u, open[0], open[1], 0.15);
     const d2 = (x - u.x) ** 2 + (y - u.y) ** 2;
     return d2 <= reach * reach || (there && d2 < 2.3 * 2.3);
+  }
+
+  /** The open tile beside tile (tx, ty) nearest to `u`: edge-on before corners, walled-in pockets skipped. Null if boxed in. */
+  private besideSpot(u: Unit, tx: number, ty: number): [number, number] | null {
+    let best: [number, number] | null = null, bestD = Infinity;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const cx = tx + dx + 0.5, cy = ty + dy + 0.5;
+      if ((!dx && !dy) || this.grid.isBlocked(cx, cy)) continue;
+      const wayIn = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([ex, ey]) => !this.grid.isBlocked(cx + ex, cy + ey));
+      if (!wayIn) continue;
+      const d = (cx - u.x) ** 2 + (cy - u.y) ** 2 + (dx && dy ? 2 : 0);
+      if (d < bestD) { bestD = d; best = [cx, cy]; }
+    }
+    return best;
   }
 
   /** @internal sim helper, also used by logistics */
