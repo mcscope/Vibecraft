@@ -110,3 +110,15 @@ export function fenWantFlag(b: ModelBuilder): void {
   b.box([0.03, 0.32, 0.26], [0, 1.25, 0.14], BANNER, [0.15, 0, 0]); // a ragged team rag
   for (let i = 0; i < 3; i++) b.limb([0, 1.7, 0], [0.04, 1.95 + i * 0.05, (i - 1) * 0.06], 0.012, REED);
 }
+
+/** One tile of dug channel: still dark water, mud and reeds at the corners. */
+export function canal(b: ModelBuilder): void {
+  // water right to the tile's edges, so a line of them reads as one channel
+  b.box([2.0, 0.06, 2.0], [0, 0.03, 0], { color: '#2e4a46', rough: 0.08 });
+  b.box([1.1, 0.062, 0.7], [0.15, 0.03, -0.2], { color: '#3a5a52', rough: 0.05 }); // a lighter glint
+  for (const [x, z] of [[-0.95, -0.95], [0.95, -0.95], [-0.95, 0.95], [0.95, 0.95]]) b.sphere([0.16, 0.06, 0.16], [x, 0.04, z], MUD); // mud at the corners
+  for (const [x, z] of [[-0.9, -0.9], [0.9, 0.8], [-0.85, 0.85]]) {
+    for (let i = 0; i < 4; i++) b.limb([x, 0.05, z], [x + (i - 1.5) * 0.06, 0.45 + i * 0.07, z + (i % 2 ? 0.05 : -0.05)], 0.018, REED);
+  }
+  b.cylinder(0.12, 0.12, 0.012, [0.4, 0.1, 0.35], { color: '#4a7a3a', tex: 'leaf' }, undefined, 9); // a lily pad
+}

@@ -141,6 +141,8 @@ export interface BuildingSpec {
   };
   /** Players can't place it (e.g. a starting-only building). */
   unbuildable?: boolean;
+  /** A wall piece: blocks the way, laid in lines by hand (shift-click to keep placing). The AI doesn't build these. */
+  wall?: boolean;
 }
 
 /** Raises one unit type's refinement for its owner, everywhere. Cost derives from the curve. */

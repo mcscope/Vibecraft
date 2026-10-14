@@ -162,6 +162,10 @@ export const buildings: FenBuilding[] = [
     size: 2, materials: 220, requires: ['reed-hut'], trains: ['bog-toad', 'pack-tortoise'], model: models.toadWallow,
   },
   {
+    id: 'canal', name: 'Canal', description: 'A dug channel of fen water: nothing walks through it. Cheap; shift-click to dig a line of them.',
+    size: 1, materials: 12, wall: true, model: models.canal,
+  },
+  {
     id: 'elder-mound', name: 'Elder Mound', description: 'Where the fen\'s lore is kept and taught: every deep technology is learned here, and only here.',
     size: 3, materials: 700, requires: ['reed-hut'], researches: ['fen-lore', 'fen-lore-2', 'fen-lore-3', 'reed-lore', 'toad-lore'], model: models.elderMound,
   },
