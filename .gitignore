@@ -17,3 +17,4 @@ android/
 # Web
 node_modules/
 dist/
+.vite
