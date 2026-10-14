@@ -3,7 +3,8 @@ import type { ResourceKind, Stock, UnitSpec } from '../factions/types';
 import { itemCost, MAX_QUEUE, plantKg, RESOURCES, type Building, type Unit, type World } from '../sim/world';
 import { CAP, capitalFor, derive, type DerivedStats } from '../sim/physics';
 import { f1, fmt, have, n0, need, pct } from './format';
-import { TEAM_COLORS, unitFrame } from '../render/renderer';
+import { unitFrame } from '../render/renderer';
+import { teamColor } from '../render/artbank';
 import { blit, spriteIcon, spriteToCanvas } from '../art/draw';
 import { unitSprite } from '../art/contract';
 import type { ArtBank } from '../render/artbank';
@@ -395,7 +396,7 @@ export class Hud {
       <div class="unit-panel">
         <canvas class="portrait big" data-portrait="${u.owner}:${u.specId}:${u.id}"></canvas>
         <div class="info">
-          <h3><i class="swatch" style="background:${TEAM_COLORS[u.owner].primary}"></i>${s.spec.name}${own ? '' : ` <small>${this.world.players[u.owner].name}</small>`}</h3>
+          <h3><i class="swatch" style="background:${teamColor(this.world, u.owner).primary}"></i>${s.spec.name}${own ? '' : ` <small>${this.world.players[u.owner].name}</small>`}</h3>
           <div class="state" data-state></div>
           <div class="bar hp" data-bar="hp"><i></i><span></span></div>
           ${u.dummy ? '' : `<div class="bar cal" data-bar="cal"><i></i><span></span></div>
@@ -460,7 +461,7 @@ export class Hud {
     const w = this.world;
     const own = b.owner === this.player;
     const st = b.stats;
-    const head = `<h3><i class="swatch" style="background:${TEAM_COLORS[b.owner].primary}"></i>${b.spec.name}${own ? '' : ` <small>${w.players[b.owner].name}</small>`}</h3>
+    const head = `<h3><i class="swatch" style="background:${teamColor(w, b.owner).primary}"></i>${b.spec.name}${own ? '' : ` <small>${w.players[b.owner].name}</small>`}</h3>
       <div class="bar hp" data-bar="bhp"><i></i><span></span></div>`;
     if (!b.complete) {
       return `<div class="building-panel"><div class="info">${head}
@@ -534,6 +535,8 @@ export function describeOrder(w: World, u: Unit): string {
   if (u.exhausted) return 'Exhausted — resting';
   switch (o.kind) {
     case 'idle': return u.engage ? 'Fighting' : u.carter ? 'Waiting for orders' : 'Idle';
+    case 'wild': return u.engage ? 'Attacking' : u.wild === 'aggressive' ? 'Prowling' : 'Grazing';
+    case 'hunt': return 'Hunting';
     case 'move': return 'Moving';
     case 'attackMove': return u.engage ? 'Fighting' : 'Attack-moving';
     case 'attack': return 'Attacking';

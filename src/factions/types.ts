@@ -10,7 +10,7 @@
 // `FactionSpec.art` (see src/art/contract.ts). How it makes that art — a 3D
 // bake, hand-drawn sheets, generated images — is up to the faction.
 
-import type { ArtLoader } from '../art/contract';
+import type { ArtLoader, BiomeLoader } from '../art/contract';
 
 export type AttackStyle = 'strike' | 'throw';
 
@@ -155,4 +155,23 @@ export interface FactionSpec {
   resourceNames?: Partial<Record<ResourceKind, string>>;
   /** Supplies the faction's art (sprites, building looks, flag, sounds, music) for a team colour. */
   art?: ArtLoader;
+  /** The look of this faction's half of the map (ground, trees, bushes, deposits, clutter, wildlife art). */
+  biome?: BiomeLoader;
+  /** Animals that roam this faction's half of the map. Neutral: they belong to no player. */
+  wildlife?: WildSpec[];
+}
+
+/**
+ * A wild animal: a unit design (same physics as any unit) plus how it behaves.
+ * Passive animals graze and can be hunted by workers; aggressive ones attack
+ * whatever comes close, chase a little way, then go home. A killed animal leaves
+ * a carcass of food.
+ */
+export interface WildSpec extends UnitSpec {
+  temper: 'passive' | 'aggressive';
+  /** Animals per group, and groups per map half. */
+  group: number;
+  count: number;
+  /** kg of food the carcass holds (default: half its body mass). */
+  meat?: number;
 }

@@ -2,7 +2,8 @@
 // Given the same seed, factions and command stream, every client computes the
 // exact same world. Iteration order is Map insertion order (= id order).
 
-import type { BuildingSpec, FactionSpec, ResourceKind, Stock, TechSpec, UnitSpec } from '../factions/types';
+import type { BuildingSpec, FactionSpec, ResourceKind, Stock, TechSpec, UnitSpec, WildSpec } from '../factions/types';
+import { Rng } from './rng';
 import type { PlayerCommand } from './commands';
 import type { Grid } from './map';
 import { skirmish, type Scenario } from './scenarios';
@@ -45,10 +46,19 @@ export interface PlayerState {
   /** Technologies researched or in progress. */
   techs: string[];
   researched: string[];
+  /** The Wilds: owns the wildlife, never wins or loses, isn't anyone's opponent. */
+  neutral?: boolean;
 }
+
+/** Wildlife tuning (engine-wide). */
+export const WILD = { wander: 5, aggro: 5, leash: 10, minFromHome: 16, apart: 8 } as const;
 
 export type Order =
   | { kind: 'idle' }
+  /** A worker hunting a passive animal (x/y: where it was last seen). */
+  | { kind: 'hunt'; target: number; x: number; y: number }
+  /** Wildlife: roam around a home spot (tx/ty: current wander target, rest: ticks until the next). */
+  | { kind: 'wild'; hx: number; hy: number; tx: number; ty: number; rest: number }
   | { kind: 'move'; x: number; y: number }
   | { kind: 'attackMove'; x: number; y: number }
   | { kind: 'attack'; target: number }
@@ -107,6 +117,8 @@ export interface Unit {
   stuck: number; // ticks of little progress toward the current goal
   /** Training dummy: inert target. */
   dummy: boolean;
+  /** Wildlife temper (wild units only). */
+  wild?: 'passive' | 'aggressive';
   carter: boolean;
   /** Progress toward the next whole kilogram being gathered. */
   gatherAcc: number;
@@ -157,6 +169,8 @@ export interface ResourceNode {
   /** Shards (dropped/thrown crystals) don't block and can be walked over. */
   shard: boolean;
   tree: boolean;
+  /** What's left of a killed animal (drawn as a carcass). */
+  carcass?: boolean;
   /** Still growing: kg yet to grow, and kg per second. */
   growLeft?: number;
   growRate?: number;
@@ -219,8 +233,15 @@ export class World {
   private pending: PlayerCommand[] = [];
 
   readonly scenario: Scenario;
+  /** Each player's home (town center middle), for territories. */
+  readonly homes: Array<[number, number]> = [];
+  /** The Wilds' player id, or -1. */
+  wildsId = -1;
+  /** Sim-side dice (deterministic: every client rolls the same). */
+  private readonly rng: Rng;
 
   constructor(opts: WorldOptions) {
+    this.rng = new Rng((opts.seed * 2654435761) ^ 0x5eed);
     this.scenario = opts.scenario ?? skirmish();
     const map = this.scenario.map(opts.seed);
     this.grid = map.grid;
@@ -234,12 +255,69 @@ export class World {
       });
     }
     opts.players.forEach((p, i) => {
-      this.factions.set(p.faction.id, p.faction);
-      this.players.push({ id: i, name: p.name, factionId: p.faction.id, defeated: false, refine: {}, refineWork: {}, techs: [], researched: [] });
+      // two players may bring different factions under the same id: give the later one its own key
+      const key = this.factions.has(p.faction.id) && this.factions.get(p.faction.id) !== p.faction ? `${p.faction.id}#${i}` : p.faction.id;
+      this.factions.set(key, p.faction);
+      this.players.push({ id: i, name: p.name, factionId: key, defeated: false, refine: {}, refineWork: {}, techs: [], researched: [] });
       for (const s of p.faction.units) this.unitSpecs.set(`${i}/${s.id}`, { spec: s, stats: derive(s) });
-      for (const b of p.faction.buildings ?? []) this.buildingStats.set(`${p.faction.id}/${b.id}`, deriveBuilding(b, p.faction));
+      for (const b of p.faction.buildings ?? []) this.buildingStats.set(`${key}/${b.id}`, deriveBuilding(b, p.faction));
     });
     this.scenario.setup(this, map);
+    for (let i = 0; i < this.players.length; i++) {
+      const [sx, sy] = map.starts[i] ?? map.starts[0];
+      this.homes.push([sx + 1.5, sy + 1.5]);
+    }
+    if (this.scenario.wildlife !== false) this.addWilds(opts.players.map((p) => p.faction));
+  }
+
+  /** Whose half of the map a point is in: the player with the nearest home. */
+  territory(x: number, y: number): number {
+    let best = 0, bestD = Infinity;
+    this.homes.forEach(([hx, hy], i) => { const d = (hx - x) ** 2 + (hy - y) ** 2; if (d < bestD) { bestD = d; best = i; } });
+    return best;
+  }
+
+  /** The Wilds: a neutral side that owns every faction's wildlife, spawned in groups in that faction's half. */
+  private addWilds(factions: FactionSpec[]): void {
+    const specs: WildSpec[] = [];
+    const idOf = new Map<WildSpec, string>();
+    factions.forEach((f, i) => {
+      for (const w of f.wildlife ?? []) {
+        const clash = specs.find((x) => x.id === w.id && x !== w);
+        const id = clash ? `${w.id}@${i}` : w.id;
+        if (!specs.includes(w)) specs.push(clash ? { ...w, id } : w);
+        idOf.set(w, id);
+      }
+    });
+    if (!specs.length) return;
+    const id = this.players.length;
+    this.wildsId = id;
+    const wilds: FactionSpec = { id: 'wilds', name: 'The Wilds', workerId: '', units: specs };
+    this.factions.set(wilds.id, wilds);
+    this.players.push({ id, name: 'Wilds', factionId: wilds.id, defeated: false, refine: {}, refineWork: {}, techs: [], researched: [], neutral: true });
+    for (const s of specs) this.unitSpecs.set(`${id}/${s.id}`, { spec: s, stats: derive(s) });
+    const dens: Array<[number, number]> = [];
+    factions.forEach((f, owner) => {
+      for (const w of f.wildlife ?? []) {
+        const uid = idOf.get(w)!;
+        for (let g = 0; g < w.count; g++) {
+          for (let tries = 0; tries < 300; tries++) {
+            const x = this.rng.int(2, this.grid.width - 2) + 0.5, y = this.rng.int(2, this.grid.height - 2) + 0.5;
+            if (this.grid.isBlocked(x, y) || this.territory(x, y) !== owner) continue;
+            if (this.homes.some(([hx, hy]) => Math.hypot(hx - x, hy - y) < WILD.minFromHome)) continue;
+            if (dens.some(([dx, dy]) => Math.hypot(dx - x, dy - y) < WILD.apart)) continue;
+            dens.push([x, y]);
+            for (let k = 0; k < w.group; k++) {
+              const u = this.spawnAt(id, uid, x + this.rng.range(-1.2, 1.2), y + this.rng.range(-1.2, 1.2), this.rng.int(0, 8));
+              if (!u) continue;
+              u.wild = w.temper;
+              u.order = { kind: 'wild', hx: x, hy: y, tx: u.x, ty: u.y, rest: this.rng.int(20, 120) };
+            }
+            break;
+          }
+        }
+      }
+    });
   }
 
   // ───────────────────────────── queries ─────────────────────────────
@@ -507,6 +585,11 @@ export class World {
         }
         return;
       }
+      case 'hunt': {
+        const prey = this.units.get(cmd.target);
+        if (!prey || prey.wild !== 'passive') return;
+        return set(mine(cmd.units).filter((u) => u.stats.gatherRate > 0), { kind: 'hunt', target: prey.id, x: prey.x, y: prey.y });
+      }
       case 'construct': {
         const site = ownBuilding(cmd.site);
         if (!site || site.complete) return;
@@ -702,9 +785,10 @@ export class World {
 
   /** Carts currently heading to (or pinned to) a building. */
   /** Sowing: keep the ground around the building planted, paying seed from its own stock. */
-  private tickSow(b: Building): void {
-    const sow = b.spec.sow!;
-    // which enabled resource is furthest below its quota of living plants?
+  /** What a sowing building will plant next: the enabled kind furthest below its quota of living plants. */
+  sowNext(b: Building): 'food' | 'wood' | null {
+    const sow = b.spec.sow;
+    if (!sow) return null;
     let res: 'food' | 'wood' | null = null, best = 0;
     for (const r of b.sowing) {
       let n = 0;
@@ -712,6 +796,12 @@ export class World {
       const lack = 1 - n / (sow.maxPlants?.[r] ?? SOW_MAX[r]);
       if (lack > best) { best = lack; res = r; }
     }
+    return res;
+  }
+
+  private tickSow(b: Building): void {
+    const sow = b.spec.sow!;
+    const res = this.sowNext(b);
     // the mechanism is still busy with the last planting
     if (b.sowProgress > 0) { b.sowProgress = Math.max(0, b.sowProgress - b.stats.sowRate * DT); return; }
     if (!res) return;
@@ -781,6 +871,7 @@ export class World {
   private tickUnit(u: Unit): void {
     if (u.dummy) { u.animT += DT; return; }
     const st = u.stats;
+    if (u.wild) u.cal = st.maxCalories; // they graze
     if (u.cooldown > 0) u.cooldown -= DT;
     if (u.swing > 0) u.swing -= DT;
     if (u.repathIn > 0) u.repathIn--;
@@ -812,6 +903,8 @@ export class World {
     }
     switch (o.kind) {
       case 'idle': return this.runIdle(u);
+      case 'wild': return this.runWild(u, o);
+      case 'hunt': return this.runHunt(u, o);
       case 'move': {
         if (this.moveTo(u, o.x, o.y, 0.3)) { this.finish(u); }
         return u.x !== u.px || u.y !== u.py;
@@ -871,6 +964,54 @@ export class World {
         u.order = { kind: 'gather', node: shard.id, nodeType: 'crystal', phase: 'toNode', stopWhenArmed: true };
       }
     }
+    return false;
+  }
+
+  /** Hunting: reach the animal and bring it down, then gather what it leaves. */
+  private runHunt(u: Unit, o: Extract<Order, { kind: 'hunt' }>): boolean {
+    const prey = this.units.get(o.target);
+    if (prey && prey.hp > 0) {
+      o.x = prey.x; o.y = prey.y;
+      if (!this.moveTo(u, prey.x, prey.y, u.stats.radius + prey.stats.radius + 0.4)) return u.x !== u.px || u.y !== u.py;
+      this.face(u, prey.x - u.x, prey.y - u.y);
+      prey.hp = 0; // it leaves a carcass when it's reaped this tick
+      return false;
+    }
+    const carcass = [...this.nodes.values()].find((n) => n.carcass && (n.x - o.x) ** 2 + (n.y - o.y) ** 2 < 9);
+    if (carcass) u.order = { kind: 'gather', node: carcass.id, nodeType: 'food', phase: 'toNode', stopWhenArmed: false };
+    else this.finish(u);
+    return false;
+  }
+
+  /** Wildlife: wander near home; the aggressive attack what comes close (within a leash). Passive ones just graze. */
+  private runWild(u: Unit, o: Extract<Order, { kind: 'wild' }>): boolean {
+    const moving = () => u.x !== u.px || u.y !== u.py;
+    const fromHome = Math.hypot(u.x - o.hx, u.y - o.hy);
+    const nearest = (r: number) => {
+      let best: Unit | null = null, bestD = r * r;
+      for (const e of this.units.values()) {
+        if (e.owner === u.owner || e.dummy) continue;
+        const d = (e.x - u.x) ** 2 + (e.y - u.y) ** 2;
+        if (d < bestD) { bestD = d; best = e; }
+      }
+      return best;
+    };
+    if (u.wild === 'aggressive') {
+      if (u.engage && fromHome < WILD.leash && this.units.has(u.engage) && this.attackTarget(u, u.engage)) return moving();
+      u.engage = 0;
+      if (fromHome < WILD.leash && (this.tick + u.id) % 5 === 0) {
+        const e = nearest(WILD.aggro);
+        if (e) { u.engage = e.id; return moving(); }
+      }
+    }
+    if (fromHome > WILD.leash) { o.tx = o.hx; o.ty = o.hy; } // strayed too far: head home
+    if (Math.hypot(u.x - o.tx, u.y - o.ty) > 0.4) { this.moveTo(u, o.tx, o.ty, 0.3); return moving(); }
+    if (o.rest > 0) { o.rest--; return false; }
+    // pick the next spot to graze or prowl
+    const a = this.rng.next() * Math.PI * 2, r = this.rng.next() * WILD.wander;
+    const spot = this.grid.nearestOpen(o.hx + Math.cos(a) * r, o.hy + Math.sin(a) * r, 3);
+    if (spot) { o.tx = spot[0]; o.ty = spot[1]; }
+    o.rest = this.rng.int(40, 160);
     return false;
   }
 
@@ -980,7 +1121,7 @@ export class World {
   private nearestEnemy(u: Unit, radius: number, includeDummies: boolean): number {
     let best = 0, bestD = radius * radius;
     for (const e of this.units.values()) {
-      if (e.owner === u.owner || (e.dummy && !includeDummies)) continue;
+      if (e.owner === u.owner || (e.dummy && !includeDummies) || (e.wild === 'passive' && !includeDummies)) continue;
       const d = (e.x - u.x) ** 2 + (e.y - u.y) ** 2;
       if (d < bestD) { bestD = d; best = e.id; }
     }
@@ -1364,7 +1505,11 @@ export class World {
     for (const u of this.units.values()) {
       if (u.hp > 0) continue;
       this.units.delete(u.id);
-      this.dropShard(u.x, u.y, u.crystal + u.ammo);
+      if (u.wild) {
+        const spec = this.specOf(u.owner, u.specId)?.spec as WildSpec | undefined;
+        const spot = this.grid.nearestOpen(u.x, u.y, 3);
+        if (spot) this.addNode({ type: 'food', x: spot[0], y: spot[1], amount: spec?.meat ?? Math.round(u.stats.mass / 2), shard: false, tree: false, carcass: true });
+      } else this.dropShard(u.x, u.y, u.crystal + u.ammo);
       this.events.push({ type: 'death', x: u.x, y: u.y, id: u.id, owner: u.owner, specId: u.specId, heading: u.heading });
     }
     for (const b of this.buildings.values()) {
@@ -1375,13 +1520,13 @@ export class World {
     }
     if (this.tick % TICK_RATE !== 0 || !this.scenario.victory) return;
     for (const p of this.players) {
-      if (p.defeated) continue;
+      if (p.defeated || p.neutral) continue;
       const fighters = this.unitsOf(p.id).filter((u) => !u.carter);
       if (this.buildingsOf(p.id).length === 0 && fighters.length === 0) p.defeated = true;
       else if (this.buildingsOf(p.id).length === 0 && fighters.every((u) => !this.armed(u))) p.defeated = true;
     }
-    const alive = this.players.filter((p) => !p.defeated);
-    if (alive.length <= 1 && this.players.length > 1) {
+    const alive = this.players.filter((p) => !p.defeated && !p.neutral);
+    if (alive.length <= 1 && this.players.filter((p) => !p.neutral).length > 1) {
       this.winner = alive[0]?.id ?? 0;
       this.events.push({ type: 'gameOver', winner: this.winner });
     }

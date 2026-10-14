@@ -227,11 +227,20 @@ export class Baker {
       grid.width = fw * n;
       grid.height = fh * rows;
       const ctx = grid.getContext('2d', { willReadFrequently: true })!;
-      this.setCanvas(cw * n, chh * rows);
+      // Render in batches that fit the GPU's drawing-buffer limit. A big body's
+      // frames side by side can exceed it, and the browser then silently shrinks
+      // the canvas, so frames get read back from the wrong place (they jitter).
+      const gl = this.renderer.getContext();
+      const lim = Math.min(4096, (gl.getParameter(gl.MAX_VIEWPORT_DIMS) as Int32Array)[0], gl.getParameter(gl.MAX_RENDERBUFFER_SIZE) as number);
+      const cols = Math.max(1, Math.min(n, Math.floor(lim / cw)));
+      const rowsPer = Math.max(1, Math.min(rows, Math.floor(lim / chh)));
+      this.setCanvas(cols * cw, rowsPer * chh);
+      for (let r0 = 0; r0 < rows; r0 += rowsPer) for (let f0 = 0; f0 < n; f0 += cols) {
+      const nr = Math.min(rowsPer, rows - r0), nc = Math.min(cols, n - f0);
       this.renderer.setScissorTest(true);
-      for (let di = 0; di < rows; di++) {
+      for (let di = r0; di < r0 + nr; di++) {
         const theta = (BAKED_DIRS[di] * Math.PI) / 4;
-        for (let f = 0; f < n; f++) {
+        for (let f = f0; f < f0 + nc; f++) {
           const phase = anim === 'die' ? f / (n - 1) : f / n;
           this.clearStage();
           const body = new THREE.Group();
@@ -244,15 +253,16 @@ export class Baker {
             body.position.y = -0.04 * k;
           }
           this.stage.rotation.y = -theta;
-          const vy = (rows - 1 - di) * chh; // GL viewports start bottom-left
-          this.renderer.setViewport(f * cw, vy, cw, chh);
-          this.renderer.setScissor(f * cw, vy, cw, chh);
+          const vx = (f - f0) * cw, vy = (rowsPer - 1 - (di - r0)) * chh; // GL viewports start bottom-left
+          this.renderer.setViewport(vx, vy, cw, chh);
+          this.renderer.setScissor(vx, vy, cw, chh);
           this.renderer.render(this.scene, this.camera);
           onFrame?.();
         }
       }
       this.renderer.setScissorTest(false);
-      ctx.drawImage(this.renderer.domElement, 0, 0, cw * n, chh * rows, 0, 0, fw * n, fh * rows);
+      ctx.drawImage(this.renderer.domElement, 0, 0, nc * cw, nr * chh, f0 * fw, r0 * fh, nc * fw, nr * fh);
+      }
       // crop each cell to its alpha bounds
       const data = ctx.getImageData(0, 0, grid.width, grid.height).data;
       const list: Crop[] = [];

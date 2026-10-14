@@ -113,6 +113,8 @@ export const training: FactionSpec = {
   townCenterId: 'fort',
   units: [strawDummy, armoredDummy, bales],
   buildings: [{ id: 'fort', name: 'Target Fort', description: 'A practice fort. Knock it down; it gets rebuilt.', size: 3, materials: 810, unbuildable: true }],
+  // the range's half of the map: an autumn meadow (no wildlife on a practice range)
+  biome: (onProgress) => import('../../biomes/meadow').then((m) => m.bakeMeadow(onProgress, 'autumn')),
   art: (team, onProgress) => import('../../kits/bake3d/baker').then(async ({ Baker }) => {
     const baker = new Baker();
     const art = { units: {} as Record<string, import('../../art/contract').UnitArt>, buildings: { fort: baker.bakeBuilding(fort, 3, team) }, flag: baker.bakeStatic(fort, team) };

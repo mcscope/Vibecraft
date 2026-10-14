@@ -1,7 +1,8 @@
+import type { BiomeArt } from '../art/contract';
 import { TERRAIN_SAND, TERRAIN_WATER } from '../sim/map';
 import type { World } from '../sim/world';
 import type { Camera } from '../render/camera';
-import { TEAM_COLORS } from '../render/renderer';
+import { teamColor } from '../render/artbank';
 
 /** Diamond-shaped minimap matching the isometric view. */
 export class Minimap {
@@ -9,7 +10,8 @@ export class Minimap {
   private ctx: CanvasRenderingContext2D;
   readonly size: number;
 
-  constructor(readonly canvas: HTMLCanvasElement, private world: World, size = 200) {
+  /** `ground(x, y)` gives that half of the map's biome colours (defaults: the meadow). */
+  constructor(readonly canvas: HTMLCanvasElement, private world: World, size = 200, private ground?: (x: number, y: number) => BiomeArt['ground']) {
     this.size = size;
     const dpr = window.devicePixelRatio || 1;
     canvas.width = size * dpr;
@@ -25,7 +27,8 @@ export class Minimap {
     const g = world.grid;
     for (let y = 0; y < g.height; y++) for (let x = 0; x < g.width; x++) {
       const t = g.terrain[y * g.width + x];
-      b.fillStyle = t === TERRAIN_WATER ? '#2f5f7a' : t === TERRAIN_SAND ? '#b8a070' : '#5d7a2f';
+      const gr = this.ground?.(x + 0.5, y + 0.5);
+      b.fillStyle = t === TERRAIN_WATER ? gr?.shallow ?? '#2f5f7a' : t === TERRAIN_SAND ? gr?.sand ?? '#b8a070' : gr?.grass[0] ?? '#5d7a2f';
       const [px, py] = this.toMini(x + 0.5, y + 0.5);
       b.fillRect(px - 1.6, py - 0.8, 3.2, 1.6);
     }
@@ -68,7 +71,7 @@ export class Minimap {
     for (const n of this.world.nodes.values()) {
       if (n.shard) continue;
       const [x, y] = this.toMini(n.x, n.y);
-      ctx.fillStyle = n.tree ? '#2d4a22' : n.type === 'food' ? '#c0392b' : '#7ad7ef';
+      ctx.fillStyle = n.tree ? this.ground?.(n.x, n.y)?.forest ?? '#2d4a22' : n.type === 'food' ? '#c0392b' : '#7ad7ef';
       ctx.fillRect(x - 1, y - 1, 2, 2);
     }
     return (this.layer = c);
@@ -83,14 +86,14 @@ export class Minimap {
     this.staticLayer();
     for (const b of world.buildings.values()) {
       const [x, y] = this.toMini(b.ox + b.size / 2, b.oy + b.size / 2);
-      ctx.fillStyle = TEAM_COLORS[b.owner].primary;
+      ctx.fillStyle = teamColor(this.world, b.owner).primary;
       ctx.fillRect(x - 4, y - 3, 8, 6);
       ctx.strokeStyle = '#fff';
       ctx.strokeRect(x - 4, y - 3, 8, 6);
     }
     for (const u of world.units.values()) {
       const [x, y] = this.toMini(u.x, u.y);
-      ctx.fillStyle = TEAM_COLORS[u.owner].primary;
+      ctx.fillStyle = teamColor(this.world, u.owner).primary;
       ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
     }
     // camera viewport

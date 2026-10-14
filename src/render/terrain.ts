@@ -4,7 +4,7 @@
 import { TERRAIN_SAND, TERRAIN_WATER } from '../sim/map';
 import type { World } from '../sim/world';
 import { TILE_H, TILE_W, isoX, isoY } from './camera';
-import type { Sprite } from '../art/contract';
+import type { BiomeArt, Sprite } from '../art/contract';
 
 /** Terrain is painted at this many pixels per screen pixel (zoom 1), for crispness. */
 export const TERRAIN_SCALE = 1.5;
@@ -15,11 +15,17 @@ type RGB = [number, number, number];
 const hex = (h: string): RGB => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 const mix = (a: RGB, b: RGB, t: number): RGB => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
-const GRASS_A = hex('#5d7a2f'), GRASS_B = hex('#6f8a37'), GRASS_C = hex('#4b6627');
-const DIRT_A = hex('#86704a'), DIRT_B = hex('#6d5a3a');
-const FOREST = hex('#3f4a22');
-const SAND = hex('#c2a978');
-const SHALLOW = hex('#4b8299'), DEEP = hex('#24506b');
+/** Ground colours for one biome, as RGB. */
+interface Palette { ga: RGB; gb: RGB; gc: RGB; da: RGB; db: RGB; forest: RGB; sand: RGB; shallow: RGB; deep: RGB }
+const DEFAULT_GROUND: NonNullable<BiomeArt['ground']> = { grass: ['#5d7a2f', '#6f8a37', '#4b6627'], dirt: ['#86704a', '#6d5a3a'], forest: '#3f4a22', sand: '#c2a978', shallow: '#4b8299', deep: '#24506b' };
+function palette(g: BiomeArt['ground']): Palette {
+  const x = g ?? DEFAULT_GROUND;
+  return { ga: hex(x.grass[0]), gb: hex(x.grass[1]), gc: hex(x.grass[2]), da: hex(x.dirt[0]), db: hex(x.dirt[1]), forest: hex(x.forest), sand: hex(x.sand), shallow: hex(x.shallow), deep: hex(x.deep) };
+}
+
+/** Which biome paints each part of the map: each player's half has its own (blended at the border). */
+export interface Looks { biomes: BiomeArt[]; homes: Array<[number, number]> }
+const BORDER = 3; // tiles of blend across a territory border
 
 /** Tileable value noise sampler. */
 function makeNoise(size: number, seed: number): (x: number, y: number) => number {
@@ -38,7 +44,18 @@ function makeNoise(size: number, seed: number): (x: number, y: number) => number
   };
 }
 
-export function paintTerrain(world: World, extraDirt: Array<[number, number, number]> = [], doodads?: Doodads): HTMLCanvasElement {
+export function paintTerrain(world: World, extraDirt: Array<[number, number, number]> = [], looks?: Looks): HTMLCanvasElement {
+  const pals = (looks?.biomes.length ? looks.biomes : [null]).map((b) => palette(b?.ground));
+  const homes = looks?.homes.length ? looks.homes : [[0, 0] as [number, number]];
+  /** Nearest and second-nearest home, and how far past the border (in tiles) the point is. */
+  const near = (x: number, y: number): [number, number, number] => {
+    let a = 0, b = -1, da = Infinity, db = Infinity;
+    homes.forEach(([hx, hy], i) => {
+      const d = Math.hypot(hx - x, hy - y);
+      if (d < da) { db = da; b = a; da = d; a = i; } else if (d < db) { db = d; b = i; }
+    });
+    return [a, b, (db - da) / 2];
+  };
   const S = TERRAIN_SCALE;
   const g = world.grid;
   const W = g.width, H = g.height;
@@ -96,25 +113,30 @@ export function paintTerrain(world: World, extraDirt: Array<[number, number, num
       const grain = n4((px / S) * 0.45, (py / S) * 0.9);
       const wobble = (mid - 0.5) * 0.5 + (fine - 0.5) * 0.25;
 
-      let c: RGB = mix(mix(GRASS_A, GRASS_B, smooth(0.35, 0.75, big)), GRASS_C, smooth(0.55, 0.85, mid) * 0.6);
-      // forest floor under woods
       const f = smooth(0.25, 0.65, sample(forest, wx, wy) + wobble);
-      c = mix(c, FOREST, f * 0.85);
-      // trodden dirt around buildings and mines
       const dw = smooth(0.35, 0.7, sample(dirt, wx, wy) + wobble);
-      c = mix(c, mix(DIRT_A, DIRT_B, fine), dw);
-      // sand and water
       const wv = sample(water, wx, wy) + wobble * 0.6;
       const sv = Math.max(sample(sand, wx, wy), smooth(0.05, 0.4, wv)) + wobble * 0.4;
-      c = mix(c, mix(SAND, DIRT_A, mid * 0.4), smooth(0.35, 0.6, sv));
       const wt = smooth(0.42, 0.52, wv);
-      if (wt > 0) {
-        const depth = smooth(0.5, 1.0, wv);
-        let wc = mix(SHALLOW, DEEP, depth);
-        const ripple = Math.sin((wx + wy) * 6 + mid * 9) * 0.5 + 0.5;
-        wc = mix(wc, [200, 225, 230], ripple * 0.08 * (1 - depth) + smooth(0.42, 0.47, wv) * (1 - smooth(0.47, 0.55, wv)) * 0.5);
-        c = mix(c, wc, wt);
-      }
+      const paint = (P: Palette): RGB => {
+        let c: RGB = mix(mix(P.ga, P.gb, smooth(0.35, 0.75, big)), P.gc, smooth(0.55, 0.85, mid) * 0.6);
+        c = mix(c, P.forest, f * 0.85); // forest floor under woods
+        c = mix(c, mix(P.da, P.db, fine), dw); // trodden dirt around buildings and mines
+        c = mix(c, mix(P.sand, P.da, mid * 0.4), smooth(0.35, 0.6, sv)); // shore
+        if (wt > 0) {
+          const depth = smooth(0.5, 1.0, wv);
+          let wc = mix(P.shallow, P.deep, depth);
+          const ripple = Math.sin((wx + wy) * 6 + mid * 9) * 0.5 + 0.5;
+          wc = mix(wc, [200, 225, 230], ripple * 0.08 * (1 - depth) + smooth(0.42, 0.47, wv) * (1 - smooth(0.47, 0.55, wv)) * 0.5);
+          c = mix(c, wc, wt);
+        }
+        return c;
+      };
+      // this point's half of the map, blended into the neighbour's near the border (wobbly, not a ruler line)
+      const [ta, tb, past] = near(wx, wy);
+      let c = paint(pals[ta] ?? pals[0]);
+      const edge = past + (mid - 0.5) * 2.5;
+      if (tb >= 0 && edge < BORDER && pals[tb] && pals[tb] !== pals[ta]) c = mix(paint(pals[tb]), c, smooth(-BORDER, BORDER, edge));
       // fine grain + tufts so it doesn't look airbrushed
       const k = 0.88 + grain * 0.16 + (fine - 0.5) * 0.12 - (fine > 0.78 && wt < 0.5 ? 0.12 : 0);
       d[o] = Math.min(255, c[0] * k);
@@ -124,7 +146,7 @@ export function paintTerrain(world: World, extraDirt: Array<[number, number, num
     }
   }
   ctx.putImageData(img, 0, 0);
-  if (doodads) scatter(ctx, world, doodads, { forest, dirt, sand, water, sample, ox });
+  if (looks?.biomes.length) scatter(ctx, world, (x, y) => looks.biomes[near(x, y)[0]]?.doodads ?? looks.biomes[0].doodads, { forest, dirt, sand, water, sample, ox });
   return canvas;
 }
 
@@ -134,7 +156,7 @@ export function paintTerrain(world: World, extraDirt: Array<[number, number, num
  * tile, drawn back-to-front so nearer props overlap farther ones.
  */
 function scatter(
-  ctx: CanvasRenderingContext2D, world: World, d: Doodads,
+  ctx: CanvasRenderingContext2D, world: World, doodadsAt: (x: number, y: number) => Doodads,
   f: { forest: Float32Array; dirt: Float32Array; sand: Float32Array; water: Float32Array; sample: (a: Float32Array, x: number, y: number) => number; ox: number },
 ): void {
   const g = world.grid;
@@ -152,6 +174,7 @@ function scatter(
       if (occupied[i] || g.terrain[i] === TERRAIN_WATER) continue;
       seed = (x * 73856093) ^ (y * 19349663) ^ 0x5bd1e995;
       const cx = x + 0.5, cy = y + 0.5;
+      const d = doodadsAt(cx, cy);
       const forest = f.sample(f.forest, cx, cy), dirt = f.sample(f.dirt, cx, cy), shore = f.sample(f.water, cx, cy);
       // sparse: about one prop every other grass tile, fewer on forest floor and dirt
       const chance = forest > 0.4 ? 0.3 : dirt > 0.5 || shore > 0.25 ? 0.12 : 0.45;

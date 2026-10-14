@@ -1,9 +1,14 @@
 import './style.css';
 import { meadowfolk } from './factions/meadowfolk';
+import { PLAYABLE } from './factions';
+import type { FactionSpec } from './factions/types';
 import { training } from './factions/training';
 import { World, DT } from './sim/world';
 import { provingGrounds, skirmish } from './sim/scenarios';
-import { Lockstep, LocalInput, LoopbackTransport, type CommandSource } from './net/lockstep';
+import { Lockstep, LocalInput, LoopbackTransport, type CommandSource, type Transport } from './net/lockstep';
+import { NetTransport } from './net/relayClient';
+import type { OnlineGame } from './net/online';
+import { openLobby } from './ui/lobby';
 import { SkirmishAI } from './ai/skirmishAI';
 import { CartDebug } from './ui/cartDebug';
 import { Renderer } from './render/renderer';
@@ -14,14 +19,24 @@ import { Minimap } from './ui/minimap';
 import { AudioEngine } from './audio/engine';
 import { mountSettingsDialog, onSettings, settings } from './ui/settings';
 
-type Mode = 'demo' | 'skirmish' | 'spectate';
-const HUMAN = 0;
+type Mode = 'demo' | 'skirmish' | 'spectate' | 'online';
 const params = new URLSearchParams(location.search);
 // Seed choice happens outside the sim, so Math.random is fine here.
 const seed = Number(params.get('seed') ?? Math.floor(Math.random() * 1e9));
 
 mountSettingsDialog();
 const menu = document.getElementById('menu')!;
+
+// who plays whom in skirmish / spectate (remembered between visits)
+const PICK_KEY = 'vibecraft.matchup';
+const picked = (() => { try { return JSON.parse(localStorage.getItem(PICK_KEY) ?? '{}') as { you?: string; foe?: string }; } catch { return {}; } })();
+for (const sel of menu.querySelectorAll<HTMLSelectElement>('[data-pick]')) {
+  const which = sel.dataset.pick as 'you' | 'foe';
+  sel.innerHTML = PLAYABLE.map((f) => `<option value="${f.id}">${f.name}</option>`).join('');
+  sel.value = params.get(which) ?? picked[which] ?? (which === 'foe' && PLAYABLE[1] ? PLAYABLE[1].id : PLAYABLE[0].id);
+  sel.addEventListener('change', () => { picked[which] = sel.value; try { localStorage.setItem(PICK_KEY, JSON.stringify(picked)); } catch { /* private mode */ } });
+}
+const pick = (which: 'you' | 'foe'): FactionSpec => PLAYABLE.find((f) => f.id === menu.querySelector<HTMLSelectElement>(`[data-pick="${which}"]`)!.value) ?? meadowfolk;
 const loading = document.getElementById('loading')!;
 const mode = params.get('mode') as Mode | null;
 if (mode) start(mode);
@@ -30,19 +45,67 @@ else {
   menu.addEventListener('click', (e) => {
     const href = (e.target as HTMLElement).closest<HTMLElement>('[data-href]')?.dataset.href;
     if (href) { location.href = href; return; }
+    if ((e.target as HTMLElement).closest('[data-online]')) {
+      const lobby = document.getElementById('lobby')!;
+      lobby.style.display = 'flex';
+      openLobby(lobby.querySelector<HTMLElement>('.lobby-box')!, (g) => { lobby.style.display = 'none'; void startOnline(g); }, () => (lobby.style.display = 'none'));
+      return;
+    }
     const m = (e.target as HTMLElement).closest<HTMLElement>('[data-mode]')?.dataset.mode as Mode | undefined;
     if (!m) return;
-    history.replaceState(null, '', `?mode=${m}`);
+    history.replaceState(null, '', `?mode=${m}&you=${pick('you').id}&foe=${pick('foe').id}`);
     start(m);
   });
 }
 
 async function start(m: Mode): Promise<void> {
-  menu.style.display = 'none';
-  loading.style.display = 'flex';
   const world = m === 'demo'
     ? new World({ seed, scenario: provingGrounds(), players: [{ name: 'You', faction: meadowfolk }, { name: 'Training Grounds', faction: training }] })
-    : new World({ seed, scenario: skirmish(), players: [{ name: m === 'spectate' ? 'Blue' : 'You', faction: meadowfolk }, { name: 'Red', faction: meadowfolk }] });
+    : new World({ seed, scenario: skirmish(), players: [{ name: m === 'spectate' ? pick('you').name : 'You', faction: pick('you') }, { name: pick('foe').name, faction: pick('foe') }] });
+  await run({
+    mode: m, world, me: 0, transport: new LoopbackTransport(), delay: 2,
+    sources: (local) => {
+      const s: CommandSource[] = m === 'spectate' ? [new SkirmishAI(0), new SkirmishAI(1)] : m === 'skirmish' ? [local, new SkirmishAI(1)] : [local];
+      if (m === 'demo') s.push({ player: 1, poll: () => [] }); // the dummies never act
+      return s;
+    },
+  });
+}
+
+/** An online game: every seat's faction arrived as a bundle; commands go through the relay. */
+async function startOnline(g: OnlineGame): Promise<void> {
+  menu.style.display = 'none';
+  // listen for ticks right away: the other player may finish loading first
+  const transport = new NetTransport(g.relay);
+  const world = new World({ seed: g.seed, scenario: skirmish(), players: g.factions.map((faction, i) => ({ name: g.names[i], faction })) });
+  const seats = g.names.length;
+  g.relay.onPeers = (peers) => { if (peers.length < seats) showNotice(`${g.names.find((_, i) => i !== g.me) ?? 'Your opponent'} left the game.`); };
+  g.relay.onClose = () => showNotice('Lost the connection to the relay.');
+  await run({ mode: 'online', world, me: g.me, transport, delay: 4, sources: (local) => [local] });
+}
+
+function showNotice(text: string): void {
+  const o = document.getElementById('overlay')!;
+  o.textContent = text;
+  o.style.display = 'flex';
+  o.dataset.sticky = '1';
+}
+
+interface GameSetup {
+  mode: Mode;
+  world: World;
+  /** The local player's seat. */
+  me: number;
+  transport: Transport;
+  /** Input delay in ticks (more online, to hide latency). */
+  delay: number;
+  sources: (local: LocalInput) => CommandSource[];
+}
+
+async function run(g: GameSetup): Promise<void> {
+  const { mode: m, world, me: HUMAN } = g;
+  menu.style.display = 'none';
+  loading.style.display = 'flex';
 
   const bar = loading.querySelector<HTMLElement>('.fill')!;
   const label = loading.querySelector<HTMLElement>('.label')!;
@@ -53,15 +116,17 @@ async function start(m: Mode): Promise<void> {
   });
 
   const local = new LocalInput(HUMAN);
-  const sources: CommandSource[] = m === 'spectate' ? [new SkirmishAI(0), new SkirmishAI(1)] : m === 'skirmish' ? [local, new SkirmishAI(1)] : [local];
-  if (m === 'demo') sources.push({ player: 1, poll: () => [] }); // the dummies never act
-  const lockstep = new Lockstep(world, sources, [0, 1], new LoopbackTransport(), 2);
-  lockstep.onDesync = (tick, h) => console.error('DESYNC at tick', tick, h);
+  const players = world.players.filter((p) => !p.neutral).map((p) => p.id);
+  const lockstep = new Lockstep(world, g.sources(local), players, g.transport, g.delay);
+  lockstep.onDesync = (tick, h) => {
+    console.error('DESYNC at tick', tick, h);
+    if (m === 'online') showNotice(`Out of sync at tick ${tick}: the game can't continue.`);
+  };
 
   const canvas = document.getElementById('game') as HTMLCanvasElement;
   const renderer = new Renderer(canvas, world, bank, { damageNumbers: m === 'demo' }, m === 'demo' ? [[18, 26, 4], [31, 26, 5]] : []);
   await renderer.init();
-  const minimap = new Minimap(document.getElementById('minimap') as HTMLCanvasElement, world);
+  const minimap = new Minimap(document.getElementById('minimap') as HTMLCanvasElement, world, 200, (x, y) => bank.biomeAt(x, y).ground);
   const audio = new AudioEngine(world, bank, HUMAN);
   const input = new Input(canvas, world, renderer, minimap, HUMAN, (cmd) => {
     local.issue(cmd);
@@ -148,13 +213,15 @@ async function start(m: Mode): Promise<void> {
     const status = world.winner >= 0
       ? (m === 'spectate' ? `${world.players[world.winner].name} wins` : world.winner === HUMAN ? 'Victory' : 'Defeat')
       : input.paused ? 'Paused' : '';
-    overlay.textContent = status;
-    overlay.style.display = status ? 'flex' : 'none';
+    if (!overlay.dataset.sticky) {
+      overlay.textContent = status;
+      overlay.style.display = status ? 'flex' : 'none';
+    }
     speedEl.textContent = input.mode === 'resupplyDest' ? 'Holding R: click where they should go after resupplying' : input.speed !== 1 ? `${input.speed}× speed` : '';
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
 
-  Object.assign(window, { world, renderer, input, lockstep, bank });
-  console.log(`VibeCraft — ${m}, seed ${seed}.`);
+  Object.assign(window, { world, renderer, input, lockstep, bank, issue: (cmd: Parameters<LocalInput['issue']>[0]) => local.issue(cmd) });
+  console.log(`VibeCraft — ${m}, seed ${m === 'online' ? '(host chose)' : seed}, you are seat ${HUMAN + 1}.`);
 }

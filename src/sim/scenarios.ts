@@ -14,6 +14,8 @@ export interface Scenario {
   victory: boolean;
   /** Players whose units/buildings are only targets (never auto-acquired while idle). */
   inertPlayers?: number[];
+  /** Spawn the factions' wildlife (default true). */
+  wildlife?: boolean;
 }
 
 export function skirmish(): Scenario {
@@ -47,6 +49,7 @@ export function provingGrounds(): Scenario {
     id: 'proving-grounds',
     victory: false,
     inertPlayers: [1],
+    wildlife: false,
     map(seed) {
       const rng = new Rng(seed);
       const grid = new Grid(SIZE, SIZE);

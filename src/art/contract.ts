@@ -72,7 +72,16 @@ export interface BiomeArt {
   projectile: Sprite;
   /** Ground clutter painted into the terrain. */
   doodads: { grass: Sprite[]; flowers: Sprite[]; stones: Sprite[]; forest: Sprite[] };
+  /** Ground colours (hex). Omitted: the default meadow greens. */
+  ground?: { grass: [string, string, string]; dirt: [string, string]; forest: string; sand: string; shallow: string; deep: string };
+  /** Art for the biome's wildlife, by unit id (see FactionSpec.wildlife). */
+  wildlife?: Record<string, UnitArt>;
+  /** What a killed animal leaves behind (a gatherable food node). */
+  carcass?: Sprite;
 }
+
+/** Loads a biome's art (lazily, like a faction's). */
+export type BiomeLoader = (onProgress?: (fraction: number, label: string) => void) => Promise<BiomeArt>;
 
 export type ArtLoader = (team: TeamColors, onProgress?: (fraction: number, label: string) => void) => Promise<FactionArt>;
 

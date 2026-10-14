@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "stats": "vitest run tests/stats.test.ts --reporter=verbose"
+    "stats": "vitest run tests/stats.test.ts --reporter=verbose",
+    "relay": "node scripts/relay.mjs"
   },
   "devDependencies": {
     "@types/three": "^0.169.0",

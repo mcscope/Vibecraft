@@ -1,7 +1,15 @@
 // Holds the finished art for a match: each player's FactionArt (from their
 // faction's own loader) and the map's BiomeArt. The engine draws only this.
-import type { BiomeArt, BuildingArt, FactionArt, Sprite, TeamColors, UnitArt } from '../art/contract';
+import type { BiomeArt, BiomeLoader, BuildingArt, FactionArt, Sprite, TeamColors, UnitArt } from '../art/contract';
 import type { World } from '../sim/world';
+
+/** The Wilds' colours (selection rings, minimap dots). */
+export const WILD_COLORS: TeamColors = { primary: '#8a6a3a', secondary: '#d8c08a', dark: '#4a3a20' };
+
+/** A player's colours (the Wilds get their own neutral ones). */
+export function teamColor(world: World, owner: number): TeamColors {
+  return world.players[owner]?.neutral ? WILD_COLORS : TEAM_COLORS[owner % TEAM_COLORS.length];
+}
 
 export const TEAM_COLORS: TeamColors[] = [
   { primary: '#2f5fbf', secondary: '#e8c547', dark: '#1a3366' },
@@ -10,10 +18,19 @@ export const TEAM_COLORS: TeamColors[] = [
   { primary: '#2f8a4a', secondary: '#e6dcc4', dark: '#174a26' },
 ];
 
-export type BiomeLoader = (onProgress?: (f: number, label: string) => void) => Promise<BiomeArt>;
+export type { BiomeLoader };
 
 export class ArtBank {
-  private constructor(readonly factions: FactionArt[], readonly biome: BiomeArt) {}
+  /**
+   * @param biomes each player's biome (their half of the map); `biome` is the
+   *   map default (shards, projectiles, and any player without its own).
+   */
+  private constructor(readonly factions: FactionArt[], readonly biome: BiomeArt, readonly biomes: BiomeArt[], private readonly world: World) {}
+
+  /** The biome whose half of the map a point is in. */
+  biomeAt(x: number, y: number): BiomeArt {
+    return this.biomes[this.world.territory(x, y)] ?? this.biome;
+  }
 
   unit(owner: number, id: string): UnitArt | undefined { return this.factions[owner]?.units[id]; }
   building(owner: number, id: string): BuildingArt | undefined { return this.factions[owner]?.buildings[id]; }
@@ -23,8 +40,10 @@ export class ArtBank {
   allImages(): CanvasImageSource[] {
     const out = new Set<CanvasImageSource>();
     const add = (s: Sprite) => out.add(s.img);
-    const b = this.biome;
-    [...b.trees, ...b.bushes, ...b.mines, b.shard, b.projectile, ...Object.values(b.doodads).flat()].forEach(add);
+    for (const b of new Set([this.biome, ...this.biomes])) {
+      [...b.trees, ...b.bushes, ...b.mines, b.shard, b.projectile, ...Object.values(b.doodads).flat()].forEach(add);
+      if (b.carcass) add(b.carcass);
+    }
     for (const f of this.factions) {
       add(f.flag);
       for (const u of Object.values(f.units)) for (const a of Object.values(u.anims)) a?.frames.flat().forEach(add);
@@ -34,20 +53,41 @@ export class ArtBank {
   }
 
   static async build(world: World, biome: BiomeLoader, onProgress: (f: number, label: string) => void): Promise<ArtBank> {
-    const parts = world.players.length + 1;
+    const players = world.players.filter((p) => !p.neutral);
+    // the default biome is only baked if some player brings none of their own
+    const loaders = [...new Set(players.map((p) => world.factionOf(p.id).biome ?? biome))];
+    const parts = loaders.length + world.players.length;
     let base = 0;
     const sub = (f: number, label: string) => onProgress((base + Math.min(1, f)) / parts, label);
-    const biomeArt = await biome(sub);
+    // each distinct biome is baked once, even if several players share it
+    const baked = new Map<BiomeLoader, BiomeArt>();
+    for (const l of loaders) { baked.set(l, await l(sub)); base++; }
+    const biomes = players.map((p) => baked.get(world.factionOf(p.id).biome ?? biome)!);
     const factions: FactionArt[] = [];
     for (const p of world.players) {
-      base++;
       const f = world.factionOf(p.id);
-      const team = TEAM_COLORS[p.id % TEAM_COLORS.length];
-      factions.push(f.art ? await f.art(team, sub) : placeholderArt(world, p.id, team));
+      const team = p.neutral ? WILD_COLORS : TEAM_COLORS[p.id % TEAM_COLORS.length];
+      if (p.neutral) factions.push(wildsArt(world, p.id, team, biomes));
+      else factions.push(f.art ? await f.art(team, sub) : placeholderArt(world, p.id, team));
+      base++;
     }
     onProgress(1, 'Ready');
-    return new ArtBank(factions, biomeArt);
+    return new ArtBank(factions, baked.get(biome) ?? biomes[0], biomes, world);
   }
+}
+
+/** The Wilds wear their own biome's wildlife art (a placeholder token where a biome has none). */
+function wildsArt(world: World, owner: number, team: TeamColors, biomes: BiomeArt[]): FactionArt {
+  const art = placeholderArt(world, owner, team);
+  world.players.forEach((p, i) => {
+    if (p.neutral) return;
+    for (const w of world.factionOf(i).wildlife ?? []) {
+      const look = biomes[i]?.wildlife?.[w.id];
+      if (!look) continue;
+      for (const id of [w.id, `${w.id}@${i}`]) if (world.specOf(owner, id)) art.units[id] = look;
+    }
+  });
+  return art;
 }
 
 /** A faction with no art still plays: team-coloured tokens for units, plain blocks for buildings. */

@@ -7,12 +7,13 @@ import { unitSprite } from './art/contract';
 import { blit, spriteIcon } from './art/draw';
 import { meadowfolk } from './factions/meadowfolk';
 import { training } from './factions/training';
+import { highlanders } from './factions/highlanders';
 import { capitalFor, CAP, derive, deriveBuilding, K, prerequisites, techCost, techGate, techStart, techTime } from './sim/physics';
 import { TEAM_COLORS } from './render/artbank';
 import { statsTable } from './ui/hud';
 import { esc, f1, n0 } from './ui/format';
 
-const FACTIONS: FactionSpec[] = [meadowfolk, training];
+const FACTIONS: FactionSpec[] = [meadowfolk, highlanders, training];
 const ANIMS: ArtAnim[] = ['idle', 'walk', 'attack', 'gather', 'eat', 'tired', 'die', 'carryFood', 'carryWood', 'carryCrystal'];
 const FACING = ['E', 'SE', 'S', 'SW', 'W', 'NW', 'N', 'NE'];
 

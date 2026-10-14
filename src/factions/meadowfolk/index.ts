@@ -10,6 +10,7 @@
 // in ./art.ts. The game only ever sees the finished sprites.
 
 import type { BuildingSpec, FactionSpec, TechSpec, UnitSpec } from '../types';
+import { meadowWildlife } from '../../biomes/meadow/wildlife';
 import type { BuildingModel, Mat, UnitModel } from '../../kits/bake3d/types';
 
 /** Meadowfolk specs carry their 3D models; the engine ignores the extra field. */
@@ -150,50 +151,53 @@ const lynx: MeadowUnit = {
 const hurlhorn: MeadowUnit = {
   id: 'hurlhorn',
   name: 'Hurlhorn',
-  description: 'A shaggy war-beast carrying a throwing-arm on its back. Lobs 12 kg crystals across the field. Helpless up close.',
-  mass: 700,
+  description: 'A shaggy war-beast carrying a throwing-arm on its back. Lobs 9 kg crystals across the field, a dozen to a load. Helpless up close.',
+  mass: 400,
   physique: { muscle: 0.55, frame: 0.3, reserve: 0.15 },
-  attack: { style: 'throw', crystalMass: 12, ammo: 4 },
+  attack: { style: 'throw', crystalMass: 9, ammo: 12 },
   refinement: 2.4,
-  model(b, p) {
-    const wool: Mat = { color: '#5b4330', tex: 'fur' };
-    const woolLight: Mat = { color: '#7a5d40', tex: 'fur' };
-    const horn: Mat = { color: '#d9ccb0', tex: 'stone', rough: 0.5 };
-    const bob = quadLegs(b, p, { fx: 0.8, bx: -0.85, z: 0.38, hip: 1.25, len: 1.25, r: 0.17, mat: wool, paw: { color: '#2d241c', tex: 'leather' } });
-    b.joint([0, bob, 0], [0, 0, 0], (c) => {
-      c.sphere([1.3, 0.75, 0.7], [0, 1.65, 0], wool);
-      c.sphere([0.7, 0.6, 0.62], [0.65, 1.85, 0], woolLight); // hump
-      c.sphere([1.0, 0.45, 0.6], [0, 1.25, 0], wool); // shaggy skirt
-      c.joint([1.45, 1.6, 0], [0, 0, p.anim === 'tired' ? -0.4 : p.anim === 'gather' ? -0.5 : 0], (h) => {
-        h.sphere([0.45, 0.38, 0.38], [0, 0, 0], wool);
-        h.sphere([0.22, 0.2, 0.24], [0.36, -0.12, 0], { color: '#3a2c20', tex: 'leather' });
-        h.sphere([0.2, 0.28, 0.25], [0.15, -0.35, 0], woolLight); // beard
-        for (const z of [1, -1]) {
-          const a: [number, number, number] = [0.05, 0.22, 0.28 * z];
-          const m: [number, number, number] = [0.15, 0.42, 0.62 * z];
-          const e: [number, number, number] = [0.45, 0.48, 0.78 * z];
-          h.limb(a, m, 0.09, horn, 0.07);
-          h.limb(m, e, 0.07, horn, 0.025);
-          h.sphere(0.04, [0.3, 0.05, 0.3 * z], { color: '#111111', rough: 0.2 });
+  model(outer, p) {
+    // modelled at 700 kg; drawn at the cube-root scale of its actual mass
+    outer.joint([0, 0, 0], [0, 0, 0], (b) => {
+      const wool: Mat = { color: '#5b4330', tex: 'fur' };
+      const woolLight: Mat = { color: '#7a5d40', tex: 'fur' };
+      const horn: Mat = { color: '#d9ccb0', tex: 'stone', rough: 0.5 };
+      const bob = quadLegs(b, p, { fx: 0.8, bx: -0.85, z: 0.38, hip: 1.25, len: 1.25, r: 0.17, mat: wool, paw: { color: '#2d241c', tex: 'leather' } });
+      b.joint([0, bob, 0], [0, 0, 0], (c) => {
+        c.sphere([1.3, 0.75, 0.7], [0, 1.65, 0], wool);
+        c.sphere([0.7, 0.6, 0.62], [0.65, 1.85, 0], woolLight); // hump
+        c.sphere([1.0, 0.45, 0.6], [0, 1.25, 0], wool); // shaggy skirt
+        c.joint([1.45, 1.6, 0], [0, 0, p.anim === 'tired' ? -0.4 : p.anim === 'gather' ? -0.5 : 0], (h) => {
+          h.sphere([0.45, 0.38, 0.38], [0, 0, 0], wool);
+          h.sphere([0.22, 0.2, 0.24], [0.36, -0.12, 0], { color: '#3a2c20', tex: 'leather' });
+          h.sphere([0.2, 0.28, 0.25], [0.15, -0.35, 0], woolLight); // beard
+          for (const z of [1, -1]) {
+            const a: [number, number, number] = [0.05, 0.22, 0.28 * z];
+            const m: [number, number, number] = [0.15, 0.42, 0.62 * z];
+            const e: [number, number, number] = [0.45, 0.48, 0.78 * z];
+            h.limb(a, m, 0.09, horn, 0.07);
+            h.limb(m, e, 0.07, horn, 0.025);
+            h.sphere(0.04, [0.3, 0.05, 0.3 * z], { color: '#111111', rough: 0.2 });
+          }
+        });
+        c.limb([-1.25, 1.75, 0], [-1.5, 1.35, 0], 0.08, wool, 0.05);
+        // saddle blanket + throwing frame
+        c.box([1.1, 0.1, 1.3], [-0.1, 2.3, 0], { team: 'primary', tex: 'cloth' });
+        c.box([1.15, 0.04, 1.35], [-0.1, 2.25, 0], { team: 'secondary', tex: 'cloth' });
+        for (const z of [0.42, -0.42]) {
+          c.limb([-0.5, 2.35, z], [-0.05, 3.15, z * 0.6], 0.06, WOOD);
+          c.limb([0.4, 2.35, z], [-0.05, 3.15, z * 0.6], 0.06, WOOD);
         }
+        c.limb([-0.05, 3.15, 0.3], [-0.05, 3.15, -0.3], 0.05, WOOD);
+        // the arm: rests pointing back-down, flings forward-up on attack
+        let arm = -2.3;
+        if (p.anim === 'attack') arm = p.phase < 0.4 ? -2.3 - p.phase * 0.5 : p.phase < 0.6 ? -2.5 + ((p.phase - 0.4) / 0.2) * 3.4 : 0.9 - ((p.phase - 0.6) / 0.4) * 3.2;
+        const tip = swing([-0.05, 3.15, 0], 1.5, Math.PI + arm);
+        c.limb([-0.05, 3.15, 0], tip, 0.055, WOOD, 0.04);
+        c.cylinder(0.14, 0.09, 0.08, [tip[0], tip[1] + 0.02, tip[2]], LEATHER);
+        if (p.armed && !(p.anim === 'attack' && p.phase > 0.55 && p.phase < 0.95)) c.crystal(0.38, [tip[0], tip[1] + 0.05, tip[2]], [0.3, 0, 0.4]);
       });
-      c.limb([-1.25, 1.75, 0], [-1.5, 1.35, 0], 0.08, wool, 0.05);
-      // saddle blanket + throwing frame
-      c.box([1.1, 0.1, 1.3], [-0.1, 2.3, 0], { team: 'primary', tex: 'cloth' });
-      c.box([1.15, 0.04, 1.35], [-0.1, 2.25, 0], { team: 'secondary', tex: 'cloth' });
-      for (const z of [0.42, -0.42]) {
-        c.limb([-0.5, 2.35, z], [-0.05, 3.15, z * 0.6], 0.06, WOOD);
-        c.limb([0.4, 2.35, z], [-0.05, 3.15, z * 0.6], 0.06, WOOD);
-      }
-      c.limb([-0.05, 3.15, 0.3], [-0.05, 3.15, -0.3], 0.05, WOOD);
-      // the arm: rests pointing back-down, flings forward-up on attack
-      let arm = -2.3;
-      if (p.anim === 'attack') arm = p.phase < 0.4 ? -2.3 - p.phase * 0.5 : p.phase < 0.6 ? -2.5 + ((p.phase - 0.4) / 0.2) * 3.4 : 0.9 - ((p.phase - 0.6) / 0.4) * 3.2;
-      const tip = swing([-0.05, 3.15, 0], 1.5, Math.PI + arm);
-      c.limb([-0.05, 3.15, 0], tip, 0.055, WOOD, 0.04);
-      c.cylinder(0.14, 0.09, 0.08, [tip[0], tip[1] + 0.02, tip[2]], LEATHER);
-      if (p.armed && !(p.anim === 'attack' && p.phase > 0.55 && p.phase < 0.95)) c.crystal(0.38, [tip[0], tip[1] + 0.05, tip[2]], [0.3, 0, 0.4]);
-    });
+    }, Math.cbrt(400 / 700));
   },
 };
 
@@ -302,4 +306,7 @@ export const meadowfolk: FactionSpec = {
   resourceNames: { food: 'Berries', wood: 'Wood', crystal: 'Crystal' },
   // loaded lazily so the 3D tooling only arrives when art is needed
   art: (team, onProgress) => import('./art').then((m) => m.bakeArt(team, onProgress)),
+  // our half of the map: the spring meadow, with its deer and wolves
+  biome: (onProgress) => import('../../biomes/meadow').then((m) => m.bakeMeadow(onProgress, 'spring')),
+  wildlife: meadowWildlife,
 };

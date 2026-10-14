@@ -2,6 +2,11 @@
 // Model units: 1 tile = 2 units; origin = centre of the object's footprint.
 import type { Mat, ModelBuilder } from '../../kits/bake3d/types';
 
+/** Foliage recolour, set while baking a variant (identity = spring meadow). */
+let recolor: (hex: string) => string = (c) => c;
+const g = (hex: string) => recolor(hex);
+export function setFoliage(f: ((hex: string) => string) | null): void { recolor = f ?? ((c) => c); }
+
 const WOOD: Mat = { color: '#5e4128', tex: 'wood' };
 const DARKWOOD: Mat = { color: '#3d2a1a', tex: 'wood' };
 const STONE: Mat = { color: '#8a857c', tex: 'stone' };
@@ -14,7 +19,7 @@ function rand(seed: number) {
 export function tree(b: ModelBuilder, variant: number): void {
   const r = rand(variant + 11);
   const kind = variant % 3;
-  const greens = ['#38532a', '#455f2c', '#2e4723', '#526b30', '#3b5a32'];
+  const greens = [g('#38532a'), g('#455f2c'), g('#2e4723'), g('#526b30'), g('#3b5a32')];
   const leaf = (): Mat => ({ color: greens[Math.floor(r() * greens.length)], tex: 'leaf', rough: 0.9 });
   if (kind === 1) {
     // pine
@@ -24,7 +29,7 @@ export function tree(b: ModelBuilder, variant: number): void {
     for (let i = 0; i < tiers; i++) {
       const y = 0.9 + (i / tiers) * (h - 1.2);
       const rad = 1.25 * (1 - i / (tiers + 0.5)) + 0.2;
-      b.cone(rad, 1.1, [r() * 0.1, y + 0.75, r() * 0.1], { color: '#2b4426', tex: 'leaf' }, [0, r() * 3, 0], 9);
+      b.cone(rad, 1.1, [r() * 0.1, y + 0.75, r() * 0.1], { color: g('#2b4426'), tex: 'leaf' }, [0, r() * 3, 0], 9);
     }
     return;
   }
@@ -38,7 +43,7 @@ export function tree(b: ModelBuilder, variant: number): void {
   for (let i = 0; i < blobs; i++) {
     const a = r() * Math.PI * 2, rr = Math.sqrt(r()) * 1.15;
     const y = h * 0.62 + (r() - 0.3) * 1.5;
-    b.sphere(0.38 + r() * 0.36, [Math.cos(a) * rr * 1.1, y, Math.sin(a) * rr * 1.1], kind === 2 ? { color: r() < 0.5 ? '#6b8a3a' : '#7a9a44', tex: 'leaf' } : leaf());
+    b.sphere(0.38 + r() * 0.36, [Math.cos(a) * rr * 1.1, y, Math.sin(a) * rr * 1.1], kind === 2 ? { color: r() < 0.5 ? g('#6b8a3a') : g('#7a9a44'), tex: 'leaf' } : leaf());
   }
   b.sphere(0.8, [0, h * 0.82, 0], leaf());
 }
@@ -47,9 +52,9 @@ export function bush(b: ModelBuilder, level: number): void {
   const r = rand(7);
   for (let i = 0; i < 7; i++) {
     const a = (i / 7) * Math.PI * 2;
-    b.sphere([0.42, 0.34, 0.42], [Math.cos(a) * 0.38, 0.3 + r() * 0.1, Math.sin(a) * 0.38], { color: i % 2 ? '#3d5a28' : '#4a6a2e', tex: 'leaf' });
+    b.sphere([0.42, 0.34, 0.42], [Math.cos(a) * 0.38, 0.3 + r() * 0.1, Math.sin(a) * 0.38], { color: i % 2 ? g('#3d5a28') : g('#4a6a2e'), tex: 'leaf' });
   }
-  b.sphere([0.5, 0.45, 0.5], [0, 0.5, 0], { color: '#456530', tex: 'leaf' });
+  b.sphere([0.5, 0.45, 0.5], [0, 0.5, 0], { color: g('#456530'), tex: 'leaf' });
   const berries = Math.round(level * 26);
   for (let i = 0; i < berries; i++) {
     const a = r() * Math.PI * 2, rr = 0.35 + r() * 0.35;
@@ -86,7 +91,7 @@ export function projectile(b: ModelBuilder): void {
 
 // ── ground clutter: tiny props painted into the terrain (render-only, never blocks) ──
 
-const GRASS = ['#5e7a2e', '#6d8a34', '#4f6a27', '#7a9440'];
+const GRASS = () => [g('#5e7a2e'), g('#6d8a34'), g('#4f6a27'), g('#7a9440')];
 
 export function grassClump(b: ModelBuilder, v: number): void {
   const r = rand(v * 31 + 5);
@@ -95,7 +100,7 @@ export function grassClump(b: ModelBuilder, v: number): void {
     const a = r() * Math.PI * 2, d = r() * 0.16;
     const h = 0.18 + r() * 0.22;
     const lean = (r() - 0.5) * 0.5;
-    b.cone(0.022, h, [Math.cos(a) * d, h / 2, Math.sin(a) * d], { color: GRASS[Math.floor(r() * GRASS.length)], tex: 'leaf' }, [lean, a, (r() - 0.5) * 0.5], 4);
+    b.cone(0.022, h, [Math.cos(a) * d, h / 2, Math.sin(a) * d], { color: GRASS()[Math.floor(r() * 4)], tex: 'leaf' }, [lean, a, (r() - 0.5) * 0.5], 4);
   }
 }
 
@@ -107,7 +112,7 @@ export function flowers(b: ModelBuilder, v: number): void {
   for (let i = 0; i < 4 + Math.floor(r() * 3); i++) {
     const a = r() * Math.PI * 2, d = 0.05 + r() * 0.16, h = 0.22 + r() * 0.15;
     const x = Math.cos(a) * d, z = Math.sin(a) * d;
-    b.limb([x, 0, z], [x, h, z], 0.008, { color: '#4f6a27' });
+    b.limb([x, 0, z], [x, h, z], 0.008, { color: g('#4f6a27') });
     b.sphere([0.045, 0.018, 0.045], [x, h, z], { color: petal, rough: 0.6 });
     b.sphere(0.016, [x, h + 0.012, z], { color: eye });
   }
@@ -126,7 +131,7 @@ export function fern(b: ModelBuilder, v: number): void {
   for (let i = 0; i < 7; i++) {
     const a = (i / 7) * Math.PI * 2 + r() * 0.3;
     b.joint([0, 0.02, 0], [0, a, 0.9 + r() * 0.3], (f) => {
-      f.box([0.04, 0.32, 0.12], [0, 0.18, 0], { color: i % 2 ? '#3f6a2a' : '#4c7a30', tex: 'leaf' });
+      f.box([0.04, 0.32, 0.12], [0, 0.18, 0], { color: i % 2 ? g('#3f6a2a') : g('#4c7a30'), tex: 'leaf' });
     });
   }
 }
@@ -158,7 +163,7 @@ export function fallenLog(b: ModelBuilder, v: number): void {
   b.joint([0, 0.08, 0], [0, a, 0], (l) => {
     l.limb([-0.35, 0, 0], [0.35, 0, 0], 0.08, { color: '#5a4030', tex: 'wood' }, 0.07);
     l.sphere([0.02, 0.075, 0.075], [0.36, 0, 0], { color: '#b8946a', tex: 'wood' });
-    l.sphere([0.08, 0.03, 0.06], [-0.1, 0.07, 0.02], { color: '#4c7a30', tex: 'leaf' }); // moss
+    l.sphere([0.08, 0.03, 0.06], [-0.1, 0.07, 0.02], { color: g('#4c7a30'), tex: 'leaf' }); // moss
   });
 }
 
@@ -171,3 +176,12 @@ export const DOODADS = {
     (b: ModelBuilder) => mushrooms(b, 1), (b: ModelBuilder) => stump(b, 0), (b: ModelBuilder) => fallenLog(b, 0), (b: ModelBuilder) => fallenLog(b, 1),
   ],
 };
+
+/** A felled animal: what's left to butcher (a food node). */
+export function carcass(b: ModelBuilder): void {
+  const hide: Mat = { color: '#8a5e38', tex: 'fur' };
+  b.sphere([0.5, 0.18, 0.26], [0, 0.18, 0], hide, [0.15, 0.4, 0]);
+  b.sphere([0.16, 0.12, 0.12], [0.48, 0.12, 0.2], hide);
+  for (const [x, z] of [[0.25, -0.2], [-0.25, -0.22], [0.15, 0.25]]) b.limb([x, 0.12, z], [x + 0.18, 0.06, z * 1.8], 0.04, hide);
+  b.sphere([0.16, 0.02, 0.12], [-0.1, 0.02, -0.32], { color: '#6e1a1a', rough: 0.3 });
+}

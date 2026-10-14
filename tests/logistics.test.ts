@@ -133,4 +133,19 @@ describe('supply', () => {
   expect(t.stock.food).toBeGreaterThanOrEqual(want.food - 1);
   expect(v.order.kind).toBe('idle');
   });
+
+  test('a sowing camp asks for exactly its next planting\'s seed, and plants it', () => {
+    const w = newWorld();
+    const tc = w.baseOf(0)!;
+    tc.stock = { food: 2000, wood: 500, crystal: 0 };
+    run(w, 20 * 50); // carts
+    const camp = w.addBuilding(0, 'gathering-camp', tc.ox + 9, tc.oy)!;
+    camp.sowing = ['food'];
+    const want = w.logistics.supplyTargets(camp);
+    expect(want.food).toBe(67); // one 200 kg bush's seed, nothing more
+    expect(want.wood).toBe(0);
+    run(w, 20 * 40);
+    expect([...w.nodes.values()].some((n) => n.sownBy === camp.id)).toBe(true);
+    expect(camp.stock.food).toBeLessThan(80); // never stockpiled beyond the next planting
+  });
 });

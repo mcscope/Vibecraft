@@ -182,8 +182,9 @@ export class SkirmishAI {
   }
 
   private enemyTarget(w: World): [number, number] | null {
-    for (const b of w.buildings.values()) if (b.owner !== this.player) return [b.ox + b.size / 2, b.oy + b.size / 2];
-    for (const u of w.units.values()) if (u.owner !== this.player) return [u.x, u.y];
+    const foe = (owner: number) => owner !== this.player && !w.players[owner]?.neutral; // the Wilds are nobody's opponent
+    for (const b of w.buildings.values()) if (foe(b.owner)) return [b.ox + b.size / 2, b.oy + b.size / 2];
+    for (const u of w.units.values()) if (foe(u.owner)) return [u.x, u.y];
     return null;
   }
 

@@ -116,7 +116,7 @@ export class Renderer {
   private textPool: Text[] = [];
 
   constructor(private canvas: HTMLCanvasElement, private world: World, readonly bank: ArtBank, private opts: RenderOptions, extraDirt: Array<[number, number, number]> = []) {
-    this.terrainCanvas = paintTerrain(world, extraDirt, bank.biome.doodads);
+    this.terrainCanvas = paintTerrain(world, extraDirt, { biomes: bank.biomes, homes: world.homes });
   }
 
   async init(): Promise<void> {
@@ -249,10 +249,11 @@ export class Renderer {
   }
 
   private nodeSprite(n: ResourceNode): Sprite {
-    const b = this.bank.biome;
+    if (n.shard) return this.bank.biome.shard;
+    const b = this.bank.biomeAt(n.x, n.y); // resources wear the look of the half they're in
     const level = (list: Sprite[]) => list[Math.min(list.length - 1, Math.ceil((n.amount / n.maxAmount) * (list.length - 1)))];
     if (n.tree) return b.trees[n.id % b.trees.length];
-    if (n.shard) return b.shard;
+    if (n.carcass) return b.carcass ?? level(b.bushes);
     return level(n.type === 'food' ? b.bushes : b.mines);
   }
 
@@ -549,11 +550,13 @@ export class Renderer {
     }
     if (best) return best;
     const [wx, wy] = cam.toWorld(sx, sy);
+    // a building's own footprint wins; the rest of its picture only if no bush or tree is under the cursor
+    let byPicture = 0;
     for (const b of world.buildings.values()) {
+      if (wx >= b.ox && wx <= b.ox + b.size && wy >= b.oy && wy <= b.oy + b.size) return b.id;
       const [mx, my] = cam.toScreen(b.ox + b.size / 2, b.oy + b.size / 2);
-      const inFoot = wx >= b.ox && wx <= b.ox + b.size && wy >= b.oy && wy <= b.oy + b.size;
-      const inSprite = Math.abs(sx - mx) < 80 * cam.zoom && sy < my + 10 && sy > my - 150 * cam.zoom;
-      if (inFoot || inSprite) return b.id;
+      const half = (16 + 22 * b.size) * cam.zoom; // picture width grows with footprint
+      if (!byPicture && Math.abs(sx - mx) < half && sy < my + 10 && sy > my - (40 + 35 * b.size) * cam.zoom) byPicture = b.id;
     }
     let tree = 0, treeDepth = -Infinity;
     for (const n of world.nodes.values()) {
@@ -566,6 +569,6 @@ export class Renderer {
       const r = (n.shard ? 14 : 26) * cam.zoom;
       if (Math.abs(sx - nx) < r && sy < ny + 10 * cam.zoom && sy > ny - r * 1.5) return n.id;
     }
-    return tree;
+    return tree || byPicture;
   }
 }

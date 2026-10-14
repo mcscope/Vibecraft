@@ -219,7 +219,14 @@ export class Input {
       if (ownBuilding) { this.issue({ type: 'rally', building: ownBuilding.id, x: wx, y: wy }); this.ping(wx, wy, '#ffd23f'); }
       return;
     }
-    if ((tu && tu.owner !== this.player) || (tb && tb.owner !== this.player)) {
+    if (tu && tu.wild === 'passive') {
+      // game: workers hunt it (bring it down, then gather), fighters attack it
+      const hunters = units.filter((id) => { const u = w.units.get(id); return u && !u.stats.canAttack && u.stats.gatherRate > 0; });
+      const fighters = units.filter((id) => !hunters.includes(id));
+      if (hunters.length) this.issue({ type: 'hunt', units: hunters, target });
+      if (fighters.length) this.issue({ type: 'attack', units: fighters, target });
+      this.ping(wx, wy, '#e0457a');
+    } else if ((tu && tu.owner !== this.player) || (tb && tb.owner !== this.player)) {
       this.issue({ type: 'attack', units, target });
       this.ping(wx, wy, '#ff6b5a');
     } else if (tn) {

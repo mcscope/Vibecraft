@@ -29,6 +29,8 @@ export type Command =
   | { type: 'assignCart'; units: number[]; building: number }
   /** Workers carry what a building is missing from the base, trip after trip, until it's stocked. */
   | { type: 'haul'; units: number[]; building: number }
+  /** Workers walk up to a passive animal, bring it down, and gather the carcass. */
+  | { type: 'hunt'; units: number[]; target: number }
   /** Send units to help an existing construction site. */
   | { type: 'construct'; units: number[]; site: number }
   | { type: 'rally'; building: number; x: number; y: number };
