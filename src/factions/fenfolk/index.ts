@@ -22,7 +22,7 @@ const HIDE: Mat = { color: '#6a5a3e', tex: 'leather' };
 const REED: Mat = { color: '#b8a466', tex: 'thatch' };
 const WILLOW: Mat = { color: '#6a5a3c', tex: 'wood' };
 
-const fenLook: FenLook = { skin: '#9aa874', wrap: { color: '#5e5a3a', tex: 'cloth' }, hat: 'cone' };
+const fenLook: FenLook = { skin: '#7aa05a', wrap: { color: '#7a6a44', tex: 'cloth' }, hat: 'cone' };
 const fenling: FenUnit = {
   id: 'fenling',
   name: 'Fenling',
@@ -41,7 +41,7 @@ const fenling: FenUnit = {
   },
 };
 
-const guardLook: FenLook = { skin: '#8a9a64', wrap: { color: '#4a4a30', tex: 'leather' }, hat: 'crest', bulk: 1.2 };
+const guardLook: FenLook = { skin: '#6a8a52', wrap: { color: '#5a4a30', tex: 'leather' }, hat: 'crest', bulk: 1.2 };
 const reedguard: FenUnit = {
   id: 'reedguard',
   name: 'Reedguard',
@@ -64,7 +64,7 @@ const reedguard: FenUnit = {
 
 const toadSkin: Mat = { color: '#5e6e3a', tex: 'leather' };
 const toadBelly: Mat = { color: '#c8b87a', tex: 'leather' };
-const riderLook: FenLook = { skin: '#9aa874', wrap: { color: '#4a4a30', tex: 'leather' }, hat: 'crest', mounted: true };
+const riderLook: FenLook = { skin: '#7aa05a', wrap: { color: '#5a4a30', tex: 'leather' }, hat: 'crest', mounted: true };
 const bogToad: FenUnit = {
   id: 'bog-toad',
   name: 'Bog Toad',
@@ -107,9 +107,8 @@ const packTortoise: FenUnit = {
   description: 'A great marsh tortoise with baskets of crystal lashed to its shell. Fenlings that run dry come to it for more, like crystals on the ground.',
   mass: 160,
   physique: { muscle: 0.6, frame: 0.3, reserve: 0.1 },
-  canGather: false,
   refinement: 1.5,
-  bearer: { radius: 4 },
+  bearer: { radius: 4 }, // gathers crystal only (spent ones off the ground, or from a deposit) and keeps it
   model(b, p) {
     const t = p.phase * Math.PI * 2;
     const walking = p.anim === 'walk';
@@ -131,7 +130,9 @@ const packTortoise: FenUnit = {
         c.cylinder(0.22, 0.18, 0.32, [-0.05, 0.75, z], { color: '#8a7448', tex: 'thatch' }, undefined, 10);
         for (let i = 0; i < 3; i++) c.crystal(0.16, [-0.1 + i * 0.06, 0.95, z + (i - 1) * 0.05], [0.3 * i, 0, 0.4]);
       }
-      c.box([0.6, 0.04, 1.0], [-0.05, 1.0, 0], { team: 'primary', tex: 'cloth' });
+      for (const x of [-0.2, 0.12]) c.limb([x, 0.84, 0.5], [x, 1.0, 0], 0.025, { team: 'primary', tex: 'cloth' }); // straps over the shell
+      for (const x of [-0.2, 0.12]) c.limb([x, 1.0, 0], [x, 0.84, -0.5], 0.025, { team: 'primary', tex: 'cloth' });
+      c.sphere([0.16, 0.05, 0.16], [-0.04, 1.0, 0], { team: 'primary', tex: 'cloth' }); // a team knot
     });
   },
 };

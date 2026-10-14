@@ -58,4 +58,39 @@ describe('ammo bearer', () => {
     expect(wallow.queue.length === 0 || wallow.queue[0].paid).toBe(true); // it hauled the toad's roots over
     expect(f.order.kind).toBe('cart');
   });
+
+  test('a pack tortoise gathers crystal only, keeps it, and sweeps up spent crystals when idle', () => {
+    const w = new World({ seed: 7, players: [{ name: 'Fen', faction: fenfolk }, { name: 'Fen2', faction: fenfolk }] });
+    for (const u of [...w.units.values()]) if (w.players[u.owner].neutral) w.units.delete(u.id);
+    const hall = w.baseOf(0)!;
+    const spot = w.grid.nearestOpen(hall.ox + 12, hall.oy + 12)!;
+    const t = w.spawnAt(0, 'pack-tortoise', spot[0], spot[1])!;
+    t.order = { kind: 'idle' };
+    expect(t.stats.canAttack).toBe(false); // no improvised strike
+    const bush = [...w.nodes.values()].find((n) => n.type === 'food' && !n.carcass)!;
+    w.enqueue({ player: 0, cmd: { type: 'gather', units: [t.id], node: bush.id } });
+    w.step();
+    expect(t.order.kind).toBe('idle'); // won't pick berries
+    const s2 = w.grid.nearestOpen(spot[0] + 3, spot[1])!;
+    w.addNode({ type: 'crystal', x: s2[0], y: s2[1], amount: 6, shard: true, tree: false });
+    run(w, 20 * 15);
+    expect(t.crystal).toBeGreaterThan(5.9); // swept up on its own, and kept it
+  });
+
+  test('workers right-clicked on the main building haul spare stock into it from other buildings', () => {
+    const w = new World({ seed: 7, players: [{ name: 'Fen', faction: fenfolk }, { name: 'Fen2', faction: fenfolk }] });
+    for (const u of [...w.units.values()]) if (w.players[u.owner].neutral) w.units.delete(u.id);
+    const hall = w.baseOf(0)!;
+    hall.stock = { food: 0, wood: 0, crystal: 10 }; // short of roots only
+    const hut = w.addBuilding(0, 'reed-hut', hall.ox + 8, hall.oy)!;
+    hut.stock.food = 300;
+    w.enqueue({ player: 0, cmd: { type: 'train', building: hall.id, specId: 'fenling' } });
+    w.step();
+    expect(hall.queue[0]?.paid).toBe(false); // waiting for roots
+    const f = w.unitsOf(0).find((u) => u.specId === 'fenling')!;
+    w.enqueue({ player: 0, cmd: { type: 'haul', units: [f.id], building: hall.id } });
+    run(w, 20 * 40);
+    expect(hut.stock.food).toBeLessThan(300); // it hauled roots over
+    expect(hall.queue.length === 0 || hall.queue[0].paid).toBe(true); // and the fenling got paid for
+  });
 });

@@ -58,6 +58,8 @@ export interface FactionArt {
   buildings: Record<string, BuildingArt>;
   /** Rally-point marker. */
   flag: Sprite;
+  /** Planted by a building whose orders are waiting on supplies (optional; the rally flag otherwise). */
+  wantFlag?: Sprite;
   music?: MusicSpec;
 }
 

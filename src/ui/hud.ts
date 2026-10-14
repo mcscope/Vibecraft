@@ -346,11 +346,13 @@ export class Hud {
     const coming = short.reduce((n, r) => n + w.logistics.cartsBringing(b, r), 0);
     const carter = carterName(w.factionOf(b.owner)).toLowerCase();
     if (coming) return `${coming} ${carter}${coming > 1 ? 's' : ''} bringing it`;
-    const base = w.baseOf(b.owner);
-    if (b === base || (b.spec.carters ?? 0) > 0) return 'gather more (nothing spare elsewhere)';
-    if (!base) return `no ${baseName(w.factionOf(b.owner))} to supply it`;
-    if (short.some((r) => w.logistics.spare(base)[r] < 1)) return `the ${base.spec.name} has none to spare`;
-    return `waiting for a free ${carter}`;
+    // is any of it spare at another building?
+    const elsewhere = short.reduce((n, r) => n + w.buildingsOf(b.owner).filter((x) => x !== b).reduce((m, x) => m + w.logistics.spare(x)[r], 0), 0);
+    if (elsewhere < 1) return 'gather more (nothing spare elsewhere)';
+    const hasCarts = w.unitsOf(b.owner).some((u) => u.carter);
+    const worker = workerName(w.factionOf(b.owner)).toLowerCase();
+    if (!hasCarts) return `${Math.floor(elsewhere)} spare at other buildings: right-click this with ${worker}s to haul it here`;
+    return `waiting for a free ${carter} (or right-click this with ${worker}s to haul it)`;
   }
 
   /** What this building is short of for a cost, in words ("6 crystal", "20 food + 4 crystal"), or ''. */
@@ -426,8 +428,9 @@ export class Hud {
         <canvas class="portrait" data-portrait="${k}"></canvas><b>${us.length}</b></button>`;
     });
     const workers = units.some((u) => u.owner === this.player && this.isWorker(u.specId));
-    return `<div class="group-panel"><div class="groups">${tiles.join('')}</div>
-      <div class="row">${this.commandButtons()}${workers ? this.buildMenu() : ''}</div></div>`;
+    // same shape as a single unit's panel: tiles and commands on the left, build menu beside them
+    return `<div class="group-panel"><div class="info"><div class="groups">${tiles.join('')}</div>${this.commandButtons()}</div>
+      ${workers ? this.buildMenu() : ''}</div>`;
   }
 
   private buildMenu(): string {

@@ -1,5 +1,6 @@
 // Fenfolk rigs (their own; factions never share model code).
-// Small, wiry marsh people: ~1.25 tall, reed hats, wading wraps.
+// Small, crouching, frog-like marsh folk: ~1.15 tall, wide heads with bulging eyes,
+// webbed feet, shaggy reed cloaks, lily-pad hats or fin crests.
 // Convention: faces +x, y up, +z is its left.
 import type { Mat, ModelBuilder, Pose, Vec3 } from '../../kits/bake3d/types';
 
@@ -30,6 +31,7 @@ export function fenArm(p: Pose, style: 'sling' | 'jab' | 'work'): number {
 }
 
 const REED: Mat = { color: '#b8a466', tex: 'thatch' };
+const REED_DARK: Mat = { color: '#8a7a48', tex: 'thatch' };
 const TEAM: Mat = { team: 'primary', tex: 'cloth' };
 
 export function fenling(
@@ -39,44 +41,96 @@ export function fenling(
   b.joint([0, 0, 0], [0, 0, 0], (m) => {
     const walking = p.anim === 'walk' && !look.mounted;
     const t = p.phase * TAU;
-    const bob = walking ? Math.abs(Math.sin(t)) * 0.025 : 0;
+    const bob = walking ? Math.abs(Math.sin(t)) * 0.04 : 0;
     const skin: Mat = { color: look.skin, tex: 'skin' };
+    const spots: Mat = { color: shade(look.skin, 0.72), tex: 'skin' };
+    const belly: Mat = { color: shade(look.skin, 1.35), tex: 'skin' };
     const bulk = look.bulk ?? 1;
+    // crouched, frog-like legs: thigh forward, shin back, big webbed feet
     for (const side of [1, -1]) {
-      const z = 0.08 * side * bulk;
+      const z = 0.11 * side * bulk;
       if (look.mounted) {
-        m.limb([0, 0.6, z], [0.14, 0.42, z * 3], 0.05, skin);
-        m.limb([0.14, 0.42, z * 3], [0.1, 0.2, z * 3.2], 0.04, skin);
+        m.limb([0, 0.5, z], [0.18, 0.36, z * 2.6], 0.06, skin);
+        m.limb([0.18, 0.36, z * 2.6], [0.06, 0.18, z * 2.8], 0.05, skin);
         continue;
       }
-      const a = walking ? Math.sin(t + (side > 0 ? 0 : Math.PI)) * 0.55 : 0;
-      const hip: Vec3 = [0, 0.6 + bob, z];
-      const knee = swing(hip, 0.3, a);
-      const foot = swing(knee, 0.3, a * 0.4 - (walking ? Math.max(0, Math.sin(t + (side > 0 ? 0 : Math.PI) + 1.5)) * 0.5 : 0));
-      m.limb(hip, knee, 0.05, look.wrap, 0.045);
-      m.limb(knee, foot, 0.045, skin, 0.035); // bare shins: they wade
-      m.sphere([0.08, 0.035, 0.05], [foot[0] + 0.03, Math.max(0.03, foot[1]), foot[2]], skin);
+      const a = walking ? Math.sin(t + (side > 0 ? 0 : Math.PI)) * 0.5 : 0;
+      const lift = walking ? Math.max(0, -Math.cos(t + (side > 0 ? 0 : Math.PI))) * 0.08 : 0;
+      const hip: Vec3 = [-0.04, 0.4 + bob, z];
+      const knee: Vec3 = [0.12 + Math.sin(a) * 0.12, 0.3 + bob * 0.5 + lift, z * 2.1]; // splayed out, frog-like
+      const foot: Vec3 = [-0.02 + Math.sin(a) * 0.2, 0.03 + lift, z * 1.6];
+      m.limb(hip, knee, 0.075, skin, 0.055);
+      m.limb(knee, foot, 0.05, skin, 0.035);
+      m.joint(foot, [0, 0, 0], (f) => {
+        for (const tz of [-0.045, 0, 0.045]) f.sphere([0.06, 0.018, 0.022], [0.06, 0, tz * (1 + Math.abs(tz) * 8)], skin, [0, tz * 6, 0]);
+        f.sphere([0.06, 0.012, 0.07], [0.03, -0.004, 0], belly); // webbing
+      });
     }
-    m.joint([0, bob, 0], [0, 0, p.anim === 'tired' ? -0.3 : 0], (u) => {
-      u.cylinder(0.14 * bulk, 0.18 * bulk, 0.26, [0, 0.52, 0], look.wrap, undefined, 12); // wading skirt
-      u.cylinder(0.15 * bulk, 0.14 * bulk, 0.34, [0, 0.8, 0], look.wrap, undefined, 12);
-      u.box([0.04, 0.34, 0.3 * bulk], [0.0, 0.8, 0], TEAM, [0, 0, 0.15]); // team sash
-      const hy = 1.07;
-      u.sphere([0.1, 0.11, 0.1], [0.02, hy, 0], skin);
-      u.sphere([0.025, 0.035, 0.025], [0.11, hy - 0.01, 0], skin);
-      for (const z of [1, -1]) u.sphere([0.02, 0.05, 0.03], [0, hy + 0.01, 0.1 * z], skin); // big ears
-      if (look.hat === 'crest') for (let i = 0; i < 5; i++) u.limb([0, hy + 0.08, 0], [-0.05 - i * 0.03, hy + 0.3 - i * 0.02, (i - 2) * 0.04], 0.012, REED);
-      else u.cone(0.2, 0.17, [0, hy + 0.13, 0], REED, undefined, 12);
-      const sr: Vec3 = [0, 0.95, 0.17 * bulk], sl: Vec3 = [0, 0.95, -0.17 * bulk];
-      const elbowR = swing(sr, 0.22, arm), handR = swing(elbowR, 0.2, arm + 0.25);
-      const la = walking ? -Math.sin(t) * 0.5 : 0.3;
-      const elbowL = swing(sl, 0.22, la), handL = swing(elbowL, 0.2, la + 0.3);
-      u.limb(sr, elbowR, 0.04, skin, 0.035); u.limb(elbowR, handR, 0.035, skin, 0.03);
-      u.limb(sl, elbowL, 0.04, skin, 0.035); u.limb(elbowL, handL, 0.035, skin, 0.03);
+    m.joint([0, bob, 0], [0, 0, p.anim === 'tired' ? -0.35 : -0.12], (u) => {
+      // squat, round body leaning forward, pale belly
+      u.sphere([0.19 * bulk, 0.22, 0.19 * bulk], [0, 0.6, 0], skin);
+      u.sphere([0.13 * bulk, 0.17, 0.14 * bulk], [0.08, 0.58, 0], belly);
+      for (const [x, y, z] of [[-0.12, 0.74, 0.06], [-0.1, 0.62, -0.09], [-0.14, 0.82, -0.03]] as Vec3[]) u.sphere(0.03, [x, y, z * bulk], spots);
+      u.cylinder(0.17 * bulk, 0.19 * bulk, 0.1, [0, 0.44, 0], look.wrap, undefined, 12); // loincloth wrap
+      // shaggy reed cloak hanging from the shoulders down the back
+      for (let i = 0; i < 11; i++) {
+        const a = Math.PI * 0.55 + (i / 10) * Math.PI * 0.9;
+        const sway = walking ? Math.sin(t + i) * 0.03 : 0;
+        const top: Vec3 = [Math.cos(a) * 0.13 * bulk, 0.8, Math.sin(a) * 0.17 * bulk];
+        u.limb(top, [Math.cos(a) * 0.24 * bulk - 0.05 + sway, 0.36 + (i % 3) * 0.04, Math.sin(a) * 0.26 * bulk], 0.026, i % 2 ? REED : REED_DARK, 0.012);
+      }
+      u.cylinder(0.12 * bulk, 0.16 * bulk, 0.07, [0, 0.8, 0], TEAM, undefined, 12); // team scarf
+      u.box([0.03, 0.16, 0.07], [-0.15, 0.72, 0.06], TEAM, [0.2, 0, -0.3]); // scarf tail
+      u.crystal(0.08, [0.18 * bulk, 0.68, 0], [0, 0, 0.2]); // charm on a cord
+      // wide flat head, bulging amber eyes on top, a long mouth
+      u.joint([0.07, 0.9, 0], [0, 0, 0.1], (h) => {
+        h.sphere([0.17, 0.11, 0.18], [0, 0, 0], skin);
+        h.sphere([0.12, 0.06, 0.15], [0.05, -0.05, 0], belly); // throat
+        h.box([0.02, 0.014, 0.25], [0.155, -0.03, 0], { color: '#2a2018' }); // wide mouth
+        for (const z of [1, -1]) {
+          h.sphere(0.07, [0.06, 0.09, 0.09 * z], skin);
+          h.sphere(0.055, [0.095, 0.1, 0.1 * z], { color: '#f0b030', rough: 0.15, emissive: '#3a2400' });
+          h.sphere([0.014, 0.04, 0.016], [0.146, 0.1, 0.108 * z], { color: '#120c08', rough: 0.1 });
+        }
+        h.sphere(0.022, [-0.06, 0.07, 0.02], spots);
+        if (look.hat === 'crest') {
+          // a fin crest from brow to nape: team-coloured webbing on reed spines
+          for (let i = 0; i < 5; i++) {
+            const x = 0.02 - i * 0.05, top = 0.2 - Math.abs(i - 1.5) * 0.03;
+            h.limb([x, 0.08, 0], [x - 0.04, top, 0], 0.01, REED_DARK);
+          }
+          h.box([0.2, 0.1, 0.012], [-0.09, 0.14, 0], TEAM, [0, 0, 0.15]);
+        } else {
+          // a wide lily-pad hat, notched, its brim drooping a little
+          // worn pushed back on the head so the eyes peek out under the brim
+          h.joint([-0.09, 0.15, 0], [0, 0.4, 0.45], (lh) => {
+            lh.cylinder(0.2, 0.22, 0.02, [0, 0, 0], { color: '#4e7a34', tex: 'leaf' }, undefined, 16);
+            lh.cylinder(0.16, 0.16, 0.022, [0, 0.003, 0], { color: '#5e8a3c', tex: 'leaf' }, undefined, 16);
+            lh.box([0.13, 0.03, 0.03], [-0.15, 0.002, 0], { color: look.skin }, [0, 0, 0]); // the notch shows through
+            lh.cone(0.035, 0.06, [0, 0.04, 0], TEAM, undefined, 8); // team-dyed stem
+          });
+        }
+      });
+      // long arms, webbed hands
+      const sr: Vec3 = [0.03, 0.76, 0.19 * bulk], sl: Vec3 = [0.03, 0.76, -0.19 * bulk];
+      const elbowR = swing(sr, 0.22, arm), handR = swing(elbowR, 0.22, arm + 0.25);
+      const la = walking ? -Math.sin(t) * 0.5 : 0.35;
+      const elbowL = swing(sl, 0.22, la), handL = swing(elbowL, 0.22, la + 0.3);
+      u.limb(sr, elbowR, 0.04, skin, 0.034); u.limb(elbowR, handR, 0.032, skin, 0.026);
+      u.limb(sl, elbowL, 0.04, skin, 0.034); u.limb(elbowL, handL, 0.032, skin, 0.026);
+      u.sphere([0.04, 0.03, 0.045], handR, skin);
+      u.sphere([0.04, 0.03, 0.045], handL, skin);
       if (held) u.joint(handR, [0, 0, arm + 0.25], held);
       if (offhand) u.joint(handL, [0, 0, la + 0.3], offhand);
     });
   }, look.scale ?? 1);
+}
+
+/** Lighten (k > 1) or darken (k < 1) a hex colour. */
+function shade(hex: string, k: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const c = (v: number) => Math.max(0, Math.min(255, Math.round(v * k))).toString(16).padStart(2, '0');
+  return `#${c(n >> 16)}${c((n >> 8) & 255)}${c(n & 255)}`;
 }
 
 /** Load on the back, by cargo: a reed bundle, a root basket, a crystal. */

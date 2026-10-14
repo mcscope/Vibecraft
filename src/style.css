@@ -103,7 +103,6 @@ kbd {
 .build .btns { flex-wrap: nowrap; overflow-x: auto; max-width: none; padding-bottom: 4px; }
 .build .btns > * { flex: none; }
 .unit-panel { min-width: 0; }
-.group-panel .row { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
 
 /* ── settings ── */
 #settings { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.55); z-index: 20; }
@@ -217,8 +216,10 @@ button:active { background: linear-gradient(180deg, #2a231b, #3a3026); }
 .cmds button { padding: 4px 12px; }
 .cmds u { color: var(--gold); text-decoration: none; }
 
-.group-panel { display: flex; flex-direction: column; gap: 6px; }
-.groups { display: flex; gap: 4px; flex-wrap: wrap; }
+.group-panel { display: flex; gap: 16px; align-items: flex-start; }
+.group-panel .info { width: 300px; flex: none; }
+.groups { display: flex; gap: 4px; flex-wrap: wrap; max-height: 172px; overflow-y: auto; }
+.groups .portrait { width: 52px; height: 52px; }
 .group { position: relative; padding: 2px; background: radial-gradient(ellipse at 50% 80%, #4a5530, #1e2214); }
 .group b { position: absolute; right: 4px; bottom: 1px; font-size: 14px; text-shadow: 0 1px 2px #000, 0 0 3px #000; }
 
@@ -249,7 +250,7 @@ button:active { background: linear-gradient(180deg, #2a231b, #3a3026); }
 
 @media (max-width: 760px) {
   #minimap-wrap, #panel .stats, #tooltip .stats, #help { display: none !important; }
-  .unit-panel .info, .building-panel .info { width: auto; flex: 1; }
+  .unit-panel .info, .building-panel .info, .group-panel .info { width: auto; flex: 1; }
 }
 
 /* ── Unit Lab ── */

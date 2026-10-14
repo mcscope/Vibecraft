@@ -95,6 +95,8 @@ export class Renderer {
   private air = new Container();
   private screenLayer = new Container({ isRenderGroup: true });
   private groundPool = new Pool(this.groundLayer);
+  /** "Needs supplies" flags planted by buildings whose orders wait on stock. */
+  private wantPool = new Pool(this.objects);
   private fxLayer = new Container({ isRenderGroup: true });
   private fxPool = new Pool(this.fxLayer);
   /** Smoke and flame puffs rising from damaged buildings (world iso coords). */
@@ -258,6 +260,7 @@ export class Renderer {
   }
 
   private syncBuildings(): void {
+    this.wantPool.begin();
     for (const b of this.world.buildings.values()) {
       let sp = this.buildingSprites.get(b.id);
       if (!sp) {
@@ -272,7 +275,18 @@ export class Renderer {
       const art = this.bank.building(b.owner, b.specId);
       if (art) this.setFrame(sp, buildingSprite(art, b.complete, b.built / b.stats.totalCost, b.hp, b.maxHp));
       sp.tint = b.complete && b.spec.attack && b.stock.crystal < b.spec.attack.crystalMass ? 0x808080 : 0xffffff; // tower out of ammo
+      // your building waiting on supplies plants its faction's "needs supplies" flag at its corner
+      if (b.owner === 0 && b.complete && b.queue.length && !b.queue[0].paid) {
+        const s = this.bank.wantFlag(b.owner);
+        const f = this.wantPool.get(this.texture(s));
+        f.anchor.set(s.ax / s.sw, s.ay / s.sh);
+        f.scale.set(1.35 / s.q); // a little larger than life, so it reads
+        const x = b.ox + b.size + 0.1, y = b.oy - 0.1; // the right-hand corner
+        f.position.set(isoX(x, y), isoY(x, y) - Math.abs(Math.sin(this.time * 3 + b.id)) * 3);
+        f.zIndex = b.ox + b.oy + b.size + 0.5;
+      }
     }
+    this.wantPool.end();
     for (const [id, sp] of this.buildingSprites) if (!this.world.buildings.has(id)) { sp.destroy(); this.buildingSprites.delete(id); }
   }
 
@@ -444,7 +458,9 @@ export class Renderer {
     };
     for (const u of world.units.values()) {
       const sel = rs.selected.has(u.id);
-      if (!sel && u.hp >= u.stats.maxHp - 0.5 && rs.hoverId !== u.id) continue;
+      // your ammo bearers always show how much crystal they have left to hand out
+      const bearer = u.owner === 0 && !!world.specOf(u.owner, u.specId)?.spec.bearer;
+      if (!sel && !bearer && u.hp >= u.stats.maxHp - 0.5 && rs.hoverId !== u.id) continue;
       const x = u.px + (u.x - u.px) * alpha, y = u.py + (u.y - u.py) * alpha;
       const [sx, sy] = cam.toScreen(x, y);
       if (sx < -50 || sy < -50 || sx > cam.width + 50 || sy > cam.height + 200) continue;
@@ -452,6 +468,7 @@ export class Renderer {
       const w = Math.max(20, 24 * Math.cbrt(u.stats.mass / 70)) * Math.min(1.3, cam.zoom);
       const f = u.hp / u.stats.maxHp;
       bar(sx - w / 2, top, w, 3, f, f > 0.5 ? 0x3fcf4a : f > 0.25 ? 0xe8c547 : 0xd9352b);
+      if (bearer) { top += 4; bar(sx - w / 2, top, w, 3, u.crystal / Math.max(1e-6, u.stats.cargoCapacity), 0x8fe6ff); }
       if (!sel || u.owner !== 0 || u.dummy) continue;
       top += 4;
       bar(sx - w / 2, top, w, 2, u.cal / u.stats.maxCalories, u.exhausted ? 0x8a7a5a : 0xe09a3a);
@@ -538,15 +555,21 @@ export class Renderer {
   }
 
   /** Screen-space hit test. Returns the id of the topmost thing under the cursor. */
-  pick(sx: number, sy: number, alpha: number): number {
+  /** `me`: picking a target for orders, so anyone else's unit under the cursor beats player `me`'s next to it. */
+  pick(sx: number, sy: number, alpha: number, me = -1): number {
     const { cam, world } = this;
-    let best = 0, bestDepth = -Infinity;
+    // of the units whose picture is under the cursor, the one whose body is closest to it
+    // (so you can pick a particular unit out of a crowd)
+    let best = 0, bestD = Infinity;
     for (const u of world.units.values()) {
       const x = u.px + (u.x - u.px) * alpha, y = u.py + (u.y - u.py) * alpha;
       const [ux, uy] = cam.toScreen(x, y);
       const h = (this.bank.unit(u.owner, u.specId)?.height ?? 40) * cam.zoom;
       const w = Math.max(10, Math.min(h * 0.45, 40 * cam.zoom));
-      if (Math.abs(sx - ux) < w && sy < uy + 6 && sy > uy - h - 4 && x + y > bestDepth) { best = u.id; bestDepth = x + y; }
+      if (Math.abs(sx - ux) >= w || sy >= uy + 6 || sy <= uy - h - 4) continue;
+      const cy = uy - h * 0.45;
+      const d = ((sx - ux) / w) ** 2 + ((sy - cy) / (h * 0.55)) ** 2 + (u.owner === me ? 10 : 0);
+      if (d < bestD) { best = u.id; bestD = d; }
     }
     if (best) return best;
     const [wx, wy] = cam.toWorld(sx, sy);

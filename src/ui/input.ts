@@ -94,7 +94,8 @@ export class Input {
     }
     cam.pan(dx * cam.zoom, dy * cam.zoom);
     cam.clampTo(this.world.grid.width, this.world.grid.height);
-    this.rs.hoverId = this.mouse.inside ? this.renderer.pick(this.mouse.x, this.mouse.y, this.alpha) : 0;
+    // hover shows what a right-click would target
+    this.rs.hoverId = this.mouse.inside ? this.renderer.pick(this.mouse.x, this.mouse.y, this.alpha, this.orderPicker()) : 0;
     this.canvas.style.cursor = this.mode === 'attackMove' ? 'crosshair' : this.mode === 'give' ? 'copy' : this.mode === 'resupplyDest' ? 'alias' : this.mode === 'place' ? 'cell' : 'default';
     // building placement preview follows the cursor
     if (this.mode === 'place' && this.mouse.inside) {
@@ -135,13 +136,13 @@ export class Input {
       if (this.mode === 'place') { this.mode = null; return; }
       if (this.mode === 'resupplyDest') this.mode = null;
       const [wx, wy] = this.renderer.cam.toWorld(e.clientX, e.clientY);
-      this.contextCommand(wx, wy, this.renderer.pick(e.clientX, e.clientY, this.alpha), e.shiftKey);
+      this.contextCommand(wx, wy, this.renderer.pick(e.clientX, e.clientY, this.alpha, this.orderPicker()), e.shiftKey);
       return;
     }
     if (d.button !== 0) return;
     if (this.mode) {
       const [wx, wy] = this.renderer.cam.toWorld(e.clientX, e.clientY);
-      const target = this.renderer.pick(e.clientX, e.clientY, this.alpha);
+      const target = this.renderer.pick(e.clientX, e.clientY, this.alpha, this.orderPicker());
       const units = this.selectedUnits();
       if (this.mode === 'place') {
         const g = this.rs.ghost;
@@ -209,6 +210,9 @@ export class Input {
     this.lastClick = { t: now, id };
   }
 
+  /** With units selected, clicks pick targets: other players' units win over ours. */
+  private orderPicker(): number { return this.mode !== 'give' && this.selectedUnits().length ? this.player : -1; }
+
   /** Right-click: do the obvious thing for whatever is under the cursor. */
   contextCommand(wx: number, wy: number, target: number, _shift: boolean): void {
     const w = this.world;
@@ -225,7 +229,7 @@ export class Input {
     }
     if (tu && tu.wild === 'passive') {
       // game: workers hunt it (bring it down, then gather), fighters attack it
-      const hunters = units.filter((id) => { const u = w.units.get(id); return u && !u.stats.canAttack && u.stats.gatherRate > 0; });
+      const hunters = units.filter((id) => { const u = w.units.get(id); return u && !u.stats.canAttack && w.gathers(u, 'food'); });
       const fighters = units.filter((id) => !hunters.includes(id));
       if (hunters.length) this.issue({ type: 'hunt', units: hunters, target });
       if (fighters.length) this.issue({ type: 'attack', units: fighters, target });
@@ -248,10 +252,11 @@ export class Input {
       this.ping(wx, wy, '#7aff7a');
     } else if (tb && tb.owner === this.player) {
       // unarmed workers haul supplies for it; armed units restock themselves there
-      const haulers = units.filter((id) => { const u = w.units.get(id); return u && u.stats.gatherRate > 0 && (!u.stats.canAttack || u.specId === w.factionOf(u.owner).workerId); });
+      const haulers = units.filter((id) => { const u = w.units.get(id); return u && w.gathers(u) && (!u.stats.canAttack || u.specId === w.factionOf(u.owner).workerId); });
       const rest = units.filter((id) => !haulers.includes(id));
-      const base = w.baseOf(this.player);
-      if (haulers.length && base && tb !== base) this.issue({ type: 'haul', units: haulers, building: tb.id });
+      // (into any building that's short of something, the main one included)
+      const short = Object.values(w.logistics.shortfall(tb)).some((v) => v > 0.5);
+      if (haulers.length && short) this.issue({ type: 'haul', units: haulers, building: tb.id });
       else rest.push(...haulers);
       if (rest.length) this.issue({ type: 'resupply', units: rest, building: tb.id });
       this.ping(wx, wy, '#ffd23f');

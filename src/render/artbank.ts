@@ -35,6 +35,7 @@ export class ArtBank {
   unit(owner: number, id: string): UnitArt | undefined { return this.factions[owner]?.units[id]; }
   building(owner: number, id: string): BuildingArt | undefined { return this.factions[owner]?.buildings[id]; }
   flag(owner: number): Sprite { return this.factions[owner].flag; }
+  wantFlag(owner: number): Sprite { return this.factions[owner].wantFlag ?? this.factions[owner].flag; }
 
   /** Every image the renderer may draw from (for GPU pre-upload). */
   allImages(): CanvasImageSource[] {
@@ -46,6 +47,7 @@ export class ArtBank {
     }
     for (const f of this.factions) {
       add(f.flag);
+      if (f.wantFlag) add(f.wantFlag);
       for (const u of Object.values(f.units)) for (const a of Object.values(u.anims)) a?.frames.flat().forEach(add);
       for (const bd of Object.values(f.buildings)) [...bd.construction, bd.complete, ...bd.damaged].forEach(add);
     }

@@ -3,7 +3,7 @@ import type { FactionArt, TeamColors, UnitArt } from '../../art/contract';
 import { Baker } from '../../kits/bake3d/baker';
 import { toBitmaps } from '../../kits/bake3d/bitmaps';
 import { buildings, units } from './index';
-import { clanBanner } from './buildings';
+import { clanBanner, clanWantFlag } from './buildings';
 
 /** Lower, rougher voices than the Meadowfolk. */
 const VOICES: Record<string, UnitArt['sounds']> = {
@@ -20,7 +20,7 @@ export async function bakeArt(team: TeamColors, onProgress?: (f: number, label: 
   const total = units.reduce((n, u) => n + Baker.frameCount({ withCarry: carry(u.id) }), 0) + buildings.length * 6 + 1;
   let done = 0;
   // a slower, modal (mixolydian) march with a drone: pipes and drums
-  const art: FactionArt = { units: {}, buildings: {}, flag: baker.bakeStatic(clanBanner, team), music: { scale: [0, 2, 4, 5, 7, 9, 10], root: 116.5, tempo: 68, lead: 'square', drone: 'saw' } };
+  const art: FactionArt = { units: {}, buildings: {}, flag: baker.bakeStatic(clanBanner, team), wantFlag: baker.bakeStatic(clanWantFlag, team), music: { scale: [0, 2, 4, 5, 7, 9, 10], root: 116.5, tempo: 68, lead: 'square', drone: 'saw' } };
   for (const u of units) {
     onProgress?.(done / total, `Gathering the ${u.name}s`);
     art.units[u.id] = await baker.bakeUnit(u.model, team, { withCarry: carry(u.id) }, () => {
@@ -35,6 +35,6 @@ export async function bakeArt(team: TeamColors, onProgress?: (f: number, label: 
     await new Promise((r) => setTimeout(r, 0));
   }
   baker.dispose();
-  await toBitmaps([art.flag, ...Object.values(art.buildings).flatMap((b) => [...b.construction, b.complete, ...b.damaged])]);
+  await toBitmaps([art.flag, art.wantFlag!, ...Object.values(art.buildings).flatMap((b) => [...b.construction, b.complete, ...b.damaged])]);
   return art;
 }

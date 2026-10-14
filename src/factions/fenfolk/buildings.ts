@@ -99,3 +99,14 @@ export function fenBanner(b: ModelBuilder): void {
   b.box([0.03, 0.55, 0.4], [0, 1.3, 0.21], BANNER);
   for (let i = 0; i < 3; i++) b.limb([0, 1.6, 0], [0.05, 1.85 + i * 0.05, (i - 1) * 0.06], 0.012, REED); // reed tassel
 }
+
+/** "Needs supplies": a reed pole with an empty clay pot swinging from it, mouth down. */
+export function fenWantFlag(b: ModelBuilder): void {
+  b.cylinder(0.03, 0.035, 1.7, [0, 0.85, 0], WILLOW, undefined, 8);
+  b.limb([0, 1.6, 0], [0.45, 1.75, 0], 0.025, WILLOW); // a bent arm at the top
+  b.limb([0.42, 1.73, 0], [0.42, 1.45, 0], 0.008, REED_DARK);
+  b.sphere([0.17, 0.15, 0.17], [0.42, 1.3, 0], { color: '#9a5a34', tex: 'stone' }, [0.3, 0, 2.6]); // clay pot, tipped over: empty
+  b.cylinder(0.08, 0.09, 0.06, [0.36, 1.18, 0], { color: '#7a4428', tex: 'stone' }, [0, 0, 2.6], 10); // its mouth
+  b.box([0.03, 0.32, 0.26], [0, 1.25, 0.14], BANNER, [0.15, 0, 0]); // a ragged team rag
+  for (let i = 0; i < 3; i++) b.limb([0, 1.7, 0], [0.04, 1.95 + i * 0.05, (i - 1) * 0.06], 0.012, REED);
+}

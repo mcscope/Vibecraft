@@ -13,7 +13,7 @@ export interface PackedSprite { i: number; sx: number; sy: number; sw: number; s
 interface PackedAnim { frames: PackedSprite[][]; fps?: number }
 interface PackedUnit { height: number; anims: Record<string, PackedAnim>; sounds?: UnitSounds }
 interface PackedBuilding { construction: PackedSprite[]; complete: PackedSprite; damaged: PackedSprite[]; sounds?: BuildingArt['sounds'] }
-export interface PackedArt { images: string[]; units: Record<string, PackedUnit>; buildings: Record<string, PackedBuilding>; flag: PackedSprite; music?: MusicSpec }
+export interface PackedArt { images: string[]; units: Record<string, PackedUnit>; buildings: Record<string, PackedBuilding>; flag: PackedSprite; wantFlag?: PackedSprite; music?: MusicSpec }
 export interface PackedBiome {
   images: string[];
   trees: PackedSprite[]; bushes: PackedSprite[]; mines: PackedSprite[]; shard: PackedSprite; projectile: PackedSprite;
@@ -77,7 +77,8 @@ export function packArt(art: FactionArt): PackedArt {
     buildings[id] = { construction: b.construction.map((s) => p.sprite(s)), complete: p.sprite(b.complete), damaged: b.damaged.map((s) => p.sprite(s)), sounds: b.sounds };
   }
   const flag = p.sprite(art.flag);
-  return { images: p.images, units, buildings, flag, music: art.music };
+  const wantFlag = art.wantFlag && p.sprite(art.wantFlag);
+  return { images: p.images, units, buildings, flag, wantFlag, music: art.music };
 }
 
 export function packBiome(b: BiomeArt): PackedBiome {
@@ -159,6 +160,7 @@ function allSprites(a: PackedArt | PackedBiome): PackedSprite[] {
     Object.values(a.units ?? {}).forEach(unit);
     Object.values(a.buildings ?? {}).forEach((b) => out.push(...(b.construction ?? []), b.complete, ...(b.damaged ?? [])));
     out.push(a.flag);
+    if (a.wantFlag) out.push(a.wantFlag);
   } else {
     out.push(...a.trees, ...a.bushes, ...a.mines, a.shard, a.projectile, ...Object.values(a.doodads ?? {}).flat());
     if (a.carcass) out.push(a.carcass);
@@ -204,7 +206,7 @@ export async function unpackArt(a: PackedArt): Promise<FactionArt> {
     buildings[id] = { construction: b.construction.map(sp), complete: sp(b.complete), damaged: b.damaged.map(sp), sounds: b.sounds && { placed: sounds(b.sounds.placed), complete: sounds(b.sounds.complete), destroyed: sounds(b.sounds.destroyed) } };
   }
   const music = a.music && { ...a.music, clip: a.music.clip && DATA_AUDIO.test(a.music.clip) ? a.music.clip : undefined };
-  return { units, buildings, flag: sp(a.flag), music };
+  return { units, buildings, flag: sp(a.flag), wantFlag: a.wantFlag && sp(a.wantFlag), music };
 }
 
 export async function unpackBiome(b: PackedBiome): Promise<BiomeArt> {

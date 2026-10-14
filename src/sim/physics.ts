@@ -212,7 +212,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   const crystalCost = Math.ceil(loadoutCrystal);
   const trainTime = K.trainBaseSec + K.trainSecPerKg * mass;
 
-  const improvised = !canAttack && (spec.canGather ?? true) && !spec.dummy && spec.role !== 'carter'
+  const improvised = !canAttack && (spec.canGather ?? true) && !spec.dummy && spec.role !== 'carter' && !spec.bearer
     ? (() => { const a = derive({ ...spec, attack: { style: 'strike', crystalMass: IMPROVISED_KG } }, techRefinement, techWork); return { damage: a.damage, cooldown: a.cooldown, range: a.range, attackCalories: a.attackCalories, crystalMass: IMPROVISED_KG }; })()
     : undefined;
 

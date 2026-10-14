@@ -498,7 +498,7 @@ export class World {
         const n = this.nodes.get(cmd.node);
         if (!n) return;
         for (const u of mine(cmd.units)) {
-          if (u.stats.gatherRate <= 0) continue;
+          if (!this.gathers(u, n.type)) continue;
           set([u], { kind: 'gather', node: n.id, nodeType: n.type, phase: 'toNode', stopWhenArmed: false });
         }
         return;
@@ -595,7 +595,7 @@ export class World {
         const ox = Math.floor(cmd.ox), oy = Math.floor(cmd.oy);
         if (!this.placeable(ox, oy, spec.size)) return;
         const site = this.addBuilding(player, cmd.specId, ox, oy, false);
-        if (site) set(mine(cmd.units).filter((u) => u.stats.gatherRate > 0), { kind: 'build', site: site.id, phase: 'fetch', node: 0 });
+        if (site) set(mine(cmd.units).filter((u) => this.gathers(u, 'wood')), { kind: 'build', site: site.id, phase: 'fetch', node: 0 });
         return;
       }
       case 'assignCart': {
@@ -615,9 +615,9 @@ export class World {
         const b = ownBuilding(cmd.building);
         if (!b || !b.complete) return;
         for (const u of mine(cmd.units)) {
-          if (u.stats.gatherRate <= 0) continue;
+          if (!this.gathers(u)) continue;
           const base = this.logistics.nearestProducer(u) ?? this.baseOf(player);
-          if (!base || base === b) continue;
+          if (!base) continue;
           const loaded = u.food + u.wood + u.crystal > 0.05;
           set([u], { kind: 'cart', base: base.id, home: b.id, pinned: true, phase: loaded ? 'deliver' : 'load', res: 'food' });
         }
@@ -645,12 +645,12 @@ export class World {
       case 'hunt': {
         const prey = this.units.get(cmd.target);
         if (!prey || prey.wild !== 'passive') return;
-        return set(mine(cmd.units).filter((u) => u.stats.gatherRate > 0), { kind: 'hunt', target: prey.id, x: prey.x, y: prey.y });
+        return set(mine(cmd.units).filter((u) => this.gathers(u, 'food')), { kind: 'hunt', target: prey.id, x: prey.x, y: prey.y });
       }
       case 'construct': {
         const site = ownBuilding(cmd.site);
         if (!site || site.complete) return;
-        return set(mine(cmd.units).filter((u) => u.stats.gatherRate > 0), { kind: 'build', site: site.id, phase: 'fetch', node: 0 });
+        return set(mine(cmd.units).filter((u) => this.gathers(u, 'wood')), { kind: 'build', site: site.id, phase: 'fetch', node: 0 });
       }
     }
   }
@@ -711,7 +711,7 @@ export class World {
     const pos = this.grid.nearestOpen(cx + (dx / d) * (from.size / 2 + 0.7), cy + (dy / d) * (from.size / 2 + 0.7)) ?? [cx + 2.5, cy + 2.5];
     const u = this.makeUnit(owner, specId, pos[0], pos[1]);
     const rx = from.rallyX, ry = from.rallyY;
-    if (from.rallyRes && !u.carter && u.stats.gatherRate > 0) {
+    if (from.rallyRes && !u.carter && this.gathers(u, from.rallyRes)) {
       // rallied onto a resource: go gather it (the nearest of that kind to the rally point, if it's gone)
       let node: ResourceNode | null = null, best = 10 * 10;
       for (const n of this.nodes.values()) {
@@ -1028,7 +1028,13 @@ export class World {
     if (u.carter) { if ((this.tick + u.id) % 40 === 0) this.logistics.autoAssignCart(u); return false; }
     if (this.runEngage(u)) return u.x !== u.px || u.y !== u.py;
     // Throwers with an empty sling look for spent crystals nearby.
-    if (u.throws && !this.armed(u) && (this.tick + u.id) % 20 === 0) this.seekAmmo(u, false);
+    // idle bearers sweep up spent crystals nearby
+    if ((this.tick + u.id) % 20 === 0 && this.freeCapacity(u) >= 0.5 && this.isBearer(u)) {
+      const shard = this.nearestNode(u, 'crystal', u.stats.sight, true);
+      if (shard) { u.order = { kind: 'gather', node: shard.id, nodeType: 'crystal', phase: 'toNode', stopWhenArmed: false }; return false; }
+    }
+    // idle throwers top their packs up from spent crystals (or a bearer) nearby, not just when empty
+    if (u.throws && u.ammo < u.stats.loadoutCrystal - 1e-6 && (this.tick + u.id) % 20 === 0) this.seekAmmo(u, false);
     return false;
   }
 
@@ -1231,9 +1237,10 @@ export class World {
   private runGather(u: Unit, o: Extract<Order, { kind: 'gather' }>): boolean {
     let node = this.nodes.get(o.node);
     if (o.phase !== 'toDrop' && (!node || node.amount <= 0.001)) {
-      const next = o.stopWhenArmed ? null : this.nearestNode(u, o.nodeType, 10, false, node);
+      const bearer = this.isBearer(u);
+      const next = o.stopWhenArmed || bearer ? null : this.nearestNode(u, o.nodeType, 10, false, node);
       if (next) { o.node = next.id; o.phase = 'toNode'; node = next; }
-      else if (this.cargo(u) > 0.5 && !o.stopWhenArmed) o.phase = 'toDrop';
+      else if (this.cargo(u) > 0.5 && !o.stopWhenArmed && !bearer) o.phase = 'toDrop';
       else { this.finish(u); return false; }
     }
     if (o.phase === 'toNode') {
@@ -1267,7 +1274,8 @@ export class World {
       if (o.stopWhenArmed) {
         if (u.ammo >= u.stats.loadoutCrystal - 1e-6 || n.amount <= 0.001) this.finish(u);
       } else if (full) {
-        o.phase = 'toDrop';
+        if (this.isBearer(u)) this.finish(u); // a bearer keeps its crystal to hand out
+        else o.phase = 'toDrop';
       }
       return false;
     }
@@ -1289,11 +1297,20 @@ export class World {
     return u.x !== u.px || u.y !== u.py;
   }
 
+  /** An ammo bearer: a walking crystal pile (see UnitSpec.bearer). */
+  isBearer(u: Unit): boolean { return !!this.specOf(u.owner, u.specId)?.spec.bearer; }
+
+  /** Can this unit gather `r` (any resource if omitted)? Ammo bearers gather crystal only, and keep it. */
+  gathers(u: Unit, r?: ResourceKind): boolean {
+    if (u.stats.gatherRate <= 0) return false;
+    return !this.isBearer(u) || r === 'crystal';
+  }
+
   /** The nearest friendly ammo bearer with a crystal to spare, within reach of a thrower. */
   private nearestBearer(u: Unit): Unit | null {
     let best: Unit | null = null, bestD = Infinity;
     for (const b of this.units.values()) {
-      if (b.owner !== u.owner || b === u || b.crystal < u.crystalMass - 1e-6) continue;
+      if (b.owner !== u.owner || b === u || b.crystal < Math.min(u.crystalMass, u.stats.loadoutCrystal - u.ammo) - 1e-6) continue;
       const spec = this.specOf(b.owner, b.specId)?.spec.bearer;
       if (!spec) continue;
       const d = (b.x - u.x) ** 2 + (b.y - u.y) ** 2;

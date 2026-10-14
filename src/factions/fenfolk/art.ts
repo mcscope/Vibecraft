@@ -3,7 +3,7 @@ import type { FactionArt, TeamColors, UnitArt } from '../../art/contract';
 import { Baker } from '../../kits/bake3d/baker';
 import { toBitmaps } from '../../kits/bake3d/bitmaps';
 import { buildings, units } from './index';
-import { fenBanner } from './buildings';
+import { fenBanner, fenWantFlag } from './buildings';
 
 /** High, chirping voices; the toad croaks. */
 const VOICES: Record<string, UnitArt['sounds']> = {
@@ -18,7 +18,7 @@ export async function bakeArt(team: TeamColors, onProgress?: (f: number, label: 
   const total = units.reduce((n, u) => n + Baker.frameCount({ withCarry: carry(u.id) }), 0) + buildings.length * 6 + 1;
   let done = 0;
   // a hushed, pentatonic, slightly unsettling marsh song
-  const art: FactionArt = { units: {}, buildings: {}, flag: baker.bakeStatic(fenBanner, team), music: { scale: [0, 3, 5, 7, 10], root: 174.6, tempo: 84, lead: 'sine', drone: 'triangle' } };
+  const art: FactionArt = { units: {}, buildings: {}, flag: baker.bakeStatic(fenBanner, team), wantFlag: baker.bakeStatic(fenWantFlag, team), music: { scale: [0, 3, 5, 7, 10], root: 174.6, tempo: 84, lead: 'sine', drone: 'triangle' } };
   for (const u of units) {
     onProgress?.(done / total, `Wading in the ${u.name}s`);
     art.units[u.id] = await baker.bakeUnit(u.model, team, { withCarry: carry(u.id) }, () => {
@@ -33,6 +33,6 @@ export async function bakeArt(team: TeamColors, onProgress?: (f: number, label: 
     await new Promise((r) => setTimeout(r, 0));
   }
   baker.dispose();
-  await toBitmaps([art.flag, ...Object.values(art.buildings).flatMap((b) => [...b.construction, b.complete, ...b.damaged])]);
+  await toBitmaps([art.flag, art.wantFlag!, ...Object.values(art.buildings).flatMap((b) => [...b.construction, b.complete, ...b.damaged])]);
   return art;
 }

@@ -1,10 +1,12 @@
-// The meadow biome: trees, berry bushes, crystal deposits and ground clutter,
+// The meadow biome and its variants: trees, food plants, crystal deposits and ground clutter,
 // baked with the bake3d kit. A biome is just art the map uses; another
 // homeworld would supply its own BiomeArt.
 import type { BiomeArt, Sprite, TeamColors, UnitArt } from '../../art/contract';
 import { Baker } from '../../kits/bake3d/baker';
 import { toBitmaps } from '../../kits/bake3d/bitmaps';
 import * as m from './models';
+import * as fen from './fen';
+import * as frost from './frost';
 import { fenWildlife, frostWildlife, meadowWildlife } from './wildlife';
 
 /** Meadow variants a faction can pick for its half of the map. */
@@ -67,7 +69,9 @@ export const MINE_LEVELS = 4;
 export async function bakeMeadow(onProgress?: (f: number, label: string) => void, variant: MeadowVariant = 'spring'): Promise<BiomeArt> {
   const baker = new Baker();
   m.setFoliage(variant === 'autumn' ? autumnFoliage : variant === 'frost' ? frostFoliage : variant === 'fen' ? fenFoliage : null);
-  const total = TREE_VARIANTS + BUSH_LEVELS + MINE_LEVELS + 2 + Object.values(m.DOODADS).reduce((n, l) => n + l.length, 0);
+  // frost and fen grow their own resources and clutter; spring and autumn share the meadow's
+  const set = variant === 'frost' ? frost : variant === 'fen' ? fen : m;
+  const total = TREE_VARIANTS + BUSH_LEVELS + MINE_LEVELS + 2 + Object.values(set.DOODADS).reduce((n, l) => n + l.length, 0);
   let done = 0;
   const bake = (build: Parameters<Baker['bakeStatic']>[0], shadow = true) => {
     const s = baker.bakeStatic(build, NEUTRAL, shadow);
@@ -75,11 +79,11 @@ export async function bakeMeadow(onProgress?: (f: number, label: string) => void
     return s;
   };
   const trees: Sprite[] = [], bushes: Sprite[] = [], mines: Sprite[] = [];
-  for (let i = 0; i < TREE_VARIANTS; i++) { trees.push(bake((b) => m.tree(b, i))); if (i % 4 === 3) await new Promise((r) => setTimeout(r, 0)); }
-  for (let i = 0; i < BUSH_LEVELS; i++) bushes.push(bake((b) => m.bush(b, i / (BUSH_LEVELS - 1))));
-  for (let i = 0; i < MINE_LEVELS; i++) mines.push(bake((b) => m.mine(b, i / (MINE_LEVELS - 1))));
+  for (let i = 0; i < TREE_VARIANTS; i++) { trees.push(bake((b) => set.tree(b, i))); if (i % 4 === 3) await new Promise((r) => setTimeout(r, 0)); }
+  for (let i = 0; i < BUSH_LEVELS; i++) bushes.push(bake((b) => set.bush(b, i / (BUSH_LEVELS - 1))));
+  for (let i = 0; i < MINE_LEVELS; i++) mines.push(bake((b) => set.mine(b, i / (MINE_LEVELS - 1))));
   const shard = bake(m.shard), projectile = bake(m.projectile, false);
-  const doodads = { grass: m.DOODADS.grass.map((f) => bake(f)), flowers: m.DOODADS.flowers.map((f) => bake(f)), stones: m.DOODADS.stones.map((f) => bake(f)), forest: m.DOODADS.forest.map((f) => bake(f)) };
+  const doodads = { grass: set.DOODADS.grass.map((f) => bake(f)), flowers: set.DOODADS.flowers.map((f) => bake(f)), stones: set.DOODADS.stones.map((f) => bake(f)), forest: set.DOODADS.forest.map((f) => bake(f)) };
   // wildlife and what they leave behind
   const wildlife: Record<string, UnitArt> = {};
   for (const w of WILDLIFE[variant]) { wildlife[w.id] = await baker.bakeUnit(w.model, NEUTRAL); onProgress?.(done / total, 'Waking the wildlife'); }

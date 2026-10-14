@@ -225,3 +225,12 @@ export function gatheringCamp(b: ModelBuilder): void {
   b.limb([1.6, base, 1.6], [1.6, base + 2.3, 1.6], 0.035, DARKWOOD);
   b.box([0.04, 0.4, 0.62], [1.6, base + 2.05, 1.92], BANNER);
 }
+
+/** "Needs supplies": a pennant with an empty berry basket upturned on the pole. */
+export function wantFlag(b: ModelBuilder): void {
+  b.cylinder(0.035, 0.04, 1.7, [0, 0.85, 0], DARKWOOD, undefined, 8);
+  b.box([0.03, 0.3, 0.5], [0, 1.45, 0.26], { team: 'primary', tex: 'cloth' });
+  b.cylinder(0.24, 0.17, 0.26, [0, 1.82, 0], { color: '#a8844e', tex: 'thatch' }, [Math.PI, 0, 0.2], 12); // upturned basket
+  b.cylinder(0.25, 0.25, 0.04, [0.04, 1.69, 0], { color: '#7a5a34', tex: 'wood' }, [0, 0, 0.2], 12); // its rim
+  b.sphere([0.2, 0.08, 0.16], [0.18, 0.06, -0.12], { color: '#c9b48a', tex: 'cloth' }); // an empty sack slumped at the foot
+}

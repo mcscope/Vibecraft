@@ -113,3 +113,14 @@ export function clanBanner(b: ModelBuilder): void {
   b.box([0.032, 0.08, 0.5], [0, 1.25, 0.26], { team: 'secondary', tex: 'cloth' });
   b.box([0.032, 0.5, 0.08], [0, 1.4, 0.26], { team: 'secondary', tex: 'cloth' });
 }
+
+/** "Needs supplies": a clan banner with an empty oat sack hung slack from a crossbar. */
+export function clanWantFlag(b: ModelBuilder): void {
+  b.cylinder(0.035, 0.04, 1.8, [0, 0.9, 0], BEAM, undefined, 8);
+  b.box([0.03, 0.4, 0.42], [0, 1.5, 0.22], BANNER);
+  b.box([0.032, 0.07, 0.42], [0, 1.4, 0.22], { team: 'secondary', tex: 'cloth' });
+  b.limb([0, 1.15, 0], [0, 1.15, -0.5], 0.025, BEAM); // crossbar
+  b.limb([0, 1.15, -0.45], [0, 0.98, -0.45], 0.008, { color: '#3a2a1a' });
+  b.sphere([0.12, 0.2, 0.1], [0, 0.82, -0.45], { color: '#b8a070', tex: 'cloth' }); // slack, empty sack
+  b.sphere([0.07, 0.04, 0.06], [0, 1.0, -0.45], { color: '#b8a070', tex: 'cloth' });
+}
