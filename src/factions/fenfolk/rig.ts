@@ -26,7 +26,7 @@ export function fenArm(p: Pose, style: 'sling' | 'jab' | 'work'): number {
   }
   if (p.anim === 'gather') return 0.6 + Math.abs(Math.sin(t * Math.PI)) * 1.4;
   if (p.anim === 'eat') return 2.2 + Math.sin(t * TAU) * 0.15;
-  if (p.anim === 'walk') return Math.sin(t * TAU) * 0.55;
+  if (p.anim === 'walk') return 0.35 - hop(p).ext * 0.9; // arms sweep back as it leaps
   return 0.1 + Math.sin(t * TAU) * 0.04;
 }
 
@@ -34,14 +34,31 @@ const REED: Mat = { color: '#b8a466', tex: 'thatch' };
 const REED_DARK: Mat = { color: '#8a7a48', tex: 'thatch' };
 const TEAM: Mat = { team: 'primary', tex: 'cloth' };
 
+/**
+ * Fenfolk don't walk, they hop: crouch, push off with both legs, sail with the
+ * legs trailing, land in a crouch. `lift` raises the whole body (and its load),
+ * `ext` is how far the legs are kicked out (0 crouched, 1 fully extended), `pitch`
+ * leans the body into the jump.
+ */
+export function hop(p: Pose): { lift: number; ext: number; pitch: number } {
+  if (p.anim !== 'walk') return { lift: 0, ext: 0, pitch: 0 };
+  const ph = p.phase;
+  const smooth = (x: number) => x * x * (3 - 2 * x);
+  // mostly airborne: units glide at a steady speed, so feet on the ground would slide
+  const lift = ph > 0.16 && ph < 0.92 ? Math.sin(((ph - 0.16) / 0.76) * Math.PI) * 0.3 : 0;
+  const ext = ph < 0.08 ? 0 : ph < 0.2 ? smooth((ph - 0.08) / 0.12) : ph < 0.88 ? 1 - smooth((ph - 0.2) / 0.68) * 0.8 : 0.2 * (1 - smooth((ph - 0.88) / 0.12));
+  const pitch = ph < 0.08 ? -0.1 : ph < 0.4 ? -0.35 : ph < 0.88 ? -0.35 + ((ph - 0.4) / 0.48) * 0.45 : 0.1 - ((ph - 0.88) / 0.12) * 0.2;
+  return { lift, ext, pitch };
+}
+
 export function fenling(
   b: ModelBuilder, p: Pose, look: FenLook, arm: number,
   held?: (h: ModelBuilder) => void, offhand?: (h: ModelBuilder) => void,
 ): void {
-  b.joint([0, 0, 0], [0, 0, 0], (m) => {
+  const h = look.mounted ? { lift: 0, ext: 0, pitch: 0 } : hop(p);
+  b.joint([0, h.lift, 0], [0, 0, 0], (m) => {
     const walking = p.anim === 'walk' && !look.mounted;
     const t = p.phase * TAU;
-    const bob = walking ? Math.abs(Math.sin(t)) * 0.04 : 0;
     const skin: Mat = { color: look.skin, tex: 'skin' };
     const spots: Mat = { color: shade(look.skin, 0.72), tex: 'skin' };
     const belly: Mat = { color: shade(look.skin, 1.35), tex: 'skin' };
@@ -54,11 +71,11 @@ export function fenling(
         m.limb([0.18, 0.36, z * 2.6], [0.06, 0.18, z * 2.8], 0.05, skin);
         continue;
       }
-      const a = walking ? Math.sin(t + (side > 0 ? 0 : Math.PI)) * 0.5 : 0;
-      const lift = walking ? Math.max(0, -Math.cos(t + (side > 0 ? 0 : Math.PI))) * 0.08 : 0;
-      const hip: Vec3 = [-0.04, 0.4 + bob, z];
-      const knee: Vec3 = [0.12 + Math.sin(a) * 0.12, 0.3 + bob * 0.5 + lift, z * 2.1]; // splayed out, frog-like
-      const foot: Vec3 = [-0.02 + Math.sin(a) * 0.2, 0.03 + lift, z * 1.6];
+      // both legs together: crouched (knees splayed up and out) ↔ kicked out behind
+      const e = h.ext, mix = (c: number, x: number) => c + (x - c) * e;
+      const hip: Vec3 = [-0.04, 0.4 - (1 - e) * 0.03, z];
+      const knee: Vec3 = [mix(0.12, -0.14), mix(0.3, 0.22), z * mix(2.1, 1.3)];
+      const foot: Vec3 = [mix(-0.02, -0.42), mix(0.03, 0.06), z * mix(1.6, 1.1)];
       m.limb(hip, knee, 0.075, skin, 0.055);
       m.limb(knee, foot, 0.05, skin, 0.035);
       m.joint(foot, [0, 0, 0], (f) => {
@@ -66,7 +83,7 @@ export function fenling(
         f.sphere([0.06, 0.012, 0.07], [0.03, -0.004, 0], belly); // webbing
       });
     }
-    m.joint([0, bob, 0], [0, 0, p.anim === 'tired' ? -0.35 : -0.12], (u) => {
+    m.joint([0, 0, 0], [0, 0, p.anim === 'tired' ? -0.35 : -0.12 + h.pitch], (u) => {
       // squat, round body leaning forward, pale belly
       u.sphere([0.19 * bulk, 0.22, 0.19 * bulk], [0, 0.6, 0], skin);
       u.sphere([0.13 * bulk, 0.17, 0.14 * bulk], [0.08, 0.58, 0], belly);
@@ -114,7 +131,7 @@ export function fenling(
       // long arms, webbed hands
       const sr: Vec3 = [0.03, 0.76, 0.19 * bulk], sl: Vec3 = [0.03, 0.76, -0.19 * bulk];
       const elbowR = swing(sr, 0.22, arm), handR = swing(elbowR, 0.22, arm + 0.25);
-      const la = walking ? -Math.sin(t) * 0.5 : 0.35;
+      const la = walking ? 0.35 - h.ext * 0.9 : 0.35; // arms sweep back as it leaps
       const elbowL = swing(sl, 0.22, la), handL = swing(elbowL, 0.22, la + 0.3);
       u.limb(sr, elbowR, 0.04, skin, 0.034); u.limb(elbowR, handR, 0.032, skin, 0.026);
       u.limb(sl, elbowL, 0.04, skin, 0.034); u.limb(elbowL, handL, 0.032, skin, 0.026);
@@ -135,6 +152,8 @@ function shade(hex: string, k: number): string {
 
 /** Load on the back, by cargo: a reed bundle, a root basket, a crystal. */
 export function fenLoad(b: ModelBuilder, p: Pose): void {
+  const { lift } = hop(p);
+  if (lift) { b.joint([0, lift, 0], [0, 0, 0], (l) => fenLoad(l, { ...p, anim: 'idle' })); return; } // it rides along on the hop
   if (p.cargo === 'wood') for (let i = 0; i < 4; i++) b.limb([-0.2, 0.75 + i * 0.05, -0.2], [-0.2, 0.95 + i * 0.05, 0.2], 0.03, REED);
   else if (p.cargo === 'food') b.cylinder(0.12, 0.09, 0.18, [-0.2, 0.85, 0], { color: '#7a5a34', tex: 'thatch' }, undefined, 10);
   else if (p.cargo === 'crystal') b.crystal(0.22, [-0.2, 0.9, 0], [0.3, 0, 0.4]);
