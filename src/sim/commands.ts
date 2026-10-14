@@ -35,7 +35,8 @@ export type Command =
   | { type: 'hunt'; units: number[]; target: number }
   /** Send units to help an existing construction site. */
   | { type: 'construct'; units: number[]; site: number }
-  | { type: 'rally'; building: number; x: number; y: number };
+  /** `node`: rallied onto a resource, so new workers gather it. */
+  | { type: 'rally'; building: number; x: number; y: number; node?: number };
 
 export interface PlayerCommand {
   player: number;

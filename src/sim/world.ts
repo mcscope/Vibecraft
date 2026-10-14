@@ -159,6 +159,8 @@ export interface Building {
   /** Local cache. Training, research and tower shots draw from here. */
   stock: Stock;
   rallyX: number; rallyY: number;
+  /** Rally point on a resource: new workers go and gather it (that kind, if that one's gone). */
+  rallyRes: ResourceKind | null;
   cooldown: number;
   /** Unit this building re-queues automatically, if any. */
   autoTrain: string | null;
@@ -565,6 +567,9 @@ export class World {
         const b = ownBuilding(cmd.building);
         if (!b) return;
         b.rallyX = cmd.x; b.rallyY = cmd.y;
+        const n = cmd.node ? this.nodes.get(cmd.node) : undefined;
+        b.rallyRes = n ? n.type : null;
+        if (n) { b.rallyX = n.x; b.rallyY = n.y; }
         return;
       }
       case 'build': {
@@ -653,7 +658,7 @@ export class World {
       hp: complete ? stats.maxHp : 1, maxHp: stats.maxHp,
       built: complete ? stats.totalCost : 0, complete,
       queue: [], stock: emptyStock(),
-      rallyX: ox + size + 1, rallyY: oy + size + 1, cooldown: 0, autoTrain: null,
+      rallyX: ox + size + 1, rallyY: oy + size + 1, rallyRes: null, cooldown: 0, autoTrain: null,
       sowing: [...(spec.sow?.resources ?? [])], sowProgress: 0,
     };
     this.buildings.set(b.id, b);
@@ -689,6 +694,16 @@ export class World {
     const pos = this.grid.nearestOpen(cx + (dx / d) * (from.size / 2 + 0.7), cy + (dy / d) * (from.size / 2 + 0.7)) ?? [cx + 2.5, cy + 2.5];
     const u = this.makeUnit(owner, specId, pos[0], pos[1]);
     const rx = from.rallyX, ry = from.rallyY;
+    if (from.rallyRes && !u.carter && u.stats.gatherRate > 0) {
+      // rallied onto a resource: go gather it (the nearest of that kind to the rally point, if it's gone)
+      let node: ResourceNode | null = null, best = 10 * 10;
+      for (const n of this.nodes.values()) {
+        if (n.type !== from.rallyRes || n.amount <= 0.001 || (n.shard && !n.carcass)) continue;
+        const d = (n.x - rx) ** 2 + (n.y - ry) ** 2;
+        if (d < best) { best = d; node = n; }
+      }
+      if (node) { u.order = { kind: 'gather', node: node.id, nodeType: node.type, phase: 'toNode', stopWhenArmed: false }; return u; }
+    }
     if (!u.carter && Math.abs(rx - u.x) + Math.abs(ry - u.y) > 1.5) u.order = { kind: 'move', x: rx, y: ry };
     return u;
   }

@@ -216,7 +216,11 @@ export class Input {
     const tu = w.units.get(target), tb = w.buildings.get(target), tn = w.nodes.get(target);
     const ownBuilding = [...this.rs.selected].map((id) => w.buildings.get(id)).find((b) => b && b.owner === this.player);
     if (units.length === 0) {
-      if (ownBuilding) { this.issue({ type: 'rally', building: ownBuilding.id, x: wx, y: wy }); this.ping(wx, wy, '#ffd23f'); }
+      if (ownBuilding) {
+        // on a resource, new workers will go and gather it
+        this.issue({ type: 'rally', building: ownBuilding.id, x: wx, y: wy, node: tn && !tn.shard ? tn.id : undefined });
+        this.ping(tn ? tn.x : wx, tn ? tn.y : wy, tn ? (tn.type === 'food' ? '#e0457a' : tn.type === 'wood' ? '#9ad06a' : '#7ae7ff') : '#ffd23f');
+      }
       return;
     }
     if (tu && tu.wild === 'passive') {

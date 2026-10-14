@@ -26,10 +26,10 @@ const fenLook: FenLook = { skin: '#9aa874', wrap: { color: '#5e5a3a', tex: 'clot
 const fenling: FenUnit = {
   id: 'fenling',
   name: 'Fenling',
-  description: 'Small, tireless marsh folk. Every fenling gathers, builds and slings crystal pellets; alone they are frail, together a flood.',
-  mass: 25,
-  physique: { muscle: 0.45, frame: 0.25, reserve: 0.3 },
-  attack: { style: 'throw', crystalMass: 0.3, ammo: 4 },
+  description: 'Small, tireless marsh folk. Every fenling gathers, builds and slings crystal stones; alone they are frail, together a flood.',
+  mass: 32,
+  physique: { muscle: 0.5, frame: 0.22, reserve: 0.28 },
+  attack: { style: 'throw', crystalMass: 1, ammo: 3 },
   workRefinement: 1.4, // nimble: gathers, wades and carries 40% more
   model(b, p) {
     body(b, p, fenLook, fenArm(p, 'sling'), (h) => {

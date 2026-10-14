@@ -117,6 +117,22 @@ describe('training and research', () => {
   });
 });
 
+describe('rally points', () => {
+  test('rallied onto a resource, new workers go and gather it', () => {
+    const w = newWorld();
+    const tc = w.baseOf(0)!;
+    tc.stock.food = 500;
+    const tree = [...w.nodes.values()].filter((n) => n.tree).sort((a, b) => Math.hypot(a.x - tc.ox, a.y - tc.oy) - Math.hypot(b.x - tc.ox, b.y - tc.oy))[0];
+    w.enqueue({ player: 0, cmd: { type: 'rally', building: tc.id, x: tree.x, y: tree.y, node: tree.id } });
+    w.enqueue({ player: 0, cmd: { type: 'train', building: tc.id, specId: 'villager' } });
+    const before = new Set(w.unitsOf(0).map((u) => u.id));
+    run(w, 20 * 20);
+    const fresh = w.unitsOf(0).find((u) => !before.has(u.id) && u.specId === 'villager')!;
+    expect(fresh.order.kind).toBe('gather');
+    expect(fresh.order.kind === 'gather' && fresh.order.nodeType).toBe('wood');
+  });
+});
+
 describe('tech levels', () => {
   test('Better Tools II waits for I, and each level lifts villagers further', () => {
     const w = newWorld();
