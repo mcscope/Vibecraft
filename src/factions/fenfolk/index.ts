@@ -102,12 +102,17 @@ const bogToad: FenUnit = {
   },
 };
 
-const shell: Mat = { color: '#5a5a3a', tex: 'stone' };
-const tortSkin: Mat = { color: '#7a7a54', tex: 'leather' };
+const IRON: Mat = { color: '#6a6860', tex: 'metal', metal: 0.35, rough: 0.5 };
+const BRASS: Mat = { color: '#c0913c', tex: 'metal', metal: 0.45, rough: 0.35 };
+const BONE: Mat = { color: '#d2c6a4', rough: 0.6 };
+const WAX: Mat = { color: '#7a1612', rough: 0.3 };
+const PARCHMENT: Mat = { color: '#d8c8a0', tex: 'cloth' };
+const CHAIN: Mat = { color: '#2a2824', tex: 'metal', metal: 0.8 };
+const hide: Mat = { color: '#6e6c4c', tex: 'leather' };
 const packTortoise: FenUnit = {
   id: 'pack-tortoise',
   name: 'Pack Tortoise',
-  description: 'A great marsh tortoise with baskets of crystal lashed to its shell. Fenlings that run dry come to it for more, like crystals on the ground.',
+  description: 'An ancient war-tortoise in bolted iron, a crystal reliquary chained to its back. Fenlings that run dry come to it for more, like crystals on the ground.',
   mass: 160,
   physique: { muscle: 0.6, frame: 0.3, reserve: 0.1 },
   refinement: 1.5,
@@ -115,27 +120,86 @@ const packTortoise: FenUnit = {
   model(b, p) {
     const t = p.phase * Math.PI * 2;
     const walking = p.anim === 'walk';
-    for (const [x, z, ph] of [[0.45, 0.4, 0], [0.45, -0.4, Math.PI], [-0.45, 0.4, Math.PI], [-0.45, -0.4, 0]] as Array<[number, number, number]>) {
-      const a = walking ? Math.sin(t + ph) * 0.35 : 0;
-      b.limb([x, 0.35, z], [x + Math.sin(a) * 0.2, 0.05, z * 1.15], 0.1, tortSkin, 0.09);
+    const glow = { color: '#9fefff', emissive: '#3ab8e0' };
+    // four pillar legs in iron greaves, clawed
+    for (const [x, z, ph] of [[0.48, 0.42, 0], [0.48, -0.42, Math.PI], [-0.48, 0.42, Math.PI], [-0.48, -0.42, 0]] as Array<[number, number, number]>) {
+      const a = walking ? Math.sin(t + ph) * 0.3 : 0;
+      const foot: [number, number, number] = [x + Math.sin(a) * 0.18, 0.06 + (walking ? Math.max(0, Math.sin(t + ph)) * 0.06 : 0), z * 1.18];
+      b.limb([x, 0.42, z], foot, 0.14, hide, 0.12);
+      b.cylinder(0.15, 0.17, 0.2, [(x + foot[0]) / 2, 0.24, (z + foot[2]) / 2], IRON, undefined, 8); // greave
+      b.cylinder(0.16, 0.16, 0.03, [(x + foot[0]) / 2, 0.35, (z + foot[2]) / 2], BRASS, undefined, 8);
+      for (const c of [-0.06, 0, 0.06]) b.cone(0.03, 0.1, [foot[0] + 0.12, foot[1], foot[2] + c], BONE, [0, 0, -Math.PI / 2], 5); // claws
     }
     const bob = walking ? Math.abs(Math.sin(t)) * 0.03 : 0;
     b.joint([0, bob, 0], [0, 0, 0], (c) => {
-      c.sphere([0.8, 0.45, 0.65], [0, 0.55, 0], shell); // domed shell
-      for (let i = 0; i < 6; i++) c.sphere([0.18, 0.06, 0.18], [Math.cos(i) * 0.35, 0.95, Math.sin(i) * 0.3], { color: '#4a4a30', tex: 'stone' });
-      c.joint([0.82, 0.45, 0], [0, 0, p.anim === 'eat' ? -0.4 : 0], (h) => {
-        h.limb([0, 0, 0], [0.25, 0.05, 0], 0.11, tortSkin, 0.09);
-        h.sphere([0.17, 0.13, 0.14], [0.32, 0.06, 0], tortSkin);
-        for (const z of [1, -1]) h.sphere(0.025, [0.42, 0.12, 0.08 * z], { color: '#1e1610' });
-      });
-      // baskets of crystal on both flanks, and a team cloth over the top
-      for (const z of [0.55, -0.55]) {
-        c.cylinder(0.22, 0.18, 0.32, [-0.05, 0.75, z], { color: '#8a7448', tex: 'thatch' }, undefined, 10);
-        for (let i = 0; i < 3; i++) c.crystal(0.16, [-0.1 + i * 0.06, 0.95, z + (i - 1) * 0.05], [0.3 * i, 0, 0.4]);
+      c.sphere([0.78, 0.3, 0.62], [0, 0.48, 0], hide); // belly
+      c.sphere([0.86, 0.46, 0.7], [0, 0.6, 0], IRON); // the carapace, plated in iron
+      // overlapping brass-edged plates around the rim, riveted
+      for (let i = 0; i < 14; i++) {
+        const a = (i / 14) * Math.PI * 2;
+        const x = Math.cos(a) * 0.82, z = Math.sin(a) * 0.66;
+        c.box([0.26, 0.2, 0.05], [x, 0.55, z], i % 2 ? IRON : BRASS, [0, -a + Math.PI / 2, -0.35]);
+        c.sphere(0.025, [x * 1.03, 0.64, z * 1.03], BRASS);
       }
-      for (const x of [-0.2, 0.12]) c.limb([x, 0.84, 0.5], [x, 1.0, 0], 0.025, { team: 'primary', tex: 'cloth' }); // straps over the shell
-      for (const x of [-0.2, 0.12]) c.limb([x, 1.0, 0], [x, 0.84, -0.5], 0.025, { team: 'primary', tex: 'cloth' });
-      c.sphere([0.16, 0.05, 0.16], [-0.04, 1.0, 0], { team: 'primary', tex: 'cloth' }); // a team knot
+      // a ridge of spikes down the spine and out along the flanks
+      for (let i = 0; i < 5; i++) c.cone(0.06, 0.24, [0.45 - i * 0.22, 1.02 - Math.abs(i - 2) * 0.03, 0], IRON, undefined, 6);
+      for (const zs of [1, -1]) for (let i = 0; i < 4; i++) c.cone(0.045, 0.2, [0.4 - i * 0.27, 0.78, 0.55 * zs], IRON, [zs * 0.9, 0, 0], 6);
+      // armoured head: a plated helm, tusks, burning eyes, a bridle chain
+      c.joint([0.88, 0.5, 0], [0, 0, p.anim === 'eat' ? -0.4 : 0], (h) => {
+        h.limb([-0.1, 0, 0], [0.22, 0.04, 0], 0.14, hide, 0.12);
+        h.sphere([0.2, 0.15, 0.17], [0.3, 0.06, 0], hide);
+        h.box([0.26, 0.08, 0.3], [0.3, 0.18, 0], IRON, [0, 0, -0.12]); // helm
+        h.box([0.08, 0.16, 0.34], [0.43, 0.1, 0], BRASS, [0, 0, -0.2]); // brow guard
+        h.cone(0.04, 0.16, [0.3, 0.3, 0], IRON, undefined, 5); // helm spike
+        for (const z of [1, -1]) {
+          h.sphere(0.035, [0.44, 0.08, 0.1 * z], { color: '#ffb040', emissive: '#c05010' }); // eyes
+          h.limb([0.45, -0.04, 0.09 * z], [0.6, 0.1, 0.16 * z], 0.03, BONE, 0.008); // tusks
+        }
+        h.limb([0.42, -0.02, 0.16], [0.1, -0.12, 0.3], 0.012, CHAIN);
+        h.limb([0.42, -0.02, -0.16], [0.1, -0.12, -0.3], 0.012, CHAIN);
+      });
+      // trophies: frog skulls on chains across the front of the shell
+      for (const z of [-0.3, 0, 0.3]) {
+        c.limb([0.74, 0.8, z], [0.82, 0.58, z], 0.008, CHAIN);
+        c.sphere([0.06, 0.05, 0.07], [0.83, 0.54, z], BONE);
+        for (const e of [1, -1]) c.sphere(0.015, [0.88, 0.56, z + 0.025 * e], { color: '#1a1410' });
+      }
+      // ammo hoppers slung on both flanks: iron drums bristling with crystal
+      for (const zs of [1, -1]) {
+        c.cylinder(0.17, 0.17, 0.5, [-0.12, 0.62, 0.72 * zs], IRON, [0, 0, Math.PI / 2], 10);
+        for (const x of [-0.34, 0.1]) c.cylinder(0.18, 0.18, 0.04, [x, 0.62, 0.72 * zs], BRASS, [0, 0, Math.PI / 2], 10);
+        for (let i = 0; i < 3; i++) c.crystal(0.14, [-0.24 + i * 0.12, 0.8, 0.72 * zs], [0.3 * zs, 0, 0.3 - i * 0.3]);
+        c.limb([-0.12, 0.8, 0.72 * zs], [-0.12, 0.98, 0.4 * zs], 0.012, CHAIN);
+      }
+      // purity seals: red wax and parchment strips on the shell
+      for (const [x, z] of [[0.3, 0.5], [-0.35, -0.48], [0.05, -0.6]] as Array<[number, number]>) {
+        c.sphere([0.07, 0.02, 0.07], [x, 0.86, z], WAX, [z > 0 ? 0.6 : -0.6, 0, 0]);
+        c.box([0.06, 0.22, 0.012], [x, 0.74, z * 1.12], PARCHMENT, [z > 0 ? 0.35 : -0.35, 0, 0]);
+      }
+      // the reliquary: a gothic shrine on the back, a great crystal burning inside
+      c.joint([-0.08, 1.02, 0], [0, 0, 0], (r) => {
+        r.box([0.5, 0.1, 0.5], [0, 0, 0], BRASS);
+        r.box([0.42, 0.06, 0.42], [0, 0.07, 0], IRON);
+        for (const [x, z] of [[0.18, 0.18], [0.18, -0.18], [-0.18, 0.18], [-0.18, -0.18]]) {
+          r.cylinder(0.03, 0.035, 0.46, [x, 0.33, z], IRON, undefined, 6);
+          r.cone(0.04, 0.14, [x, 0.63, z], BRASS, undefined, 4); // pinnacles
+        }
+        r.crystal(0.42, [0, 0.12, 0], [0, 0.4, 0]); // the relic
+        r.sphere(0.1, [0, 0.33, 0], glow);
+        r.roof([0.48, 0.24, 0.48], [0, 0.56, 0], IRON);
+        r.cone(0.05, 0.34, [0, 0.95, 0], BRASS, undefined, 4); // spire
+        r.sphere(0.04, [0, 1.13, 0], glow);
+      });
+      // war banners on poles at the back: team colours, trimmed
+      for (const zs of [1, -1]) {
+        c.cylinder(0.018, 0.022, 1.2, [-0.7, 1.15, 0.28 * zs], IRON, undefined, 6);
+        c.limb([-0.7, 1.68, 0.28 * zs], [-0.7, 1.68, 0.28 * zs + 0.001], 0.03, BRASS);
+        c.box([0.03, 0.12, 0.34], [-0.7, 1.66, 0.28 * zs], BRASS);
+        const sway = walking ? Math.sin(t + zs) * 0.08 : 0;
+        c.box([0.025, 0.48, 0.3], [-0.72, 1.36, 0.28 * zs], { team: 'primary', tex: 'cloth' }, [sway, 0, 0]);
+        c.box([0.027, 0.06, 0.3], [-0.72, 1.14, 0.28 * zs], { team: 'secondary', tex: 'cloth' }, [sway, 0, 0]);
+        c.cone(0.03, 0.12, [-0.7, 1.8, 0.28 * zs], BRASS, undefined, 4);
+      }
     });
   },
 };
