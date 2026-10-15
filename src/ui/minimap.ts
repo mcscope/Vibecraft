@@ -1,5 +1,5 @@
 import type { BiomeArt } from '../art/contract';
-import { TERRAIN_SAND, TERRAIN_WATER } from '../sim/map';
+import { TERRAIN_ROCK, TERRAIN_SAND, TERRAIN_WATER } from '../sim/map';
 import type { World } from '../sim/world';
 import type { Camera } from '../render/camera';
 import { teamColor } from '../render/artbank';
@@ -31,7 +31,7 @@ export class Minimap {
     for (let y = 0; y < g.height; y++) for (let x = 0; x < g.width; x++) {
       const t = g.terrain[y * g.width + x];
       const gr = this.ground?.(x + 0.5, y + 0.5);
-      b.fillStyle = t === TERRAIN_WATER ? gr?.shallow ?? '#2f5f7a' : t === TERRAIN_SAND ? gr?.sand ?? '#b8a070' : gr?.grass[0] ?? '#5d7a2f';
+      b.fillStyle = t === TERRAIN_ROCK ? '#8b8375' : t === TERRAIN_WATER ? gr?.shallow ?? '#2f5f7a' : t === TERRAIN_SAND ? gr?.sand ?? '#b8a070' : gr?.grass[0] ?? '#5d7a2f';
       const [px, py] = this.toMini(x + 0.5, y + 0.5);
       b.fillRect(px - 1.6, py - 0.8, 3.2, 1.6);
     }

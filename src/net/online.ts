@@ -10,10 +10,10 @@ import type { RelayClient } from './relayClient';
 /** Online games are 1v1 (the skirmish map has two starts). */
 export const SEATS = 2;
 
-export interface OnlineGame { seed: number; me: number; names: string[]; factions: FactionSpec[]; relay: RelayClient }
+export interface OnlineGame { seed: number; map: string; me: number; names: string[]; factions: FactionSpec[]; relay: RelayClient }
 
 type Msg =
-  | { k: 'start'; seed: number; seats: number[]; names: string[] }
+  | { k: 'start'; seed: number; map?: string; seats: number[]; names: string[] }
   | { k: 'bundle'; seat: number; bundle: FactionBundle }
   | { k: 'reject'; seat: number; errors: string[] };
 
@@ -23,7 +23,7 @@ type Msg =
  */
 export class Handshake {
   private bundles = new Map<number, FactionBundle>();
-  private began: { seed: number; seats: number[]; names: string[] } | null = null;
+  private began: { seed: number; map?: string; seats: number[]; names: string[] } | null = null;
   private resolve!: (g: OnlineGame) => void;
   private reject!: (e: Error) => void;
   readonly done: Promise<OnlineGame>;
@@ -37,12 +37,12 @@ export class Handshake {
 
   get started(): boolean { return !!this.began; }
 
-  /** Host only: seat the first two players and go. */
-  start(): void {
+  /** Host only: seat the first two players and go, on `map`. */
+  start(map: string): void {
     const seats = this.relay.peers.slice(0, SEATS);
     if (seats.length < SEATS) return;
     // seed choice happens outside the sim, so Math.random is fine
-    const msg: Msg = { k: 'start', seed: Math.floor(Math.random() * 1e9), seats: seats.map((p) => p.id), names: seats.map((p) => p.name) };
+    const msg: Msg = { k: 'start', seed: Math.floor(Math.random() * 1e9), map, seats: seats.map((p) => p.id), names: seats.map((p) => p.name) };
     this.relay.send(msg);
     void this.begin(msg);
   }
@@ -54,7 +54,7 @@ export class Handshake {
     else if (m.k === 'reject') this.reject(new Error(`${this.began?.names[m.seat] ?? 'A player'}'s game rejected a faction: ${m.errors.slice(0, 3).join('; ')}`));
   }
 
-  private async begin(m: { seed: number; seats: number[]; names: string[] }): Promise<void> {
+  private async begin(m: { seed: number; map?: string; seats: number[]; names: string[] }): Promise<void> {
     this.began = m;
     const me = m.seats.indexOf(this.relay.you);
     if (me < 0) { this.reject(new Error('This game is full (online games are 1v1).')); return; }
@@ -96,7 +96,7 @@ export class Handshake {
         ? fromBundle(b, { ...this.local, art: this.ownArt && (() => Promise.resolve(this.ownArt!)), biome: this.ownBiome && (() => Promise.resolve(this.ownBiome!)) })
         : fromBundle(b));
     }
-    this.resolve({ seed: m.seed, me, names: m.names, factions, relay: this.relay });
+    this.resolve({ seed: m.seed, map: typeof m.map === 'string' ? m.map : 'woodlands', me, names: m.names, factions, relay: this.relay });
   }
 }
 

@@ -4,9 +4,10 @@ import { PLAYABLE } from '../factions';
 import { Handshake, SEATS, type OnlineGame } from '../net/online';
 import { RelayClient } from '../net/relayClient';
 import { esc } from './format';
+import { MAPS } from '../sim/map';
 
 const KEY = 'vibecraft.online';
-const remembered = (): { relay?: string; room?: string; name?: string; faction?: string } => {
+const remembered = (): { relay?: string; room?: string; name?: string; faction?: string; map?: string } => {
   try { return JSON.parse(localStorage.getItem(KEY) ?? '{}'); } catch { return {}; }
 };
 const remember = (v: object) => { try { localStorage.setItem(KEY, JSON.stringify({ ...remembered(), ...v })); } catch { /* private mode */ } };
@@ -38,7 +39,7 @@ export function openLobby(box: HTMLElement, onGame: (g: OnlineGame) => void, onB
     $('.lobby-peers').innerHTML = `<h3>Room ${esc(($('[name=room]') as HTMLInputElement).value)}</h3><ol>${relay.peers.map((p, i) => `<li>${esc(p.name)}${p.id === relay!.you ? ' <small>(you)</small>' : ''}${i === 0 ? ' <small>host</small>' : ''}${i >= SEATS ? ' <small>watching: game is 1v1</small>' : ''}</li>`).join('')}</ol>`;
     const buttons = $('.lobby-buttons');
     buttons.innerHTML = host
-      ? `<button data-act="start" ${relay.peers.length < SEATS ? 'disabled' : ''}><b>Start game</b></button><button data-act="leave"><b>Leave</b></button>`
+      ? `<label class="lobby-map">Map <select name="map">${MAPS.map((m) => `<option value="${m.id}" ${remembered().map === m.id ? 'selected' : ''}>${esc(m.name)}</option>`).join('')}</select></label><button data-act="start" ${relay.peers.length < SEATS ? 'disabled' : ''}><b>Start game</b></button><button data-act="leave"><b>Leave</b></button>`
       : `<button data-act="leave"><b>Leave</b></button>`;
     if (!hs?.started) status(relay.peers.length < SEATS ? 'Waiting for another player to join this room…' : host ? 'Ready: press Start.' : 'Waiting for the host to start…');
   };
@@ -47,7 +48,7 @@ export function openLobby(box: HTMLElement, onGame: (g: OnlineGame) => void, onB
     const act = (e.target as HTMLElement).closest<HTMLElement>('[data-act]')?.dataset.act;
     if (act === 'back') { relay?.close(); onBack(); return; }
     if (act === 'leave') { relay?.close(); relay = null; openLobby(box, onGame, onBack); return; }
-    if (act === 'start') { hs?.start(); return; }
+    if (act === 'start') { const map = box.querySelector<HTMLSelectElement>('[name=map]')?.value ?? MAPS[0].id; remember({ map }); hs?.start(map); return; }
     if (act !== 'join') return;
     const v = (n: string) => ($(`[name=${n}]`) as HTMLInputElement).value.trim();
     const faction = PLAYABLE.find((f) => f.id === v('faction')) ?? PLAYABLE[0];

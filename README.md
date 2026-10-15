@@ -20,7 +20,9 @@ From the main menu:
 - **Codex** shows every faction's tech tree.
 - **Unit Lab** (`/lab.html`) shows how a body turns into stats.
 
-URL shortcuts: `?mode=skirmish&you=fenfolk&foe=meadowfolk&seed=5`.
+Maps: Woodlands, Steppe (after AoE2's Arabia), Water Donut, Cliff Maze and Sunken Temple (after StarCraft's Lost Temple). Pick one in the menu; online, the host picks. They're generated in `src/sim/map.ts`, so adding one is a single function.
+
+URL shortcuts: `?mode=skirmish&you=fenfolk&foe=meadowfolk&map=cliff-maze&seed=5`.
 
 ## Make your own army
 

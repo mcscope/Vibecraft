@@ -5,6 +5,7 @@ import type { FactionSpec } from './factions/types';
 import { training } from './factions/training';
 import { World, DT } from './sim/world';
 import { provingGrounds, skirmish } from './sim/scenarios';
+import { MAPS } from './sim/map';
 import { Lockstep, LocalInput, LoopbackTransport, type CommandSource, type Transport } from './net/lockstep';
 import { NetTransport } from './net/relayClient';
 import type { OnlineGame } from './net/online';
@@ -29,13 +30,18 @@ const menu = document.getElementById('menu')!;
 
 // who plays whom in skirmish / spectate (remembered between visits)
 const PICK_KEY = 'vibecraft.matchup';
-const picked = (() => { try { return JSON.parse(localStorage.getItem(PICK_KEY) ?? '{}') as { you?: string; foe?: string }; } catch { return {}; } })();
+const picked = (() => { try { return JSON.parse(localStorage.getItem(PICK_KEY) ?? '{}') as { you?: string; foe?: string; map?: string }; } catch { return {}; } })();
 for (const sel of menu.querySelectorAll<HTMLSelectElement>('[data-pick]')) {
   const which = sel.dataset.pick as 'you' | 'foe';
   sel.innerHTML = PLAYABLE.map((f) => `<option value="${f.id}">${f.name}</option>`).join('');
   sel.value = params.get(which) ?? picked[which] ?? (which === 'foe' && PLAYABLE[1] ? PLAYABLE[1].id : PLAYABLE[0].id);
   sel.addEventListener('change', () => { picked[which] = sel.value; try { localStorage.setItem(PICK_KEY, JSON.stringify(picked)); } catch { /* private mode */ } });
 }
+const mapSel = menu.querySelector<HTMLSelectElement>('[data-map]')!;
+mapSel.innerHTML = MAPS.map((m) => `<option value="${m.id}" title="${m.description}">${m.name}</option>`).join('');
+mapSel.value = params.get('map') ?? picked.map ?? MAPS[0].id;
+if (!mapSel.value) mapSel.value = MAPS[0].id;
+mapSel.addEventListener('change', () => { picked.map = mapSel.value; try { localStorage.setItem(PICK_KEY, JSON.stringify(picked)); } catch { /* private mode */ } });
 const pick = (which: 'you' | 'foe'): FactionSpec => PLAYABLE.find((f) => f.id === menu.querySelector<HTMLSelectElement>(`[data-pick="${which}"]`)!.value) ?? meadowfolk;
 const loading = document.getElementById('loading')!;
 const mode = params.get('mode') as Mode | null;
@@ -53,7 +59,7 @@ else {
     }
     const m = (e.target as HTMLElement).closest<HTMLElement>('[data-mode]')?.dataset.mode as Mode | undefined;
     if (!m) return;
-    history.replaceState(null, '', `?mode=${m}&you=${pick('you').id}&foe=${pick('foe').id}`);
+    history.replaceState(null, '', `?mode=${m}&you=${pick('you').id}&foe=${pick('foe').id}&map=${mapSel.value}`);
     start(m);
   });
 }
@@ -61,7 +67,7 @@ else {
 async function start(m: Mode): Promise<void> {
   const world = m === 'demo'
     ? new World({ seed, scenario: provingGrounds(), players: [{ name: 'You', faction: meadowfolk }, { name: 'Training Grounds', faction: training }] })
-    : new World({ seed, scenario: skirmish(), players: [{ name: m === 'spectate' ? pick('you').name : 'You', faction: pick('you') }, { name: pick('foe').name, faction: pick('foe') }] });
+    : new World({ seed, scenario: skirmish(mapSel.value), players: [{ name: m === 'spectate' ? pick('you').name : 'You', faction: pick('you') }, { name: pick('foe').name, faction: pick('foe') }] });
   await run({
     mode: m, world, me: 0, transport: new LoopbackTransport(), delay: 2,
     sources: (local) => {
@@ -77,7 +83,7 @@ async function startOnline(g: OnlineGame): Promise<void> {
   menu.style.display = 'none';
   // listen for ticks right away: the other player may finish loading first
   const transport = new NetTransport(g.relay);
-  const world = new World({ seed: g.seed, scenario: skirmish(), players: g.factions.map((faction, i) => ({ name: g.names[i], faction })) });
+  const world = new World({ seed: g.seed, scenario: skirmish(g.map), players: g.factions.map((faction, i) => ({ name: g.names[i], faction })) });
   const seats = g.names.length;
   g.relay.onPeers = (peers) => { if (peers.length < seats) showNotice(`${g.names.find((_, i) => i !== g.me) ?? 'Your opponent'} left the game.`); };
   g.relay.onClose = () => showNotice('Lost the connection to the relay.');

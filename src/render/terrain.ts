@@ -1,7 +1,7 @@
 // Paints the whole map's ground into one big canvas: grass, dirt, forest floor,
-// sand and water, blended smoothly between tiles and broken up with layered
+// sand, water and raised rock, blended smoothly between tiles and broken up with layered
 // noise so it reads like a painted RTS terrain rather than a checkerboard.
-import { TERRAIN_SAND, TERRAIN_WATER } from '../sim/map';
+import { TERRAIN_ROCK, TERRAIN_SAND, TERRAIN_WATER } from '../sim/map';
 import type { World } from '../sim/world';
 import { TILE_H, TILE_W, isoX, isoY } from './camera';
 import type { BiomeArt, Sprite } from '../art/contract';
@@ -26,6 +26,11 @@ function palette(g: BiomeArt['ground']): Palette {
 /** Which biome paints each part of the map: each player's half has its own (blended at the border). */
 export interface Looks { biomes: BiomeArt[]; homes: Array<[number, number]> }
 const BORDER = 3; // tiles of blend across a territory border
+/** How high rock stands, in screen pixels at zoom 1: its top is drawn lifted, with a cliff face below. */
+const CLIFF_PX = 28;
+const ROCK_TOP: [RGB, RGB] = [hex('#6f685c'), hex('#8c8473')];
+const ROCK_FACE: [RGB, RGB] = [hex('#2c2722'), hex('#5a4f43')];
+const ROCK_RIM: RGB = hex('#b4aa94');
 
 /** Tileable value noise sampler. */
 function makeNoise(size: number, seed: number): (x: number, y: number) => number {
@@ -60,10 +65,16 @@ export function paintTerrain(world: World, extraDirt: Array<[number, number, num
   const g = world.grid;
   const W = g.width, H = g.height;
   // Per-tile weights, later sampled bilinearly.
+  const rock = new Float32Array(W * H), nearRock = new Uint8Array(W * H);
   const water = new Float32Array(W * H), sand = new Float32Array(W * H), dirt = new Float32Array(W * H), forest = new Float32Array(W * H);
   for (let i = 0; i < W * H; i++) {
     if (g.terrain[i] === TERRAIN_WATER) water[i] = 1;
     if (g.terrain[i] === TERRAIN_SAND) sand[i] = 1;
+    if (g.terrain[i] === TERRAIN_ROCK) {
+      rock[i] = 1;
+      const x = i % W, y = Math.floor(i / W);
+      for (let dy = -2; dy <= 4; dy++) for (let dx = -2; dx <= 4; dx++) if (x + dx >= 0 && y + dy >= 0 && x + dx < W && y + dy < H) nearRock[(y + dy) * W + x + dx] = 1;
+    }
   }
   const splat = (arr: Float32Array, cx: number, cy: number, r: number, k = 1) => {
     for (let y = Math.floor(cy - r - 1); y <= cy + r + 1; y++) for (let x = Math.floor(cx - r - 1); x <= cx + r + 1; x++) {
@@ -79,6 +90,7 @@ export function paintTerrain(world: World, extraDirt: Array<[number, number, num
     else if (n.type === 'crystal' && !n.shard) splat(dirt, n.x, n.y, 1.4, 0.8);
     else if (n.type === 'food') splat(dirt, n.x, n.y, 0.9, 0.35);
   }
+  const nearRockAt = (x: number, y: number) => nearRock[Math.min(H - 1, Math.floor(y)) * W + Math.min(W - 1, Math.floor(x))] === 1;
   const sample = (arr: Float32Array, x: number, y: number) => {
     const fx = x - 0.5, fy = y - 0.5;
     const x0 = Math.max(0, Math.min(W - 1, Math.floor(fx))), y0 = Math.max(0, Math.min(H - 1, Math.floor(fy)));
@@ -132,6 +144,34 @@ export function paintTerrain(world: World, extraDirt: Array<[number, number, num
         }
         return c;
       };
+      // raised rock: the top is drawn CLIFF_PX higher than its ground, with a face below it
+      if (nearRockAt(wx, wy)) {
+        const at = (k: number) => { // the world point k screen pixels further down
+          const b2 = (py / S + k) / (TILE_H / 2);
+          const x2 = (a + b2) / 2, y2 = (b2 - a) / 2;
+          return x2 < 0 || y2 < 0 || x2 >= W || y2 >= H ? 0 : sample(rock, x2, y2) + (n2(x2 * 0.9, y2 * 0.9) - 0.5) * 0.5 + (n3(x2 * 2.2, y2 * 2.2) - 0.5) * 0.2;
+        };
+        let rc: RGB | null = null;
+        if (at(CLIFF_PX) > 0.5) {
+          rc = mix(ROCK_TOP[0], ROCK_TOP[1], big * 0.5 + fine * 0.5);
+          rc = mix(rc, (pals[0] ?? pals[0]).forest, smooth(0.55, 0.8, mid) * 0.55); // moss
+          if (fine > 0.8) rc = mix(rc, ROCK_FACE[0], 0.55); // cracks
+          if (at(CLIFF_PX - 3) <= 0.5) rc = mix(rc, ROCK_RIM, 0.6); // the lit lip
+        } else {
+          for (let k = CLIFF_PX - 1; k >= 0; k -= 1) if (at(k) > 0.5) {
+            const up = 1 - k / CLIFF_PX; // 0 at the foot, 1 at the lip
+            const strata = Math.sin((py / S + k) * 0.9 + n3(px / S * 0.08, 0.3) * 6) * 0.5 + 0.5;
+            const crag = n3(px / S * 0.45, (py / S + k) * 0.12);
+            rc = mix(ROCK_FACE[0], ROCK_FACE[1], Math.min(1, up * 0.7 + crag * 0.45 + strata * 0.15));
+            break;
+          }
+        }
+        if (rc) {
+          const k = 0.9 + grain * 0.15;
+          d[o] = Math.min(255, rc[0] * k); d[o + 1] = Math.min(255, rc[1] * k); d[o + 2] = Math.min(255, rc[2] * k); d[o + 3] = 255;
+          continue;
+        }
+      }
       // this point's half of the map, blended into the neighbour's near the border (wobbly, not a ruler line)
       const [ta, tb, past] = near(wx, wy);
       let c = paint(pals[ta] ?? pals[0]);
@@ -139,9 +179,11 @@ export function paintTerrain(world: World, extraDirt: Array<[number, number, num
       if (tb >= 0 && edge < BORDER && pals[tb] && pals[tb] !== pals[ta]) c = mix(paint(pals[tb]), c, smooth(-BORDER, BORDER, edge));
       // fine grain + tufts so it doesn't look airbrushed
       const k = 0.88 + grain * 0.16 + (fine - 0.5) * 0.12 - (fine > 0.78 && wt < 0.5 ? 0.12 : 0);
-      d[o] = Math.min(255, c[0] * k);
-      d[o + 1] = Math.min(255, c[1] * k);
-      d[o + 2] = Math.min(255, c[2] * k);
+      // cliffs cast a shadow down-right of their foot
+      const shade = nearRockAt(wx, wy) ? 1 - 0.4 * smooth(0.3, 0.7, sample(rock, wx - 0.9, wy - 0.2) + wobble * 0.5) : 1;
+      d[o] = Math.min(255, c[0] * k * shade);
+      d[o + 1] = Math.min(255, c[1] * k * shade);
+      d[o + 2] = Math.min(255, c[2] * k * shade);
       d[o + 3] = 255;
     }
   }
@@ -172,6 +214,9 @@ function scatter(
       const y = sum - x;
       const i = y * g.width + x;
       if (occupied[i] || g.terrain[i] === TERRAIN_WATER) continue;
+      // nothing on rock, or behind it where the raised top covers the ground
+      const rockAt = (tx: number, ty: number) => g.inBounds(tx, ty) && g.terrain[ty * g.width + tx] === TERRAIN_ROCK;
+      if (rockAt(x, y) || rockAt(x + 1, y) || rockAt(x, y + 1) || rockAt(x + 1, y + 1)) continue;
       seed = (x * 73856093) ^ (y * 19349663) ^ 0x5bd1e995;
       const cx = x + 0.5, cy = y + 0.5;
       const d = doodadsAt(cx, cy);

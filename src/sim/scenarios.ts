@@ -18,11 +18,11 @@ export interface Scenario {
   wildlife?: boolean;
 }
 
-export function skirmish(): Scenario {
+export function skirmish(mapId = 'woodlands'): Scenario {
   return {
     id: 'skirmish',
     victory: true,
-    map: (seed) => generateMap(seed, 64),
+    map: (seed) => generateMap(seed, 64, mapId),
     setup(w, map) {
       w.players.forEach((p, i) => {
         const [ox, oy] = map.starts[i % map.starts.length];
