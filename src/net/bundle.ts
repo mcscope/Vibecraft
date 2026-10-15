@@ -8,6 +8,7 @@ import type {
 } from '../art/contract';
 import type { FactionSpec, WildSpec } from '../factions/types';
 import { validateFaction } from '../sim/physics';
+import { checkFairness } from '../sim/fairness';
 import { validateBuildingAbilities, validateUnitAbilities } from '../sim/abilities';
 
 export interface PackedSprite { i: number; sx: number; sy: number; sw: number; sh: number; ax: number; ay: number; q: number }
@@ -142,8 +143,9 @@ export function checkSpec(s: unknown): string[] {
   }
   for (const [i, t] of (f.techs ?? []).entries()) if (!isId(t.id) || !isId(t.unit) || !isNum(t.refinement) || t.refinement <= 0 || t.refinement > 5) e.push(`tech ${i}: bad`);
   if (e.length) return e;
-  // the rules every faction lives by (refinement paid for by capital, footprints, references...)
-  return validateFaction(f as FactionSpec);
+  // the rules every faction lives by (refinement paid for by capital, footprints, references...),
+  // and the fairness bounds on what a match hands out for free
+  return [...validateFaction(f as FactionSpec), ...checkFairness(f as FactionSpec)];
 }
 
 function checkSprites(images: unknown, sprites: PackedSprite[], e: string[]): void {
