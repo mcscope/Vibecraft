@@ -32,7 +32,10 @@ export class ArtBank {
     return this.biomes[this.world.territory(x, y)] ?? this.biome;
   }
 
-  unit(owner: number, id: string): UnitArt | undefined { return this.factions[owner]?.units[id]; }
+  /** A unit's art; a tamed animal (sim/abilities/herding.ts) keeps its wild look. */
+  unit(owner: number, id: string): UnitArt | undefined {
+    return this.factions[owner]?.units[id] ?? (this.world.wildsId >= 0 ? this.factions[this.world.wildsId]?.units[id] : undefined);
+  }
   building(owner: number, id: string): BuildingArt | undefined { return this.factions[owner]?.buildings[id]; }
   flag(owner: number): Sprite { return this.factions[owner].flag; }
   wantFlag(owner: number): Sprite { return this.factions[owner].wantFlag ?? this.factions[owner].flag; }

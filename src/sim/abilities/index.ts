@@ -8,6 +8,7 @@ import { bearer } from './bearer';
 import { gait } from './gait';
 import { dropOff } from './dropoff';
 import { flight } from './flight';
+import { herding } from './herding';
 import { underfoot } from './underfoot';
 import { living } from './living';
 import { wall } from './wall';
@@ -22,7 +23,7 @@ export interface Ability {
   buildingCodex?(b: BuildingSpec, st: BuildingStats): string | null;
 }
 
-export const ABILITIES: Ability[] = [bearer, gait, wall, living, dropOff, underfoot, flight];
+export const ABILITIES: Ability[] = [bearer, gait, wall, living, dropOff, underfoot, flight, herding];
 
 export function validateUnitAbilities(u: UnitSpec, where: string): string[] {
   return ABILITIES.flatMap((a) => a.validateUnit?.(u, where) ?? []);

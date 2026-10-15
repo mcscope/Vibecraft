@@ -82,6 +82,8 @@ export interface UnitSpec {
   bearer?: { radius: number };
   /** A walking drop-off: gatherers unload into it like a building (up to its cargo capacity); it unloads at a building. */
   dropOff?: boolean;
+  /** Can tame wild animals by feeding them from its pack (sim/abilities/herding.ts). */
+  tamer?: boolean;
 }
 
 export type ResourceKind = 'food' | 'wood' | 'crystal';
@@ -157,6 +159,8 @@ export interface BuildingSpec {
   road?: { speed: number };
   /** Underfoot conveyor belt (1 tile): gatherers unload onto it; goods ride the joined belt at `speed` tiles/s to a building it touches. */
   conveyor?: { speed: number };
+  /** Breeds your tamed animals standing within `radius` tiles (pairs make young, paid from its food). */
+  pen?: { radius: number };
 }
 
 /** Raises one unit type's refinement for its owner, everywhere. Cost derives from the curve. */

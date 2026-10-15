@@ -144,3 +144,19 @@ export function eyrie(b: ModelBuilder): void {
   b.box([0.04, 0.45, 0.55], [-1.3, 1.45, 1.47], BANNER);
 }
 
+/** A ring of dry-stone wall with a gap for a gate, a hay rack and a water trough. */
+export function sheepfold(b: ModelBuilder): void {
+  b.box([3.8, 0.08, 3.8], [0, 0.04, 0], TURF);
+  for (let i = 0; i < 22; i++) {
+    const a = (i / 22) * Math.PI * 2;
+    if (a > 0.2 && a < 0.75) continue; // the gate
+    b.rock([0.32, 0.5 + (i % 3) * 0.06, 0.28], [Math.cos(a) * 1.6, 0.25, Math.sin(a) * 1.6], i % 2 ? ROUGH : STONE, i + 1);
+  }
+  for (const z of [-0.3, 0.3]) b.limb([-0.5, 0.1, z], [-0.5, 0.9, z], 0.04, BEAM); // hay rack
+  b.box([0.5, 0.5, 0.7], [-0.5, 0.65, 0], { color: '#c9a961', tex: 'thatch' });
+  b.box([0.8, 0.22, 0.3], [0.5, 0.15, -0.6], TIMBER); // trough
+  b.box([0.7, 0.04, 0.22], [0.5, 0.25, -0.6], { color: '#4a6a7a', rough: 0.1 });
+  b.cylinder(0.03, 0.035, 1.6, [1.3, 0.8, 1.3], BEAM, undefined, 8);
+  b.box([0.04, 0.4, 0.5], [1.3, 1.35, 1.55], BANNER);
+}
+

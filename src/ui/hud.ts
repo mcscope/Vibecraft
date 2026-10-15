@@ -552,6 +552,7 @@ export function describeOrder(w: World, u: Unit): string {
   switch (o.kind) {
     case 'idle': return u.engage ? 'Fighting' : u.carter ? 'Waiting for orders' : u.militia ? (w.armed(u) ? 'Militia: ready' : 'Militia: no crystal') : 'Idle';
     case 'muster': return 'Grabbing a crystal';
+    case 'tame': return `Taming the ${w.specOf(w.units.get(o.target)?.owner ?? 0, w.units.get(o.target)?.specId ?? '')?.spec.name ?? 'animal'}`;
     case 'rearm': return `Restocking from the ${w.specOf(u.owner, w.units.get(o.unit)?.specId ?? '')?.spec.name ?? 'bearer'}`;
     case 'wild': return u.engage ? 'Attacking' : u.wild === 'aggressive' ? 'Prowling' : 'Grazing';
     case 'hunt': return 'Hunting';

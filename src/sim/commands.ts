@@ -33,6 +33,8 @@ export type Command =
   | { type: 'townBell'; on: boolean }
   /** Throwers restock from a friendly ammo bearer. */
   | { type: 'rearm'; units: number[]; bearer: number }
+  /** Tamers feed a wild animal until it joins you. */
+  | { type: 'tame'; units: number[]; target: number }
   /** Workers walk up to a passive animal, bring it down, and gather the carcass. */
   | { type: 'hunt'; units: number[]; target: number }
   /** Send units to help an existing construction site. */

@@ -1,3 +1,4 @@
+import { isTamer, tameable } from '../sim/abilities/herding';
 import { isUnderfoot } from '../sim/abilities/underfoot';
 // Mouse + keyboard → selection, camera, and Commands.
 import type { Command } from '../sim/commands';
@@ -231,13 +232,19 @@ export class Input {
       }
       return;
     }
-    if (tu && tu.wild === 'passive') {
-      // game: workers hunt it (bring it down, then gather), fighters attack it
-      const hunters = units.filter((id) => { const u = w.units.get(id); return u && !u.stats.canAttack && w.gathers(u, 'food'); });
-      const fighters = units.filter((id) => !hunters.includes(id));
+    // a wild animal: tamers with food tame it (sim/abilities/herding.ts); workers hunt game; fighters attack
+    const tamers = tu?.wild && tameable(tu) ? units.filter((id) => { const u = w.units.get(id); return u && isTamer(w, u) && u.food >= 0.5; }) : [];
+    if (tamers.length) this.issue({ type: 'tame', units: tamers, target });
+    const others = units.filter((id) => !tamers.includes(id));
+    if (tu && (tu.wild === 'passive' || (tu.tame === 'passive' && tu.owner === this.player && tamers.length === 0)) && (tu.wild || others.some((id) => { const u = w.units.get(id); return u && !u.stats.canAttack && w.gathers(u, 'food'); }))) {
+      // game (or one of your own herd, to butcher): workers bring it down and gather it, fighters attack it
+      const hunters = others.filter((id) => { const u = w.units.get(id); return u && !u.stats.canAttack && w.gathers(u, 'food'); });
+      const fighters = others.filter((id) => !hunters.includes(id));
       if (hunters.length) this.issue({ type: 'hunt', units: hunters, target });
-      if (fighters.length) this.issue({ type: 'attack', units: fighters, target });
+      if (fighters.length && tu.wild) this.issue({ type: 'attack', units: fighters, target });
       this.ping(wx, wy, '#e0457a');
+    } else if (tamers.length) {
+      this.ping(wx, wy, '#9ad06a'); // the rest hold off: it's being tamed
     } else if ((tu && tu.owner !== this.player) || (tb && tb.owner !== this.player)) {
       this.issue({ type: 'attack', units, target });
       this.ping(wx, wy, '#ff6b5a');

@@ -25,6 +25,7 @@ const crofter: ClanUnit = {
   name: 'Crofter',
   description: 'Farms, fells and builds. Stockier than most workers: carries more, and keeps a hatchet handy.',
   mass: 60,
+  tamer: true, // herders: feed a wild beast from the pack until it follows you
   physique: { muscle: 0.45, frame: 0.35, reserve: 0.2 },
   attack: { style: 'strike', crystalMass: 0.8 },
   model(b, p) {
@@ -224,6 +225,10 @@ export const buildings: ClanBuilding[] = [
     id: 'woodland-lodge', name: 'Woodland Lodge', description: 'A woodcutters\' lodge: fells faster nearby and keeps planting trees from its own timber.',
     size: 2, materials: 150, gatherBoost: { radius: 7, resources: ['wood'] },
     sow: { mechanism: 50, radius: 6, resources: ['wood'], maxPlants: { wood: 12 } }, model: models.woodlandLodge,
+  },
+  {
+    id: 'sheepfold', name: 'Sheepfold', description: 'A ring of dry-stone wall with a hay rack. Tamed beasts kept close by breed here, fed from its stock.',
+    size: 2, materials: 140, pen: { radius: 3 }, model: models.sheepfold,
   },
   {
     id: 'eyrie', name: 'Eyrie', description: 'A crag of stacked stone crowned with a great stick nest, where war-eagles are hatched and hooded.',

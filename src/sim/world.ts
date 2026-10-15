@@ -12,6 +12,7 @@ import { Logistics } from './logistics';
 import * as bearerAbility from './abilities/bearer';
 import { midStride, strideFactor } from './abilities/gait';
 import { nearestDropOff } from './abilities/dropoff';
+import { eating, isTamer, runPens, runTame } from './abilities/herding';
 import { canReach, FLY_SIGHT, flyTo, heightBonus, takeOff, tickFlight } from './abilities/flight';
 import { isUnderfoot, loadBelt, nearestBelt, roadFactor, routeBelts, runBelts, type BeltRoutes, type Parcel } from './abilities/underfoot';
 import { grow, grownEnough, livingStats, seedMaterials } from './abilities/living';
@@ -70,6 +71,8 @@ export type Order =
   | { kind: 'hunt'; target: number; x: number; y: number }
   /** Town bell: go to a building and take a crystal to fight with. */
   | { kind: 'muster'; building: number }
+  /** A tamer feeding a wild animal until it joins us. */
+  | { kind: 'tame'; target: number }
   /** A dry thrower going to an ammo bearer for a load. */
   | { kind: 'rearm'; unit: number }
   /** Wildlife: roam around a home spot (tx/ty: current wander target, rest: ticks until the next). */
@@ -138,6 +141,9 @@ export interface Unit {
   dummy: boolean;
   /** Wildlife temper (wild units only). */
   wild?: 'passive' | 'aggressive';
+  /** A tamed animal's temper (sim/abilities/herding.ts); and, while being tamed, who's feeding it and how much so far. */
+  tame?: 'passive' | 'aggressive';
+  tameBy?: number; tameFed?: number; tameTick?: number;
   /** Called up by the town bell: fights on its own while holding a crystal. */
   militia?: boolean;
   /** What it was doing when the bell rang (resumed when it stops). */
@@ -183,6 +189,8 @@ export interface Building {
   autoTrain: string | null;
   /** Resources this building is currently sowing (subset of spec.sow.resources). */
   sowing: Array<'food' | 'wood'>;
+  /** Pens: seconds of breeding so far per kind of animal. */
+  breeding?: Record<string, number>;
   /** kg of planting work accumulated toward the next plant. */
   sowProgress: number;
 }
@@ -261,6 +269,15 @@ export class World {
     return id === undefined ? undefined : this.buildings.get(id);
   }
   belts(): BeltRoutes { return (this.beltRoutes ??= routeBelts(this)); }
+  /** A tamed animal's kind becomes one of `player`'s unit kinds (same body, same stats). */
+  adoptSpec(player: number, from: number, specId: string): void {
+    const s = this.unitSpecs.get(`${from}/${specId}`);
+    if (s && !this.unitSpecs.has(`${player}/${specId}`)) this.unitSpecs.set(`${player}/${specId}`, s);
+  }
+  /** The temper of an animal kind `owner` herds. */
+  herdTemper(owner: number, specId: string): 'passive' | 'aggressive' {
+    return (this.specOf(owner, specId)?.spec as WildSpec | undefined)?.temper ?? 'passive';
+  }
   nextParcelId(): number { return this.parcelSeq++; }
   /** Render-side consumers drain this; the sim never reads it. */
   events: WorldEvent[] = [];
@@ -673,8 +690,13 @@ export class World {
       }
       case 'hunt': {
         const prey = this.units.get(cmd.target);
-        if (!prey || prey.wild !== 'passive') return;
+        if (!prey || !(prey.wild === 'passive' || (prey.tame === 'passive' && prey.owner === player))) return; // wild game, or your own herd to butcher
         return set(mine(cmd.units).filter((u) => this.gathers(u, 'food')), { kind: 'hunt', target: prey.id, x: prey.x, y: prey.y });
+      }
+      case 'tame': {
+        const a = this.units.get(cmd.target);
+        if (!a || !a.wild) return;
+        return set(mine(cmd.units).filter((u) => isTamer(this, u)), { kind: 'tame', target: a.id });
       }
       case 'construct': {
         const site = ownBuilding(cmd.site);
@@ -825,6 +847,7 @@ export class World {
     this.separate();
     for (const p of this.projectiles.values()) this.tickProjectile(p);
     if (this.parcels.length) runBelts(this, DT);
+    runPens(this);
     for (const n of this.nodes.values()) {
       if (!n.growLeft) continue;
       const g = Math.min(n.growLeft, (n.growRate ?? 0) * DT);
@@ -1010,7 +1033,7 @@ export class World {
   private tickUnit(u: Unit): void {
     if (u.dummy) { u.animT += DT; return; }
     const st = u.stats;
-    if (u.wild) u.cal = st.maxCalories; // they graze
+    if (u.wild || u.tame) u.cal = st.maxCalories; // they graze
     if (u.cooldown > 0) u.cooldown -= DT;
     if (u.swing > 0) u.swing -= DT;
     if (u.repathIn > 0) u.repathIn--;
@@ -1043,9 +1066,10 @@ export class World {
     }
     switch (o.kind) {
       case 'idle': return this.runIdle(u);
-      case 'wild': return this.runWild(u, o);
+      case 'wild': return eating(this, u) ? false : this.runWild(u, o); // being fed by a tamer: it stands and eats
       case 'hunt': return this.runHunt(u, o);
       case 'muster': return this.runMuster(u, o.building);
+      case 'tame': return runTame(this, u, o.target);
       case 'rearm': return bearerAbility.runRearm(this, u, o.unit);
       case 'move': {
         if (this.moveTo(u, o.x, o.y, 0.3)) { this.finish(u); }
@@ -1728,7 +1752,7 @@ export class World {
     for (const u of this.units.values()) {
       if (u.hp > 0) continue;
       this.units.delete(u.id);
-      if (u.wild) {
+      if (u.wild || u.tame) {
         const spec = this.specOf(u.owner, u.specId)?.spec as WildSpec | undefined;
         const spot = this.grid.nearestOpen(u.x, u.y, 3);
         if (spot) this.addNode({ type: 'food', x: spot[0], y: spot[1], amount: spec?.meat ?? Math.round(u.stats.mass / 2), shard: false, tree: false, carcass: true });

@@ -3,6 +3,7 @@
 // where there's need — most urgent first, over the shortest whole trip — with the
 // base's waiting orders first in line.
 import type { ResourceKind, Stock } from '../factions/types';
+import { penWant } from './abilities/herding';
 import { growWant } from './abilities/living';
 import { CAP } from './physics';
 import {
@@ -30,6 +31,7 @@ export class Logistics {
     for (const r of RESOURCES) t[r] = queued[r];
     if (b.spec.trains?.length) t.food += FOOD_STASH;
     t.food += growWant(b); // a living building eats to grow
+    t.food += penWant(this.w, b); // a pen feeds its breeding pairs
     if (b.stats.tower && b.spec.attack) t.crystal += (b.spec.attack.stockShots ?? TOWER_STOCK_SHOTS) * b.spec.attack.crystalMass;
     const next = this.w.sowNext(b);
     if (next) t[next] = Math.max(t[next], Math.ceil(plantKg(b.spec, next) * CAP.sowSeedFraction));
