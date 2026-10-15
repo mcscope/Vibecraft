@@ -151,6 +151,10 @@ export interface BuildingSpec {
    * (so what it can train) follow its current size.
    */
   living?: { seed: number; grow: number };
+  /** Underfoot road (1 tile, blocks nothing): anyone on it moves `speed`× (1–2) as fast for fewer calories; wheels gain twice as much. */
+  road?: { speed: number };
+  /** Underfoot conveyor belt (1 tile): gatherers unload onto it; goods ride the joined belt at `speed` tiles/s to a building it touches. */
+  conveyor?: { speed: number };
 }
 
 /** Raises one unit type's refinement for its owner, everywhere. Cost derives from the curve. */

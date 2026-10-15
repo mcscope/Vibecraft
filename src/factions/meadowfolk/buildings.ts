@@ -234,3 +234,19 @@ export function wantFlag(b: ModelBuilder): void {
   b.cylinder(0.25, 0.25, 0.04, [0.04, 1.69, 0], { color: '#7a5a34', tex: 'wood' }, [0, 0, 0.2], 12); // its rim
   b.sphere([0.2, 0.08, 0.16], [0.18, 0.06, -0.12], { color: '#c9b48a', tex: 'cloth' }); // an empty sack slumped at the foot
 }
+
+/** One tile of road: flagstones set flush in packed earth. */
+export function road(b: ModelBuilder): void {
+  b.box([2.0, 0.04, 2.0], [0, 0.02, 0], { color: '#7a6a50', tex: 'stone' });
+  const stones: Array<[number, number, number, number]> = [[-0.5, -0.5, 0.85, 0.8], [0.45, -0.55, 0.95, 0.75], [-0.55, 0.45, 0.75, 0.95], [0.5, 0.5, 0.85, 0.85], [0, 0, 0.5, 0.45]];
+  stones.forEach(([x, z, w, d], i) => b.box([w, 0.06, d], [x, 0.04, z], i % 2 ? STONE : DARKSTONE, [0, (i - 2) * 0.06, 0]));
+}
+
+/** One tile of conveyor: a low wooden frame of rollers with team-painted side rails. */
+export function conveyor(b: ModelBuilder): void {
+  b.box([2.0, 0.05, 2.0], [0, 0.025, 0], { color: '#6a5a40', tex: 'stone' });
+  for (const z of [-0.8, 0.8]) for (const x of [-0.8, 0.8]) b.box([0.12, 0.2, 0.12], [x, 0.1, z], DARKWOOD); // legs
+  for (let i = 0; i < 7; i++) b.cylinder(0.075, 0.075, 1.5, [-0.84 + i * 0.28, 0.24, 0], WOOD, [Math.PI / 2, 0, 0], 8); // rollers
+  for (const z of [-0.85, 0.85]) b.box([2.0, 0.1, 0.08], [0, 0.26, z], BANNER); // rails
+}
+

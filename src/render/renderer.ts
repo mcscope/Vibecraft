@@ -4,6 +4,7 @@
 import { Application, Container, ImageSource, Matrix, Rectangle, Sprite as PixiSprite, Text, Texture, type TextureSource } from 'pixi.js';
 import { type Building, type ResourceNode, type Unit, type World, type WorldEvent } from '../sim/world';
 import { Camera, isoX, isoY, TILE_H, TILE_W } from './camera';
+import { isUnderfoot, parcelPos } from '../sim/abilities/underfoot';
 import { buildingSprite, unitSprite, type ArtAnim, type Sprite } from '../art/contract';
 import { TEAM_COLORS, type ArtBank } from './artbank';
 import { paintTerrain, TERRAIN_SCALE } from './terrain';
@@ -98,6 +99,7 @@ export class Renderer {
   private groundPool = new Pool(this.groundLayer);
   /** "Needs supplies" flags planted by buildings whose orders wait on stock. */
   private wantPool = new Pool(this.objects);
+  private parcelPool = new Pool(this.objects);
   private fxLayer = new Container({ isRenderGroup: true });
   private fxPool = new Pool(this.fxLayer);
   /** Smoke and flame puffs rising from damaged buildings (world iso coords). */
@@ -312,7 +314,8 @@ export class Renderer {
         const cx = b.ox + b.size / 2, cy = b.oy + b.size / 2;
         sp.position.set(isoX(cx, cy), isoY(cx, cy));
         sp.zIndex = b.ox + b.oy + b.size;
-        this.objects.addChild(sp);
+        // underfoot pieces (sim/abilities/underfoot.ts) lie on the ground, under everyone
+        (isUnderfoot(b.spec) ? this.ground : this.objects).addChild(sp);
         this.buildingSprites.set(b.id, sp);
       }
       // the faction supplies the looks; we pick construction stage / damage level
@@ -383,6 +386,19 @@ export class Renderer {
       sp.visible = this.seen(p.owner, x, y);
     }
     for (const [id, sp] of this.projSprites) if (!this.world.projectiles.has(id)) { sp.destroy(); this.projSprites.delete(id); }
+    // goods riding conveyor belts: little crates, tinted by what's in them
+    this.parcelPool.begin();
+    for (const p of this.world.parcels) {
+      const [x, y] = parcelPos(this.world, p);
+      if (!this.seen(p.owner, x, y)) continue;
+      const s = this.parcelPool.get(Texture.WHITE);
+      s.anchor.set(0.5, 1);
+      s.width = 9; s.height = 7;
+      s.tint = p.res === 'food' ? 0xc0392b : p.res === 'wood' ? 0x8a5a2e : 0x7ae7ff;
+      s.position.set(isoX(x, y), isoY(x, y) - 2);
+      s.zIndex = x + y;
+    }
+    this.parcelPool.end();
   }
 
   /** Damaged buildings smoke; badly damaged ones burn. */
@@ -628,9 +644,10 @@ export class Renderer {
     if (best) return best;
     const [wx, wy] = cam.toWorld(sx, sy);
     // a building's own footprint wins; the rest of its picture only if no bush or tree is under the cursor
-    let byPicture = 0;
+    let byPicture = 0, under = 0;
     for (const b of world.buildings.values()) {
       if (b.owner !== this.viewer && !this.explored(b.ox + b.size / 2, b.oy + b.size / 2)) continue;
+      if (isUnderfoot(b.spec)) { if (wx >= b.ox && wx < b.ox + 1 && wy >= b.oy && wy < b.oy + 1) under = b.id; continue; } // last resort: it's flat on the ground
       if (wx >= b.ox && wx <= b.ox + b.size && wy >= b.oy && wy <= b.oy + b.size) return b.id;
       const [mx, my] = cam.toScreen(b.ox + b.size / 2, b.oy + b.size / 2);
       const half = (16 + 22 * b.size) * cam.zoom; // picture width grows with footprint
@@ -648,6 +665,6 @@ export class Renderer {
       const r = (n.shard ? 14 : 26) * cam.zoom;
       if (Math.abs(sx - nx) < r && sy < ny + 10 * cam.zoom && sy > ny - r * 1.5) return n.id;
     }
-    return tree || byPicture;
+    return tree || byPicture || under;
   }
 }

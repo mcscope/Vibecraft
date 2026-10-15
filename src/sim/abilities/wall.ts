@@ -3,7 +3,8 @@
 import type { BuildingSpec } from '../../factions/types';
 import type { Ability } from './index';
 
-export const isWall = (b: BuildingSpec): boolean => !!b.wall;
+/** Laid by hand in lines, so the AI leaves it alone: walls and underfoot pieces. */
+export const isWall = (b: BuildingSpec): boolean => !!b.wall || !!b.road || !!b.conveyor;
 
 export const wall: Ability = {
   id: 'wall',

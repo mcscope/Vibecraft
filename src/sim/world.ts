@@ -12,6 +12,7 @@ import { Logistics } from './logistics';
 import * as bearerAbility from './abilities/bearer';
 import { midStride, strideFactor } from './abilities/gait';
 import { nearestDropOff } from './abilities/dropoff';
+import { isUnderfoot, loadBelt, nearestBelt, roadFactor, routeBelts, runBelts, type BeltRoutes, type Parcel } from './abilities/underfoot';
 import { grow, grownEnough, livingStats, seedMaterials } from './abilities/living';
 import {
   derive, deriveBuilding, loadedSpeed, CAP, K, techCost, techGate, techTime,
@@ -246,6 +247,18 @@ export class World {
   readonly buildings = new Map<number, Building>();
   readonly nodes = new Map<number, ResourceNode>();
   readonly projectiles = new Map<number, Projectile>();
+  /** Underfoot pieces by tile (sim/abilities/underfoot.ts), goods riding belts, and the belt routes (rebuilt when buildings change). */
+  private underfootTiles = new Map<number, number>();
+  parcels: Parcel[] = [];
+  private parcelSeq = 1;
+  private beltRoutes: BeltRoutes | null = null;
+  underfootAt(x: number, y: number): Building | undefined {
+    if (!this.grid.inBounds(x, y)) return undefined;
+    const id = this.underfootTiles.get(Math.floor(y) * this.grid.width + Math.floor(x));
+    return id === undefined ? undefined : this.buildings.get(id);
+  }
+  belts(): BeltRoutes { return (this.beltRoutes ??= routeBelts(this)); }
+  nextParcelId(): number { return this.parcelSeq++; }
   /** Render-side consumers drain this; the sim never reads it. */
   events: WorldEvent[] = [];
   winner = -1;
@@ -449,7 +462,7 @@ export class World {
   /** Is a size×size footprint at (ox,oy) free to build on? */
   placeable(ox: number, oy: number, size: number): boolean {
     if (ox < 1 || oy < 1 || ox + size > this.grid.width - 1 || oy + size > this.grid.height - 1) return false;
-    for (let y = oy; y < oy + size; y++) for (let x = ox; x < ox + size; x++) if (this.grid.isBlocked(x, y)) return false;
+    for (let y = oy; y < oy + size; y++) for (let x = ox; x < ox + size; x++) if (this.grid.isBlocked(x, y) || this.underfootAt(x, y)) return false;
     return true;
   }
 
@@ -695,6 +708,8 @@ export class World {
       sowing: [...(spec.sow?.resources ?? [])], sowProgress: 0, grown,
     };
     this.buildings.set(b.id, b);
+    this.beltRoutes = null;
+    if (isUnderfoot(spec)) { this.underfootTiles.set(oy * this.grid.width + ox, b.id); return b; } // laid on the ground: blocks nothing
     for (let y = oy; y < oy + size; y++) for (let x = ox; x < ox + size; x++) this.grid.block(x, y, 1);
     // nudge anyone standing on the new footprint out of it
     for (const u of this.units.values()) {
@@ -806,6 +821,7 @@ export class World {
     for (const u of this.units.values()) this.tickUnit(u);
     this.separate();
     for (const p of this.projectiles.values()) this.tickProjectile(p);
+    if (this.parcels.length) runBelts(this, DT);
     for (const n of this.nodes.values()) {
       if (!n.growLeft) continue;
       const g = Math.min(n.growLeft, (n.growRate ?? 0) * DT);
@@ -1330,6 +1346,12 @@ export class World {
     const drop = this.nearestCache(u, () => true);
     const dd = drop ? (drop.ox + drop.size / 2 - u.x) ** 2 + (drop.oy + drop.size / 2 - u.y) ** 2 : Infinity;
     const carrier = nearestDropOff(this, u, dd);
+    // or a conveyor belt nearer still: unload onto it and the goods ride home
+    const belt = nearestBelt(this, u, carrier ? (carrier.x - u.x) ** 2 + (carrier.y - u.y) ** 2 : dd);
+    if (belt) {
+      if (this.moveTo(u, belt[0], belt[1], 0.45)) { loadBelt(this, u, belt[0], belt[1]); o.phase = 'toNode'; }
+      return u.x !== u.px || u.y !== u.py;
+    }
     if (carrier) {
       if (this.moveTo(u, carrier.x, carrier.y, u.stats.radius + carrier.stats.radius + 0.5)) {
         this.transfer(u, carrier);
@@ -1514,6 +1536,7 @@ export class World {
 
   private completeBuilding(b: Building): void {
     b.complete = true;
+    this.beltRoutes = null;
     b.built = b.stats.totalCost;
     this.events.push({ type: 'built', id: b.id, owner: b.owner });
   }
@@ -1536,7 +1559,7 @@ export class World {
   nearestCache(u: Unit, test: (b: Building) => boolean): Building | null {
     let best: Building | null = null, bestD = Infinity;
     for (const b of this.buildings.values()) {
-      if (b.owner !== u.owner || !b.complete || !test(b)) continue;
+      if (b.owner !== u.owner || !b.complete || isUnderfoot(b.spec) || !test(b)) continue; // roads and belts hold nothing
       const d = (b.ox + b.size / 2 - u.x) ** 2 + (b.oy + b.size / 2 - u.y) ** 2;
       if (d < bestD) { bestD = d; best = b; }
     }
@@ -1581,7 +1604,7 @@ export class World {
       if (u.path.length === 0) return dx * dx + dy * dy <= (arrive + 1.5) ** 2;
     }
     const st = u.stats;
-    let speed = loadedSpeed(st, this.packLoad(u));
+    let speed = loadedSpeed(st, this.packLoad(u)) * roadFactor(this, u);
     if (u.exhausted) speed *= K.exhaustedSpeedMul;
     let budget = speed * DT;
     // a bounding gait (sim/abilities/gait.ts): still while crouched, faster in the air
@@ -1619,7 +1642,7 @@ export class World {
     else { u.path = []; return; }
     this.face(u, dx, dy);
     if (!u.exhausted) {
-      u.cal -= u.stats.moveCalPerTile * dist * (1 + (this.packLoad(u) / u.stats.mass) * (u.stats.wheeled ? K.wheelHaulCost : 1));
+      u.cal -= u.stats.moveCalPerTile * dist * (1 + (this.packLoad(u) / u.stats.mass) * (u.stats.wheeled ? K.wheelHaulCost : 1)) / roadFactor(this, u);
       u.busy = true;
     }
   }
@@ -1704,7 +1727,9 @@ export class World {
     for (const b of this.buildings.values()) {
       if (b.hp > 0) continue;
       this.buildings.delete(b.id);
-      for (let y = b.oy; y < b.oy + b.size; y++) for (let x = b.ox; x < b.ox + b.size; x++) this.grid.block(x, y, -1);
+      this.beltRoutes = null;
+      if (isUnderfoot(b.spec)) this.underfootTiles.delete(b.oy * this.grid.width + b.ox);
+      else for (let y = b.oy; y < b.oy + b.size; y++) for (let x = b.ox; x < b.ox + b.size; x++) this.grid.block(x, y, -1);
       this.events.push({ type: 'buildingDestroyed', id: b.id, owner: b.owner });
     }
     if (this.tick % TICK_RATE !== 0 || !this.scenario.victory) return;

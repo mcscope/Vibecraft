@@ -1,3 +1,4 @@
+import { isUnderfoot } from '../sim/abilities/underfoot';
 // Mouse + keyboard → selection, camera, and Commands.
 import type { Command } from '../sim/commands';
 import type { World } from '../sim/world';
@@ -217,7 +218,10 @@ export class Input {
   contextCommand(wx: number, wy: number, target: number, _shift: boolean): void {
     const w = this.world;
     const units = this.selectedUnits();
-    const tu = w.units.get(target), tb = w.buildings.get(target), tn = w.nodes.get(target);
+    const tu = w.units.get(target), tn = w.nodes.get(target);
+    // a finished road or belt is just ground to walk on (sim/abilities/underfoot.ts)
+    const tbAny = w.buildings.get(target);
+    const tb = tbAny && tbAny.complete && isUnderfoot(tbAny.spec) ? undefined : tbAny;
     const ownBuilding = [...this.rs.selected].map((id) => w.buildings.get(id)).find((b) => b && b.owner === this.player);
     if (units.length === 0) {
       if (ownBuilding) {
