@@ -12,6 +12,7 @@ const VOICES: Record<string, UnitArt['sounds']> = {
   axeman: { voice: { vowel: 'a', timbre: 'square', pitch: 95 } },
   'ram-rider': { voice: { vowel: 'u', timbre: 'saw', pitch: 85 } },
   'pony-cart': { voice: { vowel: 'i', timbre: 'triangle', pitch: 300 } },
+  eagle: { voice: { vowel: 'i', timbre: 'saw', pitch: 520 } },
 };
 
 export async function bakeArt(team: TeamColors, onProgress?: (f: number, label: string) => void): Promise<FactionArt> {

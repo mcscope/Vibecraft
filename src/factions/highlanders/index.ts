@@ -146,7 +146,61 @@ const ponyCart: ClanUnit = {
   },
 };
 
-export const units: ClanUnit[] = [crofter, javelineer, axeman, ramRider, ponyCart];
+const plumage: Mat = { color: '#4a3220', tex: 'fur' };
+const nape: Mat = { color: '#b8862e', tex: 'fur' };
+const beakHorn: Mat = { color: '#e0b030', rough: 0.4 };
+const eagle: ClanUnit = {
+  id: 'eagle',
+  name: 'Golden Eagle',
+  description: 'A great war-eagle with crystal-shod talons. Flies over walls and water and sees far, but must stoop to strike, and tires fast in the air.',
+  mass: 22,
+  physique: { muscle: 0.55, frame: 0.25, reserve: 0.2 },
+  attack: { style: 'strike', crystalMass: 0.8 },
+  canGather: false,
+  flight: true,
+  model(b, p) {
+    const t = p.phase * Math.PI * 2;
+    const flying = p.anim === 'walk';
+    const lift = flying ? 0.35 : 0;
+    b.joint([0, lift, 0], [0, 0, flying ? -0.15 : 0.35], (c) => {
+      c.sphere([0.34, 0.2, 0.2], [0, 0.45, 0], plumage); // body
+      c.sphere([0.2, 0.12, 0.15], [0.05, 0.38, 0], { color: '#5a3e28', tex: 'fur' }); // breast
+      // tail fan
+      for (const z of [-0.08, 0, 0.08]) c.box([0.3, 0.03, 0.09], [-0.4, 0.45, z], plumage, [0, z * 3, 0.1]);
+      // head: golden nape, hooked beak, fierce eye, a team-coloured hood tassel
+      c.joint([0.32, 0.6, 0], [0, 0, p.anim === 'attack' ? -0.5 : 0], (h) => {
+        h.sphere([0.12, 0.1, 0.1], [0, 0, 0], nape);
+        h.cone(0.045, 0.12, [0.12, -0.02, 0], beakHorn, [0, 0, -Math.PI / 2 - 0.3], 6);
+        for (const z of [1, -1]) h.sphere(0.02, [0.07, 0.03, 0.06 * z], { color: '#e0a020', emissive: '#402800' });
+        h.box([0.04, 0.12, 0.05], [-0.06, 0.08, 0], { team: 'primary', tex: 'cloth' }, [0, 0, 0.6]);
+      });
+      // wings: spread and beating in flight, folded along the body when landed
+      for (const side of [1, -1]) {
+        const beat = flying ? Math.sin(t * 2) * 0.7 : 0;
+        const spread = flying ? 1 : p.anim === 'attack' ? 0.6 : 0;
+        c.joint([0.02, 0.55, 0.16 * side], [beat * side * spread + (1 - spread) * 1.25 * side, spread * 0.1, 0], (wg) => {
+          for (let i = 0; i < 5; i++) {
+            const len = 0.55 + spread * 0.25 - i * 0.05;
+            wg.box([0.12 - i * 0.008, 0.025, len], [-0.04 - i * 0.07, 0, (len / 2) * side * (0.4 + spread * 0.6)], i < 2 ? plumage : { color: '#3a2618', tex: 'fur' }, [0, -side * (0.15 + i * 0.12) * spread, 0]);
+          }
+        });
+      }
+    });
+    // legs and crystal-shod talons: tucked in flight, gripping the ground when landed, thrust forward to strike
+    for (const z of [0.07, -0.07]) {
+      const strike = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase * 1.4) * Math.PI) : 0;
+      const hip: [number, number, number] = [0.02, 0.33 + lift, z];
+      const foot: [number, number, number] = flying ? [-0.15, 0.22 + lift, z] : [0.05 + strike * 0.25, 0.03 + strike * 0.12, z];
+      b.limb(hip, foot, 0.025, beakHorn, 0.02);
+      for (const tz of [-0.04, 0, 0.04]) {
+        b.cone(0.012, 0.07, [foot[0] + 0.05, foot[1], foot[2] + tz], { color: '#1a1410' }, [0, 0, -Math.PI / 2], 4);
+        if (p.armed) b.crystal(0.05, [foot[0] + 0.08, foot[1], foot[2] + tz], [0, 0, -1.4]);
+      }
+    }
+  },
+};
+
+export const units: ClanUnit[] = [crofter, javelineer, axeman, ramRider, ponyCart, eagle];
 
 // ── Buildings (capital curve K = 720). Hall 700; longhouse 200 → smithy 460 / ram pen 560.
 export const buildings: ClanBuilding[] = [
@@ -170,6 +224,10 @@ export const buildings: ClanBuilding[] = [
     id: 'woodland-lodge', name: 'Woodland Lodge', description: 'A woodcutters\' lodge: fells faster nearby and keeps planting trees from its own timber.',
     size: 2, materials: 150, gatherBoost: { radius: 7, resources: ['wood'] },
     sow: { mechanism: 50, radius: 6, resources: ['wood'], maxPlants: { wood: 12 } }, model: models.woodlandLodge,
+  },
+  {
+    id: 'eyrie', name: 'Eyrie', description: 'A crag of stacked stone crowned with a great stick nest, where war-eagles are hatched and hooded.',
+    size: 2, materials: 200, requires: ['longhouse'], trains: ['eagle'], model: models.eyrie,
   },
   {
     id: 'stone-tower', name: 'Stone Tower', description: 'A tall dry-stone tower with a throwing arm on the roof: heavier shots, from higher up.',

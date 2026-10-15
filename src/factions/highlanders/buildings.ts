@@ -124,3 +124,23 @@ export function clanWantFlag(b: ModelBuilder): void {
   b.sphere([0.12, 0.2, 0.1], [0, 0.82, -0.45], { color: '#b8a070', tex: 'cloth' }); // slack, empty sack
   b.sphere([0.07, 0.04, 0.06], [0, 1.0, -0.45], { color: '#b8a070', tex: 'cloth' });
 }
+
+/** A crag of stacked stone crowned with a great nest of sticks, a perch pole and a banner. */
+export function eyrie(b: ModelBuilder): void {
+  b.box([3.6, 0.12, 3.6], [0, 0.06, 0], ROUGH);
+  b.rock([1.3, 1.0, 1.2], [0.1, 0.8, 0], ROUGH, 3);
+  b.rock([0.9, 1.4, 0.9], [-0.2, 1.6, 0.1], STONE, 5);
+  b.rock([0.7, 0.6, 0.8], [0.8, 0.5, -0.7], ROUGH, 7);
+  // the nest: a ring of tangled sticks on the crag's top
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    b.limb([Math.cos(a) * 0.55 - 0.2, 2.75, Math.sin(a) * 0.55], [Math.cos(a + 0.9) * 0.6 - 0.2, 2.9, Math.sin(a + 0.9) * 0.6], 0.045, BEAM);
+  }
+  b.cylinder(0.5, 0.35, 0.18, [-0.2, 2.8, 0], { color: '#6a5034', tex: 'thatch' }, undefined, 12);
+  for (const [x, z] of [[-0.3, 0.1], [-0.1, -0.12]]) b.sphere([0.09, 0.11, 0.09], [x, 2.95, z], { color: '#e8e0cc' }); // eggs
+  b.limb([1.2, 0.1, 1.0], [1.2, 2.2, 1.0], 0.05, BEAM); // perch pole
+  b.limb([0.95, 2.1, 1.0], [1.45, 2.1, 1.0], 0.04, BEAM);
+  b.cylinder(0.03, 0.035, 1.6, [-1.3, 0.85, 1.2], BEAM, undefined, 8);
+  b.box([0.04, 0.45, 0.55], [-1.3, 1.45, 1.47], BANNER);
+}
+

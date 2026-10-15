@@ -122,6 +122,13 @@ export class Renderer {
 
   /** Whose fog of war to show; -1 (spectating) shows everything. */
   viewer = -1;
+  /** How far each flier is off the ground (0 landed … 1 at flying height), eased. */
+  private alt = new Map<number, number>();
+  private dt = 0;
+  /** Screen px a flier is drawn above the ground at full height (zoom 1). */
+  static readonly FLY_PX = 56;
+  /** Px above the ground unit `id` is drawn at (zoom 1). */
+  lift(id: number): number { return (this.alt.get(id) ?? 0) * Renderer.FLY_PX; }
   private fog: { canvas: HTMLCanvasElement; img: ImageData; tex: Texture; sprite: PixiSprite; tick: number } | null = null;
 
   /** Can the viewer see this spot right now? (Their own things always.) */
@@ -253,6 +260,7 @@ export class Renderer {
 
   draw(alpha: number, dt: number, rs: RenderState): void {
     this.time += dt;
+    this.dt = dt;
     const { cam } = this;
     const z = cam.zoom;
     this.worldLayer.scale.set(z);
@@ -352,8 +360,13 @@ export class Renderer {
         this.unitSprites.set(u.id, sp);
       }
       const x = u.px + (u.x - u.px) * alpha, y = u.py + (u.y - u.py) * alpha;
-      sp.position.set(isoX(x, y), isoY(x, y));
-      sp.zIndex = x + y;
+      // fliers (sim/abilities/flight.ts) rise on take-off and settle on landing
+      if (u.stats.flight) {
+        const a0 = this.alt.get(u.id) ?? 0;
+        this.alt.set(u.id, a0 + ((u.airborne ? 1 : 0) - a0) * Math.min(1, this.dt * 4));
+      }
+      sp.position.set(isoX(x, y), isoY(x, y) - this.lift(u.id));
+      sp.zIndex = x + y + (u.airborne ? 2 : 0);
       const art = this.bank.unit(u.owner, u.specId);
       if (art) {
         const f = unitFrame(u);
@@ -364,7 +377,7 @@ export class Renderer {
       sp.tint = disarmed ? 0x707070 : 0xffffff;
       sp.visible = this.seen(u.owner, u.x, u.y); // fog of war
     }
-    for (const [id, sp] of this.unitSprites) if (!this.world.units.has(id)) { sp.destroy(); this.unitSprites.delete(id); }
+    for (const [id, sp] of this.unitSprites) if (!this.world.units.has(id)) { sp.destroy(); this.unitSprites.delete(id); this.alt.delete(id); }
   }
 
   private syncProjectiles(alpha: number): void {
@@ -496,6 +509,14 @@ export class Renderer {
         this.ghostSprite.visible = true;
       }
     } else if (this.ghostSprite) this.ghostSprite.visible = false;
+    // fliers' shadows on the ground below them
+    for (const u of w.units.values()) {
+      const lift = this.lift(u.id);
+      if (lift < 2 || !this.seen(u.owner, u.x, u.y)) continue;
+      const x = u.px + (u.x - u.px) * alpha, y = u.py + (u.y - u.py) * alpha;
+      const r = u.stats.radius * 40 * (1 - lift / Renderer.FLY_PX * 0.3);
+      ellipse(this.discTex, isoX(x, y), isoY(x, y), r, r * 0.5, 0x000000, 0.3);
+    }
     P.end();
     // rally flag
     if (rally) {
@@ -533,7 +554,7 @@ export class Renderer {
       const x = u.px + (u.x - u.px) * alpha, y = u.py + (u.y - u.py) * alpha;
       const [sx, sy] = cam.toScreen(x, y);
       if (sx < -50 || sy < -50 || sx > cam.width + 50 || sy > cam.height + 200) continue;
-      let top = sy - ((this.bank.unit(u.owner, u.specId)?.height ?? 40) + 8) * cam.zoom;
+      let top = sy - ((this.bank.unit(u.owner, u.specId)?.height ?? 40) + 8 + this.lift(u.id)) * cam.zoom;
       const w = Math.max(20, 24 * Math.cbrt(u.stats.mass / 70)) * Math.min(1.3, cam.zoom);
       const f = u.hp / u.stats.maxHp;
       bar(sx - w / 2, top, w, 3, f, f > 0.5 ? 0x3fcf4a : f > 0.25 ? 0xe8c547 : 0xd9352b);
@@ -633,7 +654,8 @@ export class Renderer {
     for (const u of world.units.values()) {
       if (!this.seen(u.owner, u.x, u.y)) continue;
       const x = u.px + (u.x - u.px) * alpha, y = u.py + (u.y - u.py) * alpha;
-      const [ux, uy] = cam.toScreen(x, y);
+      const [ux, uy0] = cam.toScreen(x, y);
+      const uy = uy0 - this.lift(u.id) * cam.zoom; // fliers are up in the air
       const h = (this.bank.unit(u.owner, u.specId)?.height ?? 40) * cam.zoom;
       const w = Math.max(10, Math.min(h * 0.45, 40 * cam.zoom));
       if (Math.abs(sx - ux) >= w || sy >= uy + 6 || sy <= uy - h - 4) continue;

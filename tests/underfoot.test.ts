@@ -14,7 +14,7 @@ describe('underfoot', () => {
     const w = fresh();
     const tc = w.baseOf(0)!;
     const y = tc.oy + 5;
-    const time = (withRoad: boolean) => {
+    const time = () => {
       const v = w.unitsOf(0).find((u) => u.specId === 'villager')!;
       v.x = v.px = tc.ox + 1.5; v.y = v.py = y + 0.5; v.order = { kind: 'idle' }; v.path = [];
       w.enqueue({ player: 0, cmd: { type: 'move', units: [v.id], x: tc.ox + 9.5, y: y + 0.5 } });
@@ -22,10 +22,10 @@ describe('underfoot', () => {
       while (Math.abs(v.x - (tc.ox + 9.5)) > 0.3 && t < 400) { w.step(); t++; }
       return t;
     };
-    const plain = time(false);
+    const plain = time();
     for (let x = tc.ox; x < tc.ox + 11; x++) w.addBuilding(0, 'road', x, y);
     expect(w.grid.isBlocked(tc.ox + 3.5, y + 0.5)).toBe(false);
-    const paved = time(true);
+    const paved = time();
     expect(paved).toBeLessThan(plain * 0.8);
   });
 

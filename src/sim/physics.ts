@@ -95,6 +95,8 @@ export interface DerivedStats {
   wheeled: boolean;
   /** Bounding gait, if any (see UnitSpec.gait). */
   gait?: { hop: number; period: number };
+  /** Can fly (see UnitSpec.flight, sim/abilities/flight.ts). */
+  flight: boolean;
   /** kg. Shared by weapon crystal, ammo, and cargo. */
   carryCapacity: number;
   /** kg of crystal the unit keeps as its loadout (weapon or ammo). */
@@ -222,7 +224,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   return {
     improvised,
     mass, physique, muscleMass, frameMass, reserveMass,
-    maxHp, maxCalories, speed, canAttack, wheeled, gait: deriveGait(spec), carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, sight,
+    maxHp, maxCalories, speed, canAttack, wheeled, gait: deriveGait(spec), flight: !!spec.flight, carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, sight,
     limbSpeed, maxAttackEnergy, crystalVelocity, attackEnergy, damage, attackCalories, cooldown, range,
     dps: damage / cooldown,
     gatherRate,

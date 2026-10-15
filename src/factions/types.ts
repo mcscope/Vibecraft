@@ -52,6 +52,8 @@ export interface UnitSpec {
    * airborne from (1 − hop) × ⅔ to that plus hop.
    */
   gait?: { hop: number; period?: number };
+  /** It flies: takes off to move, straight over everything; burns calories aloft (∝ mass²); lands when it stops. Melee fliers land to strike. */
+  flight?: boolean;
   /** Can this unit harvest resource nodes? Default true. */
   canGather?: boolean;
   /** Training dummy: never moves, eats or fights. Only for scenarios. */

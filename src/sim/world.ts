@@ -12,6 +12,7 @@ import { Logistics } from './logistics';
 import * as bearerAbility from './abilities/bearer';
 import { midStride, strideFactor } from './abilities/gait';
 import { nearestDropOff } from './abilities/dropoff';
+import { canReach, FLY_SIGHT, flyTo, heightBonus, takeOff, tickFlight } from './abilities/flight';
 import { isUnderfoot, loadBelt, nearestBelt, roadFactor, routeBelts, runBelts, type BeltRoutes, type Parcel } from './abilities/underfoot';
 import { grow, grownEnough, livingStats, seedMaterials } from './abilities/living';
 import {
@@ -131,6 +132,8 @@ export interface Unit {
   stuck: number; // ticks of little progress toward the current goal
   /** Bounding gait: how far through its stride (0..1), and the last tick it was moving. */
   stride: number; strideTick: number;
+  /** A flier in the air (sim/abilities/flight.ts). */
+  airborne: boolean;
   /** Training dummy: inert target. */
   dummy: boolean;
   /** Wildlife temper (wild units only). */
@@ -768,7 +771,7 @@ export class World {
       food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
       order: { kind: 'idle' }, resume: null, engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
-      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1,
+      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false,
       dummy: !!spec.dummy,
       carter: spec.role === 'carter',
       gatherAcc: 0,
@@ -859,7 +862,7 @@ export class World {
         if ((tx + 0.5 - x) ** 2 + (ty + 0.5 - y) ** 2 <= r * r) v[ty * W + tx] = 2;
       }
     };
-    for (const u of this.units.values()) stamp(u.owner, u.x, u.y, u.stats.sight);
+    for (const u of this.units.values()) stamp(u.owner, u.x, u.y, u.stats.sight + (u.airborne ? FLY_SIGHT : 0));
     for (const b of this.buildings.values()) {
       const r = Math.max(b.size / 2 + BUILDING_SIGHT, b.complete && b.stats.tower ? b.stats.tower.range + 1 : 0);
       stamp(b.owner, b.ox + b.size / 2, b.oy + b.size / 2, r);
@@ -1018,6 +1021,7 @@ export class World {
 
     let anim: UnitAnim = 'idle';
     const moved = this.runOrder(u) || midStride(u, this.tick); // a hopper crouching between bounds is still on its way
+    tickFlight(this, u, moved, DT);
     if (moved) anim = 'walk';
     if (u.swing > 0) anim = 'attack';
     else if (((u.order.kind === 'gather' && u.order.phase === 'harvest') || (u.order.kind === 'build' && u.order.phase === 'chop')) && !moved && u.busy) anim = 'gather';
@@ -1203,6 +1207,8 @@ export class World {
       if (open) this.moveTo(u, open[0], open[1], 0.1);
       return true;
     }
+    if (tu && !canReach(u, tu)) return false; // a flier in the air: only thrown crystals reach it
+    if (u.airborne && !wpn.throws) u.airborne = false; // a melee flier lands to strike
     this.face(u, tx - u.x, ty - u.y);
     if (u.cooldown > 0 || u.exhausted) return true;
     if (u.cal < wpn.attackCalories) { u.exhausted = true; return true; }
@@ -1218,7 +1224,7 @@ export class World {
       if (tu) { ax += ((tu.x - tu.px) / DT) * flight; ay += ((tu.y - tu.py) / DT) * flight; } // lead the target
       const p: Projectile = {
         id: this.nextId++, owner: u.owner, sx: u.x, sy: u.y, sz: 0, tx: ax, ty: ay, t: 0, duration: flight,
-        damage: u.stats.damage, crystalKg: u.crystalMass, target: targetId,
+        damage: u.stats.damage + heightBonus(u), crystalKg: u.crystalMass, target: targetId,
       };
       this.projectiles.set(p.id, p);
     } else {
@@ -1261,7 +1267,7 @@ export class World {
   private nearestEnemy(u: Unit, radius: number, includeDummies: boolean): number {
     let best = 0, bestD = radius * radius;
     for (const e of this.units.values()) {
-      if (e.owner === u.owner || (e.dummy && !includeDummies)) continue;
+      if (e.owner === u.owner || (e.dummy && !includeDummies) || !canReach(u, e)) continue;
       // animals: only on an explicit attack-move, or when one is attacking one of ours (defend, don't hunt)
       if (e.wild && !includeDummies && !(e.engage && this.units.get(e.engage)?.owner === u.owner)) continue;
       const d = (e.x - u.x) ** 2 + (e.y - u.y) ** 2;
@@ -1588,6 +1594,10 @@ export class World {
   moveTo(u: Unit, gx: number, gy: number, arrive: number): boolean {
     const dx = gx - u.x, dy = gy - u.y;
     if (dx * dx + dy * dy <= arrive * arrive) { u.path = []; return true; }
+    if (u.stats.flight) {
+      takeOff(u);
+      if (u.airborne) return flyTo(u, gx, gy, arrive, loadedSpeed(u.stats, this.packLoad(u)), DT, (fx, fy) => this.face(u, fx, fy));
+    }
     if ((gx - u.goalX) ** 2 + (gy - u.goalY) ** 2 > 0.6 || (u.path.length === 0 && u.repathIn === 0)) {
       u.goalX = gx; u.goalY = gy;
       if (this.grid.lineClear(u.x, u.y, gx, gy)) u.path = [[gx, gy]];
@@ -1695,6 +1705,7 @@ export class World {
       const a = arr[i];
       for (let j = i + 1; j < arr.length; j++) {
         const b = arr[j];
+        if (a.airborne || b.airborne) continue; // fliers pass overhead
         const dx = b.x - a.x, dy = b.y - a.y;
         const r = a.stats.radius + b.stats.radius;
         const d2 = dx * dx + dy * dy;
