@@ -2,6 +2,8 @@ import { defineConfig } from 'vite';
 import { resolve } from 'node:path';
 
 export default defineConfig({
+  // relative asset paths, so the build works from any URL prefix (e.g. mcscope.com/game/vibecraft/)
+  base: './',
   // each checkout keeps its own pre-bundled deps (two dev servers sharing
   // node_modules/.vite can serve mismatched copies of a library)
   cacheDir: resolve(__dirname, '.vite'),
