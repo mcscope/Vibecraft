@@ -24,12 +24,13 @@ URL shortcuts: `?mode=skirmish&you=fenfolk&foe=meadowfolk&seed=5`.
 
 ## Make your own army
 
-1. **Copy a faction.** Copy `src/factions/fenfolk/` (or `meadowfolk/`) to `src/factions/<yours>/`. Give it a new `id` and `name`, and rename its units and buildings.
-2. **Register it.** Add it to `PLAYABLE` in `src/factions/index.ts`, and add it to the Codex in `src/codex.ts`.
-3. **Shape the bodies.** A unit is `mass`, `physique: { muscle, frame, reserve }`, and optionally `attack: { style: 'strike' | 'throw', crystalMass, ammo }`. Change these and watch the Codex or Unit Lab update. `refinement` makes a unit cheaper to train, and techs raise it.
-4. **Draw them.** Each unit and building has a `model(builder, pose)` built from primitives (boxes, spheres, limbs, joints). The game bakes models into lit isometric sprites on your machine. Copy an existing model to get started.
-5. **Bring your land.** `homeworld.ts` sets the look of your half of the map: ground, trees, bushes and deposits. `wildlife.ts` lists the animals that roam it.
-6. **Play it.** Run a skirmish against the built-in AI. The AI is generic: it reads your buildings and what they train.
+1. **Brainstorm a concept.** Before any code, decide who your people are: where they live, what they eat, how they fight, what makes them strange. Frog-folk of the fens? Clockwork monks? A hive that grows its buildings? Pick a theme, a playstyle and one or two signature ideas, and skim [DESIGN_SPACE.md](DESIGN_SPACE.md) for abilities nobody has used yet. A clear concept makes every later choice easier: body shapes, buildings, art and land.
+2. **Copy a faction.** Copy `src/factions/fenfolk/` (or `meadowfolk/`) to `src/factions/<yours>/`. Give it a new `id` and `name`, and rename its units and buildings.
+3. **Register it.** Add it to `PLAYABLE` in `src/factions/index.ts`, and add it to the Codex in `src/codex.ts`.
+4. **Shape the bodies.** A unit is `mass`, `physique: { muscle, frame, reserve }`, and optionally `attack: { style: 'strike' | 'throw', crystalMass, ammo }`. Change these and watch the Codex or Unit Lab update. `refinement` makes a unit cheaper to train, and techs raise it.
+5. **Draw them.** Each unit and building has a `model(builder, pose)` built from primitives (boxes, spheres, limbs, joints). The game bakes models into lit isometric sprites on your machine. Copy an existing model to get started.
+6. **Bring your land.** `homeworld.ts` sets the look of your half of the map: ground, trees, bushes and deposits. `wildlife.ts` lists the animals that roam it.
+7. **Play it.** Run a skirmish against the built-in AI. The AI is generic: it reads your buildings and what they train.
 
 Rules of the road:
 - **A faction is self-contained.** Never import another faction's files. Shared helpers live in `src/kits/` and `src/biomes/`.
