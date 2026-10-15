@@ -6,6 +6,7 @@ import type { FactionSpec, ResourceKind } from '../factions/types';
 import { prerequisites } from '../sim/physics';
 import type { Command } from '../sim/commands';
 import { TICK_RATE, type Building, type Unit, type World } from '../sim/world';
+import { isWall } from '../sim/abilities/wall';
 
 export class SkirmishAI {
   private waveSize = 6;
@@ -23,7 +24,7 @@ export class SkirmishAI {
     const tier = (b: NonNullable<FactionSpec['buildings']>[number]) => prerequisites(b, f).length;
     const producer = (b: NonNullable<FactionSpec['buildings']>[number]) => (b.trains?.length || b.researches?.length ? 0 : 1);
     return (f.buildings ?? [])
-      .filter((b) => !b.unbuildable && !b.wall)
+      .filter((b) => !b.unbuildable && !isWall(b))
       .sort((a, b) => producer(a) - producer(b) || tier(a) - tier(b) || a.materials - b.materials || (a.id < b.id ? -1 : 1))
       .map((b, i) => [b.id, 7 + 2 * i]);
   }

@@ -8,6 +8,7 @@ import type {
 } from '../art/contract';
 import type { FactionSpec, WildSpec } from '../factions/types';
 import { validateFaction } from '../sim/physics';
+import { validateBuildingAbilities, validateUnitAbilities } from '../sim/abilities';
 
 export interface PackedSprite { i: number; sx: number; sy: number; sw: number; sh: number; ax: number; ay: number; q: number }
 interface PackedAnim { frames: PackedSprite[][]; fps?: number }
@@ -126,8 +127,7 @@ export function checkSpec(s: unknown): string[] {
     if (!isNum(u.mass) || !u.physique || !isNum(u.physique.muscle) || !isNum(u.physique.frame) || !isNum(u.physique.reserve)) e.push(`${where}: bad body`);
     if (u.attack && (!['strike', 'throw'].includes(u.attack.style) || !isNum(u.attack.crystalMass) || (u.attack.ammo !== undefined && !isNum(u.attack.ammo)))) e.push(`${where}: bad attack`);
     for (const k of ['refinement', 'workRefinement'] as const) if (u[k] !== undefined && !isNum(u[k])) e.push(`${where}: bad ${k}`);
-    if (u.gait !== undefined && (!isNum(u.gait.hop) || (u.gait.period !== undefined && !isNum(u.gait.period)))) e.push(`${where}: bad gait`);
-    if (u.bearer !== undefined && (!isNum(u.bearer.radius) || u.bearer.radius <= 0 || u.bearer.radius > 12)) e.push(`${where}: bad bearer radius`);
+    e.push(...validateUnitAbilities(u as FactionData['units'][number], where)); // sim/abilities
   };
   f.units.forEach((u, i) => unit(u, `unit ${i}`));
   (f.wildlife ?? []).forEach((w, i) => {
@@ -138,6 +138,7 @@ export function checkSpec(s: unknown): string[] {
     if (!isId(b.id) || !isStr(b.name, 60) || !isNum(b.size) || b.size < 1 || b.size > 8 || !isNum(b.materials) || b.materials < 0) e.push(`building ${i}: bad id/size/materials`);
     for (const k of ['trains', 'researches', 'requires'] as const) if (b[k] !== undefined && (!Array.isArray(b[k]) || !b[k]!.every(isId))) e.push(`building ${i}: bad ${k}`);
     if (b.attack && (!isNum(b.attack.mechanism) || !isNum(b.attack.crystalMass) || !isNum(b.attack.height))) e.push(`building ${i}: bad attack`);
+    e.push(...validateBuildingAbilities(b, `building ${i}`)); // sim/abilities
   }
   for (const [i, t] of (f.techs ?? []).entries()) if (!isId(t.id) || !isId(t.unit) || !isNum(t.refinement) || t.refinement <= 0 || t.refinement > 5) e.push(`tech ${i}: bad`);
   if (e.length) return e;

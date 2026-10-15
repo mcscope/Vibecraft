@@ -262,7 +262,7 @@ export class Input {
       this.ping(wx, wy, '#ffd23f');
     } else if (tu && tu.owner === this.player && !this.rs.selected.has(tu.id)) {
       // an ammo bearer: throwers restock from it; anyone else gives it what they carry
-      const isBearer = !!w.specOf(tu.owner, tu.specId)?.spec.bearer;
+      const isBearer = w.isBearer(tu); // sim/abilities/bearer.ts
       const throwers = isBearer ? units.filter((id) => w.units.get(id)?.throws) : [];
       if (throwers.length) this.issue({ type: 'rearm', units: throwers, bearer: tu.id });
       const others = units.filter((id) => !throwers.includes(id));

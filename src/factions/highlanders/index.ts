@@ -7,7 +7,7 @@
 // Self-contained: imports only the engine's types and kits, never another faction.
 import type { BuildingSpec, FactionSpec, TechSpec, UnitSpec } from '../types';
 import type { BuildingModel, Mat, UnitModel } from '../../kits/bake3d/types';
-import { frostWildlife } from '../../biomes/meadow/wildlife';
+import { highlandWildlife } from './wildlife';
 import { armFor, burden, clansman, fourLegs, type ClanLook } from './rig';
 import * as models from './buildings';
 
@@ -198,6 +198,6 @@ export const highlanders: FactionSpec = {
   resourceNames: { food: 'Oats', wood: 'Timber', crystal: 'Crystal' },
   art: (team, onProgress) => import('./art').then((m) => m.bakeArt(team, onProgress)),
   // our half of the map: a frost meadow with elk and bears
-  biome: (onProgress) => import('../../biomes/meadow').then((m) => m.bakeMeadow(onProgress, 'frost')),
-  wildlife: frostWildlife,
+  biome: (onProgress) => import('./homeworld').then((m) => m.bakeHomeworld(onProgress)),
+  wildlife: highlandWildlife,
 };

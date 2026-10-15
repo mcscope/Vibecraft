@@ -11,7 +11,7 @@
 // Self-contained: only engine types and kits, never another faction.
 import type { BuildingSpec, FactionSpec, TechSpec, UnitSpec } from '../types';
 import type { BuildingModel, Mat, UnitModel } from '../../kits/bake3d/types';
-import { fenWildlife } from '../../biomes/meadow/wildlife';
+import { fenWildlife } from './wildlife';
 import { fenArm, fenLoad, fenling as body, type FenLook } from './rig';
 import * as models from './buildings';
 
@@ -259,6 +259,6 @@ export const fenfolk: FactionSpec = {
   resourceNames: { food: 'Roots', wood: 'Reeds', crystal: 'Crystal' },
   art: (team, onProgress) => import('./art').then((m) => m.bakeArt(team, onProgress)),
   // our half of the map: a murky fen, with herons and bog lurkers
-  biome: (onProgress) => import('../../biomes/meadow').then((m) => m.bakeMeadow(onProgress, 'fen')),
+  biome: (onProgress) => import('./homeworld').then((m) => m.bakeHomeworld(onProgress)),
   wildlife: fenWildlife,
 };

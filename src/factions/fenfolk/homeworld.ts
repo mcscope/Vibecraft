@@ -2,6 +2,9 @@
 // root clumps in wet mud (roots), crystals breaking out of a peat mound, and
 // bog clutter. Model units: 1 tile = 2 units; origin = centre of the footprint.
 import type { Mat, ModelBuilder, Vec3 } from '../../kits/bake3d/types';
+import type { BiomeArt } from '../../art/contract';
+import { bakeBiome } from '../../biomes/bake';
+import { fenWildlife } from './wildlife';
 
 const MUD: Mat = { color: '#3e3326', tex: 'stone', rough: 0.6 };
 const WET: Mat = { color: '#3a4a40', rough: 0.15 };
@@ -196,3 +199,11 @@ export const DOODADS = {
     (b: ModelBuilder) => toadstools(b, 1), (b: ModelBuilder) => lilies(b, 3), (b: ModelBuilder) => mossyLog(b, 0), (b: ModelBuilder) => mossyLog(b, 1),
   ],
 };
+
+/** The ground of this homeworld's half of the map. */
+export const GROUND: NonNullable<BiomeArt['ground']> = { grass: ['#5a5e32', '#6a6a3a', '#4a4e2a'], dirt: ['#4a3e2a', '#3a3022'], forest: '#3a3e22', sand: '#7a6e4a', shallow: '#4a5e4e', deep: '#2a3a32' };
+
+/** Bake this homeworld's map art (loaded only when art is needed). */
+export function bakeHomeworld(onProgress?: (f: number, label: string) => void): Promise<BiomeArt> {
+  return bakeBiome({ tree, bush, mine, DOODADS }, GROUND, fenWildlife, onProgress);
+}

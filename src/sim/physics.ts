@@ -18,6 +18,7 @@
 // costs food. You cannot make a 10k-damage unit that costs 1 food.
 
 import type { BuildingSpec, FactionSpec, Physique, TechSpec, UnitSpec } from '../factions/types';
+import { deriveGait } from './abilities/gait';
 
 export const LIMITS = {
   minMass: 15,
@@ -221,7 +222,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   return {
     improvised,
     mass, physique, muscleMass, frameMass, reserveMass,
-    maxHp, maxCalories, speed, canAttack, wheeled, gait: spec.gait && { hop: Math.min(0.95, Math.max(0.3, spec.gait.hop)), period: Math.min(3, Math.max(0.3, spec.gait.period ?? 1)) }, carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, sight,
+    maxHp, maxCalories, speed, canAttack, wheeled, gait: deriveGait(spec), carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, sight,
     limbSpeed, maxAttackEnergy, crystalVelocity, attackEnergy, damage, attackCalories, cooldown, range,
     dps: damage / cooldown,
     gatherRate,

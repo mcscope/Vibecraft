@@ -9,6 +9,8 @@ import type { Grid } from './map';
 import { skirmish, type Scenario } from './scenarios';
 import { findPath } from './pathfinding';
 import { Logistics } from './logistics';
+import * as bearerAbility from './abilities/bearer';
+import { midStride, strideFactor } from './abilities/gait';
 import {
   derive, deriveBuilding, loadedSpeed, CAP, K, techCost, techGate, techTime,
   type BuildingStats, type DerivedStats,
@@ -523,7 +525,7 @@ export class World {
           else back = { kind: 'move', x: u.x, y: u.y };
           if (back.kind === 'gather') back = { ...back, phase: 'toNode' };
           // a thrower restocks from a friendly ammo bearer if one is nearer than the building
-          const bearer = u.throws ? this.nearestBearer(u) : null;
+          const bearer = u.throws ? bearerAbility.nearestBearer(this, u) : null;
           const toB = bearer ? (bearer.x - u.x) ** 2 + (bearer.y - u.y) ** 2 : Infinity;
           const toBuilding = (b.ox + b.size / 2 - u.x) ** 2 + (b.oy + b.size / 2 - u.y) ** 2;
           set([u], bearer && toB < toBuilding ? { kind: 'rearm', unit: bearer.id } : { kind: 'resupply', building: b.id });
@@ -533,7 +535,7 @@ export class World {
       }
       case 'rearm': {
         const bearer = this.units.get(cmd.bearer);
-        if (!bearer || bearer.owner !== player || !this.specOf(player, bearer.specId)?.spec.bearer) return;
+        if (!bearer || bearer.owner !== player || !this.isBearer(bearer)) return;
         for (const u of mine(cmd.units)) {
           if (!u.throws || u === bearer) continue;
           const prev = u.order;
@@ -989,7 +991,7 @@ export class World {
     if (u.crystal > 0 && u.ammo < st.loadoutCrystal) { const k = Math.min(u.crystal, st.loadoutCrystal - u.ammo); u.crystal -= k; u.ammo += k; }
 
     let anim: UnitAnim = 'idle';
-    const moved = this.runOrder(u) || u.strideTick === this.tick; // a hopper crouching between bounds is still on its way
+    const moved = this.runOrder(u) || midStride(u, this.tick); // a hopper crouching between bounds is still on its way
     if (moved) anim = 'walk';
     if (u.swing > 0) anim = 'attack';
     else if (((u.order.kind === 'gather' && u.order.phase === 'harvest') || (u.order.kind === 'build' && u.order.phase === 'chop')) && !moved && u.busy) anim = 'gather';
@@ -1014,7 +1016,7 @@ export class World {
       case 'wild': return this.runWild(u, o);
       case 'hunt': return this.runHunt(u, o);
       case 'muster': return this.runMuster(u, o.building);
-      case 'rearm': return this.runRearm(u, o.unit);
+      case 'rearm': return bearerAbility.runRearm(this, u, o.unit);
       case 'move': {
         if (this.moveTo(u, o.x, o.y, 0.3)) { this.finish(u); }
         return u.x !== u.px || u.y !== u.py;
@@ -1067,12 +1069,7 @@ export class World {
   private runIdle(u: Unit): boolean {
     if (u.carter) { if ((this.tick + u.id) % 40 === 0) this.logistics.autoAssignCart(u); return false; }
     if (this.runEngage(u)) return u.x !== u.px || u.y !== u.py;
-    // Throwers with an empty sling look for spent crystals nearby.
-    // idle bearers sweep up spent crystals nearby
-    if ((this.tick + u.id) % 20 === 0 && this.freeCapacity(u) >= 0.5 && this.isBearer(u)) {
-      const shard = this.nearestNode(u, 'crystal', u.stats.sight, true);
-      if (shard) { u.order = { kind: 'gather', node: shard.id, nodeType: 'crystal', phase: 'toNode', stopWhenArmed: false }; return false; }
-    }
+    if (bearerAbility.sweep(this, u)) return false; // idle bearers sweep up spent crystals nearby
     // idle throwers top their packs up from spent crystals (or a bearer) nearby, not just when empty
     if (u.throws && u.ammo < u.stats.loadoutCrystal - 1e-6 && (this.tick + u.id) % 20 === 0) this.seekAmmo(u, false);
     return false;
@@ -1337,49 +1334,22 @@ export class World {
     return u.x !== u.px || u.y !== u.py;
   }
 
-  /** An ammo bearer: a walking crystal pile (see UnitSpec.bearer). */
-  isBearer(u: Unit): boolean { return !!this.specOf(u.owner, u.specId)?.spec.bearer; }
+  /** An ammo bearer: a walking crystal pile (see sim/abilities/bearer.ts). */
+  isBearer(u: Unit): boolean { return bearerAbility.isBearer(this, u); }
 
   /** Can this unit gather `r` (any resource if omitted)? Ammo bearers gather crystal only, and keep it. */
-  gathers(u: Unit, r?: ResourceKind): boolean {
-    if (u.stats.gatherRate <= 0) return false;
-    return !this.isBearer(u) || r === 'crystal';
-  }
-
-  /** The nearest friendly ammo bearer with a crystal to spare, within reach of a thrower. */
-  private nearestBearer(u: Unit): Unit | null {
-    let best: Unit | null = null, bestD = Infinity;
-    for (const b of this.units.values()) {
-      if (b.owner !== u.owner || b === u || b.crystal < Math.min(u.crystalMass, u.stats.loadoutCrystal - u.ammo) - 1e-6) continue;
-      const spec = this.specOf(b.owner, b.specId)?.spec.bearer;
-      if (!spec) continue;
-      const d = (b.x - u.x) ** 2 + (b.y - u.y) ** 2;
-      if (d <= (u.stats.sight + spec.radius) ** 2 && d < bestD) { bestD = d; best = b; }
-    }
-    return best;
-  }
+  gathers(u: Unit, r?: ResourceKind): boolean { return bearerAbility.gathers(this, u, r); }
 
   /** A dry thrower's nearest crystal: a spent one on the ground, or a bearer to take from. Sets a detour/order; false if none. */
   private seekAmmo(u: Unit, detour: boolean): boolean {
     const shard = this.nearestNode(u, 'crystal', u.stats.sight, true);
-    const bearer = this.nearestBearer(u);
+    const bearer = bearerAbility.nearestBearer(this, u);
     const ds = shard ? (shard.x - u.x) ** 2 + (shard.y - u.y) ** 2 : Infinity;
     const db = bearer ? (bearer.x - u.x) ** 2 + (bearer.y - u.y) ** 2 : Infinity;
     if (ds === Infinity && db === Infinity) return false;
     const order: Order = db < ds ? { kind: 'rearm', unit: bearer!.id } : { kind: 'gather', node: shard!.id, nodeType: 'crystal', phase: 'toNode', stopWhenArmed: true };
     if (detour) this.detour(u, order); else u.order = order;
     return true;
-  }
-
-  /** Walk to an ammo bearer and take a load from it. */
-  private runRearm(u: Unit, bearerId: number): boolean {
-    const b = this.units.get(bearerId);
-    if (!b || b.owner !== u.owner || b.crystal < 1e-6 || u.ammo >= u.stats.loadoutCrystal - 1e-6) { this.finish(u); return false; }
-    if (!this.moveTo(u, b.x, b.y, u.stats.radius + b.stats.radius + 0.5)) return u.x !== u.px || u.y !== u.py;
-    const k = Math.min(u.stats.loadoutCrystal - u.ammo, b.crystal);
-    b.crystal -= k; u.ammo += k;
-    this.finish(u);
-    return false;
   }
 
   /** Take a crystal from a building to fight with (town bell, or a worker sent to attack). */
@@ -1402,15 +1372,11 @@ export class World {
     const b = this.buildings.get(buildingId);
     if (!b || b.owner !== u.owner || !b.complete) { this.finish(u); return false; }
     if (!this.moveToBuilding(u, b)) return u.x !== u.px || u.y !== u.py;
-    this.deposit(u, b, this.specOf(u.owner, u.specId)?.spec.bearer ? ['food', 'wood'] : undefined); // a bearer keeps its crystal
+    this.deposit(u, b, bearerAbility.depositKinds(this, u)); // a bearer keeps its crystal
     // Restock loadout crystal from this building's stock.
     const need = Math.min(Math.max(0, u.stats.loadoutCrystal - u.ammo), b.stock.crystal);
     if (need > 0) { u.ammo += need; b.stock.crystal -= need; }
-    // ammo bearers fill their cargo with crystal to hand out
-    if (this.specOf(u.owner, u.specId)?.spec.bearer) {
-      const k = Math.floor(Math.min(this.freeCapacity(u), b.stock.crystal));
-      if (k > 0) { u.crystal += k; b.stock.crystal -= k; }
-    }
+    bearerAbility.loadUp(this, u, b); // ammo bearers fill their cargo with crystal to hand out
     if (!this.eat(u, b)) this.finish(u);
     return false;
   }
@@ -1534,7 +1500,8 @@ export class World {
   }
 
   /** Carts: load at the pool's building, take it where it's most needed, repeat. */
-  private nearestNode(u: Unit, type: ResourceKind, radius: number, shardsOnly: boolean, exclude?: ResourceNode): ResourceNode | null {
+  /** @internal sim helper, also used by abilities */
+  nearestNode(u: Unit, type: ResourceKind, radius: number, shardsOnly: boolean, exclude?: ResourceNode): ResourceNode | null {
     let best: ResourceNode | null = null, bestD = radius * radius;
     for (const n of this.nodes.values()) {
       if (n.type !== type || n.amount <= 0.001 || n === exclude) continue;
@@ -1575,8 +1542,8 @@ export class World {
     else u.heading = dx > 0 ? (dy > 0 ? 1 : 7) : (dy > 0 ? 3 : 5);
   }
 
-  /** Walk toward (gx,gy). Returns true once within `arrive` of it. */
-  private moveTo(u: Unit, gx: number, gy: number, arrive: number): boolean {
+  /** @internal sim helper, also used by abilities. Walk toward (gx,gy); true once within `arrive`. */
+  moveTo(u: Unit, gx: number, gy: number, arrive: number): boolean {
     const dx = gx - u.x, dy = gy - u.y;
     if (dx * dx + dy * dy <= arrive * arrive) { u.path = []; return true; }
     if ((gx - u.goalX) ** 2 + (gy - u.goalY) ** 2 > 0.6 || (u.path.length === 0 && u.repathIn === 0)) {
@@ -1598,17 +1565,10 @@ export class World {
     let speed = loadedSpeed(st, this.packLoad(u));
     if (u.exhausted) speed *= K.exhaustedSpeedMul;
     let budget = speed * DT;
-    let grounded = false;
-    if (st.gait) {
-      // a bounding gait: still while crouched, faster in the air, same speed on average
-      if (u.strideTick !== this.tick - 1) u.stride = 0; // set off from a crouch
-      u.strideTick = this.tick;
-      u.stride = (u.stride + DT / st.gait.period) % 1;
-      const up = (1 - st.gait.hop) * (2 / 3);
-      grounded = u.stride < up || u.stride >= up + st.gait.hop;
-      budget = grounded ? 0 : budget / st.gait.hop;
-      if (grounded) return false;
-    }
+    // a bounding gait (sim/abilities/gait.ts): still while crouched, faster in the air
+    const stride = strideFactor(u, this.tick, DT);
+    if (stride === 0) return false;
+    budget *= stride;
     while (budget > 0 && u.path.length > 0) {
       const [wx, wy] = u.path[0];
       const ddx = wx - u.x, ddy = wy - u.y;

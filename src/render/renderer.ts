@@ -39,7 +39,7 @@ export function unitFrame(u: Unit): { anim: ArtAnim; time?: number; progress?: n
       const most = Math.max(u.food, u.wood, u.crystal); // what the cargo pack mostly holds
       const anim: ArtAnim = most <= 0.5 ? 'walk' : most === u.food ? 'carryFood' : most === u.wood ? 'carryWood' : 'carryCrystal';
       // a bounding gait plays the walk by stride, in step with the sim; otherwise stride rate follows speed
-      if (u.stats.gait) return { anim, progress: u.stride };
+      if (u.stats.gait) return { anim, progress: u.stride }; // sim/abilities/gait.ts
       return { anim, time: u.animT * Math.max(0.5, u.stats.speed) / 1.7 };
     }
     case 'attack': {
@@ -507,7 +507,7 @@ export class Renderer {
       if (!this.seen(u.owner, u.x, u.y)) continue;
       const sel = rs.selected.has(u.id);
       // your ammo bearers always show how much crystal they have left to hand out
-      const bearer = u.owner === 0 && !!world.specOf(u.owner, u.specId)?.spec.bearer;
+      const bearer = u.owner === 0 && world.isBearer(u); // sim/abilities/bearer.ts
       if (!sel && !bearer && u.hp >= u.stats.maxHp - 0.5 && rs.hoverId !== u.id) continue;
       const x = u.px + (u.x - u.px) * alpha, y = u.py + (u.y - u.py) * alpha;
       const [sx, sy] = cam.toScreen(x, y);

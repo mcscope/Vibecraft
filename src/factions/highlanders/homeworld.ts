@@ -2,6 +2,9 @@
 // crystals breaking out of snow-capped granite, and highland ground clutter.
 // Model units: 1 tile = 2 units; origin = centre of the object's footprint.
 import type { Mat, ModelBuilder } from '../../kits/bake3d/types';
+import type { BiomeArt } from '../../art/contract';
+import { bakeBiome } from '../../biomes/bake';
+import { highlandWildlife } from './wildlife';
 
 const SNOW: Mat = { color: '#ffffff', rough: 1 };
 const BARK: Mat = { color: '#3a2c22', tex: 'wood' };
@@ -157,3 +160,11 @@ export const DOODADS = {
     (b: ModelBuilder) => drift(b, 1), (b: ModelBuilder) => frozenLog(b, 0), (b: ModelBuilder) => frozenLog(b, 1), (b: ModelBuilder) => snowStones(b, 9),
   ],
 };
+
+/** The ground of this homeworld's half of the map. */
+export const GROUND: NonNullable<BiomeArt['ground']> = { grass: ['#b9c4c0', '#cfd8d4', '#9eaba8'], dirt: ['#8a8070', '#6e665a'], forest: '#5e6e66', sand: '#d8d4c8', shallow: '#6a92a8', deep: '#2e5470' };
+
+/** Bake this homeworld's map art (loaded only when art is needed). */
+export function bakeHomeworld(onProgress?: (f: number, label: string) => void): Promise<BiomeArt> {
+  return bakeBiome({ tree, bush, mine, DOODADS }, GROUND, highlandWildlife, onProgress);
+}

@@ -13,6 +13,7 @@ import { capitalFor, CAP, derive, deriveBuilding, K, prerequisites, techCost, te
 import { TEAM_COLORS } from './render/artbank';
 import { statsTable } from './ui/hud';
 import { esc, f1, n0 } from './ui/format';
+import { buildingAbilityLines, unitAbilityLines } from './sim/abilities';
 
 const FACTIONS: FactionSpec[] = [meadowfolk, highlanders, fenfolk, training];
 const ANIMS: ArtAnim[] = ['idle', 'walk', 'attack', 'gather', 'eat', 'tired', 'die', 'carryFood', 'carryWood', 'carryCrystal'];
@@ -181,8 +182,7 @@ function unitAbilities(u: UnitSpec): string[] {
       : `<b>Strikes</b> with a ${u.attack.crystalMass} kg crystal. ${n0(d.damage)} damage, reach ${f1(d.range)}, ${f1(d.dps)} per second.`);
   } else if (!u.dummy) out.push('<b>Unarmed.</b>');
   if (u.role === 'carter') out.push(`<b>Supply hauler.</b> Produced automatically; loads ${n0(d.carryCapacity)} kg at its home building and carries it to whichever building needs it most.`);
-  if (u.bearer) out.push(`<b>Ammo bearer.</b> A walking pile of crystal (${n0(d.cargoCapacity)} kg): friendly throwers that run dry come and take a load, like spent crystals on the ground. Refills at any building with crystal (right-click it).`);
-  if (u.gait) out.push(`<b>Hops.</b> Bounds along, airborne ${Math.round(d.gait!.hop * 100)}% of each ${f1(d.gait!.period, 2)} s stride: still while crouched, faster in the air, the same speed on average.`);
+  out.push(...unitAbilityLines(u, d)); // sim/abilities
   if (u.wheeled) out.push(`<b>Wheeled.</b> Carries ${K.wheelCarry}× as much for its muscle; a full load slows it less and costs fewer calories to haul.`);
   if ((u.canGather ?? true) && !u.dummy && u.role !== 'carter') out.push(`<b>Gathers</b> ${f1(d.gatherRate, 2)} kg/s and carries ${n0(d.carryCapacity)} kg; also builds.`);
   if ((u.refinement ?? 1) > 1) out.push(`<b>Refined ${f1(u.refinement!, 2)}×</b>: costs 1/${f1(u.refinement!, 2)} of its body's ${res('food')}. Its building needs ${n0(capitalFor(u.refinement!))} capital.`);
@@ -220,6 +220,7 @@ function buildingAbilities(b: BuildingSpec): string[] {
   const out: string[] = [];
   if (b.trains?.length) out.push(`<b>Trains</b> ${b.trains.map((id) => link('unit', id, unitById(id)?.name ?? id)).join(', ')}.`);
   if (b.researches?.length) out.push(`<b>Researches</b> ${b.researches.map((id) => link('tech', id, techById(id)?.name ?? id)).join(', ')}.`);
+  out.push(...buildingAbilityLines(b, st)); // sim/abilities
   if (b.carters && faction.carterId) out.push(`<b>Cart pool.</b> Keeps ${b.carters} ${link('unit', faction.carterId, unitById(faction.carterId)?.name ?? 'carts')} that load here and supply other buildings.`);
   if (b.attack && st.tower) out.push(`<b>Tower.</b> ${b.attack.mechanism} kg mechanism throws ${b.attack.crystalMass} kg crystals from ${b.attack.height} m: ${n0(st.tower.damage)} damage, range ${f1(st.tower.range)}, every ${f1(st.tower.cooldown)} s. Lobbing from height, it can't hit anything within ${f1(st.tower.minRange)} tiles of its walls. Each shot uses one crystal from its own stock.`);
   if (b.gatherBoost) out.push(`<b>Gathering ×${f1(st.gatherBoost, 2)}</b> for ${b.gatherBoost.resources.map(res).join(', ')} within ${b.gatherBoost.radius} tiles, from its own capital. Lose the building, lose the boost.`);
