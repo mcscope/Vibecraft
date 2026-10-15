@@ -2,7 +2,8 @@
 // cost is derived from the spec by each player's own physics, so a bundle can't
 // claim a unit is cheaper than it is. What's left is what a game hands out for
 // free (the starting base, its first workers, the wildlife on your half), and
-// numbers the physics doesn't price. Those are bounded here. Online bundles are
+// the few numbers the physics doesn't price yet. Only those are bounded here:
+// anything a player pays for (haulers, tower height, ammo...) is limited by its price. Online bundles are
 // held to these on arrival; `npm test` holds the shipped factions to them too.
 import type { FactionSpec } from '../factions/types';
 import { capitalFor, derive, deriveBuilding } from './physics';
@@ -15,16 +16,11 @@ export const FAIR = {
   /** Wildlife on your half is free food (and danger): heaviest animal, and all of them together (kg). */
   wildMaxKg: 400,
   wildTotalKg: 1500,
-  /** A tower's launch height (m) and the shots of ammo it asks to keep. */
-  towerMaxHeight: 12,
-  towerMaxStock: 200,
-  /** Radii of area effects (tiles). */
+  /** Radii of area effects (tiles): not priced yet. */
   maxRadius: 8,
-  /** Sown plants: size (kg) and how many of each kind a building keeps going. */
+  /** Sown plants: size (kg) and how many of each kind a building keeps going: not priced yet. */
   sowMaxKg: 400,
   sowMaxPlants: 12,
-  /** Auto-produced haulers per building. */
-  maxCarters: 6,
 } as const;
 
 /** Everything unfair about a faction ([] = fine to bring to a game). */
@@ -73,8 +69,8 @@ export function checkFairness(f: FactionSpec): string[] {
     const a = b.attack;
     if (a) {
       if (!(a.mechanism > 0) || !(a.crystalMass >= 0.1)) e.push(`${b.id}: a tower needs mechanism > 0 and crystals of at least 0.1 kg`);
-      if (!(a.height >= 0 && a.height <= FAIR.towerMaxHeight)) e.push(`${b.id}: tower height must be 0–${FAIR.towerMaxHeight} m`);
-      if (a.stockShots !== undefined && !(a.stockShots >= 1 && a.stockShots <= FAIR.towerMaxStock)) e.push(`${b.id}: stockShots must be 1–${FAIR.towerMaxStock}`);
+      if (!(a.height >= 0)) e.push(`${b.id}: tower height can't be negative`); // height is priced: mechanism × height
+      if (a.stockShots !== undefined && !(a.stockShots >= 1)) e.push(`${b.id}: stockShots must be at least 1`);
     }
     if (b.gatherBoost && !(b.gatherBoost.radius > 0 && b.gatherBoost.radius <= FAIR.maxRadius)) e.push(`${b.id}: gatherBoost radius must be 1–${FAIR.maxRadius}`);
     if (b.sow) {
@@ -83,7 +79,7 @@ export function checkFairness(f: FactionSpec): string[] {
       for (const kg of Object.values(s.plantKg ?? {})) if (!(kg! > 0 && kg! <= FAIR.sowMaxKg)) e.push(`${b.id}: sown plants can grow to at most ${FAIR.sowMaxKg} kg`);
       for (const n of Object.values(s.maxPlants ?? {})) if (!(Number.isInteger(n) && n! >= 0 && n! <= FAIR.sowMaxPlants)) e.push(`${b.id}: at most ${FAIR.sowMaxPlants} sown plants of a kind`);
     }
-    if (b.carters !== undefined && !(Number.isInteger(b.carters) && b.carters >= 0 && b.carters <= FAIR.maxCarters)) e.push(`${b.id}: carters must be 0–${FAIR.maxCarters}`);
+    if (b.carters !== undefined && !(Number.isInteger(b.carters) && b.carters >= 0)) e.push(`${b.id}: carters must be a whole number`); // each one is paid for
   }
   return e;
 }

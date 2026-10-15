@@ -35,7 +35,7 @@ describe('fairness', () => {
     ['a training dummy in the army', (f) => { unit(f, 'maceman').dummy = true; }, /dummies/],
     ['a herd of whales on your half', (f) => { f.wildlife![0].mass = 1400; }, /wild animals can weigh/],
     ['too much free game', (f) => { f.wildlife![0].count = 8; f.wildlife![0].group = 8; }, /wildlife: at most/],
-    ['a tower on a mountain', (f) => { building(f, 'watchtower').attack!.height = 60; }, /tower height/],
+    ['a tower dug into the ground', (f) => { building(f, 'watchtower').attack!.height = -5; }, /tower height/],
     ['a gathering boost across the map', (f) => { building(f, 'gathering-camp').gatherBoost!.radius = 40; }, /gatherBoost radius/],
     ['a worker that isn\'t a unit', (f) => { f.workerId = 'nobody'; }, /workerId/],
     ['two units with one id', (f) => { unit(f, 'slinger').id = 'maceman'; }, /used twice/],
