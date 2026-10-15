@@ -1,12 +1,15 @@
 import { describe, expect, test } from 'vitest';
 import { fenfolk } from '../src/factions/fenfolk';
 import { World } from '../src/sim/world';
+import { pool as poolSpec, withExtras } from './kit';
+
+const fen = withExtras(fenfolk, { buildings: [poolSpec] });
 
 const run = (w: World, ticks: number) => { for (let i = 0; i < ticks; i++) w.step(); };
 
 describe('living buildings', () => {
   test('a spawning pool is planted small, grows by eating roots, and trains fenlings only once big enough', () => {
-    const w = new World({ seed: 7, players: [{ name: 'Fen', faction: fenfolk }, { name: 'Fen2', faction: fenfolk }] });
+    const w = new World({ seed: 7, players: [{ name: 'Fen', faction: fen }, { name: 'Fen2', faction: fenfolk }] });
     const hall = w.baseOf(0)!;
     const pool = w.addBuilding(0, 'spawning-pool', hall.ox + 8, hall.oy)!;
     expect(pool.grown).toBeCloseTo(450 * 0.15, 5);

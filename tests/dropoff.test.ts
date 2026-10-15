@@ -1,12 +1,15 @@
 import { describe, expect, test } from 'vitest';
 import { fenfolk } from '../src/factions/fenfolk';
 import { World } from '../src/sim/world';
+import { withExtras } from './kit';
+
+const fen = withExtras(fenfolk, { patch: { 'pack-tortoise': { dropOff: true } } });
 
 const run = (w: World, ticks: number) => { for (let i = 0; i < ticks; i++) w.step(); };
 
 describe('walking drop-off', () => {
   test('gatherers far from home unload into a nearby pack tortoise, which unloads at a building', () => {
-    const w = new World({ seed: 7, players: [{ name: 'Fen', faction: fenfolk }, { name: 'Fen2', faction: fenfolk }] });
+    const w = new World({ seed: 7, players: [{ name: 'Fen', faction: fen }, { name: 'Fen2', faction: fenfolk }] });
     for (const u of [...w.units.values()]) if (w.players[u.owner].neutral) w.units.delete(u.id);
     const hall = w.baseOf(0)!;
     // the food patch farthest from the hall on our side

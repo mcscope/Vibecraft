@@ -1,10 +1,13 @@
 import { describe, expect, test } from 'vitest';
 import { meadowfolk } from '../src/factions/meadowfolk';
 import { World } from '../src/sim/world';
+import { conveyor, road, withExtras } from './kit';
+
+const paved = withExtras(meadowfolk, { buildings: [road, conveyor] });
 
 const run = (w: World, ticks: number) => { for (let i = 0; i < ticks; i++) w.step(); };
 const fresh = () => {
-  const w = new World({ seed: 7, players: [{ name: 'A', faction: meadowfolk }, { name: 'B', faction: meadowfolk }] });
+  const w = new World({ seed: 7, players: [{ name: 'A', faction: paved }, { name: 'B', faction: meadowfolk }] });
   for (const u of [...w.units.values()]) if (w.players[u.owner].neutral) w.units.delete(u.id);
   return w;
 };

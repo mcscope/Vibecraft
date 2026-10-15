@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { PLAYABLE } from '../src/factions';
-import { highlanders } from '../src/factions/highlanders';
+import { fenfolk } from '../src/factions/fenfolk';
 import { meadowfolk } from '../src/factions/meadowfolk';
 import { World } from '../src/sim/world';
 import { SkirmishAI } from '../src/ai/skirmishAI';
@@ -15,9 +15,9 @@ describe('playable factions', () => {
     }
   });
 
-  test('Highland Clans vs Meadowfolk: an AI game makes progress and stays deterministic', () => {
+  test('Fenfolk vs Meadowfolk: an AI game makes progress and stays deterministic', () => {
     const play = () => {
-      const w = new World({ seed: 77, players: [{ name: 'Clans', faction: highlanders }, { name: 'Meadow', faction: meadowfolk }] });
+      const w = new World({ seed: 77, players: [{ name: 'Fen', faction: fenfolk }, { name: 'Meadow', faction: meadowfolk }] });
       const ais = [new SkirmishAI(0), new SkirmishAI(1)];
       let trained = 0;
       const hashes: number[] = [];
@@ -27,14 +27,13 @@ describe('playable factions', () => {
         w.events = [];
         if (t % 400 === 0) hashes.push(w.hash());
       }
-      return { trained, hashes, clans: w.unitsOf(0).map((u) => u.specId), buildings: w.buildingsOf(0).map((b) => b.specId), wild: w.unitsOf(w.wildsId).map((u) => u.specId) };
+      return { trained, hashes, workers: w.unitsOf(0).filter((u) => u.specId === fenfolk.workerId).length, buildings: w.buildingsOf(0).length, wild: w.unitsOf(w.wildsId).length };
     };
     const a = play(), b = play();
     expect(a.hashes).toEqual(b.hashes);
     expect(a.trained).toBeGreaterThan(10);
-    expect(a.clans.filter((id) => id === 'crofter').length).toBeGreaterThan(6);
-    expect(a.buildings).toContain('longhouse');
-    expect(a.wild).toContain('elk');
-    expect(a.wild).toContain('deer');
+    expect(a.workers).toBeGreaterThan(6);
+    expect(a.buildings).toBeGreaterThan(2);
+    expect(a.wild).toBeGreaterThan(0);
   });
 });

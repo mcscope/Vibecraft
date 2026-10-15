@@ -2,7 +2,6 @@
 // online game it's baked on your machine and sent to the other players as data.
 import type { FactionSpec } from './types';
 import { meadowfolk } from './meadowfolk';
-import { highlanders } from './highlanders';
 import { fenfolk } from './fenfolk';
 
-export const PLAYABLE: FactionSpec[] = [meadowfolk, highlanders, fenfolk];
+export const PLAYABLE: FactionSpec[] = [meadowfolk, fenfolk];

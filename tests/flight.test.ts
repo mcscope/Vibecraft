@@ -1,10 +1,12 @@
 import { describe, expect, test } from 'vitest';
-import { highlanders } from '../src/factions/highlanders';
 import { meadowfolk } from '../src/factions/meadowfolk';
 import { World } from '../src/sim/world';
+import { eagle, withExtras } from './kit';
+
+const fliers = withExtras(meadowfolk, { units: [eagle] });
 
 const fresh = () => {
-  const w = new World({ seed: 7, players: [{ name: 'H', faction: highlanders }, { name: 'M', faction: meadowfolk }] });
+  const w = new World({ seed: 7, players: [{ name: 'H', faction: fliers }, { name: 'M', faction: meadowfolk }] });
   for (const u of [...w.units.values()]) if (w.players[u.owner].neutral) w.units.delete(u.id);
   return w;
 };

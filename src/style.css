@@ -86,19 +86,19 @@ kbd {
 .build { display: flex; flex-direction: column; gap: 4px; }
 .build .label { font-family: 'Cinzel', serif; color: var(--gold); font-size: 13px; }
 .build .btns { display: flex; flex-wrap: wrap; gap: 5px; max-width: 520px; }
-.bld { display: flex; flex-direction: column; align-items: center; padding: 6px 6px 7px; width: 176px; }
+.bld { display: flex; flex-direction: column; align-items: center; padding: 4px 4px 5px; width: 108px; }
 .bld { position: relative; }
 .bld.short::after {
   content: ''; position: absolute; inset: 0; pointer-events: none;
   background: repeating-linear-gradient(135deg, rgba(0,0,0,0.16) 0 6px, transparent 6px 16px);
 }
-.bld .need { color: #ff8a7a; font-size: 12px; min-height: 14px; }
-.bld .art { width: 160px; height: 160px; object-fit: contain; filter: drop-shadow(0 1px 1px #000); }
-.bld b { font-size: 14px; line-height: 1.1; text-align: center; }
-.bld span { font-size: 12.5px; color: var(--dim); }
-.bld .trainsrow { display: flex; flex-wrap: wrap; gap: 3px; min-height: 56px; align-items: center; justify-content: center; margin-top: 2px; }
-.bld .mini { width: 56px; height: 56px; object-fit: contain; background: radial-gradient(ellipse at 50% 80%, #4a5530, #1e2214); border: 1px solid #000; }
-.bld .tag { font-style: normal; font-size: 16px; color: var(--gold); width: 36px; height: 36px; line-height: 36px; text-align: center; border: 1px solid var(--bronze); background: var(--inset); }
+.bld .need { color: #ff8a7a; font-size: 11px; min-height: 13px; }
+.bld .art { width: 84px; height: 84px; object-fit: contain; filter: drop-shadow(0 1px 1px #000); }
+.bld b { font-size: 12.5px; line-height: 1.1; text-align: center; }
+.bld span { font-size: 11.5px; color: var(--dim); }
+.bld .trainsrow { display: flex; flex-wrap: wrap; gap: 3px; min-height: 30px; align-items: center; justify-content: center; margin-top: 2px; }
+.bld .mini { width: 30px; height: 30px; object-fit: contain; background: radial-gradient(ellipse at 50% 80%, #4a5530, #1e2214); border: 1px solid #000; }
+.bld .tag { font-style: normal; font-size: 13px; color: var(--gold); width: 24px; height: 24px; line-height: 24px; text-align: center; border: 1px solid var(--bronze); background: var(--inset); }
 .build { min-width: 0; flex: 1; }
 .build .btns { flex-wrap: nowrap; overflow-x: auto; max-width: none; padding-bottom: 4px; }
 .build .btns > * { flex: none; }

@@ -117,7 +117,6 @@ const packTortoise: FenUnit = {
   physique: { muscle: 0.6, frame: 0.3, reserve: 0.1 },
   refinement: 1.5,
   bearer: { radius: 4 }, // gathers crystal only (spent ones off the ground, or from a deposit) and keeps it
-  dropOff: true, // fenlings unload into it out in the field; it carries the haul home
   model(b, p) {
     const t = p.phase * Math.PI * 2;
     const walking = p.anim === 'walk';
@@ -225,10 +224,6 @@ export const buildings: FenBuilding[] = [
   {
     id: 'toad-wallow', name: 'Toad Wallow', description: 'A pool ringed with reeds where bog toads are raised and saddled, and pack tortoises are loaded.',
     size: 2, materials: 220, requires: ['reed-hut'], trains: ['bog-toad', 'pack-tortoise'], model: models.toadWallow,
-  },
-  {
-    id: 'spawning-pool', name: 'Spawning Pool', description: 'A pool of frogspawn, planted small. Fed roots, it swells into a great hatchery: frail when young, and able to raise finer broods as it grows.',
-    size: 2, materials: 450, living: { seed: 0.15, grow: 1.5 }, trains: ['fenling', 'reedguard', 'bog-toad'], model: models.spawningPool,
   },
   {
     id: 'canal', name: 'Canal', description: 'A dug channel of fen water: nothing walks through it. Cheap; shift-click to dig a line of them.',

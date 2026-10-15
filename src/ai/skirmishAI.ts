@@ -7,12 +7,15 @@ import { prerequisites } from '../sim/physics';
 import type { Command } from '../sim/commands';
 import { TICK_RATE, type Building, type Unit, type World } from '../sim/world';
 import { isWall } from '../sim/abilities/wall';
+import { isUnderfoot } from '../sim/abilities/underfoot';
+import { useBearers, useBelts, useHerds, type AiTurn } from './abilities';
 
 export class SkirmishAI {
   private waveSize = 6;
   private attacking = new Set<number>();
   private trainIndex = new Map<number, number>();
   private plan: Array<[string, number]> | null = null;
+  private lastBelt = -Infinity;
 
   constructor(readonly player: number, private thinkEvery = TICK_RATE) {}
 
@@ -44,7 +47,7 @@ export class SkirmishAI {
     const buildings = w.buildingsOf(this.player);
     const tc = w.baseOf(this.player);
     const workers = units.filter((u) => u.specId === faction.workerId);
-    const army = units.filter((u) => u.specId !== faction.workerId && !u.carter);
+    const army = units.filter((u) => u.specId !== faction.workerId && !u.carter && u.tame !== 'passive'); // a tame herd isn't an army
     const minutes = w.tick / TICK_RATE / 60;
     const stock = w.stockOf(this.player);
 
@@ -65,7 +68,7 @@ export class SkirmishAI {
         continue;
       }
       if (w.buildBlocker(this.player, id)) continue;
-      if (buildings.some((b) => !b.complete)) break; // finish one site before starting the next
+      if (buildings.some((b) => !b.complete && !isUnderfoot(b.spec))) break; // finish one site before starting the next
       const st = w.buildingStatsOf(this.player, id)!;
       if (stock.wood < st.totalCost * 0.4) break; // save up for this one before the next
       const spec = w.buildingSpecOf(this.player, id)!;
@@ -84,7 +87,7 @@ export class SkirmishAI {
     // ── Forward bases: if a buildable building can raise workers (a hut, an outpost),
     //    put more of them beside the resources our workers walk farthest for.
     const outpost = (faction.buildings ?? []).filter((b) => !b.unbuildable && b.trains?.includes(faction.workerId)).sort((a, b) => a.materials - b.materials)[0];
-    if (tc && outpost && !buildings.some((b) => !b.complete) && !w.buildBlocker(this.player, outpost.id)) {
+    if (tc && outpost && !buildings.some((b) => !b.complete && !isUnderfoot(b.spec)) && !w.buildBlocker(this.player, outpost.id)) {
       const have = buildings.filter((b) => b.specId === outpost.id).length;
       const st = w.buildingStatsOf(this.player, outpost.id)!;
       if (have < Math.min(6, 1 + Math.floor(workers.length / 6)) && stock.wood >= st.totalCost) {
@@ -100,6 +103,32 @@ export class SkirmishAI {
         const spot = far && w.findBuildSpot(outpost.size, far[0], far[1]);
         const pick = spot ? this.closestFree(workers, builders, spot[0], spot[1], 2) : [];
         if (spot && pick.length) out.push({ type: 'build', units: pick, specId: outpost.id, ox: spot[0], oy: spot[1] });
+      }
+    }
+
+    // ── Abilities the faction has switched on (bearers, herds, belts...).
+    const turn: AiTurn = {
+      w, player: this.player, faction, workers, army, buildings, attacking: this.attacking, out,
+      closestFree: (x, y, n) => this.closestFree(workers, builders, x, y, n),
+      train: (b, id) => this.tryTrain(w, b, id, out),
+    };
+    useBearers(turn);
+    useHerds(turn);
+    this.lastBelt = useBelts(turn, this.lastBelt);
+
+    // ── Hauling without carts: a building whose order waits on supplies gets a worker
+    //    to fetch them from wherever they piled up; it goes back to gathering after.
+    if (!units.some((u) => u.carter)) {
+      const waiting = (b: Building) => b.complete && b.queue.some((q) => !q.paid);
+      const haulers = workers.filter((u) => u.order.kind === 'cart');
+      const free = haulers.filter((u) => { const h = u.order.kind === 'cart' ? w.buildings.get(u.order.home) : undefined; return !h || !waiting(h); });
+      if (free.length) out.push({ type: 'stop', units: free.map((u) => u.id) });
+      let n = haulers.length - free.length;
+      for (const b of buildings) {
+        if (n >= Math.max(1, Math.floor(workers.length / 6))) break;
+        if (!waiting(b) || haulers.some((u) => u.order.kind === 'cart' && u.order.home === b.id)) continue;
+        const pick = this.closestFree(workers, builders, b.ox, b.oy, 1);
+        if (pick.length) { out.push({ type: 'haul', units: pick, building: b.id }); n++; }
       }
     }
 
@@ -121,7 +150,7 @@ export class SkirmishAI {
       const node = movers[0] && this.nearestNode(w, movers[0], 'food');
       if (node) { out.push({ type: 'gather', units: movers.map((u) => u.id), node }); counts[r] -= movers.length; counts.food += movers.length; }
     }
-    for (const u of workers.filter((x) => x.order.kind === 'idle')) {
+    for (const u of workers.filter((x) => x.order.kind === 'idle' && !builders.has(x.id))) {
       const n = workers.length;
       let want: ResourceKind = 'food';
       let worst = -Infinity;
@@ -135,6 +164,8 @@ export class SkirmishAI {
 
     // ── Production: workers from the town center, army from everything else.
     const workerTarget = Math.min(30, 10 + Math.floor(minutes * 2.5));
+    // a worker waiting on food comes first until the economy has a base (cheap soldiers would eat it all)
+    const workerFirst = workers.length < Math.min(workerTarget, 14) && buildings.some((b) => b.queue.some((q) => q.kind === 'unit' && q.specId === faction.workerId && !q.paid));
     for (const b of buildings) {
       if (!b.complete || b.queue.length >= 2) continue;
       const trains = (b.spec.trains ?? []).filter((id) => w.specOf(this.player, id));
@@ -142,7 +173,7 @@ export class SkirmishAI {
       if (trains.includes(faction.workerId) && workers.length < workerTarget) { this.tryTrain(w, b, faction.workerId, out); continue; }
       // soldiers (a building that also raises workers trains soldiers once there are enough workers)
       const soldiers = trains.filter((id) => id !== faction.workerId && id !== faction.carterId && w.specOf(this.player, id)?.stats.canAttack);
-      if (!soldiers.length) continue;
+      if (!soldiers.length || workerFirst) continue;
       const i = this.trainIndex.get(b.id) ?? 0;
       if (this.tryTrain(w, b, soldiers[i % soldiers.length], out)) this.trainIndex.set(b.id, i + 1);
     }

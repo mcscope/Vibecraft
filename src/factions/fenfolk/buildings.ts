@@ -123,27 +123,3 @@ export function canal(b: ModelBuilder): void {
   b.cylinder(0.12, 0.12, 0.012, [0.4, 0.1, 0.35], { color: '#4a7a3a', tex: 'leaf' }, undefined, 9); // a lily pad
 }
 
-/** A living hatchery: a pool thick with frogspawn, ringed by reeds, a crystal glowing at its heart. */
-export function spawningPool(b: ModelBuilder): void {
-  b.cylinder(1.9, 2.0, 0.12, [0, 0.06, 0], MUD, undefined, 18);
-  b.cylinder(1.55, 1.55, 0.05, [0, 0.13, 0], { color: '#3a5446', rough: 0.1 }, undefined, 18); // the pool
-  // clutches of spawn: clear jelly beads with dark eggs
-  const clutches: Array<[number, number, number]> = [[0.5, 0.3, 9], [-0.6, -0.2, 11], [0.1, -0.8, 8], [-0.3, 0.75, 10], [0.9, -0.5, 7]];
-  for (const [cx, cz, n] of clutches) {
-    for (let i = 0; i < n; i++) {
-      const a = i * 2.4, r = 0.08 + (i % 4) * 0.07;
-      const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
-      b.sphere(0.075, [x, 0.17, z], { color: '#c8d8b8', rough: 0.05 });
-      b.sphere(0.028, [x + 0.01, 0.2, z], { color: '#1a1a14' });
-    }
-  }
-  for (let i = 0; i < 14; i++) { // reeds ringing the pool
-    const a = (i / 14) * Math.PI * 2;
-    b.limb([Math.cos(a) * 1.7, 0.1, Math.sin(a) * 1.7], [Math.cos(a) * 1.78, 0.8 + (i % 3) * 0.2, Math.sin(a) * 1.78], 0.025, i % 2 ? REED : REED_DARK);
-  }
-  b.crystal(0.35, [0, 0.12, 0], [0, 0.3, 0]); // the heart-stone
-  b.sphere(0.12, [0, 0.2, 0], { color: '#9fefff', emissive: '#2a8aa8' });
-  b.cylinder(0.025, 0.03, 1.5, [1.5, 0.75, 1.1], WILLOW, undefined, 6);
-  b.box([0.03, 0.35, 0.5], [1.5, 1.3, 1.35], BANNER);
-}
-

@@ -276,14 +276,6 @@ export const buildings: MeadowBuilding[] = [
     id: 'watchtower', name: 'Watchtower', description: 'A throwing arm on stilts. Height adds energy and range; it throws crystals from its own stock.',
     size: 1, materials: 90, attack: { mechanism: 20, crystalMass: 0.5, height: 4 }, model: models.watchtower,
   },
-  {
-    id: 'road', name: 'Road', description: 'Flagstones laid in the grass. Anyone on it walks faster and tires less; carts fly along it. Shift-click to lay a line.',
-    size: 1, materials: 8, road: { speed: 1.4 }, model: models.road,
-  },
-  {
-    id: 'conveyor', name: 'Conveyor Belt', description: 'A run of wooden rollers. Villagers unload onto it anywhere and the goods roll to the building it touches. Shift-click to lay a line.',
-    size: 1, materials: 20, conveyor: { speed: 2 }, model: models.conveyor,
-  },
 ];
 
 // Each line has three levels; each level must follow the one before (the engine
