@@ -317,7 +317,12 @@ export class Renderer {
       }
       // the faction supplies the looks; we pick construction stage / damage level
       const art = this.bank.building(b.owner, b.specId);
-      if (art) this.setFrame(sp, buildingSprite(art, b.complete, b.built / b.stats.totalCost, b.hp, b.maxHp));
+      if (art) {
+        const look = buildingSprite(art, b.complete, b.built / b.stats.totalCost, b.hp, b.maxHp);
+        this.setFrame(sp, look);
+        // a living building (sim/abilities/living.ts) swells as it grows
+        if (b.grown !== undefined && b.complete) sp.scale.set((0.6 + 0.4 * Math.min(1, b.grown / b.spec.materials)) / look.q);
+      }
       sp.tint = b.complete && b.spec.attack && b.stock.crystal < b.spec.attack.crystalMass ? 0x808080 : 0xffffff; // tower out of ammo
       sp.visible = b.owner === this.viewer || this.explored(b.ox + b.size / 2, b.oy + b.size / 2); // once found, a building stays on the map
       // your building waiting on supplies plants its faction's "needs supplies" flag at its corner

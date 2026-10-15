@@ -380,7 +380,8 @@ export function deriveBuilding(spec: BuildingSpec, faction: FactionSpec): Buildi
     effectiveCapital,
     maxRefinement: refinementFor(effectiveCapital),
     attackCost,
-    totalCost: Math.ceil(capital + attackCost),
+    // a living building is planted small (seed share of its materials) and grows the rest from food
+    totalCost: Math.ceil(capital * (spec.living ? Math.min(1, Math.max(0.05, spec.living.seed)) : 1) + attackCost),
     minSize: Math.ceil(Math.sqrt(capital / CAP.kgPerTile)),
     tower: towerStats(spec.attack),
     gatherBoost: spec.gatherBoost ? refinementFor(capital) : 1,

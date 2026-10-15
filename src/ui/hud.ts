@@ -302,6 +302,13 @@ export class Hud {
       const max = Math.max(1, target[r], b.stock[r]);
       this.setBar(`stock-${r}`, b.stock[r], max, target[r] > 1 ? `${names[r]} ${have(b.stock[r])} / ${need(target[r])}` : `${names[r]} ${have(b.stock[r])}`);
     }
+      const grow = this.panel.querySelector<HTMLElement>('[data-grow]');
+      if (grow && b.grown !== undefined) {
+        // a living building (sim/abilities/living.ts)
+        grow.textContent = b.grown >= b.spec.materials - 0.5
+          ? `Fully grown (${Math.round(b.spec.materials)} kg)`
+          : `Growing ${Math.floor(b.grown)} / ${Math.round(b.spec.materials)} kg · eats ${this.names().food.toLowerCase()} from its stock${b.stock.food < 0.5 ? ' (none here: haul some over)' : ''}`;
+      }
     const carts = this.panel.querySelector('[data-carts]');
     if (carts) {
       let pool = 0;
@@ -483,6 +490,7 @@ export class Hud {
       </div>
       ${RESOURCES.map((r) => `<div class="bar stock ${r}" data-bar="stock-${r}"><i></i><span></span></div>`).join('')}
       <div class="state" data-carts></div>
+      ${b.grown !== undefined ? '<div class="state" data-grow></div>' : ''}
       ${st.tower ? '<div class="ammo" data-ammo></div>' : ''}
       ${b.spec.gatherBoost ? `<div class="state">Gathering nearby ×${fmt(st.gatherBoost, 2)} (within ${b.spec.gatherBoost.radius} tiles)</div>` : ''}
       ${b.spec.sow && own ? `<div class="sow">Sowing ${b.spec.sow.resources.map((r) => `<button data-sow="${r}" data-building="${b.id}" class="${b.sowing.includes(r) ? 'on' : ''}" title="Plants a ${plantKg(b.spec, r)} kg ${r === 'food' ? 'bush' : 'tree'} for ${need(plantKg(b.spec, r) * CAP.sowSeedFraction)} ${names[r].toLowerCase()} of seed from this building; it grows over ${CAP.sowGrowSec} s">${names[r]} ${b.sowing.includes(r) ? 'on' : 'off'}</button>`).join(' ')}</div>` : ''}

@@ -6,6 +6,7 @@ import type { BuildingSpec, UnitSpec } from '../../factions/types';
 import type { BuildingStats, DerivedStats } from '../physics';
 import { bearer } from './bearer';
 import { gait } from './gait';
+import { living } from './living';
 import { wall } from './wall';
 
 export interface Ability {
@@ -18,7 +19,7 @@ export interface Ability {
   buildingCodex?(b: BuildingSpec, st: BuildingStats): string | null;
 }
 
-export const ABILITIES: Ability[] = [bearer, gait, wall];
+export const ABILITIES: Ability[] = [bearer, gait, wall, living];
 
 export function validateUnitAbilities(u: UnitSpec, where: string): string[] {
   return ABILITIES.flatMap((a) => a.validateUnit?.(u, where) ?? []);

@@ -226,6 +226,10 @@ export const buildings: FenBuilding[] = [
     size: 2, materials: 220, requires: ['reed-hut'], trains: ['bog-toad', 'pack-tortoise'], model: models.toadWallow,
   },
   {
+    id: 'spawning-pool', name: 'Spawning Pool', description: 'A pool of frogspawn, planted small. Fed roots, it swells into a great hatchery: frail when young, and able to raise finer broods as it grows.',
+    size: 2, materials: 450, living: { seed: 0.15, grow: 1.5 }, trains: ['fenling', 'reedguard', 'bog-toad'], model: models.spawningPool,
+  },
+  {
     id: 'canal', name: 'Canal', description: 'A dug channel of fen water: nothing walks through it. Cheap; shift-click to dig a line of them.',
     size: 1, materials: 12, wall: true, model: models.canal,
   },

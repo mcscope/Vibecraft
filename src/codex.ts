@@ -184,7 +184,7 @@ function unitAbilities(u: UnitSpec): string[] {
   if (u.role === 'carter') out.push(`<b>Supply hauler.</b> Produced automatically; loads ${n0(d.carryCapacity)} kg at its home building and carries it to whichever building needs it most.`);
   out.push(...unitAbilityLines(u, d)); // sim/abilities
   if (u.wheeled) out.push(`<b>Wheeled.</b> Carries ${K.wheelCarry}× as much for its muscle; a full load slows it less and costs fewer calories to haul.`);
-  if ((u.canGather ?? true) && !u.dummy && u.role !== 'carter') out.push(`<b>Gathers</b> ${f1(d.gatherRate, 2)} kg/s and carries ${n0(d.carryCapacity)} kg; also builds.`);
+  if ((u.canGather ?? true) && !u.dummy && u.role !== 'carter') out.push(u.bearer ? `<b>Gathers crystal</b> ${f1(d.gatherRate, 2)} kg/s and carries ${n0(d.carryCapacity)} kg.` : `<b>Gathers</b> ${f1(d.gatherRate, 2)} kg/s and carries ${n0(d.carryCapacity)} kg; also builds.`);
   if ((u.refinement ?? 1) > 1) out.push(`<b>Refined ${f1(u.refinement!, 2)}×</b>: costs 1/${f1(u.refinement!, 2)} of its body's ${res('food')}. Its building needs ${n0(capitalFor(u.refinement!))} capital.`);
   if ((u.workRefinement ?? 1) > 1) out.push(`<b>Work-refined ${f1(u.workRefinement!, 2)}×</b>: gathers, walks and carries that much more.`);
   return out;

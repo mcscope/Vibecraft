@@ -30,7 +30,7 @@ export async function bakeBiome(
   let done = 0;
   const bake = (build: Parameters<Baker['bakeStatic']>[0], shadow = true) => {
     const s = baker.bakeStatic(build, NEUTRAL, shadow);
-    onProgress?.(++done / total, 'Growing the meadow');
+    onProgress?.(++done / total, 'Growing the land');
     return s;
   };
   const trees: Sprite[] = [], bushes: Sprite[] = [], mines: Sprite[] = [];

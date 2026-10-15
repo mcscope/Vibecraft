@@ -11,6 +11,7 @@ import { findPath } from './pathfinding';
 import { Logistics } from './logistics';
 import * as bearerAbility from './abilities/bearer';
 import { midStride, strideFactor } from './abilities/gait';
+import { grow, grownEnough, livingStats, seedMaterials } from './abilities/living';
 import {
   derive, deriveBuilding, loadedSpeed, CAP, K, techCost, techGate, techTime,
   type BuildingStats, type DerivedStats,
@@ -157,6 +158,8 @@ export interface Building {
   specId: string;
   spec: BuildingSpec;
   stats: BuildingStats;
+  /** Living buildings: materials grown so far (see abilities/living.ts). */
+  grown?: number;
   ox: number; oy: number; // top-left tile
   size: number;
   hp: number;
@@ -676,16 +679,19 @@ export class World {
   /** Place a building (scenario setup) or a construction site (`complete` = false). */
   addBuilding(owner: number, specId: string, ox: number, oy: number, complete = true): Building | null {
     const spec = this.buildingSpecOf(owner, specId);
-    const stats = this.buildingStatsOf(owner, specId);
-    if (!spec || !stats) return null;
+    const base = this.buildingStatsOf(owner, specId);
+    if (!spec || !base) return null;
+    let stats: BuildingStats = base;
     const size = spec.size;
+    const grown = spec.living ? seedMaterials(spec) : undefined;
+    if (grown !== undefined) stats = livingStats(spec, this.factionOf(owner), grown); // planted small
     const b: Building = {
       id: this.nextId++, owner, specId, spec, stats, ox, oy, size,
       hp: complete ? stats.maxHp : 1, maxHp: stats.maxHp,
       built: complete ? stats.totalCost : 0, complete,
       queue: [], stock: emptyStock(),
       rallyX: ox + size + 1, rallyY: oy + size + 1, rallyRes: null, cooldown: 0, autoTrain: null,
-      sowing: [...(spec.sow?.resources ?? [])], sowProgress: 0,
+      sowing: [...(spec.sow?.resources ?? [])], sowProgress: 0, grown,
     };
     this.buildings.set(b.id, b);
     for (let y = oy; y < oy + size; y++) for (let x = ox; x < ox + size; x++) this.grid.block(x, y, 1);
@@ -845,6 +851,7 @@ export class World {
 
   private tickBuilding(b: Building): void {
     if (!b.complete) return;
+    if (b.grown !== undefined) grow(b, this.factionOf(b.owner), DT);
     if (b.autoTrain && b.queue.length === 0) {
       const s = this.specOf(b.owner, b.autoTrain);
       if (s && this.unitsOf(b.owner).length < MAX_UNITS_PER_PLAYER) {
@@ -854,7 +861,9 @@ export class World {
     let item = b.queue[0];
     if (item && !item.paid) {
       const c = itemCost(item);
-      if (RESOURCES.every((r) => b.stock[r] >= c[r] - 1e-6)) { for (const r of RESOURCES) b.stock[r] -= c[r]; item.paid = true; }
+      // a young living building can only train what its current size supports
+      const ready = item.kind !== 'unit' || grownEnough(b, Math.max(this.refinementOf(b.owner, item.specId), this.refinementOf(b.owner, item.specId, 'work')));
+      if (ready && RESOURCES.every((r) => b.stock[r] >= c[r] - 1e-6)) { for (const r of RESOURCES) b.stock[r] -= c[r]; item.paid = true; }
     }
     if (item && !item.paid) {
       // still waiting for stock: let anything already paid for behind it go first

@@ -143,6 +143,12 @@ export interface BuildingSpec {
   unbuildable?: boolean;
   /** A wall piece: blocks the way, laid in lines by hand (shift-click to keep placing). The AI doesn't build these. */
   wall?: boolean;
+  /**
+   * A living building: planted with `seed` (0–1) of its materials, then it grows by
+   * eating food from its stock, `grow` kg/s, up to its full materials. HP and capital
+   * (so what it can train) follow its current size.
+   */
+  living?: { seed: number; grow: number };
 }
 
 /** Raises one unit type's refinement for its owner, everywhere. Cost derives from the curve. */
