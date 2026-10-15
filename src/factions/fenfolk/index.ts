@@ -117,6 +117,7 @@ const packTortoise: FenUnit = {
   physique: { muscle: 0.6, frame: 0.3, reserve: 0.1 },
   refinement: 1.5,
   bearer: { radius: 4 }, // gathers crystal only (spent ones off the ground, or from a deposit) and keeps it
+  dropOff: true, // fenlings unload into it out in the field; it carries the haul home
   model(b, p) {
     const t = p.phase * Math.PI * 2;
     const walking = p.anim === 'walk';

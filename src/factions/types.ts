@@ -78,6 +78,8 @@ export interface UnitSpec {
    * buildings with crystal in stock (right-click the building).
    */
   bearer?: { radius: number };
+  /** A walking drop-off: gatherers unload into it like a building (up to its cargo capacity); it unloads at a building. */
+  dropOff?: boolean;
 }
 
 export type ResourceKind = 'food' | 'wood' | 'crystal';

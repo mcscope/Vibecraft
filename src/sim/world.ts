@@ -11,6 +11,7 @@ import { findPath } from './pathfinding';
 import { Logistics } from './logistics';
 import * as bearerAbility from './abilities/bearer';
 import { midStride, strideFactor } from './abilities/gait';
+import { nearestDropOff } from './abilities/dropoff';
 import { grow, grownEnough, livingStats, seedMaterials } from './abilities/living';
 import {
   derive, deriveBuilding, loadedSpeed, CAP, K, techCost, techGate, techTime,
@@ -1325,8 +1326,17 @@ export class World {
       }
       return false;
     }
-    // toDrop: the nearest finished building (carts move it on from there)
+    // toDrop: the nearest finished building (carts move it on from there), or a nearer walking drop-off
     const drop = this.nearestCache(u, () => true);
+    const dd = drop ? (drop.ox + drop.size / 2 - u.x) ** 2 + (drop.oy + drop.size / 2 - u.y) ** 2 : Infinity;
+    const carrier = nearestDropOff(this, u, dd);
+    if (carrier) {
+      if (this.moveTo(u, carrier.x, carrier.y, u.stats.radius + carrier.stats.radius + 0.5)) {
+        this.transfer(u, carrier);
+        if (this.cargo(u) < 0.5) o.phase = 'toNode'; // all handed over (else the rest goes to a building)
+      }
+      return u.x !== u.px || u.y !== u.py;
+    }
     if (!drop) return false;
     if (this.moveToBuilding(u, drop)) {
       this.deposit(u, drop);
