@@ -2,6 +2,7 @@
 // inside the deterministic tick (so they stay in sync in multiplayer too).
 import { generateMap, Grid, TERRAIN_SAND, TERRAIN_WATER, type GeneratedMap, type MapFeature } from './map';
 import { Rng } from './rng';
+import { startStock, startWorkers } from './fairness';
 import { TICK_RATE, type World } from './world';
 
 export interface Scenario {
@@ -29,8 +30,9 @@ export function skirmish(mapId = 'woodlands'): Scenario {
         const f = w.factionOf(p.id);
         const tc = w.addBuilding(i, f.townCenterId ?? '', ox, oy);
         if (!tc) return;
-        tc.stock = { food: 500, wood: 250, crystal: 120 };
-        for (let n = 0; n < 5; n++) w.spawnUnit(i, f.workerId, tc);
+        // everyone starts from the same pool; the base and workers are paid from it
+        tc.stock = startStock(f);
+        for (let n = 0; n < startWorkers(f); n++) w.spawnUnit(i, f.workerId, tc);
       });
     },
   };

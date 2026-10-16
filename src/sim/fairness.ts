@@ -1,18 +1,35 @@
 // Fairness rules for factions that play against other people. Every stat and
 // cost is derived from the spec by each player's own physics, so a bundle can't
-// claim a unit is cheaper than it is. What's left is what a game hands out for
-// free (the starting base, its first workers, the wildlife on your half), and
+// claim a unit is cheaper than it is. Everyone starts from the same pool of
+// resources: the starting base and workers are paid from it and the rest is
+// starting stock. What's left is what a game hands out for free (the wildlife
+// on your half), and
 // the few numbers the physics doesn't price yet. Only those are bounded here:
 // anything a player pays for (haulers, tower height, ammo...) is limited by its price. Online bundles are
 // held to these on arrival; `npm test` holds the shipped factions to them too.
-import type { FactionSpec } from '../factions/types';
+import type { FactionSpec, ResourceKind } from '../factions/types';
 import { capitalFor, derive, deriveBuilding } from './physics';
 
+/** What every player starts with, before paying for the starting base and workers. */
+export const START_POOL: Record<ResourceKind, number> = { food: 900, wood: 1060, crystal: 120 };
+
+/** What a faction's starting base and workers cost, out of the pool. */
+export function startCost(f: FactionSpec): Record<ResourceKind, number> {
+  const base = f.buildings?.find((b) => b.id === f.townCenterId);
+  const worker = f.units.find((u) => u.id === f.workerId);
+  const n = startWorkers(f);
+  const d = worker ? derive(worker) : null;
+  return { food: (d?.foodCost ?? 0) * n, wood: base ? deriveBuilding(base, f).totalCost : 0, crystal: (d?.crystalCost ?? 0) * n };
+}
+export const startWorkers = (f: FactionSpec): number => f.startWorkers ?? 5;
+
+/** The starting stock: the pool less the starting base and workers. */
+export function startStock(f: FactionSpec): Record<ResourceKind, number> {
+  const c = startCost(f);
+  return { food: Math.max(0, START_POOL.food - c.food), wood: Math.max(0, START_POOL.wood - c.wood), crystal: Math.max(0, START_POOL.crystal - c.crystal) };
+}
+
 export const FAIR = {
-  /** The starting base is free: its materials plus any tower on it (kg). */
-  startBaseKg: 900,
-  /** Each of the five free starting workers: food + crystal its body would cost to train (before refinement). */
-  startWorkerCost: 150,
   /** Wildlife on your half is free food (and danger): heaviest animal, and all of them together (kg). */
   wildMaxKg: 400,
   wildTotalKg: 1500,
@@ -34,21 +51,21 @@ export function checkFairness(f: FactionSpec): string[] {
   if (!units.has(f.workerId)) e.push(`workerId "${f.workerId}" is not one of its units`);
   if (f.carterId !== undefined && !units.has(f.carterId)) e.push(`carterId "${f.carterId}" is not one of its units`);
   for (const t of f.techs ?? []) if (!units.has(t.unit)) e.push(`${t.id}: improves unknown unit ${t.unit}`);
-  // the free start
+  // the start: base and workers are paid from the shared pool
   const base = f.townCenterId !== undefined ? buildings.get(f.townCenterId) : undefined;
   if (!base) e.push(`townCenterId "${f.townCenterId}" is not one of its buildings`);
-  else {
-    const kg = deriveBuilding(base, f).totalCost;
-    if (kg > FAIR.startBaseKg) e.push(`${base.id}: a starting base is free, so it can hold at most ${FAIR.startBaseKg} kg (this is ${kg})`);
-    if (base.living) e.push(`${base.id}: the starting base can't be a living building`);
+  else if (base.living) e.push(`${base.id}: the starting base can't be a living building`);
+  const n = startWorkers(f);
+  if (!(Number.isInteger(n) && n >= 1)) e.push(`startWorkers must be a whole number, at least 1`);
+  const cost = startCost(f);
+  for (const r of ['food', 'wood', 'crystal'] as const) {
+    if (cost[r] > START_POOL[r]) e.push(`the starting base and ${n} workers cost ${Math.ceil(cost[r])} ${r}, more than the starting pool's ${START_POOL[r]}`);
   }
   const worker = units.get(f.workerId);
-  if (worker) {
-    const d = derive({ ...worker, refinement: 1, workRefinement: 1 }); // refinement makes training cheaper, not the body
-    const cost = d.foodCost + d.crystalCost;
-    if (cost > FAIR.startWorkerCost) e.push(`${worker.id}: the starting workers are free, so each body can cost at most ${FAIR.startWorkerCost} to train (this costs ${Math.round(cost)})`);
+  if (worker && base) {
+    // workers are priced at their refinement, so the base has to be able to train them at it
     const need = Math.max(capitalFor(worker.refinement ?? 1), capitalFor(worker.workRefinement ?? 1));
-    if (base && need > deriveBuilding(base, f).effectiveCapital + 1e-6) e.push(`${worker.id}: its refinement needs ${Math.ceil(need)} capital, more than the starting base has`);
+    if (need > deriveBuilding(base, f).effectiveCapital + 1e-6) e.push(`${worker.id}: its refinement needs ${Math.ceil(need)} capital, more than the starting base has`);
   }
   // nothing a match can't hurt
   for (const u of [...f.units, ...(f.wildlife ?? [])]) if (u.dummy) e.push(`${u.id}: training dummies are for scenarios only`);

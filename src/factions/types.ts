@@ -192,6 +192,8 @@ export interface FactionSpec {
   carterId?: string;
   /** Starting base building; trains workers and carters, is where carters load. */
   townCenterId?: string;
+  /** Workers you start with (default 5). They and the starting base are paid from the same starting pool (sim/fairness.ts), the rest is your starting stock. */
+  startWorkers?: number;
   units: UnitSpec[];
   buildings?: BuildingSpec[];
   techs?: TechSpec[];
