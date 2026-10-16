@@ -21,8 +21,8 @@ export class Logistics {
   /**
    * What a building wants on hand: exactly what its queued orders still need
    * (nothing is stocked ahead of time), a small berry stash where units are made
-   * (for them to eat), a tower's ammo, and the seed for a sowing building's
-   * next planting (planting is its order).
+   * (for them to eat), a tower's ammo, crystal for a gather boost to burn, and
+   * the seed for a sowing building's next planting (planting is its order).
    */
   supplyTargets(b: Building): Stock {
     const t = emptyStock();
@@ -33,6 +33,7 @@ export class Logistics {
     t.food += growWant(b); // a living building eats to grow
     t.food += penWant(this.w, b); // a pen feeds its breeding pairs
     if (b.stats.tower && b.spec.attack) t.crystal += (b.spec.attack.stockShots ?? TOWER_STOCK_SHOTS) * b.spec.attack.crystalMass;
+    if (b.spec.gatherBoost) t.crystal += CAP.boostStash; // the boost burns crystal
     const next = this.w.sowNext(b);
     if (next) t[next] = Math.max(t[next], Math.ceil(plantKg(b.spec, next) * CAP.sowSeedFraction));
     return t;

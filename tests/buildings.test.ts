@@ -168,12 +168,32 @@ describe('towers and infrastructure', () => {
     expect(enemy.hp).toBeLessThan(hp);
   });
 
+  test('a gather boost burns crystal from its building as it works', () => {
+    const w = newWorld();
+    const tc = w.baseOf(0)!;
+    const camp = w.addBuilding(0, 'gathering-camp', tc.ox + 8, tc.oy + 8)!;
+    camp.sowing = [];
+    const v = w.unitsOf(0).find((u) => u.specId === 'villager')!;
+    for (const u of w.unitsOf(0)) if (u !== v) w.units.delete(u.id); // nobody else dropping off or topping it up
+    camp.stock = { food: 0, wood: 0, crystal: 2 };
+    tc.stock = { food: 0, wood: 0, crystal: 0 }; // nothing to cart over
+    const bush = [...w.nodes.values()].find((n) => n.type === 'food' && !n.shard)!;
+    bush.x = camp.ox + 4.5; bush.y = camp.oy + 1.5; bush.amount = 400;
+    v.x = v.px = bush.x + 1; v.y = v.py = bush.y;
+    w.enqueue({ player: 0, cmd: { type: 'gather', units: [v.id], node: bush.id } });
+    run(w, 20 * 30);
+    expect(camp.stock.crystal).toBeLessThan(2); // burned for the extra food
+  });
+
   test('gathering camp boosts gathering nearby and sows plants that grow', () => {
   const w = newWorld();
   const tc = w.baseOf(0)!;
   const camp = w.addBuilding(0, 'gathering-camp', tc.ox + 8, tc.oy + 8)!;
   expect(camp.stats.gatherBoost).toBeGreaterThan(1.1);
   const cx = camp.ox + 1, cy = camp.oy + 1;
+  camp.stock.crystal = 0;
+  expect(w.gatherBoostAt(0, cx + 3, cy, 'food')).toBe(1); // no crystal to burn, no boost
+  camp.stock.crystal = 10;
   expect(w.gatherBoostAt(0, cx + 3, cy, 'food')).toBe(camp.stats.gatherBoost);
   expect(w.gatherBoostAt(0, cx + 20, cy, 'food')).toBe(1);
   expect(w.gatherBoostAt(1, cx + 3, cy, 'food')).toBe(1);

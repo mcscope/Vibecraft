@@ -456,16 +456,25 @@ export class World {
       : (s?.spec.refinement ?? 1) + (p.refine[unitId] ?? 0);
   }
 
-  /** Best gather-rate boost a player's infrastructure gives at a spot, for a resource. */
+  /** Best gather-rate boost a player's infrastructure gives at a spot, for a resource (only buildings with crystal to burn). */
   gatherBoostAt(owner: number, x: number, y: number, res: ResourceKind): number {
-    let best = 1;
+    return this.boostAt(owner, x, y, res).mult;
+  }
+  boostAt(owner: number, x: number, y: number, res: ResourceKind): { mult: number; from: Building | null } {
+    let best = 1, from: Building | null = null;
     for (const b of this.buildings.values()) {
       const gb = b.spec.gatherBoost;
-      if (b.owner !== owner || !b.complete || !gb || !gb.resources.includes(res)) continue;
+      if (b.owner !== owner || !b.complete || !gb || !gb.resources.includes(res) || b.stock.crystal <= 1e-6) continue;
       const r = gb.radius + b.size / 2;
-      if ((b.ox + b.size / 2 - x) ** 2 + (b.oy + b.size / 2 - y) ** 2 <= r * r) best = Math.max(best, b.stats.gatherBoost);
+      if ((b.ox + b.size / 2 - x) ** 2 + (b.oy + b.size / 2 - y) ** 2 <= r * r && b.stats.gatherBoost > best) { best = b.stats.gatherBoost; from = b; }
     }
-    return best;
+    return { mult: best, from };
+  }
+  /** A boosted gatherer took `kg`: the boosting building burns crystal for the extra part. */
+  private burnBoost(boost: { mult: number; from: Building | null }, kg: number): void {
+    if (!boost.from || boost.mult <= 1) return;
+    const extra = kg * (1 - 1 / boost.mult);
+    boost.from.stock.crystal = Math.max(0, boost.from.stock.crystal - extra * CAP.boostCrystalPerKg);
   }
 
   /** Why a player can't place this building right now, or null if they can. */
@@ -1350,7 +1359,8 @@ export class World {
       const n = node!;
       if (u.exhausted) return false;
       this.face(u, n.x - u.x, n.y - u.y);
-      const rate = n.shard ? Math.max(2, u.stats.gatherRate * 4) : u.stats.gatherRate * this.gatherBoostAt(u.owner, n.x, n.y, n.type);
+      const boost = n.shard ? { mult: 1, from: null } : this.boostAt(u.owner, n.x, n.y, n.type);
+      const rate = n.shard ? Math.max(2, u.stats.gatherRate * 4) : u.stats.gatherRate * boost.mult;
       let want: number;
       if (n.shard) {
         // spent crystals are picked up whole; re-arming fills the weapon pack, gathering the cargo pack
@@ -1359,6 +1369,7 @@ export class World {
       if (want > 0) {
         n.amount -= want;
         if (o.stopWhenArmed) u.ammo += want; else this.carry(u, n.type, want);
+        this.burnBoost(boost, want);
         u.cal -= K.gatherCalPerKg * want;
         u.busy = true;
       }
@@ -1512,9 +1523,11 @@ export class World {
       if (!this.moveToNear(u, tree.x, tree.y, 0.85 + u.stats.radius, true)) return u.x !== u.px || u.y !== u.py;
       if (u.exhausted) return false;
       this.face(u, tree.x - u.x, tree.y - u.y);
-      const want = Math.min(this.gatherUnits(u, u.stats.gatherRate * this.gatherBoostAt(u.owner, tree.x, tree.y, 'wood'), tree.amount), Math.max(0, Math.ceil(remaining - u.wood)));
+      const boost = this.boostAt(u.owner, tree.x, tree.y, 'wood');
+      const want = Math.min(this.gatherUnits(u, u.stats.gatherRate * boost.mult, tree.amount), Math.max(0, Math.ceil(remaining - u.wood)));
       if (want > 0) {
         tree.amount -= want; u.wood += want; u.cal -= K.gatherCalPerKg * want; u.busy = true;
+        this.burnBoost(boost, want);
       }
       if (tree.amount <= 0.001) this.removeNode(tree);
       if (this.freeCapacity(u) < 1 - 1e-6 || u.wood >= remaining - 1e-6 || tree.amount <= 0.001) o.phase = 'deliver';

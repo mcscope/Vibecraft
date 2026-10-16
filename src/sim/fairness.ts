@@ -2,11 +2,11 @@
 // cost is derived from the spec by each player's own physics, so a bundle can't
 // claim a unit is cheaper than it is. Everyone starts from the same pool of
 // resources: the starting base and workers are paid from it and the rest is
-// starting stock. What's left is what a game hands out for free (the wildlife
-// on your half), and
-// the few numbers the physics doesn't price yet. Only those are bounded here:
-// anything a player pays for (haulers, tower height, ammo...) is limited by its price. Online bundles are
-// held to these on arrival; `npm test` holds the shipped factions to them too.
+// starting stock. Anything a player pays for (haulers, tower height, gather
+// boosts that burn crystal, sowing that spends seed) is limited by its price,
+// not a cap; only what a game hands out free (the wildlife on your half) is
+// bounded. Online bundles are held to these on arrival; `npm test` holds the
+// shipped factions to them too.
 import type { FactionSpec, ResourceKind } from '../factions/types';
 import { capitalFor, derive, deriveBuilding } from './physics';
 
@@ -33,11 +33,6 @@ export const FAIR = {
   /** Wildlife on your half is free food (and danger): heaviest animal, and all of them together (kg). */
   wildMaxKg: 400,
   wildTotalKg: 1500,
-  /** Radii of area effects (tiles): not priced yet. */
-  maxRadius: 8,
-  /** Sown plants: size (kg) and how many of each kind a building keeps going: not priced yet. */
-  sowMaxKg: 400,
-  sowMaxPlants: 12,
 } as const;
 
 /** Everything unfair about a faction ([] = fine to bring to a game). */
@@ -89,12 +84,14 @@ export function checkFairness(f: FactionSpec): string[] {
       if (!(a.height >= 0)) e.push(`${b.id}: tower height can't be negative`); // height is priced: mechanism × height
       if (a.stockShots !== undefined && !(a.stockShots >= 1)) e.push(`${b.id}: stockShots must be at least 1`);
     }
-    if (b.gatherBoost && !(b.gatherBoost.radius > 0 && b.gatherBoost.radius <= FAIR.maxRadius)) e.push(`${b.id}: gatherBoost radius must be 1–${FAIR.maxRadius}`);
+    // a gather boost burns crystal for every extra kg, so its reach is paid for as it's used
+    if (b.gatherBoost && !(b.gatherBoost.radius > 0)) e.push(`${b.id}: gatherBoost radius must be positive`);
     if (b.sow) {
+      // sowing spends seed (a third of each plant's yield) at a pace set by its priced mechanism
       const s = b.sow;
-      if (!(s.mechanism >= 0) || !(s.radius > 0 && s.radius <= FAIR.maxRadius)) e.push(`${b.id}: bad sow mechanism/radius`);
-      for (const kg of Object.values(s.plantKg ?? {})) if (!(kg! > 0 && kg! <= FAIR.sowMaxKg)) e.push(`${b.id}: sown plants can grow to at most ${FAIR.sowMaxKg} kg`);
-      for (const n of Object.values(s.maxPlants ?? {})) if (!(Number.isInteger(n) && n! >= 0 && n! <= FAIR.sowMaxPlants)) e.push(`${b.id}: at most ${FAIR.sowMaxPlants} sown plants of a kind`);
+      if (!(s.mechanism >= 0) || !(s.radius > 0)) e.push(`${b.id}: bad sow mechanism/radius`);
+      for (const kg of Object.values(s.plantKg ?? {})) if (!(kg! > 0)) e.push(`${b.id}: sown plants must grow to more than 0 kg`);
+      for (const n of Object.values(s.maxPlants ?? {})) if (!(Number.isInteger(n) && n! >= 0)) e.push(`${b.id}: maxPlants must be a whole number`);
     }
     if (b.carters !== undefined && !(Number.isInteger(b.carters) && b.carters >= 0)) e.push(`${b.id}: carters must be a whole number`); // each one is paid for
   }

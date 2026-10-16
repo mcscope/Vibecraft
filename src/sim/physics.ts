@@ -293,6 +293,10 @@ export const CAP = {
   sowSeedFraction: 1 / 3,
   /** Seconds for a sown plant to grow to full. */
   sowGrowSec: 90,
+  /** Gather boosts are crystal magic: crystal burned per extra kg the boost adds. */
+  boostCrystalPerKg: 0.05,
+  /** Crystal a boosting building asks to keep on hand to burn. */
+  boostStash: 10,
 } as const;
 
 export function capitalFor(refinement: number): number {

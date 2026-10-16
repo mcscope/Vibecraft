@@ -130,6 +130,7 @@ export interface BuildingSpec {
    * lose the building, lose the boost. Boosts don't stack; the best one applies.
    */
   gatherBoost?: { radius: number; resources: ResourceKind[] };
+  // (the boost burns crystal from the building's stock: CAP.boostCrystalPerKg per extra kg; none on hand, no boost)
   /**
    * Sowing: plants new berry bushes / trees on open ground within `radius`.
    * `mechanism` (kg of sowing machinery, paid like a tower's mechanism, not

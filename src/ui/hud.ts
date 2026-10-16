@@ -174,7 +174,7 @@ export class Hud {
         spec.trains?.length ? `Trains ${spec.trains.map((id) => w.specOf(this.player, id)?.spec.name ?? id).join(', ')}` : '',
         spec.researches?.length ? `Researches ${spec.researches.length} technologies` : '',
         st.tower ? `Throws ${spec.attack!.crystalMass} kg crystals for ${n0(st.tower.damage)} damage, range ${fmt(st.tower.range, 1)}` : '',
-        spec.gatherBoost ? `Gathering within ${spec.gatherBoost.radius} tiles ×${fmt(st.gatherBoost, 2)}` : '',
+        spec.gatherBoost ? `Gathering within ${spec.gatherBoost.radius} tiles ×${fmt(st.gatherBoost, 2)}, burning crystal` : '',
         spec.sow ? `Sows ${spec.sow.resources.map((r) => this.names()[r].toLowerCase()).join(' and ')} within ${spec.sow.radius} tiles` : '',
         spec.carters ? `Always keeps ${spec.carters} ${carterName(w.factionOf(this.player)).toLowerCase()}${spec.carters > 1 ? 's' : ''}; train more by hand` : '',
       ].filter(Boolean).join(' · ');
@@ -492,7 +492,7 @@ export class Hud {
       <div class="state" data-carts></div>
       ${b.grown !== undefined ? '<div class="state" data-grow></div>' : ''}
       ${st.tower ? '<div class="ammo" data-ammo></div>' : ''}
-      ${b.spec.gatherBoost ? `<div class="state">Gathering nearby ×${fmt(st.gatherBoost, 2)} (within ${b.spec.gatherBoost.radius} tiles)</div>` : ''}
+      ${b.spec.gatherBoost ? `<div class="state">${b.stock.crystal > 1e-6 ? `Gathering nearby ×${fmt(st.gatherBoost, 2)} (within ${b.spec.gatherBoost.radius} tiles), burning crystal` : 'No crystal: gathering boost off'}</div>` : ''}
       ${b.spec.sow && own ? `<div class="sow">Sowing ${b.spec.sow.resources.map((r) => `<button data-sow="${r}" data-building="${b.id}" class="${b.sowing.includes(r) ? 'on' : ''}" title="Plants a ${plantKg(b.spec, r)} kg ${r === 'food' ? 'bush' : 'tree'} for ${need(plantKg(b.spec, r) * CAP.sowSeedFraction)} ${names[r].toLowerCase()} of seed from this building; it grows over ${CAP.sowGrowSec} s">${names[r]} ${b.sowing.includes(r) ? 'on' : 'off'}</button>`).join(' ')}</div>` : ''}
       ${st.tower ? `<div class="state">Tower: ${n0(st.tower.damage)} dmg · range ${fmt(st.tower.minRange, 0)}–${fmt(st.tower.range, 1)} (can't hit right below itself) · ${fmt(st.tower.cooldown, 1)} s · ${b.spec.attack!.crystalMass} kg crystal per shot</div>` : ''}`;
     if (!own) return `<div class="building-panel"><div class="info">${head}${info}</div></div>`;

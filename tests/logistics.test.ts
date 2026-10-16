@@ -85,7 +85,7 @@ describe('supply', () => {
   tc.stock = { food: 0, wood: 0, crystal: 0 };
   const camp = w.addBuilding(0, 'gathering-camp', tc.ox + 8, tc.oy)!;
   camp.sowing = [];
-  camp.stock = { food: 400, wood: 0, crystal: 5 }; // what villagers dropped there
+  camp.stock = { food: 400, wood: 0, crystal: 15 }; // what villagers dropped there (it keeps 10 crystal for its boost)
   w.enqueue({ player: 0, cmd: { type: 'train', building: tc.id, specId: 'villager' } });
   run(w, 20 * 60);
   expect(camp.stock.food).toBeLessThan(400);
