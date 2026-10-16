@@ -159,7 +159,8 @@ describe('towers and infrastructure', () => {
     const w = newWorld();
     const t = w.addBuilding(0, 'watchtower', 30, 30)!;
     t.stock = { food: 0, wood: 0, crystal: 30 }; // no food needed, just crystal ammo
-    const enemy = w.unitsOf(1)[0];
+    const enemy = w.unitsOf(1).find((u) => u.specId === 'villager')!;
+    enemy.crystal = 0; enemy.ammo = 0; // disarmed, so it won't walk into the blind spot to fight
     enemy.x = enemy.px = 36; enemy.y = enemy.py = 31; enemy.order = { kind: 'idle' }; // outside its blind spot
     const hp = enemy.hp;
     run(w, 20 * 4);

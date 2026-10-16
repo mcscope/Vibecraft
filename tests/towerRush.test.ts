@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { meadowfolk } from '../src/factions/meadowfolk';
 import { World } from '../src/sim/world';
 import { SkirmishAI } from '../src/ai/skirmishAI';
+import { withExtras } from './kit';
 
 const run = (w: World, ticks: number) => { for (let i = 0; i < ticks; i++) w.step(); };
 const newWorld = () => new World({ seed: 7, players: [{ name: 'A', faction: meadowfolk }, { name: 'B', faction: meadowfolk }] });
@@ -20,8 +21,9 @@ describe('answering a tower rush', () => {
     expect(t.stats.tower!.minRange).toBeCloseTo(3);
   });
 
-  test('an unarmed villager sent to attack grabs a crystal first, then hits', () => {
-    const w = newWorld(); tidy(w);
+  test('an unarmed worker sent to attack grabs a crystal first, then hits', () => {
+    const unarmed = withExtras(meadowfolk, { patch: { villager: { attack: undefined } } });
+    const w = new World({ seed: 7, players: [{ name: 'A', faction: unarmed }, { name: 'B', faction: meadowfolk }] }); tidy(w);
     const tc = w.baseOf(0)!;
     tc.stock.crystal = 50;
     const v = w.unitsOf(0).find((u) => u.specId === 'villager')!;

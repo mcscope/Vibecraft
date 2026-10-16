@@ -31,11 +31,16 @@ const villagerLook: HumanLook = {
 const villager: MeadowUnit = {
   id: 'villager',
   name: 'Villager',
-  description: 'Gathers berries, wood and crystal, hauls them home and raises buildings. Unarmed.',
+  description: 'Gathers berries, wood and crystal, hauls them home and raises buildings, and can defend itself with a crystal-headed hammer.',
   mass: 45,
   physique: { muscle: 0.4, frame: 0.35, reserve: 0.25 },
+  attack: { style: 'strike', crystalMass: 1 },
   model(b, p) {
-    human(b, p, villagerLook, armAngle(p), () => {}); // unarmed: empty hands
+    human(b, p, villagerLook, armAngle(p), (h) => {
+      if (!p.armed) return;
+      h.limb([0, 0, 0], [0.32, 0.06, 0], 0.018, WOOD);
+      h.crystal(0.16, [0.34, 0.06, 0], [0, 0, -Math.PI / 2 + 0.1]);
+    });
     cargoPack(b, p, 0.95);
   },
 };

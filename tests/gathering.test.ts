@@ -17,11 +17,11 @@ describe('gatherers', () => {
     expect(v.food).toBeLessThan(0.05);
   });
 
-  test('villagers carry no crystal', () => {
+  test('villagers carry a crystal-headed hammer', () => {
   const w = newWorld();
   const v = w.unitsOf(0).find((u) => u.specId === 'villager')!;
-  expect(v.stats.crystalCost).toBe(0);
-  expect(v.crystal).toBe(0);
+  expect(v.stats.crystalCost).toBe(1);
+  expect(w.armed(v)).toBe(true);
   });
 
   test('sown bushes start holding their seed, can be picked while growing, and vanish when picked bare', () => {
