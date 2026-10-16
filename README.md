@@ -4,6 +4,8 @@ A browser RTS where every player vibecodes their own army, then brings it to an 
 
 You describe your faction in code: its units, buildings and techs, how they look, the land they come from and the animals that live there. You don't set the stats. The engine works out HP, speed, damage, carry capacity, calories and cost from each unit's body (mass, how that mass splits between muscle, frame and reserve, and the crystal it swings or throws) and from each building's materials. A giant is strong and also hungry, slow and expensive. That keeps factions nobody has playtested against each other fair.
 
+**Play it now:** http://mcscope.com/game/vibecraft/. Its online lobby uses the relay at `ws://mcscope.com:5190` by default.
+
 ## Run it
 
 ```sh
@@ -43,6 +45,7 @@ Rules of the road:
 
 Online games are 1v1. Each player runs their own copy of the game with their own faction. When the match starts, your faction (specs and baked art) travels to your opponent as data. Their client checks it against the rules, so you never need each other's code.
 
+0. **Or use the hosted relay.** On http://mcscope.com/game/vibecraft/ the lobby already points at `ws://mcscope.com:5190`. Both players need the same version of the game, because lockstep needs identical rules on both sides. If you've changed the engine (not just your faction), host your own build and relay.
 1. **Start the relay.** One person runs `npm run relay`, a tiny dependency-free WebSocket relay on port 5190.
    - On a LAN, everyone uses that machine's address.
    - Over the internet, run the relay somewhere public (a small VPS, or forward port 5190) and use `ws://<host>:5190`.
