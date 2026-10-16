@@ -14,6 +14,7 @@ import { midStride, strideFactor } from './abilities/gait';
 import { nearestDropOff } from './abilities/dropoff';
 import { eating, isTamer, runPens, runTame } from './abilities/herding';
 import { canReach, FLY_SIGHT, flyTo, heightBonus, takeOff, tickFlight } from './abilities/flight';
+import { MatchStats } from './stats';
 import { isUnderfoot, loadBelt, nearestBelt, roadFactor, routeBelts, runBelts, type BeltRoutes, type Parcel } from './abilities/underfoot';
 import { grow, grownEnough, livingStats, seedMaterials } from './abilities/living';
 import {
@@ -284,6 +285,8 @@ export class World {
   /** Render-side consumers drain this; the sim never reads it. */
   events: WorldEvent[] = [];
   winner = -1;
+  /** Totals and a timeline for the score screen (read-only; the sim never looks at it). */
+  stats!: MatchStats;
 
   private nextId = 1;
   /** Per player: unit specs with stats including that player's technologies. */
@@ -322,6 +325,7 @@ export class World {
       for (const s of p.faction.units) this.unitSpecs.set(`${i}/${s.id}`, { spec: s, stats: derive(s) });
       for (const b of p.faction.buildings ?? []) this.buildingStats.set(`${key}/${b.id}`, deriveBuilding(b, p.faction));
     });
+    this.stats = new MatchStats(this.players.length);
     this.scenario.setup(this, map);
     for (let i = 0; i < this.players.length; i++) {
       const [sx, sy] = map.starts[i] ?? map.starts[0];
@@ -680,6 +684,13 @@ export class World {
         }
         return;
       }
+      case 'resign': {
+        const p = this.players[player];
+        if (!p || p.neutral || p.defeated) return;
+        p.defeated = true;
+        this.stats.resigned = player;
+        return;
+      }
       case 'townBell': {
         // every worker: on → grab a crystal and stand as militia; off → back to what they were doing
         const workers = [...this.units.values()].filter((u) => u.owner === player && !u.carter && u.stats.gatherRate > 0 && (u.stats.improvised || u.specId === this.factionOf(player).workerId));
@@ -849,6 +860,7 @@ export class World {
 
   step(commands: PlayerCommand[] = []): void {
     if (this.winner >= 0) return;
+    const events0 = this.events.length;
     for (const c of this.pending) this.apply(c);
     this.pending = [];
     for (const c of commands) this.apply(c);
@@ -870,6 +882,7 @@ export class World {
     if (this.tick % VISION_EVERY === 0) this.updateVision();
     this.scenario.tick?.(this);
     this.tick++;
+    this.stats.record(this, this.events.slice(events0));
   }
 
   /** What `player` can see of tile (x, y): 0 never seen, 1 explored, 2 in sight now. */
@@ -1372,6 +1385,7 @@ export class World {
       if (want > 0) {
         n.amount -= want;
         if (o.stopWhenArmed) u.ammo += want; else this.carry(u, n.type, want);
+        if (!n.shard) this.stats.gather(u.owner, n.type, want);
         this.burnBoost(boost, want);
         u.cal -= K.gatherCalPerKg * want;
         u.busy = true;
@@ -1536,6 +1550,7 @@ export class World {
       const want = Math.min(this.gatherUnits(u, u.stats.gatherRate * boost.mult, tree.amount), Math.max(0, Math.ceil(remaining - u.wood)));
       if (want > 0) {
         tree.amount -= want; u.wood += want; u.cal -= K.gatherCalPerKg * want; u.busy = true;
+        this.stats.gather(u.owner, 'wood', want);
         this.burnBoost(boost, want);
       }
       if (tree.amount <= 0.001) this.removeNode(tree);

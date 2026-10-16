@@ -10,6 +10,7 @@ import { Lockstep, LocalInput, LoopbackTransport, type CommandSource, type Trans
 import { NetTransport } from './net/relayClient';
 import type { OnlineGame } from './net/online';
 import { openLobby } from './ui/lobby';
+import { showScore } from './ui/scoreScreen';
 import { SkirmishAI } from './ai/skirmishAI';
 import { CartDebug } from './ui/cartDebug';
 import { Renderer } from './render/renderer';
@@ -180,6 +181,13 @@ async function run(g: GameSetup): Promise<void> {
   let fps = 60;
   const overlay = document.getElementById('overlay')!;
   const speedEl = document.getElementById('speed')!;
+  // resign (players only, in matches that can be won) and the score screen when it's over
+  const resignBtn = document.getElementById('resign')!;
+  const canResign = m === 'skirmish' || m === 'online';
+  resignBtn.style.display = canResign ? '' : 'none';
+  resignBtn.onclick = () => { if (world.winner < 0 && !world.players[HUMAN].defeated && confirm('Resign this match?')) local.issue({ type: 'resign' }); };
+  let scored = false;
+  const scoreBox = document.getElementById('score')!;
 
   const cartDebug = new CartDebug(world, renderer.cam, HUMAN);
   let simMs = 0, drawMs = 0, perfTick = 0;
@@ -219,6 +227,11 @@ async function run(g: GameSetup): Promise<void> {
       perfEl.textContent = `${Math.round(fps)} fps · sim ${simMs.toFixed(1)} ms · draw ${drawMs.toFixed(1)} ms`;
     }
 
+    if (world.winner >= 0 && !scored && world.scenario.victory) {
+      scored = true;
+      resignBtn.style.display = 'none';
+      showScore(scoreBox, world, m === 'spectate' ? -1 : HUMAN, () => {});
+    }
     const status = world.winner >= 0
       ? (m === 'spectate' ? `${world.players[world.winner].name} wins` : world.winner === HUMAN ? 'Victory' : 'Defeat')
       : input.paused ? 'Paused' : '';

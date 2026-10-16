@@ -40,7 +40,9 @@ export type Command =
   /** Send units to help an existing construction site. */
   | { type: 'construct'; units: number[]; site: number }
   /** `node`: rallied onto a resource, so new workers gather it. */
-  | { type: 'rally'; building: number; x: number; y: number; node?: number };
+  | { type: 'rally'; building: number; x: number; y: number; node?: number }
+  /** Give up: you lose, the others play on (or win). */
+  | { type: 'resign' };
 
 export interface PlayerCommand {
   player: number;
