@@ -93,4 +93,15 @@ describe('ammo bearer', () => {
     expect(hut.stock.food).toBeLessThan(300); // it hauled roots over
     expect(hall.queue.length === 0 || hall.queue[0].paid).toBe(true); // and the fenling got paid for
   });
+  test('a pack tortoise comes out of training loaded with crystal', () => {
+    const w = new World({ seed: 7, players: [{ name: 'Fen', faction: fenfolk }, { name: 'Fen2', faction: fenfolk }] });
+    const hall = w.baseOf(0)!;
+    const wallow = w.addBuilding(0, 'toad-wallow', hall.ox + 8, hall.oy)!;
+    wallow.stock = { food: 1000, wood: 0, crystal: 100 };
+    w.enqueue({ player: 0, cmd: { type: 'train', building: wallow.id, specId: 'pack-tortoise' } });
+    run(w, 20 * 60);
+    const t = w.unitsOf(0).find((u) => u.specId === 'pack-tortoise')!;
+    expect(t).toBeTruthy();
+    expect(t.crystal).toBeGreaterThan(20);
+  });
 });

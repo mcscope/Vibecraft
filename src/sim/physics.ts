@@ -288,11 +288,11 @@ export const CAP = {
   /** Height costs mechanism × height × this, in building resource. */
   heightCost: 0.25,
   /** Sowing: kg of future yield planted per second, per kg of sowing mechanism. */
-  sowRatePerKg: 0.08,
-  /** Seed cost as a fraction of the yield (plants give back ~3×, slowly). */
-  sowSeedFraction: 1 / 3,
+  sowRatePerKg: 0.2,
+  /** Seed cost as a fraction of the yield (plants give back 4×). */
+  sowSeedFraction: 1 / 4,
   /** Seconds for a sown plant to grow to full. */
-  sowGrowSec: 90,
+  sowGrowSec: 45,
   /** Gather boosts are crystal magic: crystal burned per extra kg the boost adds. */
   boostCrystalPerKg: 0.05,
   /** Crystal a boosting building asks to keep on hand to burn. */

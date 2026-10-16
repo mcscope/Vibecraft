@@ -32,7 +32,7 @@ describe('gatherers', () => {
   camp.stock = { food: 100, wood: 0, crystal: 0 };
   run(w, 2);
   const bush = [...w.nodes.values()].find((n) => n.sownBy === camp.id)!;
-  expect(bush.amount).toBeGreaterThan(60); // the seed went into it: never an empty bush
+  expect(bush.amount).toBeGreaterThan(45); // the seed (a quarter of 200 kg) went into it: never an empty bush
   expect(bush.growLeft).toBeGreaterThan(0);
   const v = w.unitsOf(0).find((u) => u.specId === 'villager')!;
   w.enqueue({ player: 0, cmd: { type: 'gather', units: [v.id], node: bush.id } });

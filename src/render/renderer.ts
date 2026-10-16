@@ -25,7 +25,8 @@ export interface RenderState {
   box: { x0: number; y0: number; x1: number; y1: number } | null;
   ping: { x: number; y: number; t: number; color: string } | null;
   /** Building placement preview. */
-  ghost: { specId: string; ox: number; oy: number; size: number; ok: boolean } | null;
+  /** Placement preview; `line` is the tiles of a dragged line of one-tile pieces (walls, canals, roads). */
+  ghost: { specId: string; ox: number; oy: number; size: number; ok: boolean; line?: Array<[number, number, boolean]> } | null;
 }
 
 export interface RenderOptions {
@@ -493,6 +494,7 @@ export class Renderer {
     }
     const gh = rs.ghost;
     if (gh) {
+      for (const [x, y, ok] of gh.line ?? []) ellipse(this.diamondTex, isoX(x + 0.5, y + 0.5), isoY(x + 0.5, y + 0.5), 32, 16, ok ? 0x7aff7a : 0xff5a4a, 0.8);
       const cx = gh.ox + gh.size / 2, cy = gh.oy + gh.size / 2;
       ellipse(this.diamondTex, isoX(cx, cy), isoY(cx, cy), gh.size * 32, gh.size * 16, gh.ok ? 0x7aff7a : 0xff5a4a, 0.95);
       const gs = this.world.buildingSpecOf(0, gh.specId);

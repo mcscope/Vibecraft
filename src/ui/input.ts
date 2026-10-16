@@ -1,5 +1,6 @@
 import { isTamer, tameable } from '../sim/abilities/herding';
 import { isUnderfoot } from '../sim/abilities/underfoot';
+import { isWall } from '../sim/abilities/wall';
 // Mouse + keyboard → selection, camera, and Commands.
 import type { Command } from '../sim/commands';
 import type { World } from '../sim/world';
@@ -106,6 +107,12 @@ export class Input {
         const [wx, wy] = cam.toWorld(this.mouse.x, this.mouse.y);
         const ox = Math.round(wx - spec.size / 2), oy = Math.round(wy - spec.size / 2);
         this.rs.ghost = { specId: spec.id, ox, oy, size: spec.size, ok: this.world.placeable(ox, oy, spec.size) && !this.world.buildBlocker(this.player, spec.id) };
+        // dragging a wall, canal or road lays a line of it
+        const d = this.drag;
+        if (d && d.button === 0 && d.moved && spec.size === 1 && isWall(spec)) {
+          const [sx, sy] = cam.toWorld(d.x, d.y);
+          this.rs.ghost.line = this.lineTiles(Math.floor(sx), Math.floor(sy), ox, oy).map(([x, y]) => [x, y, this.world.placeable(x, y, 1)]);
+        }
       }
     } else this.rs.ghost = null;
   }
@@ -148,6 +155,14 @@ export class Input {
       const units = this.selectedUnits();
       if (this.mode === 'place') {
         const g = this.rs.ghost;
+        if (g?.line && d.moved) {
+          // a dragged line: the selected workers start at the first tile and work along it
+          const tiles = g.line.filter(([, , ok]) => ok);
+          tiles.forEach(([x, y], i) => this.issue({ type: 'build', units: i === 0 ? this.workers(units) : [], specId: g.specId, ox: x, oy: y }));
+          if (tiles.length) this.ping(tiles[0][0] + 0.5, tiles[0][1] + 0.5, '#7aff7a');
+          if (!e.shiftKey) this.mode = null;
+          return;
+        }
         if (g && g.ok) {
           this.issue({ type: 'build', units: this.workers(units), specId: g.specId, ox: g.ox, oy: g.oy });
           this.ping(g.ox + g.size / 2, g.oy + g.size / 2, '#7aff7a');
@@ -377,6 +392,20 @@ export class Input {
     this.renderer.cam.centerOn(u.x, u.y);
   }
 
+  /** Tiles from (x0, y0) to (x1, y1), stepping edge to edge (so walls and canals join up). */
+  private lineTiles(x0: number, y0: number, x1: number, y1: number): Array<[number, number]> {
+    const out: Array<[number, number]> = [[x0, y0]];
+    let x = x0, y = y0;
+    for (let i = 0; i < 64 && (x !== x1 || y !== y1); i++) {
+      // step along whichever axis is further behind the straight line
+      const dx = x1 - x0, dy = y1 - y0;
+      const ahead = Math.abs(dx) * Math.abs(y - y0) - Math.abs(dy) * Math.abs(x - x0); // > 0: y has run ahead
+      if (x !== x1 && (y === y1 || ahead >= 0)) x += Math.sign(x1 - x); else y += Math.sign(y1 - y);
+      out.push([x, y]);
+    }
+    return out;
+  }
+
   /** Start placing a building (from the HUD build menu). */
   startPlacing(specId: string): void {
     if (!this.workers(this.selectedUnits()).length) return;
@@ -389,16 +418,25 @@ export class Input {
     return units.filter((id) => this.world.units.get(id)?.specId === wid);
   }
 
-  /** Nearest finished building with food to the selection (falls back to the base). */
+  /**
+   * Nearest finished building to the selection that has what it needs: crystal
+   * if anyone's short of it (a thrower's pack, an ammo bearer's load), else food.
+   * Falls back to the base.
+   */
   private supplyBuilding(units: number[]): import('../sim/world').Building | undefined {
     const w = this.world;
-    let x = 0, y = 0, n = 0;
-    for (const id of units) { const u = w.units.get(id); if (u) { x += u.x; y += u.y; n++; } }
+    let x = 0, y = 0, n = 0, crystal = false;
+    for (const id of units) {
+      const u = w.units.get(id);
+      if (!u) continue;
+      x += u.x; y += u.y; n++;
+      if (u.ammo < u.stats.loadoutCrystal - 1e-6 || (w.specOf(u.owner, u.specId)?.spec.bearer && w.freeCapacity(u) >= 1)) crystal = true;
+    }
     if (!n) return w.baseOf(this.player);
     x /= n; y /= n;
     let best: import('../sim/world').Building | undefined, bestD = Infinity;
     for (const b of w.buildingsOf(this.player)) {
-      if (!b.complete || b.stock.food < 1) continue;
+      if (!b.complete || (crystal ? b.stock.crystal < 1 : b.stock.food < 1)) continue;
       const d = (b.ox + b.size / 2 - x) ** 2 + (b.oy + b.size / 2 - y) ** 2;
       if (d < bestD) { bestD = d; best = b; }
     }

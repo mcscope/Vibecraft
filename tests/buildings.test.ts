@@ -168,6 +168,24 @@ describe('towers and infrastructure', () => {
     expect(enemy.hp).toBeLessThan(hp);
   });
 
+  test('a builder whose site is done moves on to the next unfinished site nearby', () => {
+    const w = newWorld();
+    const tc = w.baseOf(0)!;
+    tc.stock.wood = 1000;
+    const v = w.unitsOf(0).find((u) => u.specId === 'villager')!;
+    const s1 = w.findBuildSpot(1, tc.ox + 5, tc.oy + 1)!;
+    w.enqueue({ player: 0, cmd: { type: 'build', units: [v.id], specId: 'watchtower', ox: s1[0], oy: s1[1] } });
+    run(w, 1);
+    const s2 = w.findBuildSpot(1, s1[0] + 3, s1[1] + 1)!;
+    w.enqueue({ player: 0, cmd: { type: 'build', units: [], specId: 'watchtower', ox: s2[0], oy: s2[1] } }); // nobody sent here
+    run(w, 1);
+    const a = w.buildings.get(w.buildingsOf(0).find((x) => x.ox === s1[0] && x.oy === s1[1])!.id)!;
+    const b = w.buildings.get(w.buildingsOf(0).find((x) => x.ox === s2[0] && x.oy === s2[1])!.id)!;
+    for (let i = 0; i < 20 * 120 && !(a.complete && b.complete); i++) w.step();
+    expect(a.complete).toBe(true);
+    expect(b.complete).toBe(true);
+  });
+
   test('a gather boost burns crystal from its building as it works', () => {
     const w = newWorld();
     const tc = w.baseOf(0)!;
@@ -198,7 +216,7 @@ describe('towers and infrastructure', () => {
   expect(w.gatherBoostAt(0, cx + 20, cy, 'food')).toBe(1);
   expect(w.gatherBoostAt(1, cx + 3, cy, 'food')).toBe(1);
   camp.stock = { food: 300, wood: 300, crystal: 0 };
-  run(w, 20 * 140); // 60 kg of sowing mechanism plants 4.8 kg/s of yield: a bush, then a tree
+  run(w, 20 * 140); // 60 kg of sowing mechanism plants 12 kg/s of yield: bushes and trees
   const sown = [...w.nodes.values()].filter((n) => n.sownBy === camp.id);
   expect(sown.some((n) => n.type === 'food')).toBe(true);
   expect(sown.some((n) => n.type === 'wood')).toBe(true);

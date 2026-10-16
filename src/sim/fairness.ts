@@ -87,7 +87,7 @@ export function checkFairness(f: FactionSpec): string[] {
     // a gather boost burns crystal for every extra kg, so its reach is paid for as it's used
     if (b.gatherBoost && !(b.gatherBoost.radius > 0)) e.push(`${b.id}: gatherBoost radius must be positive`);
     if (b.sow) {
-      // sowing spends seed (a third of each plant's yield) at a pace set by its priced mechanism
+      // sowing spends seed (a quarter of each plant's yield) at a pace set by its priced mechanism
       const s = b.sow;
       if (!(s.mechanism >= 0) || !(s.radius > 0)) e.push(`${b.id}: bad sow mechanism/radius`);
       for (const kg of Object.values(s.plantKg ?? {})) if (!(kg! > 0)) e.push(`${b.id}: sown plants must grow to more than 0 kg`);

@@ -30,6 +30,8 @@ export const TREE_WOOD = 100;
 /** What a sown plant grows to, and how many a building keeps going at once. */
 /** Defaults for BuildingSpec.sow (a faction can set its own). */
 export const SOW_YIELD: Record<'food' | 'wood', number> = { food: 200, wood: 100 };
+/** Tiles a builder looks around for another unfinished site when its own is done. */
+const NEARBY_SITE = 10;
 export const SOW_MAX: Record<'food' | 'wood', number> = { food: 6, wood: 8 };
 /** Default BuildingSpec.attack.stockShots. */
 export const TOWER_STOCK_SHOTS = 40;
@@ -775,6 +777,7 @@ export class World {
     const d = Math.sqrt(dx * dx + dy * dy) || 1;
     const pos = this.grid.nearestOpen(cx + (dx / d) * (from.size / 2 + 0.7), cy + (dy / d) * (from.size / 2 + 0.7)) ?? [cx + 2.5, cy + 2.5];
     const u = this.makeUnit(owner, specId, pos[0], pos[1]);
+    bearerAbility.loadUp(this, u, from); // an ammo bearer comes out loaded with crystal from the building's stock
     const rx = from.rallyX, ry = from.rallyY;
     if (from.rallyRes && !u.carter && this.gathers(u, from.rallyRes)) {
       // rallied onto a resource: go gather it (the nearest of that kind to the rally point, if it's gone)
@@ -1507,7 +1510,13 @@ export class World {
   /** Construction: fetch wood from a stockpile (or chop it), carry it to the site. */
   private runBuild(u: Unit, o: Extract<Order, { kind: 'build' }>): boolean {
     const site = this.buildings.get(o.site);
-    if (!site || site.owner !== u.owner || site.complete) { this.finish(u); return false; }
+    if (!site || site.owner !== u.owner || site.complete) {
+      // done here: move on to the nearest unfinished site close by (a line of walls, the next building)
+      const next = this.nearbySite(u);
+      if (next) { o.site = next.id; o.phase = u.wood > 0.05 ? 'deliver' : 'fetch'; u.path = []; return false; }
+      this.finish(u);
+      return false;
+    }
     const remaining = site.stats.totalCost - site.built;
     if (o.phase === 'deliver' || (o.phase !== 'chop' && u.wood >= Math.min(remaining, 0.5))) {
       if (u.wood <= 1e-6) { o.phase = 'fetch'; return false; }
@@ -1564,6 +1573,17 @@ export class World {
     if (best) { o.node = best.id; o.phase = 'chop'; }
     else this.finish(u);
     return false;
+  }
+
+  /** The nearest unfinished building of a builder's side within a few tiles, if any. */
+  private nearbySite(u: Unit): Building | null {
+    let best: Building | null = null, bestD = NEARBY_SITE * NEARBY_SITE;
+    for (const b of this.buildings.values()) {
+      if (b.owner !== u.owner || b.complete) continue;
+      const d = (b.ox + b.size / 2 - u.x) ** 2 + (b.oy + b.size / 2 - u.y) ** 2;
+      if (d < bestD) { bestD = d; best = b; }
+    }
+    return best;
   }
 
   /** Put wood from a unit's pack into a construction site; HP grows with it. */

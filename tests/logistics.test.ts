@@ -142,10 +142,10 @@ describe('supply', () => {
     const camp = w.addBuilding(0, 'gathering-camp', tc.ox + 9, tc.oy)!;
     camp.sowing = ['food'];
     const want = w.logistics.supplyTargets(camp);
-    expect(want.food).toBe(67); // one 200 kg bush's seed, nothing more
+    expect(want.food).toBe(50); // one 200 kg bush's seed, nothing more
     expect(want.wood).toBe(0);
     run(w, 20 * 40);
     expect([...w.nodes.values()].some((n) => n.sownBy === camp.id)).toBe(true);
-    expect(camp.stock.food).toBeLessThan(80); // never stockpiled beyond the next planting
+    expect(camp.stock.food).toBeLessThan(60); // never stockpiled beyond the next planting
   });
 });
