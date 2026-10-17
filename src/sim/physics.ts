@@ -301,8 +301,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
       const L = shaft, kg = shaft * K.shaftKgPerM, out = 0.75 * L + 0.4;
       const I = (kg * 0.75 * (0.75 * L) ** 2) / 3 + (kg * 0.25 * (0.25 * L) ** 2) / 3 + crystalMass * out * out;
       const torque = K.holdForcePerMuscleKg * muscleMass * 0.5;
-      // and a long weapon's tip can't sweep round faster than the arms move (limb speed ÷ its length out front)
-      return Math.min(K.turnRate, Math.sqrt(((Math.PI / 2) * torque) / (2 * Math.max(1e-6, I))), L > 0 ? limbSpeed / out : Infinity);
+      return Math.min(K.turnRate, Math.sqrt(((Math.PI / 2) * torque) / (2 * Math.max(1e-6, I))));
     })(),
     minReach: shaft ? reach - (shaft * 0.75 * 0.5) / M_PER_TILE : 0, // it can choke up half the shaft's forward length
     // a shaft can be planted (butt on the ground behind, point at the enemy) only if it's well longer than the body is tall:
