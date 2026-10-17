@@ -135,6 +135,13 @@ In Meadow-vs-Meadow and Fen-vs-Fen AI games, first blood comes at about 4.5–5.
 - **Workers flee raiders.**
 - **Cheaper early towers at outlying worksites.**
 
+**Then built:** the AI shelters *any* worker that has fighting enemies within 6 tiles and no soldiers of its own nearby, in the nearest building with room (base, hut or camp). Everyone comes out after 8 calm seconds. Raids stopped killing whole worker lines:
+- unit losses fell sharply (one game went from 35/21 lost to 18/8);
+- most games now stay contested to 20 minutes;
+- one Fen-vs-Meadow game swung to the Meadowfolk.
+
+The snowball is clearly weaker.
+
 ## Decisions for the user (not made unilaterally)
 
 1. **Workers that are also soldiers.** Correction to an earlier guess: the arena shows ranged units are *weak* per cost, not strong. What made the Fenfolk dominant was that their *workers* are a ranged militia they'd have paid for anyway. That's a legitimate faction identity, but it's under-priced. Options:
