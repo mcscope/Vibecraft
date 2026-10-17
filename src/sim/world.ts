@@ -1353,7 +1353,7 @@ export class World {
     let hit = 0;
     const tu = this.units.get(p.target);
     if (p.tz !== undefined) {
-      // thrown up at a flier: it hits a flier there, or falls back to earth harmlessly
+      // thrown up at a flier: it hits a flier up there...
       if (tu && tu.airborne && (tu.x - p.tx) ** 2 + (tu.y - p.ty) ** 2 < (tu.stats.radius + 0.5) ** 2) hit = tu.id;
       else {
         let best = 0.5 ** 2;
@@ -1363,8 +1363,10 @@ export class World {
           if (d < best + u.stats.radius ** 2) { best = d; hit = u.id; }
         }
       }
-      if (hit) this.damage(hit, p.damage, p.tx, p.ty);
-      this.dropShard(p.tx, p.ty, p.crystalKg);
+      if (hit) { this.damage(hit, p.damage, p.tx, p.ty); this.dropShard(p.tx, p.ty, p.crystalKg); return; }
+      // ...or misses and falls back to earth from that height, onto whatever is underneath
+      const fall: Projectile = { id: this.nextId++, owner: p.owner, sx: p.tx, sy: p.ty, sz: p.tz, tx: p.tx, ty: p.ty, t: 0, duration: dropTime(p.tz), damage: p.damage, crystalKg: p.crystalKg, target: 0, drop: true };
+      this.projectiles.set(fall.id, fall);
       return;
     }
     if (tu && (tu.x - p.tx) ** 2 + (tu.y - p.ty) ** 2 < (tu.stats.radius + 0.4) ** 2) hit = tu.id;

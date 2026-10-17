@@ -404,7 +404,9 @@ export class Renderer {
       const dist = Math.hypot(p.tx - p.sx, p.ty - p.sy);
       // a bomb falls from the bird (accelerating); a throw arcs; a tower's shot starts up its stilts
       // thrown at a flier: the arc ends up at the bird (its altitude, plus half its body)
-      const end = p.tz !== undefined ? Renderer.altPx(p.tz) + 20 : 0;
+      // (where the bird is drawn now, so the stone meets it even as it climbs or dives)
+      const tu = p.tz !== undefined ? this.world.units.get(p.target) : undefined;
+      const end = p.tz === undefined ? 0 : tu?.airborne ? this.lift(tu.id) + (this.bank.unit(tu.owner, tu.specId)?.height ?? 40) * 0.35 : Renderer.altPx(p.tz) + 20;
       const h = p.drop ? (Renderer.altPx(p.sz) + 30) * (1 - t * t) : (10 + dist * 6) * 4 * t * (1 - t) + (26 + p.sz * 16) * (1 - t) + end * t;
       sp.position.set(isoX(x, y), isoY(x, y) - h);
       sp.rotation = this.time * 14 + p.id;
