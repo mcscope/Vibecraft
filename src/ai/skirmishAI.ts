@@ -174,8 +174,12 @@ export class SkirmishAI {
       // soldiers (a building that also raises workers trains soldiers once there are enough workers)
       const soldiers = trains.filter((id) => id !== faction.workerId && id !== faction.carterId && w.specOf(this.player, id)?.stats.canAttack);
       if (!soldiers.length || workerFirst) continue;
+      // the best army value for the money (Lanchester: HP × DPS ÷ cost²), with the runner-up now and then for variety
+      const value = (id: string) => { const st = w.specOf(this.player, id)!.stats; const cost = st.foodCost + st.crystalCost * 3; return (st.maxHp * (st.damage / st.cooldown)) / (cost * cost); };
+      const ranked = [...soldiers].sort((p, q) => value(q) - value(p));
       const i = this.trainIndex.get(b.id) ?? 0;
-      if (this.tryTrain(w, b, soldiers[i % soldiers.length], out)) this.trainIndex.set(b.id, i + 1);
+      const pick = ranked.length > 1 && i % 4 === 3 ? ranked[1] : ranked[0];
+      if (this.tryTrain(w, b, pick, out)) this.trainIndex.set(b.id, i + 1);
     }
 
     // ── Research: queue the next available tech when the building is idle (it waits for its wood).
