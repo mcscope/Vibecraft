@@ -1894,26 +1894,35 @@ export class World {
    * Turn u toward (dx, dy), no faster than it can swing round (its weapon's inertia, slower still with a
    * planted shaft); a body running flat out faces along its run (a couched point goes where it goes).
    */
+  /** Turn u toward (dx, dy) as far as it can this tick (see turnToward). */
   private face(u: Unit, dx: number, dy: number): void {
     if (Math.abs(dx) + Math.abs(dy) < 1e-4) return;
-    const v = Math.hypot(u.vx, u.vy);
-    if (u.airborne || u.dummy) u.facing = Math.atan2(dy, dx);
-    // on the move a body faces where it's going: how fast its run can bend is momentum's business (moveTo)
-    else if (v > 0.3) u.facing = Math.atan2(u.vy, u.vx);
+    this.turnToward(u, Math.atan2(dy, dx));
+  }
+
+  /**
+   * Turn u's facing toward `angle`, no faster than its body allows this tick: a long body (≥ 1 m) pivots on its
+   * haunches when slow and wheels wide at speed (its feet's sideways grip); a short one as fast as it can bring its
+   * weapon round, far slower with a planted shaft. Fliers and dummies turn at once.
+   */
+  private turnToward(u: Unit, angle: number): void {
+    if (u.airborne || u.dummy) u.facing = angle;
     else {
-      // standing, it turns as fast as it can bring its weapon round (a planted shaft far slower); a long body
-      // has to walk itself round instead
       if (u.turnTick !== this.tick) {
         u.turnTick = this.tick;
-        const rate = u.stats.length >= 1 ? Math.min(u.stats.turnRate, 0.8 / u.stats.length) : u.stats.turnRate;
-        u.turnLeft = rate * DT * (u.stats.canPlant ? K.plantedTurnMul : 1);
+        const v = Math.hypot(u.vx, u.vy) * M_PER_TILE;
+        // a long body pivots on its haunches when slow (~3 m/s over its length); at speed its feet's sideways grip bends
+        // its line no tighter than traction ÷ speed (a galloping wheel is wide); a short body as fast as its weapon comes round
+        const long = Math.min(u.stats.turnRate, Math.max(3, v) / u.stats.length, (K.traction * K.gravity) / Math.max(v, 0.1));
+        u.turnLeft = DT * (u.stats.length >= 1 ? long : u.stats.turnRate * (u.stats.canPlant && v < 0.5 ? K.plantedTurnMul : 1));
       }
-      const want = Math.atan2(dy, dx), diff = Math.atan2(Math.sin(want - u.facing), Math.cos(want - u.facing));
+      const diff = Math.atan2(Math.sin(angle - u.facing), Math.cos(angle - u.facing));
       const step = Math.max(-u.turnLeft, Math.min(u.turnLeft, diff));
       u.facing += step; u.turnLeft -= Math.abs(step);
     }
     u.heading = ((Math.round(u.facing / (Math.PI / 4)) % 8) + 8) % 8;
   }
+
 
 
   /** Is (dx, dy) within a blow's arc of where u faces? */
@@ -1971,21 +1980,14 @@ export class World {
       let want = speed;
       // brake in time to stop at the goal (v² = 2·a·d), unless running through it
       if (u.path.length === 1 && !through) want = Math.min(want, Math.sqrt(2 * (K.footBrake * K.gravity) / M_PER_TILE * Math.max(0, d - arrive * 0.5)));
-      const v0 = Math.hypot(u.vx, u.vy);
-      let dirx = ddx / d, diry = ddy / d;
-      if (st.length >= 1 && v0 > 0.05) {
-        // a long body keeps its momentum and wheels round, its line turning no faster than speed ÷ its length
-        // (a slow walking pivot when nearly stopped), like a bird banking
-        const cur = Math.atan2(u.vy, u.vx), diff = Math.atan2(Math.sin(Math.atan2(diry, dirx) - cur), Math.cos(Math.atan2(diry, dirx) - cur));
-        const w = Math.max(v0 * M_PER_TILE, 0.8) / st.length; // rad/s
-        const a = cur + Math.max(-w * DT, Math.min(w * DT, diff));
-        dirx = Math.cos(a); diry = Math.sin(a);
-      } else if (v0 > 0.3) {
-        // a short body turns so tight it plants and pivots: the sharper the turn, the more it pulls up first, then goes
-        const cos = (u.vx * ddx + u.vy * ddy) / (v0 * d);
-        want = Math.min(want, Math.max(st.speed * 0.3, v0 * Math.max(0, cos)) + acc * DT);
-      }
-      let wvx = dirx * want, wvy = diry * want;
+      // a body turns itself toward where it's going, then its legs drive it the way it faces: full speed
+      // only once it's lined up, and a little sidestep meanwhile. (Short bodies turn fast, so they pull up,
+      // turn and go; a long body turns at speed ÷ length, so it wheels round on its momentum.)
+      this.turnToward(u, Math.atan2(ddy, ddx));
+      const fx = Math.cos(u.facing), fy = Math.sin(u.facing), gx2 = ddx / d, gy2 = ddy / d;
+      const align = fx * gx2 + fy * gy2, side = Math.min(want, st.speed * K.sidestep);
+      let wvx = fx * want * Math.max(0, align) + (gx2 - align * fx) * side;
+      let wvy = fy * want * Math.max(0, align) + (gy2 - align * fy) * side;
       // runners don't run into their own side: against a friend close by, drop the part of its run that would close on them
       for (const f of this.units.values()) {
         if (f === u || f.owner !== u.owner || f.airborne) continue;
@@ -2048,8 +2050,7 @@ export class World {
     else if (!this.grid.isBlocked(nx, u.y)) { u.x = nx; u.vy = 0; }
     else if (!this.grid.isBlocked(u.x, ny)) { u.y = ny; u.vx = 0; }
     else { u.path = []; u.vx = u.vy = 0; return; }
-    if (!face) return;
-    this.face(u, dx, dy);
+    if (!face) return; // (it walks where it faces; moving doesn't turn it)
     if (!u.exhausted) {
       u.cal -= u.stats.moveCalPerTile * dist * (1 + (this.packLoad(u) / u.stats.mass) * (u.stats.wheeled ? K.wheelHaulCost : 1)) / roadFactor(this, u);
       u.busy = true;
