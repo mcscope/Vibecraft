@@ -618,9 +618,17 @@ export class Renderer {
       }
     }
     for (const b of world.buildings.values()) {
-      if (!rs.selected.has(b.id) && b.hp >= b.maxHp) continue;
+      const sheltering = b.owner === 0 ? b.garrison.length : 0;
+      if (!rs.selected.has(b.id) && b.hp >= b.maxHp && !sheltering) continue;
       const [sx, sy] = cam.toScreen(b.ox + b.size / 2, b.oy + b.size / 2);
       const w = 70 * cam.zoom;
+      if (sheltering) {
+        // who's inside: one gold pip per unit sheltering, above the health bar
+        const pw = 5, total = sheltering * (pw + 2) - 2, top = sy - 184 * cam.zoom;
+        rect(sx - total / 2 - 2, top - 2, total + 4, pw + 4, 0x000000, 0.75);
+        for (let i = 0; i < sheltering; i++) rect(sx - total / 2 + i * (pw + 2), top, pw, pw, 0xffd23f);
+      }
+      if (!rs.selected.has(b.id) && b.hp >= b.maxHp) continue;
       bar(sx - w / 2, sy - 175 * cam.zoom, w, 4, b.hp / b.maxHp, 0x3fcf4a);
       const item = b.queue[0];
       if (item) bar(sx - w / 2, sy - 169 * cam.zoom, w, 3, item.progress / item.total, 0xd8c27a);
