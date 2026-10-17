@@ -381,6 +381,7 @@ export class Input {
       if (k === km.move) { this.mode = 'move'; return; }
       if (k === km.give) { this.mode = 'give'; return; }
       if (k === km.garrison) { this.mode = 'garrison'; return; }
+      if (k === km.hold || k === km.charge) { this.hudCommand(k === km.hold ? 'hold' : 'charge'); return; }
       if (k === km.stop) { this.issue({ type: 'stop', units }); return; }
       // Tap: resupply and come back. Hold and click: resupply, then go there.
       if (k === km.resupply) {
@@ -480,9 +481,15 @@ export class Input {
   }
 
   /** Commands triggered from HUD buttons. */
-  hudCommand(kind: 'stop' | 'attackMove' | 'move' | 'resupply' | 'give' | 'garrison'): void {
+  hudCommand(kind: 'stop' | 'attackMove' | 'move' | 'resupply' | 'give' | 'garrison' | 'hold' | 'charge'): void {
     const units = this.selectedUnits();
     if (!units.length) return;
+    if (kind === 'hold' || kind === 'charge') {
+      // a toggle: if they're all already in that stance, back to deciding for themselves
+      const all = units.every((id) => this.world.units.get(id)?.stance === kind);
+      this.issue({ type: 'stance', units, stance: all ? 'auto' : kind });
+      return;
+    }
     if (kind === 'stop') this.issue({ type: 'stop', units });
     else if (kind === 'resupply') {
       const tc = this.supplyBuilding(units);

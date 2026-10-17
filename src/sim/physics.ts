@@ -98,6 +98,10 @@ export const K = {
   sprintRange: 5,
   /** ...if they have more than this share of their calories left. */
   sprintMinCalories: 0.35,
+  /** rad/s a body can swing round at, free of any weapon (a full turn in about a second). */
+  turnRate: 6,
+  /** A planted shaft turns this much slower: it has to be lifted, swung and set again. */
+  plantedTurnMul: 0.2,
   /** Newtons a body can hold behind its weapon per kg of muscle (arms, wrists, stance) before the shaft slips or it buckles. */
   holdForcePerMuscleKg: 40,
   /** Metres a blow drives in: a blow does at most (holding force × this) joules of work, unless the weapon is braced. */
@@ -155,6 +159,8 @@ export interface DerivedStats {
   /** Strike reach or throw range, tiles. */
   range: number;
   dps: number;
+  /** rad/s it can swing round at: the body's own rate, or slower if the arms can't swing its weapon's inertia round that fast. */
+  turnRate: number;
   /** Newtons it can hold behind its weapon (from its muscle): caps how much of a collision a blow passes on, unless braced. */
   holdForce: number;
   /** Strikers with a shaft: tiles inside which the point can't be brought to bear (it chokes up only so far). 0 otherwise. */
@@ -275,6 +281,14 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
     limbSpeed, maxAttackEnergy, crystalVelocity, attackEnergy, damage, attackCalories, cooldown, range,
     dps: damage / cooldown,
     holdForce: K.holdForcePerMuscleKg * muscleMass,
+    turnRate: (() => {
+      // the weapon's moment of inertia about the hands (¾ of a shaft and the crystal out front), swung round
+      // by the arms' torque (holding force on a half-metre lever): a quarter turn takes √(2·θ·I/τ)
+      const L = shaft, kg = shaft * K.shaftKgPerM, out = 0.75 * L + 0.4;
+      const I = (kg * 0.75 * (0.75 * L) ** 2) / 3 + (kg * 0.25 * (0.25 * L) ** 2) / 3 + crystalMass * out * out;
+      const torque = K.holdForcePerMuscleKg * muscleMass * 0.5;
+      return Math.min(K.turnRate, Math.sqrt(((Math.PI / 2) * torque) / (2 * Math.max(1e-6, I))));
+    })(),
     minReach: shaft ? reach - (shaft * 0.75 * 0.5) / M_PER_TILE : 0, // it can choke up half the shaft's forward length
     gatherRate,
     moveCalPerTile: K.moveCalPerKgTile * mass,

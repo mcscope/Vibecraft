@@ -46,6 +46,8 @@ export type CommandBody =
   | { type: 'rally'; building: number; x: number; y: number; node?: number }
   /** Give up: you lose, the others play on (or win). */
   | { type: 'resign' }
+  /** How the units meet the enemy: stand their ground, charge in, or decide for themselves. */
+  | { type: 'stance'; units: number[]; stance: 'auto' | 'hold' | 'charge' }
   /** Units shelter inside one of your buildings (two per tile of footprint). */
   | { type: 'garrison'; units: number[]; building: number }
   /** Everyone inside comes out. */

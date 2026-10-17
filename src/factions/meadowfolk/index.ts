@@ -141,7 +141,7 @@ const lynx: MeadowUnit = {
   description: 'A lancer riding a great lynx, crystal-tipped lance couched. Fast and fierce, but eats like a horse.',
   mass: 320,
   physique: { muscle: 0.6, frame: 0.28, reserve: 0.12 },
-  attack: { style: 'strike', crystalMass: 5 },
+  attack: { style: 'strike', crystalMass: 5, shaft: 3 }, // the couched lance it's drawn with
   refinement: 1.5,
   model(b, p) {
     const fur: Mat = { color: '#bf9a62', tex: 'fur' };

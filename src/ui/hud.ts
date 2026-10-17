@@ -17,7 +17,7 @@ export interface HudActions {
   research(buildingId: number, techId: string): void;
   cancelTrain(buildingId: number, index?: number): void;
   select(ids: number[]): void;
-  command(kind: 'stop' | 'attackMove' | 'move' | 'resupply' | 'give' | 'garrison'): void;
+  command(kind: 'stop' | 'attackMove' | 'move' | 'resupply' | 'give' | 'garrison' | 'hold' | 'charge'): void;
   ungarrison(buildingId: number): void;
   place(specId: string): void;
   idleWorker(): void;
@@ -222,9 +222,10 @@ export class Hud {
     const units = [...selected].map((id) => w.units.get(id)).filter((u): u is Unit => !!u);
     const building = [...selected].map((id) => w.buildings.get(id)).find((b): b is Building => !!b);
     const p = w.players[this.player];
-    const sig = units.length === 1 ? `u${units[0].id}`
+    const stances = units.map((u) => u.stance[0]).join('');
+    const sig = units.length === 1 ? `u${units[0].id}:${stances}`
       : building ? `b${building.id}:${building.complete}:${building.queue.map((q) => (q.kind === 'unit' ? q.specId : q.techId)).join(',')}:${p.researched.length}:${building.owner}:${building.sowing.join('')}:${building.garrison.length}`
-      : `m${units.map((u) => u.id).join(',')}`;
+      : `m${units.map((u) => u.id).join(',')}:${stances}`;
     if (sig !== this.sig) {
       this.sig = sig;
       this.portraits = [];
@@ -416,7 +417,7 @@ export class Hud {
           ${u.dummy ? '' : `<div class="bar cal" data-bar="cal"><i></i><span></span></div>
           <div class="bar pack" data-bar="pack"><div class="segs"><i class="crystal"></i><i class="food"></i><i class="wood"></i></div><span></span></div>
           ${u.throws ? '<div class="ammo" data-ammo></div>' : ''}`}
-          ${own && !u.carter ? this.commandButtons() : ''}
+          ${own && !u.carter ? this.commandButtons([u]) : ''}
           ${own && u.carter ? '<div class="hint">Carts supply whichever building is shortest. Right-click a building to pin this cart to it; Stop to unpin.</div>' : ''}
         </div>
         ${own && this.isWorker(u.specId) ? this.buildMenu() : statsTable(s.spec, s.stats, this.names().food.toLowerCase())}
@@ -437,7 +438,7 @@ export class Hud {
     });
     const workers = units.some((u) => u.owner === this.player && this.isWorker(u.specId));
     // same shape as a single unit's panel: tiles and commands on the left, build menu beside them
-    return `<div class="group-panel"><div class="info"><div class="groups">${tiles.join('')}</div>${this.commandButtons()}</div>
+    return `<div class="group-panel"><div class="info"><div class="groups">${tiles.join('')}</div>${this.commandButtons(units.filter((x) => x.owner === this.player))}</div>
       ${workers ? this.buildMenu() : ''}</div>`;
   }
 
@@ -462,8 +463,9 @@ export class Hud {
     }).join('')}</div></div>`;
   }
 
-  private commandButtons(): string {
+  private commandButtons(units: Unit[] = []): string {
     const km = keymap();
+    const all = (s: Unit['stance']) => units.length > 0 && units.every((u) => u.stance === s);
     return `<div class="cmds">
       <button data-cmd="move" title="Move there, ignoring enemies on the way (pull units out of a fight)">Move <kbd>${km.move.toUpperCase()}</kbd></button>
       <button data-cmd="attackMove" title="Attack-move">Attack <kbd>${km.attackMove.toUpperCase()}</kbd></button>
@@ -471,6 +473,8 @@ export class Hud {
       <button data-cmd="resupply" title="Resupply at the nearest stocked building, then return. Hold the key and click the ground to send them there afterwards.">Resupply <kbd>${km.resupply.toUpperCase()}</kbd></button>
       <button data-cmd="give" title="Give surplus to a friendly unit (then click it)">Give <kbd>${km.give.toUpperCase()}</kbd></button>
       <button data-cmd="garrison" title="Shelter inside one of your buildings (then click it). Throwers inside throw from cover.">Garrison <kbd>${km.garrison.toUpperCase()}</kbd></button>
+      <button data-cmd="hold" class="${all('hold') ? 'on' : ''}" title="Hold ground: don't go to meet the enemy; strike what comes into reach. Spears and pikes stay planted, so a charge runs onto the point (but a planted shaft is very slow to turn). Press again to let them decide.">Hold <kbd>${km.hold.toUpperCase()}</kbd></button>
+      <button data-cmd="charge" class="${all('charge') ? 'on' : ''}" title="Charge: sprint at the enemy from any distance and run on through (sprinting burns calories fast). Press again to let them decide.">Charge <kbd>${km.charge.toUpperCase()}</kbd></button>
     </div>`;
   }
 

@@ -161,6 +161,12 @@ export interface Unit {
   strideMul: number;
   /** Seconds left off balance (a hard hit or collision): it can't steer or strike, it just stumbles to a stop. */
   staggered: number;
+  /** How it meets the enemy: 'hold' stands its ground (strikes what comes to it, shafts set), 'charge' sprints in from any distance and runs through, 'auto' decides. */
+  stance: 'auto' | 'hold' | 'charge';
+  /** Where it faces (radians, map space; `heading` is this as an octant) and what turning it has left this tick. */
+  facing: number; turnTick: number; turnLeft: number;
+  /** How it's actually been moving lately (tiles/s, smoothed over ~½ s): what an onlooker can see, and leads a throw by. */
+  ovx: number; ovy: number;
   /** Which way a flier went this tick: +1 climbing, -1 coming down, 0 level. */
   vert: number;
   /** Climb (+) or dive (−) rate last tick, m/s (fliers). */
@@ -239,6 +245,18 @@ export interface ResourceNode {
   sownBy?: number;
 }
 
+/**
+ * Where a thrower expects `t` to be after `secs`: on along its seen motion, but something coming
+ * at the thrower stops at its reach of it (it comes to fight, not to run through).
+ */
+function leadPoint(thrower: { x: number; y: number }, t: Unit, secs: number): [number, number] {
+  let x = t.x + t.ovx * secs, y = t.y + t.ovy * secs;
+  const d0 = Math.hypot(t.x - thrower.x, t.y - thrower.y), d1 = Math.hypot(x - thrower.x, y - thrower.y);
+  const stop = Math.min(d0, t.stats.range + t.stats.radius);
+  if (d1 < stop && d0 > 1e-6) { const k = stop / d0; x = thrower.x + (t.x - thrower.x) * k; y = thrower.y + (t.y - thrower.y) * k; }
+  return [x, y];
+}
+
 /** Where a flier will be (m up) after `t` seconds at its current climb or dive: a throw at it is aimed there. */
 const leadAlt = (u: Unit, t: number): number => Math.max(0.3, Math.min(u.stats.flyHeight, u.alt + u.vz * t));
 
@@ -247,18 +265,21 @@ const leadAlt = (u: Unit, t: number): number => Math.max(0.3, Math.min(u.stats.f
  * close at along the line between them (in m/s: tiles × M_PER_TILE) and μ = m₁m₂/(m₁+m₂) the reduced mass
  * (a building doesn't move: μ is the striker's mass). Zero when they're drawing apart.
  */
-function collisionEnergy(u: Unit, t: Unit | null, tx: number, ty: number): { delivered: number; excess: number; mu: number } {
+function collisionEnergy(u: Unit, t: Unit | null, tx: number, ty: number): { delivered: number; mu: number } {
   const dx = tx - u.x, dy = ty - u.y, d = Math.hypot(dx, dy) || 1;
   const rvx = u.vx - (t?.vx ?? 0), rvy = u.vy - (t?.vy ?? 0);
   const closing = ((rvx * dx + rvy * dy) / d) * M_PER_TILE; // m/s
-  if (closing <= 0) return { delivered: 0, excess: 0, mu: 0 };
+  if (closing <= 0) return { delivered: 0, mu: 0 };
   const mu = t ? (u.stats.mass * t.stats.mass) / (u.stats.mass + t.stats.mass) : u.stats.mass;
   const energy = 0.5 * mu * closing * closing;
-  // the weapon passes on only what the body can hold behind it (work = force × depth); a braced
-  // shaft (standing, butt set) has the ground behind it instead, so a charge onto it takes it all
-  const braced = u.stats.minReach > 0 && Math.hypot(u.vx, u.vy) * M_PER_TILE < 0.5;
-  const delivered = braced ? energy : Math.min(energy, u.stats.holdForce * K.blowDepth);
-  return { delivered, excess: energy - delivered, mu };
+  // the weapon passes on only what the body can hold behind it (work = force × depth), unless the
+  // shaft is set: planted (standing, the ground behind its butt) or couched (driven straight at the
+  // target, the charging body locked behind it); then it takes the whole collision
+  const v = Math.hypot(u.vx, u.vy);
+  const planted = v * M_PER_TILE < 0.5;
+  const couched = v > u.stats.speed && (u.vx * dx + u.vy * dy) / (v * d) > 0.8;
+  const set = u.stats.minReach > 0 && (planted || couched);
+  return { delivered: set ? energy : Math.min(energy, u.stats.holdForce * K.blowDepth), mu };
 }
 
 export interface Projectile {
@@ -747,6 +768,10 @@ export class World {
         if (b) eject(this, b);
         return;
       }
+      case 'stance': {
+        for (const u of mine(cmd.units)) u.stance = cmd.stance;
+        return;
+      }
       case 'destroy': {
         for (const id of cmd.ids) {
           const t = this.units.get(id) ?? this.buildings.get(id);
@@ -825,7 +850,7 @@ export class World {
     if (!s) return null;
     const pos = this.grid.nearestOpen(x, y) ?? [x, y];
     const u = this.makeUnit(owner, specId, pos[0], pos[1]);
-    u.heading = heading;
+    u.heading = heading; u.facing = (heading * Math.PI) / 4;
     return u;
   }
 
@@ -867,7 +892,7 @@ export class World {
       food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
       order: { kind: 'idle' }, resume: null, queue: [], engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
-      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0,
+      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', facing: Math.PI / 4, turnTick: -1, turnLeft: 0,
       dummy: !!spec.dummy,
       carter: spec.role === 'carter',
       gatherAcc: 0,
@@ -1102,7 +1127,7 @@ export class World {
     const flight = Math.max(0.3, (dist * M_PER_TILE) / (tw.velocity * 0.7)); // metres over its horizontal speed
     const p: Projectile = {
       id: this.nextId++, owner: b.owner, sx: cx, sy: cy, sz: atk.height,
-      tx: target.x + target.vx * flight, ty: target.y + target.vy * flight,
+      tx: leadPoint({ x: cx, y: cy }, target, flight)[0], ty: leadPoint({ x: cx, y: cy }, target, flight)[1],
       t: 0, duration: flight, damage: tw.damage, crystalKg: atk.crystalMass, target: target.id,
       tz: target.airborne && target.alt > 0.5 ? leadAlt(target, flight) : undefined,
     };
@@ -1143,6 +1168,7 @@ export class World {
     }
     if (u.airborne) { u.vx = (u.x - u.px) / DT; u.vy = (u.y - u.py) / DT; } // fliers: their own flight model
     else this.coast(u); // on the ground: unsteered bodies slide to a stop
+    u.ovx = u.ovx * 0.9 + ((u.x - u.px) / DT) * 0.1; u.ovy = u.ovy * 0.9 + ((u.y - u.py) / DT) * 0.1;
   }
 
   /** Executes the unit's current order. Returns true if it moved this tick. */
@@ -1321,10 +1347,21 @@ export class World {
     const range = u.airborne && wpn.throws ? BOMB_REACH : tb ? Math.max(wpn.range, 1) : wpn.range;
     // closing on a target near enough, a body sprints; a striker runs on through it (a charge) rather
     // than pulling up, and a thrower brakes to stop at its range
-    const sprint = !u.airborne && edge < K.sprintRange;
+    const sprint = !u.airborne && (edge < K.sprintRange || u.stance === 'charge');
     if (edge > range - 0.05) {
       if (u.airborne) { this.moveTo(u, tx, ty, 0.05); return true; }
-      if (tu) { this.moveTo(u, tx, ty, wpn.throws ? Math.max(0.05, range - 0.3) : 0.05, sprint, !wpn.throws); return true; }
+      if (tu) {
+        // holding ground: it doesn't go to meet anything (an explicit attack order still sends it)
+        if (u.stance === 'hold' && u.order.kind !== 'attack') { this.face(u, tx - u.x, ty - u.y); return true; }
+        // a long shaft with something coming at it fast doesn't go to meet it: it plants and lets it come onto the point
+        if (u.stance === 'auto' && u.stats.minReach > 0 && !wpn.throws && edge < range + 3) {
+          const d = Math.hypot(u.x - tx, u.y - ty) || 1;
+          const coming = (tu.vx * (u.x - tx) + tu.vy * (u.y - ty)) / d; // tiles/s toward us
+          if (coming * M_PER_TILE > 1) { this.face(u, tx - u.x, ty - u.y); return true; }
+        }
+        this.moveTo(u, tx, ty, wpn.throws ? Math.max(0.05, range - 0.3) : 0.05, sprint, !wpn.throws);
+        return true;
+      }
       // buildings: walk to the open tile nearest the closest edge point
       const b = tb!;
       const ex = Math.max(b.ox - 0.5, Math.min(u.x, b.ox + b.size + 0.5)), ey = Math.max(b.oy - 0.5, Math.min(u.y, b.oy + b.size + 0.5));
@@ -1346,6 +1383,7 @@ export class World {
     if (!u.airborne && !wpn.throws && tu && v > u.stats.speed * 1.1) this.moveTo(u, u.x + (u.vx / v) * 4, u.y + (u.vy / v) * 4, 0, true, true);
     this.face(u, tx - u.x, ty - u.y);
     if (u.cooldown > 0 || u.exhausted) return true;
+    if (!u.airborne && !this.facingWithin(u, tx - u.x, ty - u.y, Math.PI * 0.2)) return true; // still swinging round to bear on it
     if (u.cal < wpn.attackCalories) { u.exhausted = true; return true; }
     u.cal -= wpn.attackCalories;
     u.busy = true;
@@ -1357,7 +1395,7 @@ export class World {
       const bomb = u.airborne && u.alt > 0.5;
       const flight = bomb ? dropTime(u.alt) : Math.max(0.25, (Math.sqrt((tx - u.x) ** 2 + (ty - u.y) ** 2) * M_PER_TILE) / (u.stats.crystalVelocity * 0.7));
       let ax = tx, ay = ty;
-      if (tu) { ax += tu.vx * flight; ay += tu.vy * flight; } // lead the target by its travel velocity
+      if (tu) [ax, ay] = leadPoint(u, tu, flight); // lead it by how it's been moving
       const p: Projectile = {
         id: this.nextId++, owner: u.owner, sx: u.x, sy: u.y, sz: bomb ? u.alt : 0, tx: ax, ty: ay, t: 0, duration: flight,
         damage: u.stats.damage + heightBonus(u), crystalKg: u.crystalMass, target: targetId, drop: bomb || undefined,
@@ -1370,12 +1408,13 @@ export class World {
       const hit = collisionEnergy(u, tu ?? null, tx, ty);
       this.damage(targetId, wpn.damage + hit.delivered * K.strikeEfficiency * K.damageScale, tx, ty);
       if (tu && hit.delivered > 0) {
-        // the blow's momentum knocks the target back along the line (and off its feet if it's enough)
-        const d = Math.hypot(tx - u.x, ty - u.y) || 1, dv = Math.sqrt(2 * hit.mu * hit.delivered) / tu.stats.mass; // m/s
-        this.shove(tu, ((tx - u.x) / d) * dv, ((ty - u.y) / d) * dv);
+        // the blow is an impulse, equal and opposite: each body changes speed by it over its own mass,
+        // so a heavy charger ploughs on while a light body is flung (and either may be knocked off its feet)
+        const d = Math.hypot(tx - u.x, ty - u.y) || 1, nx = (tx - u.x) / d, ny = (ty - u.y) / d;
+        const impulse = Math.sqrt(2 * hit.mu * hit.delivered); // kg·m/s
+        this.shove(tu, (nx * impulse) / tu.stats.mass, (ny * impulse) / tu.stats.mass);
+        this.shove(u, (-nx * impulse) / u.stats.mass, (-ny * impulse) / u.stats.mass);
       }
-      // what the weapon couldn't pass on, the striker takes itself: it stumbles into it
-      if (hit.excess > 0) this.stagger(u, Math.sqrt((2 * hit.excess) / u.stats.mass));
     }
     return true;
   }
@@ -1401,6 +1440,21 @@ export class World {
 
   private tickProjectile(p: Projectile): void {
     p.t += DT;
+    // in flight, a thrown stone strikes the first enemy body it passes through while it's low enough:
+    // on a ballistic arc from hand height (1.5 m) to body height, peaking g·T²/8 above the line
+    if (!p.drop && p.tz === undefined && p.t < p.duration) {
+      const s = p.t / p.duration, x = p.sx + (p.tx - p.sx) * s, y = p.sy + (p.ty - p.sy) * s;
+      const h = (1.5 + p.sz) * (1 - s) + 1 * s + 4 * ((K.gravity * p.duration * p.duration) / 8) * s * (1 - s); // metres
+      for (const u of this.units.values()) {
+        if (u.owner === p.owner || u.airborne || u.dummy || this.players[u.owner]?.neutral && u.id !== p.target) continue;
+        const tall = 1.7 * Math.cbrt(u.stats.mass / 70); // its body height, m
+        if (h > tall || (u.x - x) ** 2 + (u.y - y) ** 2 > (u.stats.radius + 0.1) ** 2) continue;
+        this.projectiles.delete(p.id);
+        this.damage(u.id, p.damage, u.x, u.y);
+        this.dropShard(u.x, u.y, p.crystalKg);
+        return;
+      }
+    }
     if (p.t < p.duration) return;
     this.projectiles.delete(p.id);
     let hit = 0;
@@ -1789,13 +1843,29 @@ export class World {
   // ───────────────────────────── movement ─────────────────────────────
 
   /** Snap a direction to one of 8 octants using only comparisons (no trig in the sim). */
+  /**
+   * Turn u toward (dx, dy), no faster than it can swing round (its weapon's inertia, slower still with a
+   * planted shaft); a body running flat out faces along its run (a couched point goes where it goes).
+   */
   private face(u: Unit, dx: number, dy: number): void {
-    const ax = Math.abs(dx), ay = Math.abs(dy);
-    if (ax + ay < 1e-4) return;
-    const T = 0.41421356; // tan 22.5°
-    if (ay < ax * T) u.heading = dx > 0 ? 0 : 4;
-    else if (ax < ay * T) u.heading = dy > 0 ? 2 : 6;
-    else u.heading = dx > 0 ? (dy > 0 ? 1 : 7) : (dy > 0 ? 3 : 5);
+    if (Math.abs(dx) + Math.abs(dy) < 1e-4) return;
+    let want = Math.atan2(dy, dx);
+    const v = Math.hypot(u.vx, u.vy);
+    if (!u.airborne && v > u.stats.speed * 1.15) want = Math.atan2(u.vy, u.vx);
+    if (u.airborne || u.dummy) u.facing = want;
+    else {
+      if (u.turnTick !== this.tick) { u.turnTick = this.tick; u.turnLeft = u.stats.turnRate * DT * (u.stats.minReach > 0 && v * M_PER_TILE < 0.5 ? K.plantedTurnMul : 1); }
+      const diff = Math.atan2(Math.sin(want - u.facing), Math.cos(want - u.facing));
+      const step = Math.max(-u.turnLeft, Math.min(u.turnLeft, diff));
+      u.facing += step; u.turnLeft -= Math.abs(step);
+    }
+    u.heading = ((Math.round(u.facing / (Math.PI / 4)) % 8) + 8) % 8;
+  }
+
+  /** Is (dx, dy) within a blow's arc of where u faces? */
+  private facingWithin(u: Unit, dx: number, dy: number, arc: number): boolean {
+    const diff = Math.atan2(Math.sin(Math.atan2(dy, dx) - u.facing), Math.cos(Math.atan2(dy, dx) - u.facing));
+    return Math.abs(diff) <= arc;
   }
 
   /** @internal sim helper, also used by abilities. Walk toward (gx,gy); true once within `arrive`. */

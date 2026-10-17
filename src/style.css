@@ -214,6 +214,7 @@ button:active { background: linear-gradient(180deg, #2a231b, #3a3026); }
 
 .cmds { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
 .cmds button { padding: 4px 12px; }
+.cmds button.on { color: var(--gold); box-shadow: inset 0 0 0 1px var(--gold); }
 .cmds u { color: var(--gold); text-decoration: none; }
 
 .group-panel { display: flex; gap: 16px; align-items: flex-start; }
