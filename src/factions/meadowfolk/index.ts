@@ -142,28 +142,41 @@ const lynx: MeadowUnit = {
   attack: { style: 'strike', crystalMass: 5 },
   refinement: 1.5,
   model(b, p) {
-    const fur: Mat = { color: '#b48a55', tex: 'fur' };
-    const belly: Mat = { color: '#e3cfa8', tex: 'fur' };
+    const fur: Mat = { color: '#bf9a62', tex: 'fur' };
+    const belly: Mat = { color: '#eadcbc', tex: 'fur' };
+    const spot: Mat = { color: '#6a4a2a', tex: 'fur' };
     const dark: Mat = { color: '#2a2018', tex: 'fur' };
     const lunge = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) * 0.2 : 0;
-    const bob = quadLegs(b, p, { fx: 0.62, bx: -0.58, z: 0.2, hip: 0.95, len: 0.95, r: 0.09, mat: fur, paw: fur });
+    const bob = quadLegs(b, p, { fx: 0.62, bx: -0.58, z: 0.2, hip: 0.95, len: 0.95, r: 0.09, mat: fur, paw: belly });
     b.joint([lunge, bob, 0], [0, 0, 0], (c) => {
-      c.sphere([0.85, 0.36, 0.33], [0, 1.05, 0], fur);
-      c.sphere([0.55, 0.2, 0.24], [0.05, 0.86, 0], belly);
-      c.sphere([0.38, 0.38, 0.34], [0.6, 1.12, 0], fur);
-      c.sphere([0.36, 0.36, 0.33], [-0.55, 1.08, 0], fur);
+      // a cat's body: deep chest, slim waist, high haunches
+      c.sphere([0.42, 0.4, 0.33], [0.55, 1.12, 0], fur); // chest and shoulders
+      c.sphere([0.62, 0.3, 0.27], [0, 1.06, 0], fur); // waist
+      c.sphere([0.4, 0.38, 0.32], [-0.55, 1.12, 0], fur); // haunches
+      c.sphere([0.5, 0.18, 0.22], [0.1, 0.86, 0], belly);
+      c.sphere([0.16, 0.22, 0.2], [0.8, 0.98, 0], belly); // pale chest
+      // spotted coat
+      for (let i = 0; i < 9; i++) {
+        const x = -0.75 + i * 0.18, y = 1.08 + ((i * 37) % 5) * 0.05;
+        for (const z of [1, -1]) c.sphere([0.05, 0.04, 0.02], [x, y, z * (0.31 - Math.abs(x) * 0.04)], spot);
+      }
       c.joint([1.02, 1.42, 0], [0, 0, p.anim === 'attack' ? -0.2 : 0], (h) => {
-        h.sphere([0.24, 0.22, 0.24], [0, 0, 0], fur);
-        h.sphere([0.13, 0.1, 0.15], [0.19, -0.06, 0], belly);
-        h.sphere(0.035, [0.31, -0.03, 0], dark);
+        h.sphere([0.23, 0.22, 0.25], [0, 0, 0], fur);
+        h.sphere([0.12, 0.1, 0.15], [0.18, -0.07, 0], belly); // short muzzle
+        h.sphere(0.035, [0.3, -0.04, 0], dark);
         for (const z of [0.12, -0.12]) {
-          h.cone(0.06, 0.16, [-0.02, 0.24, z], fur, [z > 0 ? 0.25 : -0.25, 0, 0], 8);
-          h.limb([-0.02, 0.32, z * 1.1], [-0.02, 0.42, z * 1.2], 0.012, dark); // ear tufts
-          h.sphere([0.06, 0.08, 0.04], [0.1, -0.12, z * 1.3], belly); // cheek ruff
+          h.sphere(0.03, [0.17, 0.05, z * 0.75], dark); // eyes
+          h.cone(0.075, 0.2, [-0.02, 0.25, z], fur, [z > 0 ? 0.25 : -0.25, 0, 0], 8);
+          h.limb([-0.02, 0.35, z * 1.15], [-0.03, 0.5, z * 1.3], 0.02, dark, 0.008); // long black ear tufts
+          h.sphere([0.1, 0.15, 0.05], [0.02, -0.13, z * 1.45], belly); // flared cheek ruff
+          h.cone(0.05, 0.14, [0.0, -0.24, z * 1.5], belly, [z > 0 ? -0.5 : 0.5, 0, Math.PI], 6);
         }
       });
-      c.limb([-0.85, 1.15, 0], [-1.05, 1.02, 0], 0.07, fur, 0.06);
-      c.sphere(0.07, [-1.08, 1.0, 0], dark);
+      // bobtail with a black tip
+      c.limb([-0.88, 1.2, 0], [-1.05, 1.1, 0], 0.07, fur, 0.06);
+      c.sphere(0.065, [-1.08, 1.08, 0], dark);
+      // team caparison draped over the flanks
+      for (const z of [1, -1]) c.box([0.62, 0.32, 0.02], [-0.05, 1.22, z * 0.35], { team: 'primary', tex: 'cloth' }, [z * 0.12, 0, 0]);
       // saddle + barding
       c.box([0.6, 0.08, 0.7], [-0.05, 1.38, 0], { team: 'primary', tex: 'cloth' });
       c.box([0.45, 0.12, 0.45], [-0.05, 1.45, 0], LEATHER);
