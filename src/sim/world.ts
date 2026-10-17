@@ -1182,7 +1182,8 @@ export class World {
     if (this.runEngage(u)) return u.x !== u.px || u.y !== u.py;
     if (bearerAbility.sweep(this, u)) return false; // idle bearers sweep up spent crystals nearby
     // idle throwers top their packs up from spent crystals (or a bearer) nearby, not just when empty
-    if (u.throws && u.ammo < u.stats.loadoutCrystal - 1e-6 && (this.tick + u.id) % 20 === 0) this.seekAmmo(u, false);
+    // (not fliers: for them topping up means flying home, and an idle bird told to stop should stay put)
+    if (u.throws && !u.stats.flight && u.ammo < u.stats.loadoutCrystal - 1e-6 && (this.tick + u.id) % 20 === 0) this.seekAmmo(u, false);
     return false;
   }
 
