@@ -60,6 +60,43 @@ function polish(ctx: CanvasRenderingContext2D, w: number, h: number): void {
   ctx.putImageData(img, 0, 0);
 }
 
+/**
+ * Ambient occlusion from a depth image (brighter = nearer the camera): a pixel with many
+ * nearby pixels standing in front of it sits in a crevice (under eaves, between beams,
+ * where a wall meets the ground) and gets darker.
+ */
+function occlude(ctx: CanvasRenderingContext2D, depth: CanvasRenderingContext2D, w: number, h: number, radius: number): void {
+  const img = ctx.getImageData(0, 0, w, h), d = img.data;
+  const z = depth.getImageData(0, 0, w, h).data;
+  const taps: Array<[number, number]> = [];
+  for (const k of [0.5, 1]) for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + k;
+    taps.push([Math.round(Math.cos(a) * radius * k), Math.round(Math.sin(a) * radius * k)]);
+  }
+  const shade = new Float32Array(w * h);
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = y * w + x;
+    if (d[i * 4 + 3] < 200 || z[i * 4 + 3] < 200) continue;
+    const here = z[i * 4];
+    let occ = 0;
+    for (const [ox, oy] of taps) {
+      const sx = x + ox, sy = y + oy;
+      if (sx < 0 || sy < 0 || sx >= w || sy >= h) continue;
+      const j = (sy * w + sx) * 4;
+      if (z[j + 3] < 200) continue;
+      const dz = z[j] - here; // positive: that neighbour is in front of us
+      if (dz > 2 && dz < 40) occ++;
+    }
+    shade[i] = occ / taps.length;
+  }
+  for (let i = 0; i < w * h; i++) {
+    if (!shade[i]) continue;
+    const k = 1 - 0.5 * shade[i];
+    d[i * 4] *= k; d[i * 4 + 1] *= k; d[i * 4 + 2] *= k;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
 /** Game octants (0 = +x, counting toward +y), one sheet row each. */
 const BAKED_DIRS = [0, 1, 2, 3, 4, 5, 6, 7];
 
@@ -164,7 +201,7 @@ export class Baker {
   }
 
   /** Render the current stage into ctx at (dx,dy) using the given screen extent. */
-  private shoot(ext: Extent, ctx: CanvasRenderingContext2D, dx: number, dy: number, r: number, h: number): void {
+  private shoot(ext: Extent, ctx: CanvasRenderingContext2D, dx: number, dy: number, r: number, h: number, depth?: CanvasRenderingContext2D): void {
     const w = ext.left + ext.right, hh = ext.top + ext.bottom;
     const pw = Math.ceil(w * this.q * this.ss), ph = Math.ceil(hh * this.q * this.ss);
     this.setCanvas(pw, ph);
@@ -173,7 +210,20 @@ export class Baker {
     this.renderer.setViewport(0, 0, pw, ph);
     this.renderer.render(this.scene, this.camera);
     ctx.drawImage(this.renderer.domElement, 0, 0, pw, ph, dx, dy, Math.ceil(w * this.q), Math.ceil(hh * this.q));
+    if (!depth) return;
+    // a depth pass over just the model's depth range (8 bits go a long way when the range is tight)
+    const cam = this.camera, near = cam.near, far = cam.far, span = (r + h) * 1.2 + 1;
+    cam.near = 50 - span; cam.far = 50 + span; cam.updateProjectionMatrix();
+    const ground = this.ground.visible, tone = this.renderer.toneMapping;
+    this.ground.visible = false; this.renderer.toneMapping = THREE.NoToneMapping;
+    this.scene.overrideMaterial = this.depthMat;
+    this.renderer.render(this.scene, this.camera);
+    this.scene.overrideMaterial = null;
+    this.ground.visible = ground; this.renderer.toneMapping = tone;
+    cam.near = near; cam.far = far; cam.updateProjectionMatrix();
+    depth.drawImage(this.renderer.domElement, 0, 0, pw, ph, dx, dy, Math.ceil(w * this.q), Math.ceil(hh * this.q));
   }
+  private depthMat = new THREE.MeshDepthMaterial();
 
   private setCanvas(pw: number, ph: number): void {
     if (this.renderer.domElement.width !== pw || this.renderer.domElement.height !== ph) this.renderer.setSize(pw, ph, false);
@@ -203,7 +253,11 @@ export class Baker {
     canvas.height = Math.ceil((ext.top + ext.bottom) * this.q);
     this.clearStage();
     build(new Builder(team, this.stage, opts));
-    this.shoot(ext, canvas.getContext('2d')!, 0, 0, r, h);
+    const depth = document.createElement('canvas');
+    depth.width = canvas.width; depth.height = canvas.height;
+    const dctx = depth.getContext('2d', { willReadFrequently: true })!;
+    this.shoot(ext, canvas.getContext('2d')!, 0, 0, r, h, dctx);
+    occlude(canvas.getContext('2d')!, dctx, canvas.width, canvas.height, Math.max(3, Math.round(this.q * 5)));
     polish(canvas.getContext('2d')!, canvas.width, canvas.height);
     this.ground.visible = true;
     return { img: canvas, sx: 0, sy: 0, sw: canvas.width, sh: canvas.height, ax: ext.left * this.q, ay: ext.top * this.q, q: this.q };
