@@ -119,6 +119,12 @@ Their economy *is* an army. Every fenling is a 7-tile thrower, so 25 fenlings pu
 
 (Range itself is not over-strong: the arena shows ranged infantry losing to melee per cost.)
 
+### Rushes and snowballing (mirror matches)
+
+In Meadow-vs-Meadow and Fen-vs-Fen AI games, first blood comes at about 4.5–5.5 minutes, and whoever wins the fights around minutes 5–10 snowballs. With no army left, the enemy roams the worker lines. Nothing gives a defender a home advantage: the base building has no attack, workers can't take cover, and towers come late.
+
+**Proposed: garrison, from physics.** Units can shelter inside a building (safe while it stands, thrown out when it falls). Throwers inside throw from the building's height, already a priced height bonus, under cover. A rush then runs into the whole economy firing from the Town Center or Stilt Hall. It's AoE's town bell, but it falls out of rules we already have. It costs a garrison command, rendering, and some AI. Not built yet: it's a sizeable feature, so it waits for your go-ahead.
+
 ## Decisions for the user (not made unilaterally)
 
 1. **Workers that are also soldiers.** Correction to an earlier guess: the arena shows ranged units are *weak* per cost, not strong. What made the Fenfolk dominant was that their *workers* are a ranged militia they'd have paid for anyway. That's a legitimate faction identity, but it's under-priced. Options:
