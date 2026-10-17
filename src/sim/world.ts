@@ -943,7 +943,8 @@ export class World {
     if (item) {
       const waiting = !item.paid;
       const capped = item.kind === 'unit' && this.unitsOf(b.owner).length >= MAX_UNITS_PER_PLAYER;
-      if (!capped && !waiting) item.progress += DT;
+      // units train at the building's rate (its own capital); research at the usual pace
+      if (!capped && !waiting) item.progress += item.kind === 'unit' ? DT * b.stats.trainRate : DT;
       if (item.progress >= item.total) {
         b.queue.shift();
         if (item.kind === 'unit') {
@@ -1297,7 +1298,11 @@ export class World {
 
   private damage(id: number, amount: number, x: number, y: number): void {
     const tu = this.units.get(id);
-    if (tu) { tu.hp -= amount; this.events.push({ type: 'hit', x, y, damage: amount, target: id }); return; }
+    if (tu) {
+      // armour (from its frame) takes a flat bite out of every hit, down to a floor
+      const dealt = Math.max(amount * K.armourFloor, amount - tu.stats.armour);
+      tu.hp -= dealt; this.events.push({ type: 'hit', x, y, damage: dealt, target: id }); return;
+    }
     const tb = this.buildings.get(id);
     if (tb) { tb.hp -= amount; this.events.push({ type: 'hit', x, y, damage: amount, target: id }); }
   }

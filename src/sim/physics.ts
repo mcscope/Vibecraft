@@ -80,6 +80,10 @@ export const K = {
   foodPerFrameKg: 0.5,
   trainBaseSec: 6,
   trainSecPerKg: 1 / 12,
+  /** Armour = this × frame share (a 45%-frame maceman: 2.7; a 22%-frame fenling: 1.3). */
+  armourPerFrame: 6,
+  /** However thick the armour, a hit always does at least this share of its damage. */
+  armourFloor: 0.15,
 } as const;
 
 export interface DerivedStats {
@@ -89,6 +93,8 @@ export interface DerivedStats {
   frameMass: number;
   reserveMass: number;
 
+  /** Flat damage each hit loses against this body: its frame share (plate thickness). Light hits glance off heavily framed bodies. */
+  armour: number;
   maxHp: number;
   maxCalories: number;
   /** Unloaded top speed, tiles/s. */
@@ -183,6 +189,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   // costs 1/r of the food (see foodCost below). It never adds HP or damage.
   const refinement = Math.max(1, (spec.refinement ?? 1) + techRefinement);
   const maxHp = K.hpPerFrameKg * frameMass + K.hpPerKg * mass;
+  const armour = K.armourPerFrame * physique.frame; // plate thickness: the share of the body that's frame, not its size
   const maxCalories = K.calPerReserveKg * reserveMass + K.calPerKg * mass;
   // work refinement w: gathers, walks and carries w× as much (applied below)
   const workRefinement = Math.max(1, (spec.workRefinement ?? 1) + techWork);
@@ -229,7 +236,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   return {
     improvised,
     mass, physique, muscleMass, frameMass, reserveMass,
-    maxHp, maxCalories, speed, canAttack, wheeled, gait: deriveGait(spec), flight: !!spec.flight, flyHeight: !spec.flight ? 0 : spec.flight === true ? DEFAULT_FLY_HEIGHT : spec.flight.height, carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, sight,
+    maxHp, armour, maxCalories, speed, canAttack, wheeled, gait: deriveGait(spec), flight: !!spec.flight, flyHeight: !spec.flight ? 0 : spec.flight === true ? DEFAULT_FLY_HEIGHT : spec.flight.height, carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, sight,
     limbSpeed, maxAttackEnergy, crystalVelocity, attackEnergy, damage, attackCalories, cooldown, range,
     dps: damage / cooldown,
     gatherRate,
@@ -298,6 +305,8 @@ export const CAP = {
   sowSeedFraction: 1 / 4,
   /** Seconds for a sown plant to grow to full. */
   sowGrowSec: 45,
+  /** A building trains units at (its own capital ÷ this) × the base rate: throughput is the wood sunk into it, not the number of buildings. */
+  trainRefCapital: 300,
   /** Gather boosts are crystal magic: crystal burned per extra kg the boost adds. */
   boostCrystalPerKg: 0.05,
   /** Crystal a boosting building asks to keep on hand to burn. */
@@ -350,6 +359,8 @@ export interface BuildingStats {
   tower: TowerStats | null;
   /** Gather-rate multiplier this building gives nearby (1 if it has no gatherBoost). */
   gatherBoost: number;
+  /** How fast it trains units (× the base rate): its own capital ÷ CAP.trainRefCapital. */
+  trainRate: number;
 }
 
 /** Every building this one depends on, transitively, each counted once. */
@@ -397,6 +408,7 @@ export function deriveBuilding(spec: BuildingSpec, faction: FactionSpec): Buildi
     tower: towerStats(spec.attack),
     gatherBoost: spec.gatherBoost ? refinementFor(capital) : 1,
     sowRate: spec.sow ? spec.sow.mechanism * CAP.sowRatePerKg : 0,
+    trainRate: Math.max(0.05, capital / CAP.trainRefCapital),
   };
 }
 
