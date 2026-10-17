@@ -1896,18 +1896,25 @@ export class World {
    */
   private face(u: Unit, dx: number, dy: number): void {
     if (Math.abs(dx) + Math.abs(dy) < 1e-4) return;
-    let want = Math.atan2(dy, dx);
     const v = Math.hypot(u.vx, u.vy);
-    if (!u.airborne && (v > u.stats.speed * 1.15 || (u.stats.length >= 1 && v > 0.3))) want = Math.atan2(u.vy, u.vx); // running flat out (or any long body on the move) faces along its run
-    if (u.airborne || u.dummy) u.facing = want;
+    if (u.airborne || u.dummy) u.facing = Math.atan2(dy, dx);
+    // on the move a body faces where it's going: how fast its run can bend is momentum's business (moveTo)
+    else if (v > 0.3) u.facing = Math.atan2(u.vy, u.vx);
     else {
-      if (u.turnTick !== this.tick) { u.turnTick = this.tick; u.turnLeft = Math.min(u.stats.turnRate, 0.8 / u.stats.length) * DT * (u.stats.canPlant && v * M_PER_TILE < 0.5 ? K.plantedTurnMul : 1); } // standing, it walks itself round: a long body slowly
-      const diff = Math.atan2(Math.sin(want - u.facing), Math.cos(want - u.facing));
+      // standing, it turns as fast as it can bring its weapon round (a planted shaft far slower); a long body
+      // has to walk itself round instead
+      if (u.turnTick !== this.tick) {
+        u.turnTick = this.tick;
+        const rate = u.stats.length >= 1 ? Math.min(u.stats.turnRate, 0.8 / u.stats.length) : u.stats.turnRate;
+        u.turnLeft = rate * DT * (u.stats.canPlant ? K.plantedTurnMul : 1);
+      }
+      const want = Math.atan2(dy, dx), diff = Math.atan2(Math.sin(want - u.facing), Math.cos(want - u.facing));
       const step = Math.max(-u.turnLeft, Math.min(u.turnLeft, diff));
       u.facing += step; u.turnLeft -= Math.abs(step);
     }
     u.heading = ((Math.round(u.facing / (Math.PI / 4)) % 8) + 8) % 8;
   }
+
 
   /** Is (dx, dy) within a blow's arc of where u faces? */
   private facingWithin(u: Unit, dx: number, dy: number, arc: number): boolean {
