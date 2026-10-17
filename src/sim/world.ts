@@ -258,6 +258,19 @@ function passBeside(u: Unit, t: Unit, beyond: number): [number, number] {
   return [t.x + nx * beyond - ny * off * side, t.y + ny * beyond + nx * off * side];
 }
 
+/**
+ * Would `u` ramming `t` from `gap` tiles away pay? Not onto a shaft's point. Otherwise, the speed it reaches over the
+ * gap (from its current speed, pushing off at foot grip, up to its sprint) knocks `t` off its feet (its jolt, μ·v / its
+ * mass, over K.staggerDv) while `u`'s own jolt stays under what injures it (K.injuryDv).
+ */
+function ramPays(u: Unit, t: Unit, gap: number): boolean {
+  if (t.stats.minReach > 0) return false; // it would run onto the point: the whole collision comes back through the shaft
+  const a = K.traction * K.gravity, v0 = Math.hypot(u.vx, u.vy) * M_PER_TILE;
+  const v = Math.min(u.stats.sprint * M_PER_TILE, Math.sqrt(v0 * v0 + 2 * a * gap * M_PER_TILE));
+  const mu = (u.stats.mass * t.stats.mass) / (u.stats.mass + t.stats.mass);
+  return (mu * v) / t.stats.mass > K.staggerDv && (mu * v) / u.stats.mass < K.injuryDv;
+}
+
 /** Tiles a body needs to reach its sprint speed from rest, pushing off as hard as its feet grip (v² = 2·a·d). */
 function runUpTiles(u: Unit): number {
   const v = u.stats.sprint * M_PER_TILE;
@@ -1395,6 +1408,13 @@ export class World {
       const [ox, oy] = u.runOut;
       if (Math.hypot(u.x - tx, u.y - ty) >= runUp || Math.hypot(ox - u.x, oy - u.y) < 0.8) u.runOut = null;
       else { this.moveTo(u, ox, oy, 0.5, true, true); return true; }
+    }
+    // a thrower with an enemy close rams it with its body if it pays: the speed it can reach over the gap would knock
+    // the target off its feet without jolting itself hurt (a great beast tramples a man; a slinger can't)
+    // (it rams while it's reloading, or out of crystals: a throw is worth more when it has one ready)
+    if (wpn.throws && tu && !u.airborne && !tu.airborne && edge < K.ramRange && u.stance !== 'hold' && (u.cooldown > 0.3 || u.ammo < u.crystalMass - 1e-6) && ramPays(u, tu, edge)) {
+      this.moveTo(u, tu.x, tu.y, 0, true, true);
+      return true;
     }
     if (edge > range - 0.05) {
       if (u.airborne) { this.moveTo(u, tx, ty, 0.05); return true; }

@@ -113,6 +113,8 @@ export const K = {
   holdForcePerMuscleKg: 40,
   /** Metres a blow drives in: a blow does at most (holding force × this) joules of work, unless the weapon is braced. */
   blowDepth: 0.15,
+  /** A thrower considers ramming an enemy this close (tiles): see ramPays (sim/world.ts). */
+  ramRange: 3,
   /** A change of velocity (m/s) bigger than this in one hit or collision knocks a body off its feet for a moment: staggered. */
   staggerDv: 1.5,
   /** Bodies colliding: a jolt (change of velocity, m/s) under this is just jostling; it's how hard a body is jolted that injures it, like a fall... */
