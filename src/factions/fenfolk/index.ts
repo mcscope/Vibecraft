@@ -227,7 +227,10 @@ const siegeHeron: FenUnit = {
     root.joint([0, 0, 0], [0, 0, 0], (b) => {
       const t = p.phase * Math.PI * 2;
       const leaping = p.anim === 'leap'; // springing off the ground: legs driving down, body tipped up, wings hauling
-      const flying = p.anim === 'fly' || leaping;
+      // in the air, pitched to its climb: ~11° up climbing, level soaring, ~17° nose-down gliding in
+      const held = p.anim === 'soar' || p.anim === 'glide'; // wings held out, not beating
+      const pitch = leaping ? 0.38 : p.anim === 'climb' ? 0.2 : p.anim === 'glide' ? -0.3 : 0;
+      const flying = p.anim === 'fly' || leaping || p.anim === 'climb' || held;
       const walking = p.anim === 'walk';
       const attacking = p.anim === 'attack';
       // flight: body level and up off the ground, wings beating slow and deep
@@ -254,7 +257,7 @@ const siegeHeron: FenUnit = {
           for (const tz of [-0.08, 0, 0.08]) b.limb(foot, [foot[0] + 0.22, 0.02, foot[2] + tz * 1.5], 0.015, heronLeg); // splayed toes
         }
       }
-      b.joint([leaping ? 0.3 : 0, lift, 0], [0, 0, leaping ? 0.3 : flying ? 0 : 0.25], (c) => {
+      b.joint([leaping ? 0.3 : 0, lift, 0], [0, 0, flying ? pitch : 0.25], (c) => {
         // body, pale breast plumes and a long tail
         c.sphere([0.75, 0.36, 0.38], [0, 1.45, 0], heronGrey);
         c.sphere([0.5, 0.26, 0.3], [0.2, 1.32, 0], heronPale);
@@ -286,7 +289,7 @@ const siegeHeron: FenUnit = {
         // wings: folded along the flanks on the ground, spread and beating in the air
         for (const side of [1, -1]) {
           const spread = flying ? 1 : attacking ? 0.35 : 0;
-          const beat = leaping ? -0.9 + Math.sin(t) * 1.1 : flying ? Math.sin(t) * 0.75 : 0; // a leap hauls the wings high, then down hard
+          const beat = held ? -0.12 : leaping ? -0.9 + Math.sin(t) * 1.1 : flying ? Math.sin(t) * 0.75 : 0; // a leap hauls the wings high then down hard; soaring holds them out, tips up a touch
           c.joint([0.15, 1.6, 0.3 * side], [beat * side * spread + (1 - spread) * 1.35 * side, 0, 0], (wg) => {
             for (let i = 0; i < 6; i++) {
               const len = 0.9 + spread * 0.9 - i * 0.08;

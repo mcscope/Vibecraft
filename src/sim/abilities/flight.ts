@@ -32,7 +32,7 @@ export const CLIMB_CAL_PER_KG_M = 0.5;
 /** Metres per second it climbs toward its ceiling. */
 export const CLIMB_RATE = 1;
 /** Metres of the take-off burst (climbs 3× as fast up to here). */
-export const LAUNCH_HEIGHT = 2;
+export const LAUNCH_HEIGHT = 1.5;
 /** How close (tiles) a bomber gets over its target before it drops. */
 export const BOMB_REACH = 0.6;
 /** Seconds a crystal takes to fall `h` metres. */
@@ -106,7 +106,8 @@ export function flyTo(w: World, u: Unit, gx: number, gy: number, arrive: number,
  * or nearly at a place it has to reach on foot.
  */
 export function tickFlight(w: World, u: Unit, _moved: boolean, dt: number, face: (dx: number, dy: number) => void): void {
-  if (!u.airborne) { u.alt = 0; return; }
+  if (!u.airborne) { u.alt = 0; u.vert = 0; return; }
+  const alt0 = u.alt;
   const flew = u.flewTick === w.tick;
   if (!flew) { u.flyDir += turnRate(u) * dt; glide(w, u, u.flySpeed || airSpeed(u), dt, face); } // no stopping in the air: circle at its pace
   const fighting = u.throws && (u.engage || u.order.kind === 'attack' || u.order.kind === 'attackMove');
@@ -123,13 +124,14 @@ export function tickFlight(w: World, u: Unit, _moved: boolean, dt: number, face:
     }
   } else {
     // a burst off the ground (wings pounding) for the first couple of metres, then a steady climb
-    const rate = u.alt < LAUNCH_HEIGHT ? CLIMB_RATE * 3 : CLIMB_RATE;
+    const rate = CLIMB_RATE * (1 + 2 * Math.max(0, 1 - u.alt / (LAUNCH_HEIGHT * 1.5))); // 3 m/s off the ground, easing to 1
     const climb = Math.min(rate * dt, Math.max(0, u.stats.flyHeight - u.alt));
     u.alt += climb;
     const soaring = u.alt >= u.stats.flyHeight - 1e-6; // up at its ceiling it rides the air
     u.cal -= (soaring ? soarBurn(u.stats) : flightBurn(u.stats)) * dt + u.stats.mass * CLIMB_CAL_PER_KG_M * climb;
   }
   if (u.cal < 0) u.cal = 0;
+  u.vert = u.alt > alt0 + 1e-6 ? 1 : u.alt < alt0 - 1e-6 ? -1 : 0;
 }
 
 /** Can `attacker` reach `target`? Only thrown crystals reach a flier in the air. */

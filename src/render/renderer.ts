@@ -38,7 +38,7 @@ export interface RenderOptions {
 export function unitFrame(u: Unit): { anim: ArtAnim; time?: number; progress?: number } {
   switch (u.anim) {
     case 'fly': return { anim: 'fly', time: u.animT };
-    case 'leap': return { anim: 'leap', time: u.animT };
+    case 'leap': case 'climb': case 'soar': case 'glide': return { anim: u.anim, time: u.animT };
     case 'walk': {
       const most = Math.max(u.food, u.wood, u.crystal); // what the cargo pack mostly holds
       const anim: ArtAnim = most <= 0.5 ? 'walk' : most === u.food ? 'carryFood' : most === u.wood ? 'carryWood' : 'carryCrystal';
@@ -371,7 +371,7 @@ export class Renderer {
       if (u.stats.flight) {
         // drawn at its real altitude (sim/abilities/flight.ts), smoothed between ticks
         const a0 = this.alt.get(u.id) ?? 0, target = u.airborne ? Renderer.altPx(u.alt) : 0;
-        this.alt.set(u.id, a0 + (target - a0) * Math.min(1, this.dt * 10));
+        this.alt.set(u.id, a0 + (target - a0) * Math.min(1, this.dt * 5));
       }
       sp.position.set(isoX(x, y), isoY(x, y) - this.lift(u.id));
       sp.zIndex = x + y + (u.airborne ? 2 : 0);
