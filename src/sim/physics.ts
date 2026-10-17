@@ -97,6 +97,8 @@ export const K = {
   traction: 0.6,
   /** Feet planted (× g): how hard a body pulls up, and how fast a shove or a slide dies. Legs, not ice. */
   footBrake: 1.5,
+  /** Sprint speed as a multiple of cruising speed (a gallop over a trot, a run over a jog). */
+  sprintPerCruise: 2.2,
   /** Calories per tile while sprinting, × walking's. */
   sprintCostMul: 4,
   /** Units sprint to close on an attack target this near (tiles)... */
@@ -138,7 +140,7 @@ export interface DerivedStats {
   maxCalories: number;
   /** Unloaded top speed, tiles/s. */
   speed: number;
-  /** Top sprint speed, tiles/s (= m/s): legs at full limb speed, burning calories fast (sim/world.ts moveTo). */
+  /** Top sprint speed, tiles/s: K.sprintPerCruise × its cruising speed, burning calories fast (sim/world.ts moveTo). */
   sprint: number;
   /** Can this unit attack at all? */
   canAttack: boolean;
@@ -296,7 +298,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   return {
     improvised,
     mass, physique, muscleMass, frameMass, reserveMass,
-    maxHp, armour, coverage, maxCalories, speed, sprint: Math.max(speed, limbSpeed / M_PER_TILE), canAttack, wheeled, gait: deriveGait(spec), flight: !!spec.flight, flyHeight: !spec.flight ? 0 : spec.flight === true ? DEFAULT_FLY_HEIGHT : spec.flight.height, carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, sight,
+    maxHp, armour, coverage, maxCalories, speed, sprint: speed * K.sprintPerCruise /* sprinting, like cruising, scales with leg length */, canAttack, wheeled, gait: deriveGait(spec), flight: !!spec.flight, flyHeight: !spec.flight ? 0 : spec.flight === true ? DEFAULT_FLY_HEIGHT : spec.flight.height, carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, sight,
     limbSpeed, maxAttackEnergy, crystalVelocity, attackEnergy, damage, attackCalories, cooldown, range,
     dps: damage / cooldown,
     holdForce: K.holdForcePerMuscleKg * muscleMass,
