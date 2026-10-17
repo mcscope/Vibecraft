@@ -121,12 +121,14 @@ const pikeman: MeadowUnit = {
       skin: '#c49270', hair: '#4a3020', head: 'helmet', scale: 1.0, bulk: 1.0, tabard: true,
       tunic: { color: '#a08a62', tex: 'leather' }, trousers: { color: '#6a5a44', tex: 'cloth' }, boots: LEATHER,
     };
-    human(b, p, look, armAngle(p) * 0.4, (h) => {
+    // a pike thrusts straight out, it doesn't swing: arms stay level, the whole pike drives forward
+    const thrust = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) * 0.45 : 0;
+    human(b, p, look, p.anim === 'attack' ? 0 : armAngle(p) * 0.4, (h) => {
       if (!p.armed) return;
       // the pike, levelled forward, butt trailing behind
-      h.limb([-0.9, -0.02, 0], [1.6, 0.06, 0], 0.022, WOOD);
-      h.cylinder(0.03, 0.03, 0.08, [1.45, 0.055, 0], IRON, [0, 0, Math.PI / 2], 6);
-      h.crystal(0.24, [1.62, 0.06, 0], [0, 0, -Math.PI / 2]);
+      h.limb([-0.9 + thrust, -0.02, 0], [1.6 + thrust, 0.06, 0], 0.022, WOOD);
+      h.cylinder(0.03, 0.03, 0.08, [1.45 + thrust, 0.055, 0], IRON, [0, 0, Math.PI / 2], 6);
+      h.crystal(0.24, [1.62 + thrust, 0.06, 0], [0, 0, -Math.PI / 2]);
     }, (h) => {
       h.sphere([0.06, 0.05, 0.05], [0.02, -0.05, 0], LEATHER);
     });
