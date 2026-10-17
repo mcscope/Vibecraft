@@ -289,25 +289,27 @@ const siegeHeron: FenUnit = {
         // wings: folded along the flanks on the ground, spread and beating in the air
         for (const side of [1, -1]) {
           const spread = flying ? 1 : attacking ? 0.35 : 0;
-          const beat = held ? -0.12 : leaping ? -0.9 + Math.sin(t) * 1.1 : flying ? Math.sin(t) * 0.75 : 0; // a leap hauls the wings high then down hard; soaring holds them out, tips up a touch
+          const beat = held ? 0.1 : leaping ? -0.9 + Math.sin(t) * 1.1 : flying ? Math.sin(t) * 0.75 : 0; // a leap hauls the wings high then down hard; soaring holds them out, tips up a touch
           c.joint([0.15, 1.6, 0.3 * side], [beat * side * spread + (1 - spread) * 1.35 * side, 0, 0], (wg) => {
-            // a heron's wing: broad and rounded, bowed down at the wrist in flight, dark fingered primaries at the tip.
-            // Each part is several overlapping ellipsoids so the surface runs on smoothly (no beads at the joins).
-            const inner = 0.45 + spread * 0.5, outer = 0.35 + spread * 0.5;
+            // a heron's wing: broad and rounded, dark fingered primaries at the tip. Every oval's front edge sits on
+            // one line (the leading edge), so they read as one wing; the wing curves down at the wrist when gliding
+            // and at the bottom of each downstroke (positive rotation here = tip down).
+            const inner = 0.45 + spread * 0.5, outer = 0.35 + spread * 0.5, LE = 0.2;
             for (const f of [0.2, 0.45, 0.7, 0.9]) {
-              wg.sphere([0.34 - f * 0.04, 0.035, inner * 0.32], [-0.12, 0, side * inner * f], heronGrey); // arm: the broad inner wing
-              wg.sphere([0.13, 0.03, inner * 0.32], [-0.4, -0.005, side * inner * f], heronDark); // dark trailing secondaries
+              const rx = 0.34 - f * 0.04;
+              wg.sphere([rx, 0.035, inner * 0.32], [LE - rx, 0, side * inner * f], heronGrey); // arm: the broad inner wing
+              wg.sphere([0.13, 0.03, inner * 0.32], [LE - rx * 2 + 0.1, -0.005, side * inner * f], heronDark); // dark trailing secondaries
             }
-            wg.sphere([0.05, 0.04, inner * 0.4], [-0.1, 0.02, side * inner * 0.5], { team: 'primary', tex: 'cloth' }); // a thin war-paint stripe
-            // the leading edge: one smooth rounded rod from shoulder to wrist, a rounded wrist joint
-            wg.limb([0.17, 0, 0], [0.16, 0, side * inner * 0.9], 0.05, heronGrey, 0.045);
-            wg.sphere(0.048, [0.16, 0, side * inner * 0.9], heronGrey);
-            wg.joint([-0.08, 0, side * inner * 0.9], [-side * 0.28 * spread, 0, 0], (hand) => { // the wrist bows the hand down
-              for (const f of [0.15, 0.4, 0.65, 0.85]) hand.sphere([0.3 - f * 0.08, 0.03, outer * 0.32], [-0.1 - f * 0.03, 0, side * outer * f], heronGrey);
-              hand.limb([0.16, 0, 0], [0.06, 0, side * outer * 0.95], 0.045, heronGrey, 0.02); // the leading edge runs on, tapering to the tip
+            wg.sphere([0.05, 0.04, inner * 0.4], [LE - 0.12, 0.02, side * inner * 0.5], { team: 'primary', tex: 'cloth' }); // a thin war-paint stripe
+            const bow = held ? 0.45 : 0.15 + 0.35 * Math.max(0, Math.sin(t)); // deepest at the bottom of the downstroke
+            wg.joint([0, 0, side * inner * 0.9], [side * bow * spread, 0, 0], (hand) => {
+              for (const f of [0.15, 0.4, 0.65, 0.85]) {
+                const rx = 0.3 - f * 0.1;
+                hand.sphere([rx, 0.03, outer * 0.32], [LE - 0.02 * f - rx, 0, side * outer * f], heronGrey);
+              }
               for (let k = 0; k < 5; k++) { // primaries splayed like fingers, longest at the front, rooted well inside the hand
                 const len = (0.34 - k * 0.03) * (0.55 + spread * 0.45);
-                hand.sphere([0.05, 0.014, len / 2], [-0.02 - k * 0.07, -0.005, side * (outer * 0.8 + len / 2)], heronDark, [0, side * (k * 0.13 - 0.1) * spread, 0]);
+                hand.sphere([0.05, 0.014, len / 2], [LE - 0.07 - k * 0.07, -0.005, side * (outer * 0.8 + len / 2)], heronDark, [0, side * (k * 0.13 - 0.1) * spread, 0]);
               }
             });
           });
