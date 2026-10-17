@@ -1430,8 +1430,13 @@ export class World {
         if (wpn.throws) this.moveTo(u, tx, ty, Math.max(0.05, range - 0.3), sprint, false);
         else {
           // straight at it till the blow lands, then past alongside
+          // against a weapon that outreaches its own (it'll be struck first), it doesn't run onto the point: near that
+          // reach it comes on at a deliberate walk, so the blow that meets it carries little of a collision, and pushes
+          // inside where a long shaft can't be brought to bear
+          const outreached = !tu.throws && tu.stats.canAttack && tu.stats.range > range + 0.1 && !charging;
+          if (outreached && edge < tu.stats.range + 2) { this.moveTo(u, tx, ty, 0.05, false, false, u.stats.speed * K.closeInPace); return true; }
           const [px, py] = u.cooldown > 0 ? passBeside(u, tu, 0) : [tx, ty];
-          this.moveTo(u, px, py, 0.05, sprint, true);
+          this.moveTo(u, px, py, 0.05, sprint && !outreached, !outreached);
         }
         return true;
       }
@@ -1984,7 +1989,7 @@ export class World {
    * at full limb speed (calories burn fast). `through`: don't brake at the goal: run on past it
    * (a charge); otherwise brake to stop there.
    */
-  moveTo(u: Unit, gx: number, gy: number, arrive: number, sprint = false, through = false): boolean {
+  moveTo(u: Unit, gx: number, gy: number, arrive: number, sprint = false, through = false, maxSpeed = Infinity): boolean {
     const dx = gx - u.x, dy = gy - u.y;
     if (dx * dx + dy * dy <= arrive * arrive) { u.path = []; return true; }
     if (u.stats.flight && !walks(this, u, gx, gy)) { // a short, clear way is walked
@@ -2009,7 +2014,7 @@ export class World {
     const st = u.stats;
     const load = loadedSpeed(st, this.packLoad(u)) / st.speed; // a heavy pack slows walk and sprint alike
     const sprinting = sprint && !u.exhausted && u.cal > st.maxCalories * K.sprintMinCalories;
-    let speed = (sprinting ? st.sprint : st.speed) * load * roadFactor(this, u);
+    let speed = Math.min(maxSpeed, (sprinting ? st.sprint : st.speed) * load * roadFactor(this, u));
     if (u.exhausted) speed *= K.exhaustedSpeedMul;
     // a bounding gait (sim/abilities/gait.ts): still while crouched, faster in the air
     const stride = strideFactor(u, this.tick, DT);
