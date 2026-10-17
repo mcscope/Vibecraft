@@ -169,19 +169,24 @@ export function plankWall(b: ModelBuilder, o: WallOpts): void {
   }
 }
 
-/** A round thatched roof built up in ragged bundle layers, with a fringe at the eaves. */
+/**
+ * A round thatched roof: three overlapping straw skirts (smooth, textured), each
+ * with a short ragged fringe of straw along its lower edge, like a real thatch's
+ * stepped eaves.
+ */
 export function thatchedCone(b: ModelBuilder, r: number, h: number, at: Vec3, mat: Mat): void {
   const [ax, ay, az] = at;
-  b.cone(r, h, [ax, ay + h / 2, az], vary(mat, 0.3, 0.25), undefined, 18);
-  const layers = Math.max(3, Math.round(h / 0.3));
-  for (let k = 0; k < layers; k++) {
-    const s = k / layers, rr = r * (1 - s) + 0.04, y = ay + h * s;
-    const n = Math.max(6, Math.round((2 * Math.PI * rr) / 0.18));
+  const skirts: Array<[number, number, number]> = [[1.0, 0.0, 0.5], [0.78, 0.3, 0.5], [0.52, 0.58, 0.45]]; // [radius, base, height] as shares
+  for (const [k, [rs, ys, hs]] of skirts.entries()) {
+    const rr = r * rs, y0 = ay + h * ys, hh = h * hs;
+    b.cone(rr, hh, [ax, y0 + hh / 2, az], vary(mat, k % 2 ? 0.35 : 0.6, 0.2), undefined, 18);
+    // the fringe: short straws hanging past the skirt's edge
+    const n = Math.max(10, Math.round((2 * Math.PI * rr) / 0.09));
     for (let i = 0; i < n; i++) {
-      const a = (i + (k % 2) * 0.5) / n * Math.PI * 2, j = hash(k, i, r, ax);
-      const len = (h / layers) * (1.2 + j * 0.4);
-      b.limb([ax + Math.cos(a) * (rr - 0.02), y + len * 0.9, az + Math.sin(a) * (rr - 0.02)],
-        [ax + Math.cos(a) * (rr + 0.05), y - 0.04 - j * 0.05, az + Math.sin(a) * (rr + 0.05)], 0.035 + j * 0.02, vary(mat, j, 0.2), 0.02);
+      const a = (i + k * 0.33) / n * Math.PI * 2, j = hash(k, i, r, ax);
+      const top: Vec3 = [ax + Math.cos(a) * rr * 0.86, y0 + hh * 0.14, az + Math.sin(a) * rr * 0.86];
+      const tip: Vec3 = [ax + Math.cos(a) * (rr + 0.03), y0 - 0.05 - j * 0.07, az + Math.sin(a) * (rr + 0.03)];
+      b.limb(top, tip, 0.022, vary(mat, j, 0.12), 0.012);
     }
   }
 }

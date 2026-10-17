@@ -1,6 +1,7 @@
 // Fenfolk buildings: reed and willow on stilts over the water, peat walls, an earthen mound.
 // One map tile = 2 model units; a size-n building spans 2n.
 import type { Mat, ModelBuilder } from '../../kits/bake3d/types';
+import { thatchedCone } from '../../kits/bake3d/detail';
 
 const REED: Mat = { color: '#b8a466', tex: 'thatch' };
 const REED_DARK: Mat = { color: '#8a7a48', tex: 'thatch' };
@@ -32,9 +33,7 @@ function stilts(b: ModelBuilder, w: number, d: number, h: number, cx = 0, cz = 0
 
 /** A layered thatch roof: three overlapping skirts and a bound top-knot. */
 function thatch(b: ModelBuilder, r: number, h: number, y: number, x = 0, z = 0): void {
-  b.cone(r * 1.08, h * 0.45, [x, y + h * 0.22, z], REED_DARK, undefined, 14);
-  b.cone(r * 0.85, h * 0.55, [x, y + h * 0.42, z], REED, undefined, 14);
-  b.cone(r * 0.55, h * 0.5, [x, y + h * 0.7, z], REED_DARK, undefined, 12);
+  thatchedCone(b, r * 1.08, h * 0.95, [x, y, z], REED); // bundled straw, layer on layer
   b.cylinder(r * 0.12, r * 0.16, h * 0.12, [x, y + h * 0.95, z], BRONZE, undefined, 8); // binding
   b.limb([x, y + h, z], [x + r * 0.05, y + h * 1.25, z], r * 0.04, REED); // top-knot
 }
