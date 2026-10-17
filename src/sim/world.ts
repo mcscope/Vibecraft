@@ -2009,10 +2009,11 @@ export class World {
       const side = long ? 0 : Math.min(want, st.speed * K.sidestep), drive = long ? want : want * Math.max(0, align);
       let wvx = fx * drive + (gx2 - align * fx) * side;
       let wvy = fy * drive + (gy2 - align * fy) * side;
-      // runners don't run into other bodies (only what they're attacking): against one close by, drop the part of the run that would close on it
+      // runners don't run into their own side or into things that won't budge (posts): against one close by, drop
+      // the part of the run that would close on it. Enemy bodies are fair game: a charge runs them down
       const aim = u.order.kind === 'attack' ? u.order.target : u.engage;
       for (const f of this.units.values()) {
-        if (f === u || f.id === aim || f.airborne) continue;
+        if (f === u || f.id === aim || f.airborne || (f.owner !== u.owner && !f.dummy)) continue;
         const ox = f.x - u.x, oy = f.y - u.y, gap = Math.hypot(ox, oy) || 1e-6;
         if (gap > u.stats.radius + f.stats.radius + 0.35) continue;
         const nx = ox / gap, ny = oy / gap, closing = (wvx - f.vx) * nx + (wvy - f.vy) * ny;
