@@ -15,6 +15,7 @@ export const deer: MeadowWild = {
   name: 'Deer',
   description: 'Grazes the meadow in small herds. Send villagers to hunt it for food.',
   mass: 70,
+  length: 1.8, // m nose to tail: a long body, it wheels
   physique: { muscle: 0.5, frame: 0.3, reserve: 0.2 },
   canGather: false,
   temper: 'passive',
@@ -53,6 +54,7 @@ export const wolf: MeadowWild = {
   name: 'Wolf',
   description: 'Hunts in packs at the edge of the meadow. Attacks anything that strays close, then slinks home.',
   mass: 32,
+  length: 1.4, // m nose to tail: a long body, it wheels
   physique: { muscle: 0.5, frame: 0.3, reserve: 0.2 },
   attack: { style: 'strike', crystalMass: 0.35 },
   canGather: false,

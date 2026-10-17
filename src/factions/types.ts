@@ -54,6 +54,12 @@ export interface UnitSpec {
    * airborne from (1 − hop) × ⅔ to that plus hop.
    */
   gait?: { hop: number; period?: number };
+  /**
+   * Metres nose to tail, for a long horizontal body (any number of legs, or none): it can't pivot on the spot, so it
+   * keeps its momentum and wheels round on an arc about this long (like a flier). Leave it out for an upright or compact
+   * body that turns by pulling up and pivoting.
+   */
+  length?: number;
   /** It flies: walks short hops, takes off to go further, straight over everything; burns calories aloft (∝ mass, so endurance comes from its reserve); lands when it stops or runs low. Melee fliers land to strike. */
   flight?: boolean | { height: number };
   /** Can this unit harvest resource nodes? Default true. */

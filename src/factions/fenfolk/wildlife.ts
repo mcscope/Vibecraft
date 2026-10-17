@@ -44,6 +44,7 @@ export const bogLurker: WildModel = {
   name: 'Bog Lurker',
   description: 'Lies low in the reeds, then snaps. Long-jawed and armoured; stay well clear of its pool.',
   mass: 90,
+  length: 2.5, // m nose to tail: a long body, it wheels
   physique: { muscle: 0.45, frame: 0.3, reserve: 0.25 },
   attack: { style: 'strike', crystalMass: 0.7 },
   canGather: false,

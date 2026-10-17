@@ -140,6 +140,7 @@ const lynx: MeadowUnit = {
   name: 'Lynx Lancer',
   description: 'A lancer riding a great lynx, crystal-tipped lance couched. Fast and fierce, but eats like a horse.',
   mass: 320,
+  length: 2.6, // m nose to tail: a long body, it wheels
   physique: { muscle: 0.6, frame: 0.28, reserve: 0.12 },
   attack: { style: 'strike', crystalMass: 5, shaft: 3 }, // the couched lance it's drawn with
   refinement: 1.5,
@@ -204,6 +205,7 @@ const hurlhorn: MeadowUnit = {
   name: 'Hurlhorn',
   description: 'A shaggy war-beast carrying a throwing-arm on its back. Lobs 9 kg crystals across the field, a dozen to a load. Helpless up close.',
   mass: 400,
+  length: 2.9, // m nose to tail: a long body, it wheels
   physique: { muscle: 0.55, frame: 0.3, reserve: 0.15 },
   attack: { style: 'throw', crystalMass: 9, ammo: 12 },
   refinement: 2.4,
@@ -268,6 +270,7 @@ const mule: MeadowUnit = {
   name: 'Mule Cart',
   description: 'A small, patient mule hauling a two-wheeled cart. Keeps outlying buildings stocked from the town center.',
   mass: 80,
+  length: 1.8, // m nose to tail: a long body, it wheels
   physique: { muscle: 0.55, frame: 0.3, reserve: 0.15 },
   wheeled: true,
   canGather: false,

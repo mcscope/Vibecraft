@@ -174,6 +174,8 @@ export interface DerivedStats {
   minReach: number;
   /** Can it plant its shaft against a charge (and hold ground with it)? */
   canPlant: boolean;
+  /** Metres it needs to wheel round (its body length, for a long body); 0 if it pivots on the spot. */
+  turnRadius: number;
 
   gatherRate: number;
   moveCalPerTile: number;
@@ -305,6 +307,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
     // a shaft can be planted (butt on the ground behind, point at the enemy) only if it's well longer than the body is tall:
     // a pike in a man's hands, not a lance on a mount
     canPlant: shaft > 1.5 * 1.7 * Math.cbrt(mass / 70),
+    turnRadius: spec.length ? Math.max(0.2, Math.min(12, spec.length)) : 0,
     gatherRate,
     moveCalPerTile: K.moveCalPerKgTile * mass,
     restRegen: K.restRegenFraction * maxCalories,

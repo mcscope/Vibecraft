@@ -1210,12 +1210,13 @@ export class World {
       case 'eatFrom': return bearerAbility.runEatFrom(this, u, o.unit);
       case 'garrison': return runGarrison(this, u, o.building);
       case 'move': {
-        if (this.moveTo(u, o.x, o.y, 0.3)) { this.finish(u); }
+        const pass = u.queue.length > 0; // more orders after this one: ride on through the waypoint, don't pull up
+        if (this.moveTo(u, o.x, o.y, pass ? 0.8 : 0.3, false, pass)) { this.finish(u); }
         return u.x !== u.px || u.y !== u.py;
       }
       case 'attackMove': {
         if (this.runEngage(u)) return u.x !== u.px || u.y !== u.py;
-        if (this.moveTo(u, o.x, o.y, 0.5)) this.finish(u);
+        if (this.moveTo(u, o.x, o.y, u.queue.length ? 0.8 : 0.5, false, u.queue.length > 0)) this.finish(u);
         return u.x !== u.px || u.y !== u.py;
       }
       case 'attack': {
@@ -1381,6 +1382,15 @@ export class World {
     if (edge > range - 0.05) {
       if (u.airborne) { this.moveTo(u, tx, ty, 0.05); return true; }
       if (tu) {
+        // no chasing what it can't catch: a target pulling away faster than it can sprint is let go (an explicit
+        // attack order stands and watches it instead)
+        {
+          const d = Math.hypot(tx - u.x, ty - u.y) || 1, away = (tu.ovx * (tx - u.x) + tu.ovy * (ty - u.y)) / d;
+          if (!wpn.throws && edge > range + 1 && away > 0.9 * u.stats.sprint) {
+            if (u.order.kind === 'attack' && u.order.target === tu.id) { this.face(u, tx - u.x, ty - u.y); return true; }
+            return false;
+          }
+        }
         // holding ground: it doesn't go to meet anything (an explicit attack order still sends it)
         if (u.stance === 'hold' && u.order.kind !== 'attack') { this.face(u, tx - u.x, ty - u.y); return true; }
         // a long shaft with something coming at it fast doesn't go to meet it: it plants and lets it come onto the point
@@ -1888,10 +1898,10 @@ export class World {
     if (Math.abs(dx) + Math.abs(dy) < 1e-4) return;
     let want = Math.atan2(dy, dx);
     const v = Math.hypot(u.vx, u.vy);
-    if (!u.airborne && v > u.stats.speed * 1.15) want = Math.atan2(u.vy, u.vx);
+    if (!u.airborne && (v > u.stats.speed * 1.15 || (u.stats.turnRadius > 0 && v > 0.3))) want = Math.atan2(u.vy, u.vx); // running flat out (or any four-legged body on the move) faces along its run
     if (u.airborne || u.dummy) u.facing = want;
     else {
-      if (u.turnTick !== this.tick) { u.turnTick = this.tick; u.turnLeft = u.stats.turnRate * DT * (u.stats.canPlant && v * M_PER_TILE < 0.5 ? K.plantedTurnMul : 1); }
+      if (u.turnTick !== this.tick) { u.turnTick = this.tick; u.turnLeft = (u.stats.turnRadius > 0 ? Math.min(u.stats.turnRate, 0.8 / u.stats.turnRadius) : u.stats.turnRate) * DT * (u.stats.canPlant && v * M_PER_TILE < 0.5 ? K.plantedTurnMul : 1); } // four legs standing: a slow walking pivot
       const diff = Math.atan2(Math.sin(want - u.facing), Math.cos(want - u.facing));
       const step = Math.max(-u.turnLeft, Math.min(u.turnLeft, diff));
       u.facing += step; u.turnLeft -= Math.abs(step);
@@ -1954,13 +1964,21 @@ export class World {
       let want = speed;
       // brake in time to stop at the goal (v² = 2·a·d), unless running through it
       if (u.path.length === 1 && !through) want = Math.min(want, Math.sqrt(2 * (K.footBrake * K.gravity) / M_PER_TILE * Math.max(0, d - arrive * 0.5)));
-      // legs turn by slowing: the sharper the turn, the more it pulls up first, then pivots and goes
       const v0 = Math.hypot(u.vx, u.vy);
-      if (v0 > 0.3) {
+      let dirx = ddx / d, diry = ddy / d;
+      if (st.turnRadius > 0 && v0 > 0.05) {
+        // four legs: it keeps its momentum and wheels round, its line turning no faster than speed ÷ body length
+        // (a slow walking pivot when nearly stopped), like a bird banking
+        const cur = Math.atan2(u.vy, u.vx), diff = Math.atan2(Math.sin(Math.atan2(diry, dirx) - cur), Math.cos(Math.atan2(diry, dirx) - cur));
+        const w = Math.max(v0 * M_PER_TILE, 0.8) / st.turnRadius; // rad/s
+        const a = cur + Math.max(-w * DT, Math.min(w * DT, diff));
+        dirx = Math.cos(a); diry = Math.sin(a);
+      } else if (v0 > 0.3) {
+        // two legs turn by slowing: the sharper the turn, the more it pulls up first, then pivots and goes
         const cos = (u.vx * ddx + u.vy * ddy) / (v0 * d);
         want = Math.min(want, Math.max(st.speed * 0.3, v0 * Math.max(0, cos)) + acc * DT);
       }
-      let wvx = (ddx / d) * want, wvy = (ddy / d) * want;
+      let wvx = dirx * want, wvy = diry * want;
       // runners don't run into their own side: against a friend close by, drop the part of its run that would close on them
       for (const f of this.units.values()) {
         if (f === u || f.owner !== u.owner || f.airborne) continue;

@@ -79,6 +79,7 @@ const bogToad: FenUnit = {
   name: 'Bog Toad',
   description: 'A huge marsh toad with a fenling on its back. Lunges and slams with its crystal-studded jaw: brutal up close.',
   mass: 400, // horse-sized: a fenling rides it
+  length: 2.4, // m nose to tail: a long body, it wheels
   physique: { muscle: 0.55, frame: 0.3, reserve: 0.15 },
   attack: { style: 'strike', crystalMass: 2.5 },
   refinement: 2.0, // as refined as the Toad Wallow allows (2.05): a big body bred well
@@ -128,6 +129,7 @@ const packTortoise: FenUnit = {
   name: 'Pack Tortoise',
   description: 'An ancient war-tortoise in bolted iron, a crystal reliquary chained to its back. Fenlings that run dry come to it for more, like crystals on the ground.',
   mass: 160,
+  length: 1.6, // m nose to tail: a long body, it wheels
   physique: { muscle: 0.45, frame: 0.47, reserve: 0.08 }, // a tortoise: half shell, slow and hard to hurt, still strong enough to haul
   refinement: 1.5,
   bearer: { radius: 4 }, // gathers crystal only (spent ones off the ground, or from a deposit) and keeps it
