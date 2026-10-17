@@ -174,8 +174,8 @@ export interface DerivedStats {
   minReach: number;
   /** Can it plant its shaft against a charge (and hold ground with it)? */
   canPlant: boolean;
-  /** Metres it needs to wheel round (its body length, for a long body); 0 if it pivots on the spot. */
-  turnRadius: number;
+  /** Metres nose to tail: given for a long body, else an upright body's depth from its mass. Every body's line turns no faster than speed ÷ this. */
+  length: number;
 
   gatherRate: number;
   moveCalPerTile: number;
@@ -301,13 +301,14 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
       const L = shaft, kg = shaft * K.shaftKgPerM, out = 0.75 * L + 0.4;
       const I = (kg * 0.75 * (0.75 * L) ** 2) / 3 + (kg * 0.25 * (0.25 * L) ** 2) / 3 + crystalMass * out * out;
       const torque = K.holdForcePerMuscleKg * muscleMass * 0.5;
-      return Math.min(K.turnRate, Math.sqrt(((Math.PI / 2) * torque) / (2 * Math.max(1e-6, I))));
+      // and a long weapon's tip can't sweep round faster than the arms move (limb speed ÷ its length out front)
+      return Math.min(K.turnRate, Math.sqrt(((Math.PI / 2) * torque) / (2 * Math.max(1e-6, I))), L > 0 ? limbSpeed / out : Infinity);
     })(),
     minReach: shaft ? reach - (shaft * 0.75 * 0.5) / M_PER_TILE : 0, // it can choke up half the shaft's forward length
     // a shaft can be planted (butt on the ground behind, point at the enemy) only if it's well longer than the body is tall:
     // a pike in a man's hands, not a lance on a mount
     canPlant: shaft > 1.5 * 1.7 * Math.cbrt(mass / 70),
-    turnRadius: spec.length ? Math.max(0.2, Math.min(12, spec.length)) : 0,
+    length: spec.length ? Math.max(0.2, Math.min(12, spec.length)) : 0.18 * bodyHeight(mass), // an upright body: its depth, ~0.18 of its height
     gatherRate,
     moveCalPerTile: K.moveCalPerKgTile * mass,
     restRegen: K.restRegenFraction * maxCalories,

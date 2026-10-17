@@ -1898,10 +1898,10 @@ export class World {
     if (Math.abs(dx) + Math.abs(dy) < 1e-4) return;
     let want = Math.atan2(dy, dx);
     const v = Math.hypot(u.vx, u.vy);
-    if (!u.airborne && (v > u.stats.speed * 1.15 || (u.stats.turnRadius > 0 && v > 0.3))) want = Math.atan2(u.vy, u.vx); // running flat out (or any four-legged body on the move) faces along its run
+    if (!u.airborne && (v > u.stats.speed * 1.15 || (u.stats.length >= 1 && v > 0.3))) want = Math.atan2(u.vy, u.vx); // running flat out (or any long body on the move) faces along its run
     if (u.airborne || u.dummy) u.facing = want;
     else {
-      if (u.turnTick !== this.tick) { u.turnTick = this.tick; u.turnLeft = (u.stats.turnRadius > 0 ? Math.min(u.stats.turnRate, 0.8 / u.stats.turnRadius) : u.stats.turnRate) * DT * (u.stats.canPlant && v * M_PER_TILE < 0.5 ? K.plantedTurnMul : 1); } // four legs standing: a slow walking pivot
+      if (u.turnTick !== this.tick) { u.turnTick = this.tick; u.turnLeft = Math.min(u.stats.turnRate, 0.8 / u.stats.length) * DT * (u.stats.canPlant && v * M_PER_TILE < 0.5 ? K.plantedTurnMul : 1); } // standing, it walks itself round: a long body slowly
       const diff = Math.atan2(Math.sin(want - u.facing), Math.cos(want - u.facing));
       const step = Math.max(-u.turnLeft, Math.min(u.turnLeft, diff));
       u.facing += step; u.turnLeft -= Math.abs(step);
@@ -1966,15 +1966,15 @@ export class World {
       if (u.path.length === 1 && !through) want = Math.min(want, Math.sqrt(2 * (K.footBrake * K.gravity) / M_PER_TILE * Math.max(0, d - arrive * 0.5)));
       const v0 = Math.hypot(u.vx, u.vy);
       let dirx = ddx / d, diry = ddy / d;
-      if (st.turnRadius > 0 && v0 > 0.05) {
-        // four legs: it keeps its momentum and wheels round, its line turning no faster than speed ÷ body length
+      if (st.length >= 1 && v0 > 0.05) {
+        // a long body keeps its momentum and wheels round, its line turning no faster than speed ÷ its length
         // (a slow walking pivot when nearly stopped), like a bird banking
         const cur = Math.atan2(u.vy, u.vx), diff = Math.atan2(Math.sin(Math.atan2(diry, dirx) - cur), Math.cos(Math.atan2(diry, dirx) - cur));
-        const w = Math.max(v0 * M_PER_TILE, 0.8) / st.turnRadius; // rad/s
+        const w = Math.max(v0 * M_PER_TILE, 0.8) / st.length; // rad/s
         const a = cur + Math.max(-w * DT, Math.min(w * DT, diff));
         dirx = Math.cos(a); diry = Math.sin(a);
       } else if (v0 > 0.3) {
-        // two legs turn by slowing: the sharper the turn, the more it pulls up first, then pivots and goes
+        // a short body turns so tight it plants and pivots: the sharper the turn, the more it pulls up first, then goes
         const cos = (u.vx * ddx + u.vy * ddy) / (v0 * d);
         want = Math.min(want, Math.max(st.speed * 0.3, v0 * Math.max(0, cos)) + acc * DT);
       }

@@ -55,9 +55,9 @@ export interface UnitSpec {
    */
   gait?: { hop: number; period?: number };
   /**
-   * Metres nose to tail, for a long horizontal body (any number of legs, or none): it can't pivot on the spot, so it
-   * keeps its momentum and wheels round on an arc about this long (like a flier). Leave it out for an upright or compact
-   * body that turns by pulling up and pivoting.
+   * Metres nose to tail (any body plan, any number of legs). Every body turns its line no faster than speed ÷ length:
+   * a long body keeps its momentum and wheels round (like a flier); a short one turns so tight it plants and pivots.
+   * Leave it out for an upright body: it's then its front-to-back depth, from its mass (a 70 kg person: ~0.3 m).
    */
   length?: number;
   /** It flies: walks short hops, takes off to go further, straight over everything; burns calories aloft (∝ mass, so endurance comes from its reserve); lands when it stops or runs low. Melee fliers land to strike. */
