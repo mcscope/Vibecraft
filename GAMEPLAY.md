@@ -142,6 +142,20 @@ In Meadow-vs-Meadow and Fen-vs-Fen AI games, first blood comes at about 4.5–5.
 
 The snowball is clearly weaker.
 
+### P4: reach strikes first, built (spears)
+
+- **New attack field `shaft`** (0–3 m, strikers only): each 2 m of shaft adds one tile of reach. The shaft's wood (1.5 kg/m) is priced like body mass, and a long pole swings a little slower (+0.08 s per metre).
+- **Bracing:** when a longer-reach striker hits a melee attacker with shorter reach, the attacker's own closing speed adds ½·m·v² × 0.5 to the blow. A charging Lynx impales itself; a slow maceman barely does.
+- **New Meadowfolk Pikeman** (Barracks, 62 kg, 3 m pike) and a 2.5 m reed spear for the Fenfolk Reedguard.
+- **AI:** it weights spear units up by the share of heavy chargers (melee, 120 kg+) in the enemy army, and throwers up by the share of fliers.
+
+Arena (1,200 budget, row vs column):
+- Pikeman vs Lynx: **+1.00**, where the Lynx previously beat everything on the ground.
+- Pikeman vs Maceman: −0.40. Pikeman vs Hurlhorn: −0.78 (outranged).
+- Reedguard vs Lynx: −0.82 → **+1.00**. Reedguard vs Bog Toad: −0.73 → +1.00.
+
+That's a real triangle: **spears beat chargers, heavy infantry and artillery beat spears, chargers beat artillery and swarms.** AI games stay close (Fen vs Meadow: three of four draws at 20 min).
+
 ## Decisions for the user (not made unilaterally)
 
 1. **Workers that are also soldiers.** Correction to an earlier guess: the arena shows ranged units are *weak* per cost, not strong. What made the Fenfolk dominant was that their *workers* are a ranged militia they'd have paid for anyway. That's a legitimate faction identity, but it's under-priced. Options:
@@ -149,7 +163,7 @@ The snowball is clearly weaker.
    - make fighting tire workers more (calories);
    - let a faction choose either a worker or a soldier body, and price dual-use bodies on both counts.
 2. **Should bigger and refined bodies be less efficient per cost?** For example, food cost growing slightly faster than mass (an elite's upbringing), or crystal as an elite's main cost (AoE "gold"). Today big refined units dominate cost-for-cost, so "trash" units have no job.
-3. **Splash (P3), tested and reverted.** In the arena it made the Hurlhorn and the heron stronger against *everything* they already beat (Hurlhorn vs Reedguard +0.57 → +0.93). It created no new counter, because swarms already lose to artillery. Revisit once swarm units are worth something (decisions 1–2). **Reach-first-strike (P4)** is still on paper.
+3. **Splash (P3), tested and reverted.** In the arena it made the Hurlhorn and the heron stronger against *everything* they already beat (Hurlhorn vs Reedguard +0.57 → +0.93). It created no new counter, because swarms already lose to artillery. Revisit once swarm units are worth something (decisions 1–2). Reach-first-strike (P4) is now built: see above.
 4. **Thrower strength, tested and reverted.** Throwing at strike parity (efficiency 0.75 → 1.0, reload 0.4 → 0.2 s) barely helped slingers (they still lost every matchup) and made the Hurlhorn and heron stronger again. Small stones carry too little energy, and armour takes most of it. Making light ranged units viable needs decision 2 (elites less efficient per cost), or ranged-specific physics such as a sling multiplying throw speed.
 5. **Faction designs.** Done for the AI: it now builds by army value (HP × DPS ÷ cost²), which turned Fen routs into mostly close games. The Meadowfolk slinger still needs a redesign (heavier stone, fewer of them), but arena tests of five variants (heavier stones, more muscle, refinement) still lost to every Fenfolk unit: per cost, ranged infantry loses to melee in this engine.
 

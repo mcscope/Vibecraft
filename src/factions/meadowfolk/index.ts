@@ -109,6 +109,30 @@ const maceman: MeadowUnit = {
   },
 };
 
+const pikeman: MeadowUnit = {
+  id: 'pikeman',
+  name: 'Pikeman',
+  description: 'A steady soldier behind a 3-metre crystal-tipped pike. Strikes first, and anything that charges onto the set pike drives it home with its own weight: the answer to Lynx Lancers and other heavy chargers. Slow to swing, and no match for a swarm.',
+  mass: 62,
+  physique: { muscle: 0.45, frame: 0.4, reserve: 0.15 },
+  attack: { style: 'strike', crystalMass: 1.5, shaft: 3 },
+  model(b, p) {
+    const look: HumanLook = {
+      skin: '#c49270', hair: '#4a3020', head: 'helmet', scale: 1.0, bulk: 1.0, tabard: true,
+      tunic: { color: '#7a6a52', tex: 'leather' }, trousers: { color: '#4a4038', tex: 'cloth' }, boots: LEATHER,
+    };
+    human(b, p, look, armAngle(p) * 0.4, (h) => {
+      if (!p.armed) return;
+      // the pike, levelled forward, butt trailing behind
+      h.limb([-0.9, -0.02, 0], [1.6, 0.06, 0], 0.022, WOOD);
+      h.cylinder(0.03, 0.03, 0.08, [1.45, 0.055, 0], IRON, [0, 0, Math.PI / 2], 6);
+      h.crystal(0.24, [1.62, 0.06, 0], [0, 0, -Math.PI / 2]);
+    }, (h) => {
+      h.sphere([0.06, 0.05, 0.05], [0.02, -0.05, 0], LEATHER);
+    });
+  },
+};
+
 const lynx: MeadowUnit = {
   id: 'lynx',
   name: 'Lynx Lancer',
@@ -265,7 +289,7 @@ export const buildings: MeadowBuilding[] = [
   },
   {
     id: 'barracks', name: 'Barracks', description: 'Trains slingers and crystal macemen.',
-    size: 3, materials: 180, trains: ['slinger', 'maceman'], model: models.barracks,
+    size: 3, materials: 180, trains: ['slinger', 'maceman', 'pikeman'], model: models.barracks,
   },
   {
     id: 'forge', name: 'Crystal Forge', description: 'Researches better slings, mail and lynx breeding (levels I and II).',
@@ -327,7 +351,7 @@ const FLAVOR: Record<string, [string, string, string]> = {
 
 const techs: TechSpec[] = [tools, sling, mail, breeding].flatMap((t) => [level(t, 1, FLAVOR[t.id]), level(t, 2, FLAVOR[t.id]), level(t, 3, FLAVOR[t.id])]);
 
-export const units: MeadowUnit[] = [villager, slinger, maceman, lynx, hurlhorn, mule];
+export const units: MeadowUnit[] = [villager, slinger, maceman, pikeman, lynx, hurlhorn, mule];
 
 export const meadowfolk: FactionSpec = {
   id: 'meadowfolk',

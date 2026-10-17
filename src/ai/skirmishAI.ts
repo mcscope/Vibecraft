@@ -166,6 +166,18 @@ export class SkirmishAI {
 
     // ── Production: workers from the town center, army from everything else.
     const workerTarget = Math.min(30, 10 + Math.floor(minutes * 2.5));
+    // what the enemy fields: shares of its army that are heavy chargers (melee, 120 kg+) and fliers
+    const threat = { chargers: 0, fliers: 0 };
+    {
+      let total = 0;
+      for (const e of w.units.values()) {
+        if (e.owner === this.player || w.players[e.owner]?.neutral || !e.stats.canAttack || e.specId === w.factionOf(e.owner).workerId) continue;
+        const kg = e.stats.mass; total += kg;
+        if (e.stats.flight) threat.fliers += kg;
+        else if (!e.throws && kg >= 120) threat.chargers += kg;
+      }
+      if (total > 0) { threat.chargers /= total; threat.fliers /= total; }
+    }
     // a worker waiting on food comes first until the economy has a base (cheap soldiers would eat it all)
     const workerFirst = workers.length < Math.min(workerTarget, 14) && buildings.some((b) => b.queue.some((q) => q.kind === 'unit' && q.specId === faction.workerId && !q.paid));
     for (const b of buildings) {
@@ -177,7 +189,15 @@ export class SkirmishAI {
       const soldiers = trains.filter((id) => id !== faction.workerId && id !== faction.carterId && w.specOf(this.player, id)?.stats.canAttack);
       if (!soldiers.length || workerFirst) continue;
       // the best army value for the money (Lanchester: HP × DPS ÷ cost²), with the runner-up now and then for variety
-      const value = (id: string) => { const st = w.specOf(this.player, id)!.stats; const cost = st.foodCost + st.crystalCost * 3; return (st.maxHp * (st.damage / st.cooldown)) / (cost * cost); };
+      const value = (id: string) => {
+        const st = w.specOf(this.player, id)!.stats, spec = w.specOf(this.player, id)!.spec;
+        const cost = st.foodCost + st.crystalCost * 3;
+        let v = (st.maxHp * (st.damage / st.cooldown)) / (cost * cost);
+        // counters: spears against heavy chargers, throwers against fliers (shares of the enemy's army)
+        if (spec.attack?.shaft) v *= 1 + 3 * threat.chargers;
+        if (st.canAttack && spec.attack?.style === 'throw') v *= 1 + 3 * threat.fliers;
+        return v;
+      };
       const ranked = [...soldiers].sort((p, q) => value(q) - value(p));
       const i = this.trainIndex.get(b.id) ?? 0;
       const pick = ranked.length > 1 && i % 4 === 3 ? ranked[1] : ranked[0];

@@ -30,6 +30,8 @@ export interface AttackSpec {
   crystalMass: number;
   /** Throwers only: how many crystals the unit spawns with / restocks to. */
   ammo?: number;
+  /** Strikers only: metres of wooden shaft (0–3), a spear or pike. Longer reach (2 m = a tile); costs its weight and swings a little slower. Braced, it impales a charging attacker with shorter reach (sim/world.ts). */
+  shaft?: number;
 }
 
 export interface UnitSpec {

@@ -48,15 +48,15 @@ const guardLook: FenLook = { skin: '#6a8a52', wrap: { color: '#5a4a30', tex: 'le
 const reedguard: FenUnit = {
   id: 'reedguard',
   name: 'Reedguard',
-  description: 'A stout fenling behind a woven reed shield, jabbing with a crystal-tipped pole. Cheap, sturdy, and in the way.',
+  description: 'A stout fenling behind a woven reed shield, bracing a long crystal-tipped reed spear. Cheap, sturdy, and in the way: anything that charges onto the spear drives it home with its own weight.',
   mass: 38,
   physique: { muscle: 0.35, frame: 0.55, reserve: 0.1 },
-  attack: { style: 'strike', crystalMass: 1 },
+  attack: { style: 'strike', crystalMass: 1, shaft: 2.5 },
   gait: { hop: 0.76, period: 0.85 }, // heavier bounds behind the shield
   model(b, p) {
     body(b, p, guardLook, fenArm(p, 'jab'), (h) => {
-      h.limb([0, 0.35, 0], [0, -0.75, 0], 0.016, WILLOW);
-      if (p.armed) h.crystal(0.12, [0, -0.8, 0], [0, 0, Math.PI]);
+      h.limb([0, 0.55, 0], [0, -1.55, 0], 0.017, WILLOW); // a long reed spear
+      if (p.armed) h.crystal(0.14, [0, -1.62, 0], [0, 0, Math.PI]);
     }, (s) => {
       s.joint([0.04, -0.05, 0.05], [Math.PI / 2, 0, 0.1], (sh) => {
         sh.cylinder(0.24, 0.24, 0.04, [0, 0, 0], REED, undefined, 14);

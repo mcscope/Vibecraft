@@ -153,6 +153,8 @@ export interface Unit {
   flewTick: number;
   /** Its air speed (tiles/s) when it last flew somewhere, kept while it coasts. */
   flySpeed: number;
+  /** Velocity last tick (tiles/s), for charges. */
+  vx: number; vy: number;
   /** Which way a flier went this tick: +1 climbing, -1 coming down, 0 level. */
   vert: number;
   /** Training dummy: inert target. */
@@ -833,7 +835,7 @@ export class World {
       food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
       order: { kind: 'idle' }, resume: null, queue: [], engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
-      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0,
+      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0, vx: 0, vy: 0,
       dummy: !!spec.dummy,
       carter: spec.role === 'carter',
       gatherAcc: 0,
@@ -1101,6 +1103,7 @@ export class World {
     if (!u.busy && !moved && u.order.kind !== 'resupply' && u.order.kind !== 'eatPack') {
       u.cal = Math.min(st.maxCalories, u.cal + st.restRegen * DT);
     }
+    u.vx = (u.x - u.px) / DT; u.vy = (u.y - u.py) / DT; // velocity this tick (for charges)
   }
 
   /** Executes the unit's current order. Returns true if it moved this tick. */
@@ -1308,7 +1311,14 @@ export class World {
       };
       this.projectiles.set(p.id, p);
     } else {
-      this.damage(targetId, wpn.damage, tx, ty);
+      // braced: a longer weapon meeting a melee attacker charging in turns its momentum against it
+      let impale = 0;
+      if (tu && !tu.throws && tu.stats.range < wpn.range - 0.2) {
+        const dx = u.x - tu.x, dy = u.y - tu.y, d = Math.hypot(dx, dy) || 1;
+        const closing = Math.max(0, (tu.vx * dx + tu.vy * dy) / d) * 2; // tiles/s toward us → m/s
+        impale = 0.5 * tu.stats.mass * closing * closing * K.braceShare * K.strikeEfficiency * K.damageScale;
+      }
+      this.damage(targetId, wpn.damage + impale, tx, ty);
     }
     return true;
   }

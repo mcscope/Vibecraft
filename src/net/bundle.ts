@@ -126,7 +126,7 @@ export function checkSpec(s: unknown): string[] {
   const unit = (u: WildSpec | FactionData['units'][number], where: string) => {
     if (!isId(u.id) || !isStr(u.name, 60) || !isStr(u.description ?? '')) e.push(`${where}: bad id/name/description`);
     if (!isNum(u.mass) || !u.physique || !isNum(u.physique.muscle) || !isNum(u.physique.frame) || !isNum(u.physique.reserve)) e.push(`${where}: bad body`);
-    if (u.attack && (!['strike', 'throw'].includes(u.attack.style) || !isNum(u.attack.crystalMass) || (u.attack.ammo !== undefined && !isNum(u.attack.ammo)))) e.push(`${where}: bad attack`);
+    if (u.attack && (!['strike', 'throw'].includes(u.attack.style) || !isNum(u.attack.crystalMass) || (u.attack.ammo !== undefined && !isNum(u.attack.ammo)) || (u.attack.shaft !== undefined && !(isNum(u.attack.shaft) && u.attack.shaft >= 0 && u.attack.shaft <= 3)))) e.push(`${where}: bad attack`);
     for (const k of ['refinement', 'workRefinement'] as const) if (u[k] !== undefined && !isNum(u[k])) e.push(`${where}: bad ${k}`);
     e.push(...validateUnitAbilities(u as FactionData['units'][number], where)); // sim/abilities
   };

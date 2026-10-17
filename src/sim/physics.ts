@@ -84,6 +84,10 @@ export const K = {
   armourPerFrame: 6,
   /** However thick the armour, a hit always does at least this share of its damage. */
   armourFloor: 0.15,
+  /** kg of wood per metre of spear shaft. */
+  shaftKgPerM: 1.5,
+  /** Share of a charging attacker's kinetic energy a braced longer weapon turns into damage. */
+  braceShare: 0.5,
 } as const;
 
 export interface DerivedStats {
@@ -212,11 +216,12 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   const damage = canAttack ? attackEnergy * (throwing ? K.throwEfficiency : K.strikeEfficiency) * K.damageScale : 0;
   const attackCalories = attackEnergy / K.muscleEfficiency;
   const power = K.powerPerMuscleKg * muscleMass;
-  const cooldown = Math.max(K.minCooldown, attackEnergy / power) + (throwing ? K.throwReload : 0);
+  const shaft = !throwing && atk?.shaft ? Math.max(0, Math.min(3, atk.shaft)) : 0;
+  const cooldown = Math.max(K.minCooldown, attackEnergy / power) + (throwing ? K.throwReload : 0) + shaft * 0.08; // a long pole swings slower
 
   const sizeRel = Math.cbrt(mass / 70);
   const radius = clamp(0.25 * sizeRel, 0.15, 0.8);
-  const reach = radius + 0.35 + 0.1 * Math.cbrt(crystalMass);
+  const reach = radius + 0.35 + 0.1 * Math.cbrt(crystalMass) + shaft / 2; // a spear's shaft: 2 m is one more tile
   const range = throwing
     ? Math.min(K.maxThrowRange, (crystalVelocity * crystalVelocity) / K.gravity)
     : reach;
@@ -225,7 +230,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   const gatherRate = (spec.canGather ?? true) ? K.gatherKgPerSec * Math.sqrt(muscleMass / 18) * workRefinement : 0;
 
   // the body's food cost, divided by refinement; crystal is the physical weapon it carries (not discounted)
-  const foodCost = Math.round((K.foodPerKg * mass + K.foodPerMuscleKg * muscleMass + K.foodPerFrameKg * frameMass) / refinement);
+  const foodCost = Math.round((K.foodPerKg * (mass + shaft * K.shaftKgPerM) + K.foodPerMuscleKg * muscleMass + K.foodPerFrameKg * frameMass) / refinement); // a spear's shaft is priced like body mass
   const crystalCost = Math.ceil(loadoutCrystal);
   const trainTime = K.trainBaseSec + K.trainSecPerKg * mass;
 
