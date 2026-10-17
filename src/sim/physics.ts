@@ -117,6 +117,8 @@ export const K = {
   injuryDv: 3,
   /** ...above it, this share of ½·m·(jolt − injuryDv)² hurts the body. */
   bodyImpactEfficiency: 0.15,
+  /** Share of a body's mass in the limb (or head) that swings with a blow. */
+  limbShare: 0.06,
   /** kg of wood per metre of spear shaft. */
   shaftKgPerM: 1.5,
 } as const;
@@ -262,8 +264,11 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   // a striker swings its whole weapon: the crystal and any wooden shaft it's mounted on
   const shaft = !throwing && atk?.shaft ? Math.max(0, Math.min(3, atk.shaft)) : 0;
   const weaponMass = crystalMass + shaft * K.shaftKgPerM;
-  const crystalVelocity = Math.min(limbSpeed, Math.sqrt((2 * maxAttackEnergy) / weaponMass));
-  const attackEnergy = 0.5 * weaponMass * crystalVelocity * crystalVelocity;
+  // a thrown crystal flies alone; a blow swings the striking limb with the weapon (the arm behind a mace, a great
+  // beast's head and forequarters behind its bite), as fast as limbs move and as hard as the muscle can put into it
+  const strikeMass = throwing ? weaponMass : weaponMass + K.limbShare * mass;
+  const crystalVelocity = Math.min(limbSpeed, Math.sqrt((2 * maxAttackEnergy) / strikeMass));
+  const attackEnergy = 0.5 * strikeMass * crystalVelocity * crystalVelocity;
   const damage = canAttack ? attackEnergy * (throwing ? K.throwEfficiency : K.strikeEfficiency) * K.damageScale : 0;
   const attackCalories = attackEnergy / K.muscleEfficiency;
   const power = K.powerPerMuscleKg * muscleMass;

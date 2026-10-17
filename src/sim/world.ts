@@ -1932,11 +1932,13 @@ export class World {
         const spin = Math.sqrt((2 * 6 * grip * Math.abs(diff)) / st.length);
         // on the move its run bends no tighter than its grip holds (v²/r ≤ grip: a turn rate of grip / v)
         const bend = v > 0.3 ? grip / v : Infinity;
-        // a bounding body has grip only with its feet down: it turns crouched between bounds, not in the air
+        // a bounding body aims each bound as it springs off (with its feet down it can face anywhere), and flies
+        // ballistic in between
         const airborneBound = !!st.gait && u.strideMul > 0 && v > 0.3;
+        const springing = !!st.gait && u.strideMul === 0;
         // and it can't swing round faster than its weapon comes round (leverage), far slower with a planted shaft
         const weapon = st.turnRate * (st.canPlant && v < 0.5 ? K.plantedTurnMul : 1);
-        u.turnLeft = airborneBound ? 0 : DT * Math.min(spin, bend, weapon);
+        u.turnLeft = airborneBound ? 0 : springing ? Math.PI : DT * Math.min(spin, bend, weapon);
       }
       const step = Math.max(-u.turnLeft, Math.min(u.turnLeft, diff));
       u.facing += step; u.turnLeft -= Math.abs(step);

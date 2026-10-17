@@ -474,7 +474,7 @@ export class Hud {
       <button data-cmd="give" title="Give surplus to a friendly unit (then click it)">Give <kbd>${km.give.toUpperCase()}</kbd></button>
       <button data-cmd="garrison" title="Shelter inside one of your buildings (then click it). Throwers inside throw from cover.">Garrison <kbd>${km.garrison.toUpperCase()}</kbd></button>
       <button data-cmd="hold" class="${all('hold') ? 'on' : ''}" title="Hold ground: don't go to meet the enemy; strike what comes into reach. Spears and pikes stay planted, so a charge runs onto the point (but a planted shaft is very slow to turn). Press again to let them decide.">Hold <kbd>${km.hold.toUpperCase()}</kbd></button>
-      <button data-cmd="charge" class="${all('charge') ? 'on' : ''}" title="Charge: sprint at the enemy from any distance and run on through (sprinting burns calories fast). Press again to let them decide.">Charge <kbd>${km.charge.toUpperCase()}</kbd></button>
+      <button data-cmd="charge" class="${all('charge') ? 'on' : ''}" title="Charge: then click an enemy or a spot: they sprint at it from wherever they are and run on through, and keep charging (riding out and coming round again) until you give them another stance (B to hold, B again to let them decide). Sprinting burns calories fast.">Charge <kbd>${km.charge.toUpperCase()}</kbd></button>
     </div>`;
   }
 

@@ -10,7 +10,7 @@ import type { Minimap } from './minimap';
 import { keymap, settings, settingsOpen, updateSettings } from './settings';
 
 /** resupplyDest: units were just sent to resupply; a ground click picks where they go afterwards. */
-type Mode = 'attackMove' | 'move' | 'give' | 'garrison' | 'resupplyDest' | 'place' | null;
+type Mode = 'attackMove' | 'charge' | 'move' | 'give' | 'garrison' | 'resupplyDest' | 'place' | null;
 
 export class Input {
   readonly rs: RenderState = { selected: new Set(), hoverId: 0, box: null, ping: null, ghost: null };
@@ -191,6 +191,13 @@ export class Input {
         // a plain move: walk there whatever's under the cursor (pull out of a fight)
         this.formationMove(units, wx, wy);
         this.ping(wx, wy, TEAM_COLORS[this.player].secondary);
+      } else if (this.mode === 'charge') {
+        // a charge: sprint at it from wherever they are and run on through (they keep charging till told otherwise)
+        const t = this.world.units.get(target) ?? this.world.buildings.get(target);
+        this.issue({ type: 'stance', units, stance: 'charge' });
+        if (t && t.owner !== this.player) this.issue({ type: 'attack', units, target });
+        else this.issue({ type: 'attackMove', units, x: wx, y: wy });
+        this.ping(wx, wy, '#ff9a3a');
       } else if (this.mode === 'attackMove') {
         const t = this.world.units.get(target) ?? this.world.buildings.get(target);
         if (t && t.owner !== this.player) this.issue({ type: 'attack', units, target });
@@ -381,7 +388,8 @@ export class Input {
       if (k === km.move) { this.mode = 'move'; return; }
       if (k === km.give) { this.mode = 'give'; return; }
       if (k === km.garrison) { this.mode = 'garrison'; return; }
-      if (k === km.hold || k === km.charge) { this.hudCommand(k === km.hold ? 'hold' : 'charge'); return; }
+      if (k === km.hold) { this.hudCommand('hold'); return; }
+      if (k === km.charge) { this.mode = 'charge'; return; }
       if (k === km.stop) { this.issue({ type: 'stop', units }); return; }
       // Tap: resupply and come back. Hold and click: resupply, then go there.
       if (k === km.resupply) {
@@ -484,8 +492,9 @@ export class Input {
   hudCommand(kind: 'stop' | 'attackMove' | 'move' | 'resupply' | 'give' | 'garrison' | 'hold' | 'charge'): void {
     const units = this.selectedUnits();
     if (!units.length) return;
-    if (kind === 'hold' || kind === 'charge') {
-      // a toggle: if they're all already in that stance, back to deciding for themselves
+    if (kind === 'charge') { this.mode = 'charge'; return; } // then click what to charge
+    if (kind === 'hold') {
+      // a toggle: if they're all already holding, back to deciding for themselves
       const all = units.every((id) => this.world.units.get(id)?.stance === kind);
       this.issue({ type: 'stance', units, stance: all ? 'auto' : kind });
       return;
