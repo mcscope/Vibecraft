@@ -2197,11 +2197,13 @@ export class World {
         a.vx -= (imp / ma) * nx; a.vy -= (imp / ma) * ny;
         b.vx += (imp / mb) * nx; b.vy += (imp / mb) * ny;
         this.stagger(a, (imp / ma) * M_PER_TILE); this.stagger(b, (imp / mb) * M_PER_TILE); // knocked harder than a step can catch
-        // injury goes by how hard each body is jolted (its change of velocity), like a fall: the light one
-        // takes the jolt, the heavy one barely feels it, and a bump at walking pace hurts nobody
+        // injury goes by how hard a body is jolted (its change of velocity), like a fall, and falls on the one that's run
+        // into: the rammer (whichever brings more of the closing speed) leads braced for it and isn't hurt, though it
+        // still takes the knock. A bump at walking pace hurts nobody
+        const rammer = a.vx * ka * nx + a.vy * ka * ny >= -(b.vx * kb * nx + b.vy * kb * ny) ? a : b;
         for (const [body, m] of [[a, ma], [b, mb]] as Array<[Unit, number]>) {
           const jolt = (imp / m) * M_PER_TILE; // m/s
-          if (jolt > K.injuryDv) this.damage(body.id, 0.5 * m * (jolt - K.injuryDv) ** 2 * K.bodyImpactEfficiency * K.damageScale, body.x, body.y);
+          if (jolt > K.injuryDv && body !== rammer) this.damage(body.id, 0.5 * m * (jolt - K.injuryDv) ** 2 * K.bodyImpactEfficiency * K.damageScale, body.x, body.y);
         }
       }
     }
