@@ -13,7 +13,7 @@ import * as bearerAbility from './abilities/bearer';
 import { midStride, strideFactor } from './abilities/gait';
 import { nearestDropOff } from './abilities/dropoff';
 import { eating, isTamer, runPens, runTame } from './abilities/herding';
-import { canReach, FLY_SIGHT, flyTo, heightBonus, takeOff, tickFlight } from './abilities/flight';
+import { canReach, FLY_SIGHT, flyTo, heightBonus, takeOff, tickFlight, walks } from './abilities/flight';
 import { MatchStats } from './stats';
 import { isUnderfoot, loadBelt, nearestBelt, roadFactor, routeBelts, runBelts, type BeltRoutes, type Parcel } from './abilities/underfoot';
 import { grow, grownEnough, livingStats, seedMaterials } from './abilities/living';
@@ -102,7 +102,7 @@ export type Order =
    */
   | { kind: 'cart'; base: number; home: number; from?: number; pinned: boolean; phase: 'load' | 'deliver'; res: ResourceKind };
 
-export type UnitAnim = 'idle' | 'walk' | 'attack' | 'gather' | 'eat' | 'tired';
+export type UnitAnim = 'idle' | 'walk' | 'fly' | 'attack' | 'gather' | 'eat' | 'tired';
 
 export interface Unit {
   id: number;
@@ -1073,6 +1073,7 @@ export class World {
     const moved = this.runOrder(u) || midStride(u, this.tick); // a hopper crouching between bounds is still on its way
     tickFlight(this, u, moved, DT);
     if (moved) anim = 'walk';
+    if (u.airborne) anim = 'fly'; // in the air, moving or hovering
     if (u.swing > 0) anim = 'attack';
     else if (((u.order.kind === 'gather' && u.order.phase === 'harvest') || (u.order.kind === 'build' && u.order.phase === 'chop')) && !moved && u.busy) anim = 'gather';
     else if ((u.order.kind === 'eatPack' || u.order.kind === 'resupply') && !moved && u.busy) anim = 'eat';
@@ -1675,7 +1676,7 @@ export class World {
   moveTo(u: Unit, gx: number, gy: number, arrive: number): boolean {
     const dx = gx - u.x, dy = gy - u.y;
     if (dx * dx + dy * dy <= arrive * arrive) { u.path = []; return true; }
-    if (u.stats.flight) {
+    if (u.stats.flight && !walks(this, u, gx, gy)) { // a short, clear way is walked
       takeOff(u);
       if (u.airborne) return flyTo(u, gx, gy, arrive, loadedSpeed(u.stats, this.packLoad(u)), DT, (fx, fy) => this.face(u, fx, fy));
     }

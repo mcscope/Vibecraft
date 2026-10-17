@@ -16,15 +16,17 @@ export const PX_PER_UNIT = 32 * Math.SQRT2 / UNITS_PER_TILE;
 export type BakedAnim = ArtAnim;
 
 const FRAMES: Record<BakedAnim, number> = {
-  idle: 4, walk: 8, attack: 8, gather: 6, eat: 4, tired: 2, die: 6, carryFood: 8, carryWood: 8, carryCrystal: 8,
+  idle: 4, walk: 8, fly: 8, attack: 8, gather: 6, eat: 4, tired: 2, die: 6, carryFood: 8, carryWood: 8, carryCrystal: 8,
 };
-const FPS: Partial<Record<BakedAnim, number>> = { idle: 2.5, walk: 8, gather: 7, eat: 4, tired: 1.5, carryFood: 8, carryWood: 8, carryCrystal: 8 };
+const FPS: Partial<Record<BakedAnim, number>> = { idle: 2.5, walk: 8, fly: 6, gather: 7, eat: 4, tired: 1.5, carryFood: 8, carryWood: 8, carryCrystal: 8 };
 
 export interface UnitBakeOptions {
   /** Inert units only get idle + die. */
   dummy?: boolean;
   /** Also bake walking with food / wood / crystal loads. */
   withCarry?: boolean;
+  /** A flier: also bake flying (pose anim 'fly'), separate from walking a short hop. */
+  fly?: boolean;
 }
 
 /** Game octants (0 = +x, counting toward +y), one sheet row each. */
@@ -200,6 +202,7 @@ export class Baker {
     const withCarry = !!opts.withCarry;
     const anims: BakedAnim[] = opts.dummy ? ['idle', 'die'] : ['idle', 'walk', 'attack', 'gather', 'eat', 'tired', 'die'];
     if (withCarry && !opts.dummy) anims.push('carryFood', 'carryWood', 'carryCrystal');
+    if (opts.fly && !opts.dummy) anims.push('fly');
     const poseFor = (anim: BakedAnim, phase: number): Pose => ({
       anim: anim === 'carryFood' || anim === 'carryWood' || anim === 'carryCrystal' ? 'walk' : anim,
       phase, team, armed: true,
@@ -321,6 +324,7 @@ export class Baker {
     if (opts.dummy) return (FRAMES.idle + FRAMES.die) * BAKED_DIRS.length;
     let n = FRAMES.idle + FRAMES.walk + FRAMES.attack + FRAMES.gather + FRAMES.eat + FRAMES.tired + FRAMES.die;
     if (withCarry) n += FRAMES.carryFood + FRAMES.carryWood + FRAMES.carryCrystal;
+    if (opts.fly) n += FRAMES.fly;
     return n * BAKED_DIRS.length;
   }
 }

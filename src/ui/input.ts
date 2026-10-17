@@ -238,10 +238,7 @@ export class Input {
   contextCommand(wx: number, wy: number, target: number, _shift: boolean): void {
     const w = this.world;
     const units = this.selectedUnits();
-    const tu = w.units.get(target);
-    // spent crystals on the ground aren't targets: right-clicking near them in a fight should still move
-    // (throwers pick them up by themselves)
-    const tn0 = w.nodes.get(target), tn = tn0 && !(tn0.shard && !tn0.carcass) ? tn0 : undefined;
+    const tu = w.units.get(target), tn = w.nodes.get(target);
     // a finished road or belt is just ground to walk on (sim/abilities/underfoot.ts)
     const tbAny = w.buildings.get(target);
     const tb = tbAny && tbAny.complete && isUnderfoot(tbAny.spec) ? undefined : tbAny;

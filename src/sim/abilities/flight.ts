@@ -1,4 +1,5 @@
-// Flight (UnitSpec.flight): it takes off whenever it moves, flies straight over
+// Flight (UnitSpec.flight): it takes off whenever it goes further than a short
+// walk (or the way is blocked), flies straight over
 // walls, water and everyone's heads, and lands when it stops. Staying up burns
 // calories every second, in proportion to its mass squared, so small fliers stay
 // up for a minute or two and big ones barely get off the ground. In the air,
@@ -17,6 +18,8 @@ export const FLY_HEIGHT = 6;
 export const FLY_SIGHT = 3;
 /** Flying is faster than walking (no ground to push off, nothing in the way). */
 export const FLY_SPEED = 1.6;
+/** A grounded flier walks rather than flies to anywhere this close (tiles) with a clear way there. */
+export const WALK_HOP = 3;
 /** Calories per second aloft: mass² / FLY_BURN_DIV. */
 export const FLY_BURN_DIV = 30;
 
@@ -27,6 +30,11 @@ export const airtime = (d: DerivedStats): number => d.maxCalories / flightBurn(d
 /** Take off (if it can fly and has the strength). */
 export function takeOff(u: Unit): void {
   if (u.stats.flight && !u.exhausted && u.cal > 0) u.airborne = true;
+}
+
+/** Would a grounded flier rather walk to (gx, gy)? Short and clear: yes. */
+export function walks(w: World, u: Unit, gx: number, gy: number): boolean {
+  return !u.airborne && (gx - u.x) ** 2 + (gy - u.y) ** 2 <= WALK_HOP * WALK_HOP && w.grid.lineClear(u.x, u.y, gx, gy);
 }
 
 /** Fly straight toward (gx, gy), over anything. True once within `arrive`. */
@@ -63,6 +71,6 @@ export const flight: Ability = {
   id: 'flight',
   validateUnit: (u: UnitSpec, where: string) => (u.flight !== undefined && typeof u.flight !== 'boolean' ? [`${where}: bad flight`] : []),
   unitCodex: (u: UnitSpec, d: DerivedStats) => (u.flight
-    ? `<b>Flies.</b> Takes off to move, straight over walls and water; burns ${f1(flightBurn(d), 1)} cal/s aloft (about ${n0(airtime(d))} s on full calories) and lands when it stops. In the air only thrown crystals reach it${u.attack?.style === 'strike' ? '; it lands to strike' : '; it throws from height, harder and further, and sees further'}.`
+    ? `<b>Flies.</b> Walks a few tiles, takes off to go further, straight over walls and water; burns ${f1(flightBurn(d), 1)} cal/s aloft (about ${n0(airtime(d))} s on full calories) and lands when it stops. In the air only thrown crystals reach it${u.attack?.style === 'strike' ? '; it lands to strike' : '; it throws from height, harder and further, and sees further'}.`
     : null),
 };

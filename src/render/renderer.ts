@@ -37,6 +37,7 @@ export interface RenderOptions {
 /** Which animation a unit is showing, and how far into it (seconds for loops, progress for one-shots). */
 export function unitFrame(u: Unit): { anim: ArtAnim; time?: number; progress?: number } {
   switch (u.anim) {
+    case 'fly': return { anim: 'fly', time: u.animT };
     case 'walk': {
       const most = Math.max(u.food, u.wood, u.crystal); // what the cargo pack mostly holds
       const anim: ArtAnim = most <= 0.5 ? 'walk' : most === u.food ? 'carryFood' : most === u.wood ? 'carryWood' : 'carryCrystal';

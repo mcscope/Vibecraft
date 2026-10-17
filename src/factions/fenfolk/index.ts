@@ -8,6 +8,8 @@
 //   • master farmers: peat farms sow big, fast-growing plots
 //   • bog toads: the hardest-hitting mount for the price, but short-reached
 //   • the heron perch: the tallest tower — long reach, a wide blind spot under it
+//   • siege herons: enormous fliers that drop heavy crystals over walls and water,
+//     but so heavy they can only stay up for a few seconds' bombing run
 // Self-contained: only engine types and kits, never another faction.
 import type { BuildingSpec, FactionSpec, TechSpec, UnitSpec } from '../types';
 import type { BuildingModel, Mat, UnitModel } from '../../kits/bake3d/types';
@@ -204,7 +206,88 @@ const packTortoise: FenUnit = {
   },
 };
 
-export const units: FenUnit[] = [fenling, reedguard, bogToad, packTortoise];
+const heronGrey: Mat = { color: '#8e969a', tex: 'fur' };
+const heronPale: Mat = { color: '#d6dad6', tex: 'fur' };
+const heronDark: Mat = { color: '#3a4044', tex: 'fur' };
+const heronBill: Mat = { color: '#d4a634', rough: 0.35 };
+const heronLeg: Mat = { color: '#9a7a3a', rough: 0.6 };
+const WICKER: Mat = { color: '#a08850', tex: 'thatch' };
+const siegeHeron: FenUnit = {
+  id: 'siege-heron',
+  name: 'Siege Heron',
+  description: 'An enormous grey heron, a fenling riding between its shoulders and a wicker basket of heavy crystals slung beneath. It flaps ponderously over walls and water to drop crystals on whatever lies below, but it is far too heavy to stay up for long.',
+  mass: 130,
+  physique: { muscle: 0.45, frame: 0.2, reserve: 0.35 },
+  attack: { style: 'throw', crystalMass: 8, ammo: 3 },
+  refinement: 1.5,
+  flight: true,
+  model(b, p) {
+    const t = p.phase * Math.PI * 2;
+    const flying = p.anim === 'fly';
+    const walking = p.anim === 'walk';
+    const attacking = p.anim === 'attack';
+    // flight: body level and up off the ground, wings beating slow and deep
+    const lift = flying ? 0.9 + Math.sin(t) * 0.06 : 0;
+    const legLen = 1.15;
+    // stilt legs: striding when walking, trailing behind in flight
+    for (const z of [1, -1]) {
+      const a = walking ? Math.sin(t + (z > 0 ? 0 : Math.PI)) * 0.45 : 0;
+      const hip: [number, number, number] = [-0.05, 1.3 + lift, 0.16 * z];
+      if (flying) {
+        b.limb(hip, [-0.75, 1.2 + lift, 0.12 * z], 0.04, heronLeg, 0.03);
+        b.limb([-0.75, 1.2 + lift, 0.12 * z], [-1.35, 1.15 + lift, 0.1 * z], 0.03, heronLeg, 0.025);
+      } else {
+        const knee: [number, number, number] = [hip[0] + Math.sin(a) * legLen * 0.5, hip[1] - legLen * 0.55, hip[2]];
+        const foot: [number, number, number] = [knee[0] + Math.sin(a * 0.4) * legLen * 0.5 - 0.05, 0.04, hip[2]];
+        b.limb(hip, knee, 0.045, heronLeg, 0.035);
+        b.limb(knee, foot, 0.035, heronLeg, 0.028);
+        for (const tz of [-0.08, 0, 0.08]) b.limb(foot, [foot[0] + 0.22, 0.02, foot[2] + tz * 1.5], 0.015, heronLeg); // splayed toes
+      }
+    }
+    b.joint([0, lift, 0], [0, 0, flying ? 0 : 0.25], (c) => {
+      // body, pale breast plumes and a long tail
+      c.sphere([0.75, 0.36, 0.38], [0, 1.45, 0], heronGrey);
+      c.sphere([0.5, 0.26, 0.3], [0.2, 1.32, 0], heronPale);
+      for (const z of [-0.1, 0, 0.1]) c.box([0.5, 0.03, 0.12], [-0.85, 1.48, z], heronDark, [0, z * 2, 0.08]);
+      // neck: an S standing tall, pulled back onto the shoulders in flight (herons fly with the neck tucked)
+      const dip = attacking ? Math.sin(Math.min(1, p.phase * 1.5) * Math.PI) * 0.4 : 0;
+      const n1: [number, number, number] = flying ? [0.6, 1.62, 0] : [0.62, 1.95 - dip * 0.3, 0];
+      const n2: [number, number, number] = flying ? [0.45, 1.85, 0] : [0.5, 2.45 - dip * 0.5, 0];
+      const head: [number, number, number] = flying ? [0.72, 1.92, 0] : [0.72 + dip * 0.3, 2.62 - dip * 0.7, 0];
+      c.limb([0.55, 1.55, 0], n1, 0.11, heronPale, 0.08);
+      c.limb(n1, n2, 0.08, heronPale, 0.07);
+      c.limb(n2, head, 0.07, heronPale, 0.06);
+      c.sphere([0.15, 0.12, 0.12], head, heronPale);
+      c.limb([head[0] - 0.08, head[1] + 0.06, 0], [head[0] - 0.42, head[1] + 0.02, 0], 0.02, heronDark, 0.005); // black crest plume
+      for (const z of [1, -1]) c.sphere(0.03, [head[0] + 0.06, head[1] + 0.04, 0.08 * z], { color: '#f0d040', emissive: '#403000' });
+      c.cone(0.06, 0.62, [head[0] + 0.42, head[1] - 0.04, 0], heronBill, [0, 0, -Math.PI / 2 - 0.08], 6); // dagger bill
+      // wings: folded along the flanks on the ground, spread and beating in the air
+      for (const side of [1, -1]) {
+        const spread = flying ? 1 : attacking ? 0.35 : 0;
+        const beat = flying ? Math.sin(t) * 0.75 : 0;
+        c.joint([0.15, 1.6, 0.3 * side], [beat * side * spread + (1 - spread) * 1.35 * side, 0, 0], (wg) => {
+          for (let i = 0; i < 6; i++) {
+            const len = 0.9 + spread * 0.9 - i * 0.08;
+            wg.box([0.24 - i * 0.012, 0.035, len], [-0.06 - i * 0.14, 0, (len / 2) * side * (0.35 + spread * 0.65)], i < 3 ? heronGrey : heronDark, [0, -side * (0.1 + i * 0.1) * spread, 0]);
+          }
+        });
+      }
+      // wicker siege basket slung under the belly, heavy crystals heaped in it
+      c.cylinder(0.3, 0.24, 0.32, [0.05, 0.98, 0], WICKER, undefined, 10);
+      for (const z of [1, -1]) c.limb([0.05, 1.12, 0.26 * z], [0.05, 1.42, 0.3 * z], 0.012, { color: '#3a3020' }); // straps
+      if (p.armed) for (const [x, z] of [[-0.05, 0.08], [0.12, -0.07], [0.02, -0.1]]) c.crystal(0.16, [0.05 + x, 1.12, z], [0.2, 0, 0.3]);
+      // saddle cloth and the rider, steering with a willow switch and heaving crystals over the side
+      c.box([0.5, 0.05, 0.6], [-0.05, 1.8, 0], { team: 'primary', tex: 'cloth' });
+      c.joint([-0.1, 1.78, 0], [0, 0, 0], (r) => body(r, { ...p, anim: attacking ? 'attack' : 'idle' }, riderLook, fenArm(p, 'sling'), (h) => {
+        h.limb([0, 0.2, 0], [0, -0.45, 0], 0.012, WILLOW);
+      }), 0.75);
+      c.limb([-0.3, 1.8, 0.18], [-0.35, 2.55, 0.18], 0.012, WILLOW); // banner pole
+      c.box([0.28, 0.2, 0.02], [-0.21, 2.43, 0.18], { team: 'primary', tex: 'cloth' });
+    });
+  },
+};
+
+export const units: FenUnit[] = [fenling, reedguard, bogToad, packTortoise, siegeHeron];
 
 // ── Buildings (capital curve K = 720). Cheap and many, except the Elder Mound.
 export const buildings: FenBuilding[] = [
@@ -230,8 +313,8 @@ export const buildings: FenBuilding[] = [
     size: 1, materials: 12, wall: true, model: models.canal,
   },
   {
-    id: 'elder-mound', name: 'Elder Mound', description: 'Where the fen\'s lore is kept and taught: every deep technology is learned here, and only here.',
-    size: 3, materials: 700, requires: ['reed-hut'], researches: ['fen-lore', 'fen-lore-2', 'fen-lore-3', 'reed-lore', 'toad-lore'], model: models.elderMound,
+    id: 'elder-mound', name: 'Elder Mound', description: 'Where the fen\'s lore is kept and taught: every deep technology is learned here, and only here. The great siege herons roost on its crown.',
+    size: 3, materials: 700, requires: ['reed-hut'], trains: ['siege-heron'], researches: ['fen-lore', 'fen-lore-2', 'fen-lore-3', 'reed-lore', 'toad-lore'], model: models.elderMound,
   },
   {
     id: 'heron-perch', name: 'Heron Perch', description: 'A spindly platform on very tall stilts with a sling-arm on top: reaches far, but can\'t hit the ground right beneath it.',

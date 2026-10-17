@@ -25,7 +25,7 @@ export interface Sprite {
 }
 
 /** Animations the engine asks for. Only `idle` is required; others fall back to it. */
-export type ArtAnim = 'idle' | 'walk' | 'attack' | 'gather' | 'eat' | 'tired' | 'die' | 'carryFood' | 'carryWood' | 'carryCrystal';
+export type ArtAnim = 'idle' | 'walk' | 'fly' | 'attack' | 'gather' | 'eat' | 'tired' | 'die' | 'carryFood' | 'carryWood' | 'carryCrystal';
 
 export interface AnimArt {
   /**
@@ -131,7 +131,7 @@ export interface MusicSpec {
 // ───────────────────────────── helpers the engine uses ─────────────────────────────
 
 export function anim(art: UnitArt, a: ArtAnim): AnimArt {
-  return art.anims[a] ?? (a.startsWith('carry') ? art.anims.walk : undefined) ?? art.anims.idle;
+  return art.anims[a] ?? (a.startsWith('carry') || a === 'fly' ? art.anims.walk : undefined) ?? art.anims.idle;
 }
 
 /** The frame to show for a unit facing map octant 0..7. `progress` (0..1) for one-shot anims, else `time` in seconds. */

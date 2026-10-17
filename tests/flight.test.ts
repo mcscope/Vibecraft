@@ -46,4 +46,16 @@ describe('flight', () => {
     for (let i = 0; i < 20 * 4; i++) { w.step(); if (!e.airborne && e.swing > 0) landed = true; }
     expect(landed).toBe(true);
   });
+  test('a flier walks a short hop instead of taking off', () => {
+    const w = fresh();
+    const hall = w.baseOf(0)!;
+    const spot = w.grid.nearestOpen(hall.ox + 8, hall.oy + 10)!;
+    const e = w.spawnAt(0, 'eagle', spot[0], spot[1])!;
+    e.order = { kind: 'idle' };
+    w.enqueue({ player: 0, cmd: { type: 'move', units: [e.id], x: spot[0] + 2, y: spot[1] } });
+    let flew = false;
+    for (let i = 0; i < 20 * 4; i++) { w.step(); if (e.airborne) flew = true; }
+    expect(flew).toBe(false);
+    expect(Math.abs(e.x - (spot[0] + 2))).toBeLessThan(0.5);
+  });
 });

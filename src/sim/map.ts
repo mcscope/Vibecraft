@@ -76,6 +76,11 @@ export interface GeneratedMap {
   seed: number;
 }
 
+/** Trees keep this far (tiles) from food and crystal, so nothing overlaps. */
+const TREE_GAP = 1.5;
+/** ...and this far beyond a base's clear area. */
+const TREE_BASE_PAD = 3;
+
 /** Shared tools for drawing a point-symmetric map: everything placed is mirrored through the centre. */
 class MapBuilder {
   readonly rng: Rng;
@@ -109,10 +114,17 @@ class MapBuilder {
       if (t === TERRAIN_WATER || t === TERRAIN_ROCK) this.taken[i] = 1;
     }
   }
+  /** Is (x, y) far enough from the other sort of feature (trees vs food/crystal), and trees from home? */
+  private spaced(kind: MapFeature['kind'], x: number, y: number): boolean {
+    const tree = kind === 'tree';
+    if (tree && this.reserved(x, y, TREE_BASE_PAD)) return false;
+    for (const f of this.features) if ((f.kind === 'tree') !== tree && (f.x - x) ** 2 + (f.y - y) ** 2 <= TREE_GAP * TREE_GAP) return false;
+    return true;
+  }
   place(kind: MapFeature['kind'], x: number, y: number, amount: number): void {
-    if (!this.free(x, y)) return;
+    if (!this.free(x, y) || !this.spaced(kind, x, y)) return;
     const [mx, my] = this.mirror(x, y);
-    if (!this.free(mx, my)) return;
+    if (!this.free(mx, my) || !this.spaced(kind, mx, my)) return;
     this.taken[y * this.size + x] = 1; this.taken[my * this.size + mx] = 1;
     this.features.push({ kind, x, y, amount }, { kind, x: mx, y: my, amount });
   }

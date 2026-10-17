@@ -15,13 +15,13 @@ const VOICES: Record<string, UnitArt['sounds']> = {
 export async function bakeArt(team: TeamColors, onProgress?: (f: number, label: string) => void): Promise<FactionArt> {
   const baker = new Baker();
   const carry = (id: string) => id === 'fenling';
-  const total = units.reduce((n, u) => n + Baker.frameCount({ withCarry: carry(u.id) }), 0) + buildings.length * 6 + 1;
+  const total = units.reduce((n, u) => n + Baker.frameCount({ withCarry: carry(u.id), fly: !!u.flight }), 0) + buildings.length * 6 + 1;
   let done = 0;
   // a hushed, pentatonic, slightly unsettling marsh song
   const art: FactionArt = { units: {}, buildings: {}, flag: baker.bakeStatic(fenBanner, team), wantFlag: baker.bakeStatic(fenWantFlag, team), music: { scale: [0, 3, 5, 7, 10], root: 174.6, tempo: 84, lead: 'sine', drone: 'triangle' } };
   for (const u of units) {
     onProgress?.(done / total, `Wading in the ${u.name}s`);
-    art.units[u.id] = await baker.bakeUnit(u.model, team, { withCarry: carry(u.id) }, () => {
+    art.units[u.id] = await baker.bakeUnit(u.model, team, { withCarry: carry(u.id), fly: !!u.flight }, () => {
       if (++done % 24 === 0) onProgress?.(done / total, `Wading in the ${u.name}s`);
     });
     art.units[u.id].sounds = VOICES[u.id];
