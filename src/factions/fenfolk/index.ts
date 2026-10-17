@@ -292,7 +292,8 @@ const siegeHeron: FenUnit = {
         for (const side of [1, -1]) {
           const spread = flying ? 1 : attacking ? 0.35 : 0;
           const beat = held ? 0.1 : leaping ? -0.9 + Math.sin(t) * 1.1 : flying ? Math.sin(t) * 0.75 : 0; // a leap hauls the wings high then down hard; soaring holds them out, tips up a touch
-          c.joint([0.15, 1.6, 0.3 * side], [beat * side * spread + (1 - spread) * 1.35 * side, 0, 0], (wg) => {
+          // folded (standing), the wing swings back along the body and lies against the flank; spread, it reaches out
+          c.joint([0.15, 1.6, 0.3 * side], [beat * side * spread + (1 - spread) * 0.45 * side, -(1 - spread) * 1.4 * side, 0], (wg) => {
             // a heron's wing: broad and rounded, dark fingered primaries at the tip. Every oval's front edge sits on
             // one line (the leading edge), so they read as one wing; the wing curves down at the wrist when gliding
             // and at the bottom of each downstroke (positive rotation here = tip down).
