@@ -42,7 +42,6 @@ export const K = {
   calPerReserveKg: 100,
   calPerKg: 30,
   baseSpeed: 1.9, // tiles/s at muscle 0.4, ideal mass
-  speedPeakMass: 200,
   minSpeed: 0.35,
   maxSpeed: 4.0,
   loadSlowdown: 0.6, // full pack => speed × (1 - 0.6)
@@ -216,9 +215,9 @@ export function clampMass(m: number): number {
 }
 
 /** Speed is mildly hump-shaped in mass: tiny and huge creatures are both slower. */
+/** Gait speed scales with leg length (a constant Froude number: v ∝ √(g·L)), and leg length with ∛mass: so v ∝ mass^⅙. Big bodies stride faster. */
 function massSpeedFactor(m: number): number {
-  const q = Math.pow(m / K.speedPeakMass, 0.25);
-  return 2 / (q + 1 / q);
+  return 0.966 * Math.pow(m / 70, 1 / 6); // 0.966: a 70 kg body's speed is as it was
 }
 
 /** `techRefinement`: refinement added by the owner's researched technologies. */

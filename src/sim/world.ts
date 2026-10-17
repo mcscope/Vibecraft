@@ -163,6 +163,8 @@ export interface Unit {
   staggered: number;
   /** How it meets the enemy: 'hold' stands its ground (strikes what comes to it, shafts set), 'charge' sprints in from any distance and runs through, 'auto' decides. */
   stance: 'auto' | 'hold' | 'charge';
+  /** Riding out to come round for another charge: where it's heading before it wheels (null: not). */
+  runOut: [number, number] | null;
   /** Where it faces (radians, map space; `heading` is this as an octant) and what turning it has left this tick. */
   facing: number; turnTick: number; turnLeft: number;
   /** How it's actually been moving lately (tiles/s, smoothed over ~½ s): what an onlooker can see, and leads a throw by. */
@@ -243,6 +245,26 @@ export interface ResourceNode {
   growRate?: number;
   /** Building that sowed it. */
   sownBy?: number;
+}
+
+/** Tiles a body needs to reach its sprint speed from rest, pushing off as hard as its feet grip (v² = 2·a·d). */
+function runUpTiles(u: Unit): number {
+  const v = u.stats.sprint * M_PER_TILE;
+  return (v * v) / (2 * K.traction * K.gravity) / M_PER_TILE;
+}
+
+/**
+ * Does a run-up blow beat standing and swinging, for this body against that one? A charge lands its swing
+ * plus the collision at sprint (all of it if its shaft is couched, else what it can hold), once per ride-out,
+ * turn and run-in; standing, it lands its swing every cooldown.
+ */
+function chargePays(u: Unit, t: Unit): boolean {
+  const st = u.stats, v = st.sprint * M_PER_TILE;
+  const mu = (st.mass * t.stats.mass) / (st.mass + t.stats.mass), energy = 0.5 * mu * v * v;
+  const delivered = st.minReach > 0 ? energy : Math.min(energy, st.holdForce * K.blowDepth);
+  const runUp = (v * v) / (2 * K.traction * K.gravity); // m
+  const cycle = (4 * runUp) / v + Math.PI / st.turnRate; // out and back at half speed on average, plus turning round
+  return (st.damage + delivered * K.strikeEfficiency * K.damageScale) / cycle > 1.5 * (st.damage / st.cooldown);
 }
 
 /**
@@ -892,7 +914,7 @@ export class World {
       food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
       order: { kind: 'idle' }, resume: null, queue: [], engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
-      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', facing: Math.PI / 4, turnTick: -1, turnLeft: 0,
+      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', runOut: null, facing: Math.PI / 4, turnTick: -1, turnLeft: 0,
       dummy: !!spec.dummy,
       carter: spec.role === 'carter',
       gatherAcc: 0,
@@ -1347,7 +1369,15 @@ export class World {
     const range = u.airborne && wpn.throws ? BOMB_REACH : tb ? Math.max(wpn.range, 1) : wpn.range;
     // closing on a target near enough, a body sprints; a striker runs on through it (a charge) rather
     // than pulling up, and a thrower brakes to stop at its range
-    const sprint = !u.airborne && (edge < K.sprintRange || u.stance === 'charge');
+    // sprint from far enough out to reach top speed by contact (v² = 2·a·d)
+    const runUp = runUpTiles(u);
+    const sprint = !u.airborne && (edge < Math.max(K.sprintRange, runUp + range) || u.stance === 'charge');
+    // riding out to come round for another charge: get clear, then wheel and come again
+    if (u.runOut && tu) {
+      const [ox, oy] = u.runOut;
+      if (Math.hypot(u.x - tx, u.y - ty) >= runUp || Math.hypot(ox - u.x, oy - u.y) < 0.8) u.runOut = null;
+      else { this.moveTo(u, ox, oy, 0.5, true, true); return true; }
+    }
     if (edge > range - 0.05) {
       if (u.airborne) { this.moveTo(u, tx, ty, 0.05); return true; }
       if (tu) {
@@ -1381,6 +1411,12 @@ export class World {
     // (then turns and comes again); at a walk it just pulls up (coasts to a stop)
     const v = Math.hypot(u.vx, u.vy);
     if (!u.airborne && !wpn.throws && tu && v > u.stats.speed * 1.1) this.moveTo(u, u.x + (u.vx / v) * 4, u.y + (u.vy / v) * 4, 0, true, true);
+    // bogged down at a walk, but a run-up blow beats standing and swinging: ride out to come round again
+    else if (!u.airborne && !wpn.throws && tu && u.stance !== 'hold' && (u.stance === 'charge' || chargePays(u, tu)) && u.cal > u.stats.maxCalories * K.sprintMinCalories) {
+      const d = Math.hypot(u.x - tx, u.y - ty) || 1, out = runUp + 1;
+      const dx = v > 0.2 ? u.vx / v : (u.x - tx) / d, dy = v > 0.2 ? u.vy / v : (u.y - ty) / d;
+      u.runOut = [u.x + dx * out, u.y + dy * out];
+    }
     this.face(u, tx - u.x, ty - u.y);
     if (u.cooldown > 0 || u.exhausted) return true;
     if (!u.airborne && !this.facingWithin(u, tx - u.x, ty - u.y, Math.PI * 0.2)) return true; // still swinging round to bear on it
