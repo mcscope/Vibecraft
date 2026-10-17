@@ -55,7 +55,7 @@ describe('ammo bearer', () => {
     run(w, 20 * 20); // nothing queued there: it just waits by the wallow, still pinned
     expect(f.order.kind === 'cart' && f.order.pinned && f.order.home === wallow.id).toBe(true);
     w.enqueue({ player: 0, cmd: { type: 'train', building: wallow.id, specId: 'bog-toad' } });
-    run(w, 20 * 60);
+    run(w, 20 * 90); // ~70 s: 8 kg a trip, and each short trip starts from rest and pulls up at the end
     expect(wallow.queue.length === 0 || wallow.queue[0].paid).toBe(true); // it hauled the toad's roots over
     expect(f.order.kind).toBe('cart');
   });

@@ -84,6 +84,20 @@ export const K = {
   armourPerFrame: 6,
   /** However thick the armour, a hit always does at least this share of its damage. */
   armourFloor: 0.15,
+  /** Grip of feet on the ground (× g): caps how fast any body speeds up and swings its line. */
+  traction: 0.6,
+  /** Feet planted (× g): how hard a body pulls up, and how fast a shove or a slide dies. Legs, not ice. */
+  footBrake: 1.5,
+  /** Calories per tile while sprinting, × walking's. */
+  sprintCostMul: 4,
+  /** Units sprint to close on an attack target this near (tiles)... */
+  sprintRange: 5,
+  /** ...if they have more than this share of their calories left. */
+  sprintMinCalories: 0.35,
+  /** Bodies colliding: impacts under this many joules are just jostling... */
+  impactThreshold: 60,
+  /** ...above it, this share of the collision energy (½·μ·v²) hurts each body. */
+  bodyImpactEfficiency: 0.15,
   /** kg of wood per metre of spear shaft. */
   shaftKgPerM: 1.5,
 } as const;
@@ -101,6 +115,8 @@ export interface DerivedStats {
   maxCalories: number;
   /** Unloaded top speed, tiles/s. */
   speed: number;
+  /** Top sprint speed, tiles/s (= m/s): legs at full limb speed, burning calories fast (sim/world.ts moveTo). */
+  sprint: number;
   /** Can this unit attack at all? */
   canAttack: boolean;
   wheeled: boolean;
@@ -241,7 +257,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   return {
     improvised,
     mass, physique, muscleMass, frameMass, reserveMass,
-    maxHp, armour, maxCalories, speed, canAttack, wheeled, gait: deriveGait(spec), flight: !!spec.flight, flyHeight: !spec.flight ? 0 : spec.flight === true ? DEFAULT_FLY_HEIGHT : spec.flight.height, carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, sight,
+    maxHp, armour, maxCalories, speed, sprint: Math.max(speed, limbSpeed), canAttack, wheeled, gait: deriveGait(spec), flight: !!spec.flight, flyHeight: !spec.flight ? 0 : spec.flight === true ? DEFAULT_FLY_HEIGHT : spec.flight.height, carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, sight,
     limbSpeed, maxAttackEnergy, crystalVelocity, attackEnergy, damage, attackCalories, cooldown, range,
     dps: damage / cooldown,
     gatherRate,

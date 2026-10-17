@@ -14,7 +14,7 @@ describe('bounding gait', () => {
     const goal = w.grid.nearestOpen(start[0] + 14, start[1])!;
     expect(w.grid.lineClear(f.x, f.y, goal[0], goal[1])).toBe(true);
     w.enqueue({ player: 0, cmd: { type: 'move', units: [f.id], x: goal[0], y: goal[1] } });
-    w.step();
+    for (let i = 0; i < 20; i++) w.step(); // a run-up: it starts from rest and speeds up as fast as its feet grip
     const steps: number[] = [];
     const anims = new Set<string>();
     for (let i = 0; i < 60; i++) { const x = f.x, y = f.y; w.step(); steps.push(Math.hypot(f.x - x, f.y - y)); anims.add(f.anim); }

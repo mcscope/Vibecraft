@@ -153,8 +153,10 @@ export interface Unit {
   flewTick: number;
   /** Its air speed (tiles/s) when it last flew somewhere, kept while it coasts. */
   flySpeed: number;
-  /** Velocity last tick (tiles/s), for charges. */
+  /** Velocity (tiles/s = m/s): ground bodies carry momentum (moveTo, coast, separate). */
   vx: number; vy: number;
+  /** Tick its velocity was last steered (else it coasts to a stop). */
+  steered: number;
   /** Which way a flier went this tick: +1 climbing, -1 coming down, 0 level. */
   vert: number;
   /** Climb (+) or dive (−) rate last tick, m/s (fliers). */
@@ -856,7 +858,7 @@ export class World {
       food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
       order: { kind: 'idle' }, resume: null, queue: [], engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
-      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0,
+      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1,
       dummy: !!spec.dummy,
       carter: spec.role === 'carter',
       gatherAcc: 0,
@@ -1125,7 +1127,8 @@ export class World {
     if (!u.busy && !moved && u.order.kind !== 'resupply' && u.order.kind !== 'eatPack') {
       u.cal = Math.min(st.maxCalories, u.cal + st.restRegen * DT);
     }
-    u.vx = (u.x - u.px) / DT; u.vy = (u.y - u.py) / DT; // velocity this tick (for charges)
+    if (u.airborne) { u.vx = (u.x - u.px) / DT; u.vy = (u.y - u.py) / DT; } // fliers: their own flight model
+    else this.coast(u); // on the ground: unsteered bodies slide to a stop
   }
 
   /** Executes the unit's current order. Returns true if it moved this tick. */
@@ -1302,8 +1305,12 @@ export class World {
     // buildings: units stop near tile centres, so anyone on a tile touching it (≤ ~0.75 from a corner) can reach
     // a flier in the air bombs: it flies right over the target and drops (sim/abilities/flight.ts)
     const range = u.airborne && wpn.throws ? BOMB_REACH : tb ? Math.max(wpn.range, 1) : wpn.range;
+    // closing on a target near enough, a body sprints; a striker runs on through it (a charge) rather
+    // than pulling up, and a thrower brakes to stop at its range
+    const sprint = !u.airborne && edge < K.sprintRange;
     if (edge > range - 0.05) {
-      if (tu || u.airborne) { this.moveTo(u, tx, ty, 0.05); return true; }
+      if (u.airborne) { this.moveTo(u, tx, ty, 0.05); return true; }
+      if (tu) { this.moveTo(u, tx, ty, wpn.throws ? Math.max(0.05, range - 0.3) : 0.05, sprint, !wpn.throws); return true; }
       // buildings: walk to the open tile nearest the closest edge point
       const b = tb!;
       const ex = Math.max(b.ox - 0.5, Math.min(u.x, b.ox + b.size + 0.5)), ey = Math.max(b.oy - 0.5, Math.min(u.y, b.oy + b.size + 0.5));
@@ -1313,6 +1320,10 @@ export class World {
     }
     if (tu && !canReach(u, tu)) return false; // a flier in the air: only thrown crystals reach it
     if (u.airborne && !wpn.throws) u.airborne = false; // a melee flier lands to strike
+    // in reach at a run: a striker doesn't stop on a dime, it keeps its line and strikes in passing
+    // (then turns and comes again); at a walk it just pulls up (coasts to a stop)
+    const v = Math.hypot(u.vx, u.vy);
+    if (!u.airborne && !wpn.throws && tu && v > u.stats.speed * 1.1) this.moveTo(u, u.x + (u.vx / v) * 4, u.y + (u.vy / v) * 4, 0, true, true);
     this.face(u, tx - u.x, ty - u.y);
     if (u.cooldown > 0 || u.exhausted) return true;
     if (u.cal < wpn.attackCalories) { u.exhausted = true; return true; }
@@ -1760,7 +1771,13 @@ export class World {
   }
 
   /** @internal sim helper, also used by abilities. Walk toward (gx,gy); true once within `arrive`. */
-  moveTo(u: Unit, gx: number, gy: number, arrive: number): boolean {
+  /**
+   * Head for (gx, gy) along a path. Ground bodies have momentum: they steer their velocity,
+   * speeding up, braking and turning no harder than their feet grip (K.traction). `sprint`: legs
+   * at full limb speed (calories burn fast). `through`: don't brake at the goal: run on past it
+   * (a charge); otherwise brake to stop there.
+   */
+  moveTo(u: Unit, gx: number, gy: number, arrive: number, sprint = false, through = false): boolean {
     const dx = gx - u.x, dy = gy - u.y;
     if (dx * dx + dy * dy <= arrive * arrive) { u.path = []; return true; }
     if (u.stats.flight && !walks(this, u, gx, gy)) { // a short, clear way is walked
@@ -1783,26 +1800,37 @@ export class World {
       if (u.path.length === 0) return dx * dx + dy * dy <= (arrive + 1.5) ** 2;
     }
     const st = u.stats;
-    let speed = loadedSpeed(st, this.packLoad(u)) * roadFactor(this, u);
+    const load = loadedSpeed(st, this.packLoad(u)) / st.speed; // a heavy pack slows walk and sprint alike
+    const sprinting = sprint && !u.exhausted && u.cal > st.maxCalories * K.sprintMinCalories;
+    let speed = (sprinting ? st.sprint : st.speed) * load * roadFactor(this, u);
     if (u.exhausted) speed *= K.exhaustedSpeedMul;
-    let budget = speed * DT;
     // a bounding gait (sim/abilities/gait.ts): still while crouched, faster in the air
     const stride = strideFactor(u, this.tick, DT);
-    if (stride === 0) return false;
-    budget *= stride;
-    while (budget > 0 && u.path.length > 0) {
+    // a bounding body (gait) covers its ground in bounds, still while crouched: its travel velocity
+    // (averaged over the bound cycle) speeds up and slows within the same grip as any body's
+    const feetDown = stride === 0;
+    // steer for the next waypoint (passing ones we're on top of)
+    const acc = K.traction * K.gravity;
+    while (u.path.length > 1 && Math.hypot(u.path[0][0] - u.x, u.path[0][1] - u.y) < Math.max(0.3, Math.hypot(u.vx, u.vy) * DT * 2)) u.path.shift();
+    if (u.path.length) {
       const [wx, wy] = u.path[0];
-      const ddx = wx - u.x, ddy = wy - u.y;
-      const d = Math.sqrt(ddx * ddx + ddy * ddy);
-      if (d <= budget) {
-        this.step1(u, ddx, ddy, d);
-        budget -= d;
-        u.path.shift();
-      } else {
-        this.step1(u, (ddx / d) * budget, (ddy / d) * budget, budget);
-        budget = 0;
+      const ddx = wx - u.x, ddy = wy - u.y, d = Math.hypot(ddx, ddy) || 1e-6;
+      let want = speed;
+      // brake in time to stop at the goal (v² = 2·a·d), unless running through it
+      if (u.path.length === 1 && !through) want = Math.min(want, Math.sqrt(2 * K.footBrake * K.gravity * Math.max(0, d - arrive * 0.5)));
+      // legs turn by slowing: the sharper the turn, the more it pulls up first, then pivots and goes
+      const v0 = Math.hypot(u.vx, u.vy);
+      if (v0 > 0.3) {
+        const cos = (u.vx * ddx + u.vy * ddy) / (v0 * d);
+        want = Math.min(want, Math.max(st.speed * 0.3, v0 * Math.max(0, cos)) + acc * DT);
       }
-    }
+      this.steer(u, (ddx / d) * want, (ddy / d) * want, acc);
+      if (feetDown) return false;
+      const moved = Math.hypot(u.vx, u.vy) * DT * stride;
+      const over = sprinting ? 1 + (K.sprintCostMul - 1) * Math.max(0, (Math.hypot(u.vx, u.vy) - st.speed) / Math.max(1e-6, st.sprint - st.speed)) : 1;
+      this.step1(u, u.vx * DT * stride, u.vy * DT * stride, moved * over);
+      if (u.path.length === 1 && !through && Math.hypot(wx - u.x, wy - u.y) < 0.05) u.path.shift();
+    } else this.coast(u);
     const after = (gx - u.x) ** 2 + (gy - u.y) ** 2;
     if (after <= arrive * arrive) { u.stuck = 0; return true; }
     // Crowds: if we're close but jostled in place, call it arrived. Far away and stuck: repath.
@@ -1813,12 +1841,31 @@ export class World {
     return false;
   }
 
-  private step1(u: Unit, dx: number, dy: number, dist: number): void {
+  /** Change u's velocity toward (wvx, wvy), by at most `acc`·DT (what its feet can push). */
+  private steer(u: Unit, wvx: number, wvy: number, acc: number): void {
+    const dvx = wvx - u.vx, dvy = wvy - u.vy, dv = Math.hypot(dvx, dvy);
+    // pushing off is limited by grip; pulling up is feet planted, much harder
+    const slowing = dvx * u.vx + dvy * u.vy < 0;
+    const max = (slowing ? Math.max(acc, K.footBrake * K.gravity) : acc) * DT;
+    if (dv <= max) { u.vx = wvx; u.vy = wvy; } else { u.vx += (dvx / dv) * max; u.vy += (dvy / dv) * max; }
+    u.steered = this.tick;
+  }
+
+  /** Nobody's driving it this tick: it brakes as hard as its feet allow, sliding on meanwhile. */
+  private coast(u: Unit): void {
+    if (u.airborne || u.steered === this.tick || (u.vx === 0 && u.vy === 0)) return;
+    this.steer(u, 0, 0, K.footBrake * K.gravity);
+    if (u.vx || u.vy) this.step1(u, u.vx * DT, u.vy * DT, 0, false);
+  }
+
+  private step1(u: Unit, dx: number, dy: number, dist: number, face = true): void {
     const nx = u.x + dx, ny = u.y + dy;
+    // running into a wall stops that part of the motion
     if (!this.grid.isBlocked(nx, ny)) { u.x = nx; u.y = ny; }
-    else if (!this.grid.isBlocked(nx, u.y)) u.x = nx;
-    else if (!this.grid.isBlocked(u.x, ny)) u.y = ny;
-    else { u.path = []; return; }
+    else if (!this.grid.isBlocked(nx, u.y)) { u.x = nx; u.vy = 0; }
+    else if (!this.grid.isBlocked(u.x, ny)) { u.y = ny; u.vx = 0; }
+    else { u.path = []; u.vx = u.vy = 0; return; }
+    if (!face) return;
     this.face(u, dx, dy);
     if (!u.exhausted) {
       u.cal -= u.stats.moveCalPerTile * dist * (1 + (this.packLoad(u) / u.stats.mass) * (u.stats.wheeled ? K.wheelHaulCost : 1)) / roadFactor(this, u);
@@ -1897,6 +1944,19 @@ export class World {
         const ax = a.x - nx * pa, ay = a.y - ny * pa, bx = b.x + nx * pb, by = b.y + ny * pb;
         if (!this.grid.isBlocked(ax, ay)) { a.x = ax; a.y = ay; }
         if (!this.grid.isBlocked(bx, by)) { b.x = bx; b.y = by; }
+        // momentum: if they're closing, they meet in an inelastic collision along the line between them
+        // (the lighter body is knocked aside more), and a hard enough impact hurts both
+        const closing = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
+        if (closing <= 0) continue;
+        const mu = (ma * mb) / total, imp = mu * closing;
+        a.vx -= (imp / ma) * nx; a.vy -= (imp / ma) * ny;
+        b.vx += (imp / mb) * nx; b.vy += (imp / mb) * ny;
+        const energy = 0.5 * mu * closing * closing;
+        if (energy > K.impactThreshold) {
+          const hurt = (energy - K.impactThreshold) * K.bodyImpactEfficiency * K.damageScale;
+          if (!a.dummy) this.damage(a.id, hurt, a.x, a.y);
+          if (!b.dummy) this.damage(b.id, hurt, b.x, b.y);
+        }
       }
     }
   }
