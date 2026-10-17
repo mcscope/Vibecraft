@@ -4,8 +4,6 @@ A browser RTS where every player vibecodes their own army, then brings it to an 
 
 You describe your faction in code: its units, buildings and techs, how they look, the land they come from and the animals that live there. You don't set the stats. The engine works out HP, speed, damage, carry capacity, calories and cost from each unit's body (mass, how that mass splits between muscle, frame and reserve, and the crystal it swings or throws) and from each building's materials. A giant is strong and also hungry, slow and expensive. That keeps factions nobody has playtested against each other fair.
 
-**Play it now:** http://mcscope.com/game/vibecraft/. Its online lobby uses the relay at `ws://mcscope.com:5190` by default.
-
 ## Run it
 
 ```sh
@@ -31,7 +29,7 @@ URL shortcuts: `?mode=skirmish&you=fenfolk&foe=meadowfolk&map=cliff-maze&seed=5`
 1. **Brainstorm a concept.** Before any code, decide who your people are: where they live, what they eat, how they fight, what makes them strange. Frog-folk of the fens? Clockwork monks? A hive that grows its buildings? Pick a theme, a playstyle and one or two signature ideas, and skim [DESIGN_SPACE.md](DESIGN_SPACE.md) for abilities nobody has used yet. A clear concept makes every later choice easier: body shapes, buildings, art and land.
 2. **Copy a faction.** Copy `src/factions/fenfolk/` (or `meadowfolk/`) to `src/factions/<yours>/`. Give it a new `id` and `name`, and rename its units and buildings.
 3. **Register it.** Add it to `PLAYABLE` in `src/factions/index.ts`, and add it to the Codex in `src/codex.ts`.
-4. **Shape the bodies.** A unit is `mass`, `physique: { muscle, frame, reserve }`, and optionally `attack: { style: 'strike' | 'throw', crystalMass, ammo }`. Change these and watch the Codex or Unit Lab update. `refinement` makes a unit cheaper to train, and techs raise it.
+4. **Shape the bodies.** A unit is `mass`, `physique: { muscle, frame, reserve }`, and optionally `attack: { style: 'strike' | 'throw', crystalMass, ammo, shaft }` (`shaft`: metres of spear for strikers, which adds reach and impales chargers). Change these and watch the Codex or Unit Lab update. `refinement` makes a unit cheaper to train, and techs raise it.
 5. **Draw them.** Each unit and building has a `model(builder, pose)` built from primitives (boxes, spheres, limbs, joints). The game bakes models into lit isometric sprites on your machine. Copy an existing model to get started.
 6. **Bring your land.** `homeworld.ts` sets the look of your half of the map: ground, trees, bushes and deposits. `wildlife.ts` lists the animals that roam it.
 7. **Play it.** Run a skirmish against the built-in AI. The AI is generic: it reads your buildings and what they train.
@@ -45,7 +43,6 @@ Rules of the road:
 
 Online games are 1v1. Each player runs their own copy of the game with their own faction. When the match starts, your faction (specs and baked art) travels to your opponent as data. Their client checks it against the rules, so you never need each other's code.
 
-0. **Or use the hosted relay.** On http://mcscope.com/game/vibecraft/ the lobby already points at `ws://mcscope.com:5190`. Both players need the same version of the game, because lockstep needs identical rules on both sides. If you've changed the engine (not just your faction), host your own build and relay.
 1. **Start the relay.** One person runs `npm run relay`, a tiny dependency-free WebSocket relay on port 5190.
    - On a LAN, everyone uses that machine's address.
    - Over the internet, run the relay somewhere public (a small VPS, or forward port 5190) and use `ws://<host>:5190`.
