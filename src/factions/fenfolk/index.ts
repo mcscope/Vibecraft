@@ -55,8 +55,13 @@ const reedguard: FenUnit = {
   gait: { hop: 0.76, period: 0.85 }, // heavier bounds behind the shield
   model(b, p) {
     body(b, p, guardLook, fenArm(p, 'jab'), (h) => {
-      h.limb([0, 0.55, 0], [0, -1.55, 0], 0.017, WILLOW); // a long reed spear
-      if (p.armed) h.crystal(0.14, [0, -1.62, 0], [0, 0, Math.PI]);
+      if (p.anim === 'attack') { // levelled: the jab drives the tip forward
+        h.limb([-0.35, 0.45, 0], [1.25, -1.15, 0], 0.017, WILLOW);
+        if (p.armed) h.crystal(0.14, [1.3, -1.2, 0], [0, 0, Math.PI * 0.75]);
+      } else { // carried upright, butt by the foot
+        h.limb([0, -0.35, 0], [0, 1.75, 0], 0.017, WILLOW);
+        if (p.armed) h.crystal(0.14, [0, 1.82, 0], [0, 0, 0]);
+      }
     }, (s) => {
       s.joint([0.04, -0.05, 0.05], [Math.PI / 2, 0, 0.1], (sh) => {
         sh.cylinder(0.24, 0.24, 0.04, [0, 0, 0], REED, undefined, 14);
