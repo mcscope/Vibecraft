@@ -22,7 +22,7 @@ export const FLY_SIGHT = 3;
 /** Flying is faster than walking (no ground to push off, nothing in the way). */
 export const FLY_SPEED = 1.6;
 /** A grounded flier walks rather than flies to anywhere this close (tiles) with a clear way there. */
-export const WALK_HOP = 3;
+export const WALK_HOP = 5;
 /** Calories per second flapping (taking off and climbing), per kg of body. */
 export const FLY_BURN_PER_KG = 0.3;
 /** Calories per second soaring at its ceiling, per kg: riding the air costs little. */
@@ -47,6 +47,16 @@ export const climbCost = (d: DerivedStats): number => d.mass * d.flyHeight * CLI
 /** Seconds it can stay up on full calories. */
 export const airtime = (d: DerivedStats): number => d.maxCalories / flightBurn(d);
 
+/** Turn rate in the air (radians/s) for a 22 kg bird; heavier birds turn slower (∝ 1/∛mass). */
+export const FLY_TURN = 2.5;
+/** Metres per second it sinks while coming in to land. */
+export const DESCENT_RATE = 1.5;
+/** It starts coming in to land this close (tiles) to where it has to be on foot. */
+export const LAND_APPROACH = 4;
+
+const turnRate = (u: Unit): number => FLY_TURN / Math.cbrt(u.stats.mass / 22);
+const airSpeed = (u: Unit): number => u.stats.speed * FLY_SPEED;
+
 /** Take off (if it can fly and has the strength). */
 export function takeOff(u: Unit): void {
   if (u.stats.flight && !u.exhausted && u.cal > u.stats.maxCalories * LAUNCH_FRACTION) u.airborne = true;
@@ -57,29 +67,62 @@ export function walks(w: World, u: Unit, gx: number, gy: number): boolean {
   return !u.airborne && (gx - u.x) ** 2 + (gy - u.y) ** 2 <= WALK_HOP * WALK_HOP && w.grid.lineClear(u.x, u.y, gx, gy);
 }
 
-/** Fly straight toward (gx, gy), over anything. True once within `arrive`. */
-export function flyTo(u: Unit, gx: number, gy: number, arrive: number, speed: number, dt: number, face: (dx: number, dy: number) => void): boolean {
-  const dx = gx - u.x, dy = gy - u.y, d = Math.sqrt(dx * dx + dy * dy);
-  if (d <= arrive) { u.path = []; return true; }
-  const step = Math.min(d, speed * FLY_SPEED * dt);
-  u.x += (dx / d) * step; u.y += (dy / d) * step;
-  face(dx, dy);
+/** Fly forward along its heading for a tick, staying on the map. */
+function glide(w: World, u: Unit, speed: number, dt: number, face: (dx: number, dy: number) => void): void {
+  const cx = Math.cos(u.flyDir), cy = Math.sin(u.flyDir);
+  u.x = Math.max(0.5, Math.min(w.grid.width - 0.5, u.x + cx * speed * dt));
+  u.y = Math.max(0.5, Math.min(w.grid.height - 0.5, u.y + cy * speed * dt));
+  face(cx, cy);
   u.busy = true;
-  return d - step <= arrive;
 }
 
-/** Each tick: burn calories aloft; come down when spent, or when it's stopped (unless it's a thrower fighting from the air). */
-export function tickFlight(w: World, u: Unit, moved: boolean, dt: number): void {
+/**
+ * Fly toward (gx, gy) over anything. A bird can't stop or turn on a dime: it
+ * keeps flying forward and turns toward the goal at its turn rate, so it loops
+ * round a goal it overshoots. True once within `arrive`.
+ */
+export function flyTo(w: World, u: Unit, gx: number, gy: number, arrive: number, speed: number, dt: number, face: (dx: number, dy: number) => void): boolean {
+  const dx = gx - u.x, dy = gy - u.y, d = Math.sqrt(dx * dx + dy * dy);
+  u.goalX = gx; u.goalY = gy;
+  if (d <= arrive) { u.path = []; return true; }
+  const want = Math.atan2(dy, dx);
+  if (u.alt < 0.05) u.flyDir = want; // leaping off the ground, it faces where it's going
+  let turn = Math.atan2(Math.sin(want - u.flyDir), Math.cos(want - u.flyDir));
+  const max = turnRate(u) * dt;
+  turn = Math.max(-max, Math.min(max, turn));
+  u.flyDir += turn;
+  glide(w, u, speed * FLY_SPEED, dt, face);
+  u.flewTick = w.tick;
+  return Math.hypot(gx - u.x, gy - u.y) <= arrive;
+}
+
+/**
+ * Each tick in the air: a bird with nowhere to fly keeps flying, circling; it
+ * climbs slowly toward its ceiling while it has somewhere to be (or a target to
+ * bomb), and comes in to land slowly, circling down, when it's done, running low,
+ * or nearly at a place it has to reach on foot.
+ */
+export function tickFlight(w: World, u: Unit, _moved: boolean, dt: number, face: (dx: number, dy: number) => void): void {
   if (!u.airborne) { u.alt = 0; return; }
-  const climb = Math.min(CLIMB_RATE * dt, Math.max(0, u.stats.flyHeight - u.alt));
-  u.alt += climb;
-  const soaring = u.alt >= u.stats.flyHeight - 1e-6; // up at its ceiling it rides the air
-  u.cal -= (soaring ? soarBurn(u.stats) : flightBurn(u.stats)) * dt + u.stats.mass * CLIMB_CAL_PER_KG_M * climb;
-  const hovering = u.throws && (u.engage || u.order.kind === 'attack' || u.order.kind === 'attackMove');
-  if (u.cal <= u.stats.maxCalories * LAND_FRACTION || u.exhausted || (!moved && !hovering)) {
-    if (!w.grid.isBlocked(u.x, u.y)) { u.airborne = false; u.alt = 0; return; }
-    const open = w.grid.nearestOpen(u.x, u.y, 6); // over a wall or water: glide to open ground first
-    if (open) { u.x = open[0]; u.y = open[1]; u.airborne = false; u.alt = 0; }
+  const flew = u.flewTick === w.tick;
+  if (!flew) { u.flyDir += turnRate(u) * dt; glide(w, u, airSpeed(u), dt, face); } // no stopping in the air: circle
+  const fighting = u.throws && (u.engage || u.order.kind === 'attack' || u.order.kind === 'attackMove');
+  const travelling = flew && (u.order.kind === 'move' || u.order.kind === 'attackMove' || u.order.kind === 'attack');
+  const nearFootGoal = flew && !travelling && Math.hypot(u.goalX - u.x, u.goalY - u.y) < LAND_APPROACH;
+  const low = u.cal <= u.stats.maxCalories * LAND_FRACTION || u.exhausted;
+  const comingIn = low || (!fighting && (!flew || nearFootGoal));
+  if (comingIn) {
+    u.alt = Math.max(0, u.alt - DESCENT_RATE * dt);
+    u.cal -= soarBurn(u.stats) * dt; // gliding down
+    if (u.alt <= 0) {
+      if (!w.grid.isBlocked(u.x, u.y)) { u.airborne = false; u.alt = 0; }
+      else u.alt = 0.3; // over a wall or water: keep circling until there's ground
+    }
+  } else {
+    const climb = Math.min(CLIMB_RATE * dt, Math.max(0, u.stats.flyHeight - u.alt));
+    u.alt += climb;
+    const soaring = u.alt >= u.stats.flyHeight - 1e-6; // up at its ceiling it rides the air
+    u.cal -= (soaring ? soarBurn(u.stats) : flightBurn(u.stats)) * dt + u.stats.mass * CLIMB_CAL_PER_KG_M * climb;
   }
   if (u.cal < 0) u.cal = 0;
 }

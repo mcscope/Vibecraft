@@ -21,12 +21,19 @@ describe('flight', () => {
     e.order = { kind: 'idle' };
     const cal0 = e.cal;
     w.enqueue({ player: 0, cmd: { type: 'move', units: [e.id], x: x0 + 6.5, y: y0 + 0.5 } });
-    let maxDev = 0, flew = false, minCal = cal0;
-    for (let i = 0; i < 20 * 6; i++) { w.step(); maxDev = Math.max(maxDev, Math.abs(e.y - (y0 + 0.5))); if (e.airborne) flew = true; minCal = Math.min(minCal, e.cal); }
+    let maxDev = 0, flew = false, minCal = cal0, crossed = false;
+    for (let i = 0; i < 20 * 30; i++) {
+      w.step();
+      if (!crossed) maxDev = Math.max(maxDev, Math.abs(e.y - (y0 + 0.5)));
+      if (e.x > x0 + 6) crossed = true;
+      if (e.airborne) flew = true;
+      minCal = Math.min(minCal, e.cal);
+    }
     expect(flew).toBe(true);
+    expect(crossed).toBe(true);
     expect(maxDev).toBeLessThan(0.1); // straight over, no detour
-    expect(e.x).toBeGreaterThan(x0 + 6);
-    expect(e.airborne).toBe(false); // landed once it stopped
+    expect(e.airborne).toBe(false); // with nothing left to do it circled down and landed
+    expect(e.x).toBeGreaterThan(x0 + 3.5); // on the far side of the wall
     expect(minCal).toBeLessThan(cal0 - 20); // flying is hungry work
   });
 

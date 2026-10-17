@@ -144,6 +144,10 @@ export interface Unit {
   airborne: boolean;
   /** Metres up (fliers climb slowly toward their ceiling while airborne; 0 on the ground). */
   alt: number;
+  /** Heading in the air (radians); a flier turns toward its goal at a limited rate. */
+  flyDir: number;
+  /** Tick a flier last steered toward a goal (otherwise it circles). */
+  flewTick: number;
   /** Training dummy: inert target. */
   dummy: boolean;
   /** Wildlife temper (wild units only). */
@@ -829,7 +833,7 @@ export class World {
       food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
       order: { kind: 'idle' }, resume: null, engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
-      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0,
+      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1,
       dummy: !!spec.dummy,
       carter: spec.role === 'carter',
       gatherAcc: 0,
@@ -1082,7 +1086,7 @@ export class World {
 
     let anim: UnitAnim = 'idle';
     const moved = this.runOrder(u) || midStride(u, this.tick); // a hopper crouching between bounds is still on its way
-    tickFlight(this, u, moved, DT);
+    tickFlight(this, u, moved, DT, (fx, fy) => this.face(u, fx, fy));
     if (moved) anim = 'walk';
     if (u.airborne) anim = 'fly'; // in the air, moving, hovering or throwing
     if (u.swing > 0 && !u.airborne) anim = 'attack';
@@ -1699,7 +1703,7 @@ export class World {
     if (dx * dx + dy * dy <= arrive * arrive) { u.path = []; return true; }
     if (u.stats.flight && !walks(this, u, gx, gy)) { // a short, clear way is walked
       takeOff(u);
-      if (u.airborne) return flyTo(u, gx, gy, arrive, loadedSpeed(u.stats, this.packLoad(u)), DT, (fx, fy) => this.face(u, fx, fy));
+      if (u.airborne) return flyTo(this, u, gx, gy, arrive, loadedSpeed(u.stats, this.packLoad(u)), DT, (fx, fy) => this.face(u, fx, fy));
     }
     if ((gx - u.goalX) ** 2 + (gy - u.goalY) ** 2 > 0.6 || (u.path.length === 0 && u.repathIn === 0)) {
       u.goalX = gx; u.goalY = gy;
