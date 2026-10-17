@@ -20,6 +20,9 @@
 import type { BuildingSpec, FactionSpec, Physique, TechSpec, UnitSpec } from '../factions/types';
 import { deriveGait } from './abilities/gait';
 
+/** How high a flier flies unless its spec says (m). */
+export const DEFAULT_FLY_HEIGHT = 6;
+
 export const LIMITS = {
   minMass: 15,
   maxMass: 1500,
@@ -97,6 +100,8 @@ export interface DerivedStats {
   gait?: { hop: number; period: number };
   /** Can fly (see UnitSpec.flight, sim/abilities/flight.ts). */
   flight: boolean;
+  /** Metres it flies at (0: doesn't fly). Higher drops hit harder; staying up there costs more. */
+  flyHeight: number;
   /** kg. Shared by weapon crystal, ammo, and cargo. */
   carryCapacity: number;
   /** kg of crystal the unit keeps as its loadout (weapon or ammo). */
@@ -224,7 +229,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   return {
     improvised,
     mass, physique, muscleMass, frameMass, reserveMass,
-    maxHp, maxCalories, speed, canAttack, wheeled, gait: deriveGait(spec), flight: !!spec.flight, carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, sight,
+    maxHp, maxCalories, speed, canAttack, wheeled, gait: deriveGait(spec), flight: !!spec.flight, flyHeight: !spec.flight ? 0 : spec.flight === true ? DEFAULT_FLY_HEIGHT : spec.flight.height, carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, sight,
     limbSpeed, maxAttackEnergy, crystalVelocity, attackEnergy, damage, attackCalories, cooldown, range,
     dps: damage / cooldown,
     gatherRate,

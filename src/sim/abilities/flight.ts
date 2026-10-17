@@ -9,12 +9,12 @@
 // crystals fall further and hit harder, and they see further.
 import type { UnitSpec } from '../../factions/types';
 import { f1, n0 } from '../../ui/format';
-import { K, type DerivedStats } from '../physics';
+import { DEFAULT_FLY_HEIGHT, K, type DerivedStats } from '../physics';
 import type { Unit, World } from '../world';
 import type { Ability } from './index';
 
 /** How high fliers fly (m): their height bonus to thrown crystals. */
-export const FLY_HEIGHT = 6;
+export const FLY_HEIGHT = DEFAULT_FLY_HEIGHT;
 /** Extra sight in the air (tiles). */
 export const FLY_SIGHT = 3;
 /** Flying is faster than walking (no ground to push off, nothing in the way). */
@@ -27,7 +27,8 @@ export const FLY_BURN_PER_KG = 0.9;
 export const LAND_FRACTION = 0.1;
 export const LAUNCH_FRACTION = 0.2;
 
-export const flightBurn = (d: DerivedStats): number => d.mass * FLY_BURN_PER_KG;
+/** Burn grows with height: holding twice as high costs twice as much. */
+export const flightBurn = (d: DerivedStats): number => d.mass * FLY_BURN_PER_KG * (d.flyHeight / FLY_HEIGHT);
 /** Seconds it can stay up on full calories. */
 export const airtime = (d: DerivedStats): number => d.maxCalories / flightBurn(d);
 
@@ -69,12 +70,12 @@ export function tickFlight(w: World, u: Unit, moved: boolean, dt: number): void 
 export const canReach = (attacker: Unit, target: Unit): boolean => !target.airborne || attacker.throws;
 
 /** Extra damage a crystal gains falling from flying height. */
-export const heightBonus = (u: Unit): number => (u.airborne ? u.crystalMass * K.gravity * FLY_HEIGHT * K.throwEfficiency * K.damageScale : 0);
+export const heightBonus = (u: Unit): number => (u.airborne ? u.crystalMass * K.gravity * u.stats.flyHeight * K.throwEfficiency * K.damageScale : 0);
 
 export const flight: Ability = {
   id: 'flight',
-  validateUnit: (u: UnitSpec, where: string) => (u.flight !== undefined && typeof u.flight !== 'boolean' ? [`${where}: bad flight`] : []),
+  validateUnit: (u: UnitSpec, where: string) => (u.flight !== undefined && typeof u.flight !== 'boolean' && !(typeof u.flight === 'object' && typeof u.flight.height === 'number' && u.flight.height >= 3 && u.flight.height <= 30) ? [`${where}: bad flight (true, or { height: 3–30 m })`] : []),
   unitCodex: (u: UnitSpec, d: DerivedStats) => (u.flight
-    ? `<b>Flies.</b> Walks a few tiles, takes off to go further, straight over walls and water; burns ${f1(flightBurn(d), 1)} cal/s aloft (about ${n0(airtime(d) * (1 - LAND_FRACTION))} s on full calories) and lands when it stops or runs low. In the air only thrown crystals reach it${u.attack?.style === 'strike' ? '; it lands to strike' : '; it throws from height, harder and further, and sees further'}.`
+    ? `<b>Flies</b> at ${n0(d.flyHeight)} m. Walks a few tiles, takes off to go further, straight over walls and water; burns ${f1(flightBurn(d), 1)} cal/s aloft (about ${n0(airtime(d) * (1 - LAND_FRACTION))} s on full calories) and lands when it stops or runs low. In the air only thrown crystals reach it${u.attack?.style === 'strike' ? '; it lands to strike' : '; what it drops falls the whole way, so it hits much harder from up there, and it sees further'}. Flying higher hits harder and burns faster.`
     : null),
 };

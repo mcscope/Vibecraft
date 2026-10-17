@@ -212,78 +212,101 @@ const heronDark: Mat = { color: '#3a4044', tex: 'fur' };
 const heronBill: Mat = { color: '#d4a634', rough: 0.35 };
 const heronLeg: Mat = { color: '#9a7a3a', rough: 0.6 };
 const WICKER: Mat = { color: '#a08850', tex: 'thatch' };
+const HERON_BRONZE: Mat = { color: '#b0823a', tex: 'metal', metal: 0.5, rough: 0.35 };
+const HERON_CHAIN: Mat = { color: '#2a2824', tex: 'metal', metal: 0.8 };
 const siegeHeron: FenUnit = {
   id: 'siege-heron',
   name: 'Siege Heron',
   description: 'An enormous grey heron, a fenling riding between its shoulders and a wicker basket of heavy crystals slung beneath. It flaps ponderously over walls and water to drop crystals on whatever lies below, but it is far too heavy to stay up for long.',
-  mass: 130,
+  mass: 180,
   physique: { muscle: 0.45, frame: 0.2, reserve: 0.35 },
-  attack: { style: 'throw', crystalMass: 8, ammo: 3 },
+  attack: { style: 'throw', crystalMass: 8, ammo: 4 },
   refinement: 1.5,
-  flight: true,
-  model(b, p) {
-    const t = p.phase * Math.PI * 2;
-    const flying = p.anim === 'fly';
-    const walking = p.anim === 'walk';
-    const attacking = p.anim === 'attack';
-    // flight: body level and up off the ground, wings beating slow and deep
-    const lift = flying ? 0.9 + Math.sin(t) * 0.06 : 0;
-    const legLen = 1.15;
-    // stilt legs: striding when walking, trailing behind in flight
-    for (const z of [1, -1]) {
-      const a = walking ? Math.sin(t + (z > 0 ? 0 : Math.PI)) * 0.45 : 0;
-      const hip: [number, number, number] = [-0.05, 1.3 + lift, 0.16 * z];
-      if (flying) {
-        b.limb(hip, [-0.75, 1.2 + lift, 0.12 * z], 0.04, heronLeg, 0.03);
-        b.limb([-0.75, 1.2 + lift, 0.12 * z], [-1.35, 1.15 + lift, 0.1 * z], 0.03, heronLeg, 0.025);
-      } else {
-        const knee: [number, number, number] = [hip[0] + Math.sin(a) * legLen * 0.5, hip[1] - legLen * 0.55, hip[2]];
-        const foot: [number, number, number] = [knee[0] + Math.sin(a * 0.4) * legLen * 0.5 - 0.05, 0.04, hip[2]];
-        b.limb(hip, knee, 0.045, heronLeg, 0.035);
-        b.limb(knee, foot, 0.035, heronLeg, 0.028);
-        for (const tz of [-0.08, 0, 0.08]) b.limb(foot, [foot[0] + 0.22, 0.02, foot[2] + tz * 1.5], 0.015, heronLeg); // splayed toes
+  flight: { height: 18 }, // a siege bird climbs high: each crystal falls 18 m, but holding up there burns calories 3× as fast
+  model(root, p) {
+    root.joint([0, 0, 0], [0, 0, 0], (b) => {
+      const t = p.phase * Math.PI * 2;
+      const flying = p.anim === 'fly';
+      const walking = p.anim === 'walk';
+      const attacking = p.anim === 'attack';
+      // flight: body level and up off the ground, wings beating slow and deep
+      const lift = flying ? 0.9 + Math.sin(t) * 0.06 : 0;
+      const legLen = 1.15;
+      // stilt legs: striding when walking, trailing behind in flight
+      for (const z of [1, -1]) {
+        const a = walking ? Math.sin(t + (z > 0 ? 0 : Math.PI)) * 0.45 : 0;
+        const hip: [number, number, number] = [-0.05, 1.3 + lift, 0.16 * z];
+        if (flying) {
+          b.limb(hip, [-0.75, 1.2 + lift, 0.12 * z], 0.04, heronLeg, 0.03);
+          b.limb([-0.75, 1.2 + lift, 0.12 * z], [-1.35, 1.15 + lift, 0.1 * z], 0.03, heronLeg, 0.025);
+        } else {
+          const knee: [number, number, number] = [hip[0] + Math.sin(a) * legLen * 0.5, hip[1] - legLen * 0.55, hip[2]];
+          const foot: [number, number, number] = [knee[0] + Math.sin(a * 0.4) * legLen * 0.5 - 0.05, 0.04, hip[2]];
+          b.limb(hip, knee, 0.045, heronLeg, 0.035);
+          b.limb(knee, foot, 0.035, heronLeg, 0.028);
+          for (const tz of [-0.08, 0, 0.08]) b.limb(foot, [foot[0] + 0.22, 0.02, foot[2] + tz * 1.5], 0.015, heronLeg); // splayed toes
+        }
       }
-    }
-    b.joint([0, lift, 0], [0, 0, flying ? 0 : 0.25], (c) => {
-      // body, pale breast plumes and a long tail
-      c.sphere([0.75, 0.36, 0.38], [0, 1.45, 0], heronGrey);
-      c.sphere([0.5, 0.26, 0.3], [0.2, 1.32, 0], heronPale);
-      for (const z of [-0.1, 0, 0.1]) c.box([0.5, 0.03, 0.12], [-0.85, 1.48, z], heronDark, [0, z * 2, 0.08]);
-      // neck: an S standing tall, pulled back onto the shoulders in flight (herons fly with the neck tucked)
-      const dip = attacking ? Math.sin(Math.min(1, p.phase * 1.5) * Math.PI) * 0.4 : 0;
-      const n1: [number, number, number] = flying ? [0.6, 1.62, 0] : [0.62, 1.95 - dip * 0.3, 0];
-      const n2: [number, number, number] = flying ? [0.45, 1.85, 0] : [0.5, 2.45 - dip * 0.5, 0];
-      const head: [number, number, number] = flying ? [0.72, 1.92, 0] : [0.72 + dip * 0.3, 2.62 - dip * 0.7, 0];
-      c.limb([0.55, 1.55, 0], n1, 0.11, heronPale, 0.08);
-      c.limb(n1, n2, 0.08, heronPale, 0.07);
-      c.limb(n2, head, 0.07, heronPale, 0.06);
-      c.sphere([0.15, 0.12, 0.12], head, heronPale);
-      c.limb([head[0] - 0.08, head[1] + 0.06, 0], [head[0] - 0.42, head[1] + 0.02, 0], 0.02, heronDark, 0.005); // black crest plume
-      for (const z of [1, -1]) c.sphere(0.03, [head[0] + 0.06, head[1] + 0.04, 0.08 * z], { color: '#f0d040', emissive: '#403000' });
-      c.cone(0.06, 0.62, [head[0] + 0.42, head[1] - 0.04, 0], heronBill, [0, 0, -Math.PI / 2 - 0.08], 6); // dagger bill
-      // wings: folded along the flanks on the ground, spread and beating in the air
-      for (const side of [1, -1]) {
-        const spread = flying ? 1 : attacking ? 0.35 : 0;
-        const beat = flying ? Math.sin(t) * 0.75 : 0;
-        c.joint([0.15, 1.6, 0.3 * side], [beat * side * spread + (1 - spread) * 1.35 * side, 0, 0], (wg) => {
-          for (let i = 0; i < 6; i++) {
-            const len = 0.9 + spread * 0.9 - i * 0.08;
-            wg.box([0.24 - i * 0.012, 0.035, len], [-0.06 - i * 0.14, 0, (len / 2) * side * (0.35 + spread * 0.65)], i < 3 ? heronGrey : heronDark, [0, -side * (0.1 + i * 0.1) * spread, 0]);
-          }
-        });
-      }
-      // wicker siege basket slung under the belly, heavy crystals heaped in it
-      c.cylinder(0.3, 0.24, 0.32, [0.05, 0.98, 0], WICKER, undefined, 10);
-      for (const z of [1, -1]) c.limb([0.05, 1.12, 0.26 * z], [0.05, 1.42, 0.3 * z], 0.012, { color: '#3a3020' }); // straps
-      if (p.armed) for (const [x, z] of [[-0.05, 0.08], [0.12, -0.07], [0.02, -0.1]]) c.crystal(0.16, [0.05 + x, 1.12, z], [0.2, 0, 0.3]);
-      // saddle cloth and the rider, steering with a willow switch and heaving crystals over the side
-      c.box([0.5, 0.05, 0.6], [-0.05, 1.8, 0], { team: 'primary', tex: 'cloth' });
-      c.joint([-0.1, 1.78, 0], [0, 0, 0], (r) => body(r, { ...p, anim: attacking ? 'attack' : 'idle' }, riderLook, fenArm(p, 'sling'), (h) => {
-        h.limb([0, 0.2, 0], [0, -0.45, 0], 0.012, WILLOW);
-      }), 0.75);
-      c.limb([-0.3, 1.8, 0.18], [-0.35, 2.55, 0.18], 0.012, WILLOW); // banner pole
-      c.box([0.28, 0.2, 0.02], [-0.21, 2.43, 0.18], { team: 'primary', tex: 'cloth' });
-    });
+      b.joint([0, lift, 0], [0, 0, flying ? 0 : 0.25], (c) => {
+        // body, pale breast plumes and a long tail
+        c.sphere([0.75, 0.36, 0.38], [0, 1.45, 0], heronGrey);
+        c.sphere([0.5, 0.26, 0.3], [0.2, 1.32, 0], heronPale);
+        for (const z of [-0.1, 0, 0.1]) c.box([0.5, 0.03, 0.12], [-0.85, 1.48, z], heronDark, [0, z * 2, 0.08]);
+        // neck: an S standing tall, pulled back onto the shoulders in flight (herons fly with the neck tucked)
+        const dip = attacking ? Math.sin(Math.min(1, p.phase * 1.5) * Math.PI) * 0.4 : 0;
+        const n1: [number, number, number] = flying ? [0.6, 1.62, 0] : [0.62, 1.95 - dip * 0.3, 0];
+        const n2: [number, number, number] = flying ? [0.45, 1.85, 0] : [0.5, 2.45 - dip * 0.5, 0];
+        const head: [number, number, number] = flying ? [0.72, 1.92, 0] : [0.72 + dip * 0.3, 2.62 - dip * 0.7, 0];
+        c.limb([0.55, 1.55, 0], n1, 0.11, heronPale, 0.08);
+        c.limb(n1, n2, 0.08, heronPale, 0.07);
+        c.limb(n2, head, 0.07, heronPale, 0.06);
+        c.sphere([0.15, 0.12, 0.12], head, heronPale);
+        // war helm: a bronze skull-cap with cheek guards, a team stripe of paint below the eye
+        c.sphere([0.13, 0.08, 0.13], [head[0] - 0.02, head[1] + 0.06, 0], HERON_BRONZE);
+        for (const z of [1, -1]) {
+          c.box([0.12, 0.08, 0.015], [head[0] + 0.02, head[1] - 0.02, 0.1 * z], HERON_BRONZE);
+          c.box([0.1, 0.02, 0.01], [head[0] + 0.08, head[1] - 0.05, 0.11 * z], { team: 'primary', tex: 'cloth' });
+          c.sphere(0.03, [head[0] + 0.07, head[1] + 0.03, 0.095 * z], { color: '#ff7a20', emissive: '#c03000' }); // eyes like coals
+        }
+        // three long black crest plumes streaming back
+        for (const k of [0, 1, 2]) c.limb([head[0] - 0.08, head[1] + 0.08, (k - 1) * 0.03], [head[0] - 0.6 - k * 0.1, head[1] + 0.12 - k * 0.07, (k - 1) * 0.08], 0.018, heronDark, 0.004);
+        // dagger bill, bronze-sheathed, tipped with a crystal
+        c.cone(0.065, 0.66, [head[0] + 0.44, head[1] - 0.04, 0], heronBill, [0, 0, -Math.PI / 2 - 0.08], 6);
+        c.cylinder(0.068, 0.07, 0.1, [head[0] + 0.16, head[1] - 0.02, 0], HERON_BRONZE, [0, 0, Math.PI / 2], 6);
+        c.crystal(0.07, [head[0] + 0.8, head[1] - 0.07, 0], [0, 0, -Math.PI / 2]);
+        // a reed-and-bone gorget around the neck
+        for (let k = 0; k < 6; k++) { const a = (k / 6) * Math.PI * 2; c.cone(0.025, 0.16, [n1[0] + Math.cos(a) * 0.1, n1[1] - 0.05, Math.sin(a) * 0.12], k % 2 ? BONE : REED, [Math.sin(a) * 0.5, 0, Math.cos(a) * 0.5 - Math.PI], 4); }
+        // wings: folded along the flanks on the ground, spread and beating in the air
+        for (const side of [1, -1]) {
+          const spread = flying ? 1 : attacking ? 0.35 : 0;
+          const beat = flying ? Math.sin(t) * 0.75 : 0;
+          c.joint([0.15, 1.6, 0.3 * side], [beat * side * spread + (1 - spread) * 1.35 * side, 0, 0], (wg) => {
+            for (let i = 0; i < 6; i++) {
+              const len = 0.9 + spread * 0.9 - i * 0.08;
+              wg.box([0.24 - i * 0.012, 0.035, len], [-0.06 - i * 0.14, 0, (len / 2) * side * (0.35 + spread * 0.65)], i < 3 ? heronGrey : heronDark, [0, -side * (0.1 + i * 0.1) * spread, 0]);
+            }
+            // war paint: a team-coloured bar across each wing, and battle ribbons from the tips
+            wg.box([0.1, 0.04, 0.5 + spread * 0.5], [-0.2, 0.01, (0.3 + spread * 0.5) * side * (0.35 + spread * 0.65)], { team: 'primary', tex: 'cloth' });
+            if (spread > 0.5) for (const k of [0, 1]) wg.box([0.3, 0.01, 0.05], [-0.35 - k * 0.25, -0.02, (1.6 - k * 0.1) * side], { team: 'secondary', tex: 'cloth' }, [0, 0, Math.sin(t * 2 + k) * 0.3]);
+          });
+        }
+        // bronze-bound siege basket hung on chains beneath the belly, glowing with heavy crystals
+        c.cylinder(0.32, 0.25, 0.34, [0.05, 0.96, 0], WICKER, undefined, 10);
+        for (const y of [0.82, 1.1]) c.cylinder(0.33, 0.33, 0.035, [0.05, y, 0], HERON_BRONZE, undefined, 12);
+        for (const [x, z] of [[0.3, 0], [-0.2, 0.2], [-0.2, -0.2]]) c.limb([0.05 + x * 0.9, 1.12, z * 0.9], [0.05 + x * 0.5, 1.45, z * 0.6], 0.012, HERON_CHAIN);
+        if (p.armed) for (const [x, z] of [[-0.05, 0.08], [0.12, -0.07], [0.02, -0.1]]) c.crystal(0.17, [0.05 + x, 1.14, z], [0.2, 0, 0.3]);
+        if (p.armed) c.sphere(0.12, [0.05, 1.16, 0], { color: '#9fefff', emissive: '#3ab8e0' }); // the glow of the load
+        // saddle cloth and the rider, steering with a willow switch and heaving crystals over the side
+        c.box([0.5, 0.05, 0.6], [-0.05, 1.8, 0], { team: 'primary', tex: 'cloth' });
+        c.joint([-0.1, 1.78, 0], [0, 0, 0], (r) => body(r, { ...p, anim: attacking ? 'attack' : 'idle' }, riderLook, fenArm(p, 'sling'), (h) => {
+          h.limb([0, 0.2, 0], [0, -0.45, 0], 0.012, WILLOW);
+        }), 0.75);
+        // a tall reed war-banner, streaming in flight
+        c.limb([-0.3, 1.8, 0.18], [-0.38, 2.85, 0.18], 0.014, WILLOW);
+        c.box([0.42, 0.26, 0.02], [-0.6 - (flying ? 0.08 : 0), 2.7, 0.18], { team: 'primary', tex: 'cloth' }, [0, 0, flying ? Math.sin(t * 2) * 0.15 : 0]);
+        c.sphere(0.035, [-0.38, 2.87, 0.18], HERON_BRONZE);
+      });
+    }, 1.4); // drawn big: it towers over a reed hut
   },
 };
 

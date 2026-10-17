@@ -53,7 +53,7 @@ export interface UnitSpec {
    */
   gait?: { hop: number; period?: number };
   /** It flies: walks short hops, takes off to go further, straight over everything; burns calories aloft (∝ mass, so endurance comes from its reserve); lands when it stops or runs low. Melee fliers land to strike. */
-  flight?: boolean;
+  flight?: boolean | { height: number };
   /** Can this unit harvest resource nodes? Default true. */
   canGather?: boolean;
   /** Training dummy: never moves, eats or fights. Only for scenarios. */

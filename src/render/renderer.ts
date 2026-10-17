@@ -128,6 +128,8 @@ export class Renderer {
   private alt = new Map<number, number>();
   private dt = 0;
   /** Screen px a flier is drawn above the ground at full height (zoom 1). */
+  private altV = new Map<number, number>();
+  private wasAirborne = new Set<number>();
   static readonly FLY_PX = 56;
   /** Px above the ground unit `id` is drawn at (zoom 1). */
   lift(id: number): number { return (this.alt.get(id) ?? 0) * Renderer.FLY_PX; }
@@ -362,10 +364,18 @@ export class Renderer {
         this.unitSprites.set(u.id, sp);
       }
       const x = u.px + (u.x - u.px) * alpha, y = u.py + (u.y - u.py) * alpha;
-      // fliers (sim/abilities/flight.ts) rise on take-off and settle on landing
+      // fliers (sim/abilities/flight.ts) leap into the air on take-off, overshoot a little
+      // and settle at height on a spring; they glide down to land
       if (u.stats.flight) {
         const a0 = this.alt.get(u.id) ?? 0;
-        this.alt.set(u.id, a0 + ((u.airborne ? 1 : 0) - a0) * Math.min(1, this.dt * 4));
+        let v = this.altV.get(u.id) ?? 0;
+        if (u.airborne && !this.wasAirborne.has(u.id)) v = Math.max(v, 5.5); // the leap
+        if (u.airborne) this.wasAirborne.add(u.id); else this.wasAirborne.delete(u.id);
+        const dt = Math.min(this.dt, 0.05);
+        if (u.airborne) v += ((1 - a0) * 22 - v * 5) * dt; // springy climb to cruising height
+        else v = (0 - a0) * 3; // a gentle glide down
+        const a = Math.max(0, a0 + v * dt);
+        this.alt.set(u.id, a); this.altV.set(u.id, a > 0 ? v : 0);
       }
       sp.position.set(isoX(x, y), isoY(x, y) - this.lift(u.id));
       sp.zIndex = x + y + (u.airborne ? 2 : 0);
