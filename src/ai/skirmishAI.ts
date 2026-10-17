@@ -17,6 +17,8 @@ export class SkirmishAI {
   private trainIndex = new Map<number, number>();
   private plan: Array<[string, number]> | null = null;
   private lastBelt = -Infinity;
+  /** Enemy soldiers and their kinds (for picking counters). */
+  private seenFoes = new Map<number, { kg: number; flier: boolean; charger: boolean }>();
   private calmSince = -1;
 
   constructor(readonly player: number, private thinkEvery = TICK_RATE) {}
@@ -169,12 +171,18 @@ export class SkirmishAI {
     // what the enemy fields: shares of its army that are heavy chargers (melee, 120 kg+) and fliers
     const threat = { chargers: 0, fliers: 0 };
     {
-      let total = 0;
+      // the enemy's army composition. NOTE: this still sees through fog (the AI doesn't scout yet);
+      // fog-limited knowledge was tried and left the Meadowfolk AI unable to counter (GAMEPLAY.md)
       for (const e of w.units.values()) {
         if (e.owner === this.player || w.players[e.owner]?.neutral || !e.stats.canAttack || e.specId === w.factionOf(e.owner).workerId) continue;
-        const kg = e.stats.mass; total += kg;
-        if (e.stats.flight) threat.fliers += kg;
-        else if (!e.throws && kg >= 120) threat.chargers += kg;
+        this.seenFoes.set(e.id, { kg: e.stats.mass, flier: !!e.stats.flight, charger: !e.throws && !e.stats.flight && e.stats.mass >= 120 });
+      }
+      let total = 0;
+      for (const [id, f] of this.seenFoes) {
+        if (!w.units.has(id)) { this.seenFoes.delete(id); continue; }
+        total += f.kg;
+        if (f.flier) threat.fliers += f.kg;
+        else if (f.charger) threat.chargers += f.kg;
       }
       if (total > 0) { threat.chargers /= total; threat.fliers /= total; }
     }
@@ -326,8 +334,13 @@ export class SkirmishAI {
 
   private enemyTarget(w: World): [number, number] | null {
     const foe = (owner: number) => owner !== this.player && !w.players[owner]?.neutral; // the Wilds are nobody's opponent
-    for (const b of w.buildings.values()) if (foe(b.owner)) return [b.ox + b.size / 2, b.oy + b.size / 2];
-    for (const u of w.units.values()) if (foe(u.owner)) return [u.x, u.y];
+    // fog: only enemy buildings we've scouted (explored ground), then units in sight now; failing
+    // that, the mirror of our own base (skirmish maps are point-symmetric, so that's where theirs is)
+    for (const b of w.buildings.values()) if (foe(b.owner) && w.vision(this.player, b.ox + b.size / 2, b.oy + b.size / 2) >= 1) return [b.ox + b.size / 2, b.oy + b.size / 2];
+    for (const u of w.units.values()) if (foe(u.owner) && w.vision(this.player, u.x, u.y) === 2) return [u.x, u.y];
+    const home = w.baseOf(this.player);
+    if (home) return [w.grid.width - home.ox - home.size / 2, w.grid.height - home.oy - home.size / 2];
+    for (const u of w.units.values()) if (foe(u.owner)) return [u.x, u.y]; // no base of our own: hunt anywhere
     return null;
   }
 

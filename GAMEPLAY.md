@@ -160,6 +160,11 @@ Arena (1,200 budget, row vs column):
 
 That's a real triangle: **spears beat chargers, heavy infantry and artillery beat spears, chargers beat artillery and swarms.** AI games stay close (Fen vs Meadow: three of four draws at 20 min).
 
+### AI and fog of war
+
+- **The AI now attacks only what it has scouted:** enemy buildings on ground it has explored, then enemy units in sight. Failing both, it heads for the mirror of its own base (skirmish maps are point-symmetric). It used to head straight for the first enemy building anywhere.
+- **Counter-picking still sees through fog.** Restricting it to enemy units actually seen left the Meadowfolk AI unable to counter, because it never sees the enemy army until it arrives. That gave Fen-favoured games, with the Meadowfolk gathering about half as much in three of four games. A fair fix needs AI scouting (send one fast unit out early), which isn't built yet.
+
 ## Decisions for the user (not made unilaterally)
 
 1. **Workers that are also soldiers.** Correction to an earlier guess: the arena shows ranged units are *weak* per cost, not strong. What made the Fenfolk dominant was that their *workers* are a ranged militia they'd have paid for anyway. That's a legitimate faction identity, but it's under-priced. Options:
