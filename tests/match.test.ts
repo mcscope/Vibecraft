@@ -23,4 +23,12 @@ describe('match', () => {
     expect(w.winner).toBe(1);
     expect(st.resigned).toBe(0);
   });
+  test('destroy kills your own units and buildings, never anyone else\'s', () => {
+    const w = new World({ seed: 9, players: [{ name: 'Meadow', faction: meadowfolk }, { name: 'Fen', faction: fenfolk }] });
+    const mine = w.unitsOf(0)[0], theirs = w.unitsOf(1)[0], tc = w.baseOf(0)!;
+    w.step([{ player: 0, cmd: { type: 'destroy', ids: [mine.id, theirs.id, tc.id] } }]);
+    expect(w.units.has(mine.id)).toBe(false);
+    expect(w.buildings.has(tc.id)).toBe(false);
+    expect(w.units.has(theirs.id)).toBe(true);
+  });
 });

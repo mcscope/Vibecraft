@@ -686,6 +686,13 @@ export class World {
         }
         return;
       }
+      case 'destroy': {
+        for (const id of cmd.ids) {
+          const t = this.units.get(id) ?? this.buildings.get(id);
+          if (t && t.owner === player) t.hp = 0; // reaped at the end of the tick, like any death
+        }
+        return;
+      }
       case 'resign': {
         const p = this.players[player];
         if (!p || p.neutral || p.defeated) return;

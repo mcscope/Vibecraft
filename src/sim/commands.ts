@@ -42,7 +42,9 @@ export type Command =
   /** `node`: rallied onto a resource, so new workers gather it. */
   | { type: 'rally'; building: number; x: number; y: number; node?: number }
   /** Give up: you lose, the others play on (or win). */
-  | { type: 'resign' };
+  | { type: 'resign' }
+  /** Kill your own units and/or knock down your own buildings (Backspace / Delete). */
+  | { type: 'destroy'; ids: number[] };
 
 export interface PlayerCommand {
   player: number;

@@ -350,6 +350,12 @@ export class Input {
       const specId = tcSelected.spec.trains?.[i];
       if (specId) { this.issue({ type: 'train', building: tcSelected.id, specId }); return; }
     }
+    if (k === 'backspace' || k === 'delete') {
+      // kill the selected units / knock down the selected building (your own only)
+      const mine = [...this.rs.selected].filter((id) => (w.units.get(id) ?? w.buildings.get(id))?.owner === this.player);
+      if (mine.length) { e.preventDefault(); this.issue({ type: 'destroy', ids: mine }); }
+      return;
+    }
     if (units.length) {
       if (k === km.attackMove) { this.mode = 'attackMove'; return; }
       if (k === km.move) { this.mode = 'move'; return; }
