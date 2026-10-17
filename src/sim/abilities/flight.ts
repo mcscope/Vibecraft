@@ -63,7 +63,9 @@ export const FLARE_DESCENT = 4;
 /** It starts coming in to land this close (tiles) to where it has to be on foot. */
 export const LAND_APPROACH = 4;
 
-const turnRate = (u: Unit): number => FLY_TURN / Math.cbrt(u.stats.mass / 22);
+/** How fast a big body's heading can bend, rad/s: a bird banking, or a long body wheeling on the ground. */
+export const wheelRate = (mass: number): number => FLY_TURN / Math.cbrt(mass / 22);
+const turnRate = (u: Unit): number => wheelRate(u.stats.mass);
 const airSpeed = (u: Unit): number => u.stats.speed * FLY_SPEED;
 
 /** Take off (if it can fly and has the strength). */

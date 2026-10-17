@@ -13,7 +13,7 @@ import * as bearerAbility from './abilities/bearer';
 import { midStride, strideFactor } from './abilities/gait';
 import { nearestDropOff } from './abilities/dropoff';
 import { eating, isTamer, runPens, runTame } from './abilities/herding';
-import { BOMB_REACH, canReach, dropTime, FLARE_HEIGHT, FLY_SIGHT, flyTo, heightBonus, LAUNCH_HEIGHT, LEAP_POSE, takeOff, tickFlight, walks } from './abilities/flight';
+import { BOMB_REACH, canReach, dropTime, wheelRate, FLARE_HEIGHT, FLY_SIGHT, flyTo, heightBonus, LAUNCH_HEIGHT, LEAP_POSE, takeOff, tickFlight, walks } from './abilities/flight';
 import { MatchStats } from './stats';
 import { eject, runGarrison, tickGarrison } from './garrison';
 import { isUnderfoot, loadBelt, nearestBelt, roadFactor, routeBelts, runBelts, type BeltRoutes, type Parcel } from './abilities/underfoot';
@@ -1901,9 +1901,9 @@ export class World {
   }
 
   /**
-   * Turn u's facing toward `angle`, no faster than its body allows this tick: a long body (≥ 1 m) pivots on its
-   * haunches when slow and wheels wide at speed (its feet's sideways grip); a short one as fast as it can bring its
-   * weapon round, far slower with a planted shaft. Fliers and dummies turn at once.
+   * Turn u's facing toward `angle`, no faster than its body allows this tick: a long body (≥ 1 m) wheels like a
+   * bird banking; a short one as fast as it can bring its weapon round, far slower with a planted shaft. Fliers
+   * and dummies turn at once.
    */
   private turnToward(u: Unit, angle: number): void {
     if (u.airborne || u.dummy) u.facing = angle;
@@ -1911,10 +1911,9 @@ export class World {
       if (u.turnTick !== this.tick) {
         u.turnTick = this.tick;
         const v = Math.hypot(u.vx, u.vy) * M_PER_TILE;
-        // a long body pivots on its haunches when slow (~3 m/s over its length); at speed its feet's sideways grip bends
-        // its line no tighter than traction ÷ speed (a galloping wheel is wide); a short body as fast as its weapon comes round
-        const long = Math.min(u.stats.turnRate, Math.max(3, v) / u.stats.length, (K.traction * K.gravity) / Math.max(v, 0.1));
-        u.turnLeft = DT * (u.stats.length >= 1 ? long : u.stats.turnRate * (u.stats.canPlant && v < 0.5 ? K.plantedTurnMul : 1));
+        // a long body wheels round like a bird banking (sim/abilities/flight.ts wheelRate); a short body turns as fast
+        // as its weapon comes round, far slower with a planted shaft
+        u.turnLeft = DT * (u.stats.length >= 1 ? wheelRate(u.stats.mass) : u.stats.turnRate * (u.stats.canPlant && v < 0.5 ? K.plantedTurnMul : 1));
       }
       const diff = Math.atan2(Math.sin(angle - u.facing), Math.cos(angle - u.facing));
       const step = Math.max(-u.turnLeft, Math.min(u.turnLeft, diff));
@@ -1985,9 +1984,12 @@ export class World {
       // turn and go; a long body turns at speed ÷ length, so it wheels round on its momentum.)
       this.turnToward(u, Math.atan2(ddy, ddx));
       const fx = Math.cos(u.facing), fy = Math.sin(u.facing), gx2 = ddx / d, gy2 = ddy / d;
-      const align = fx * gx2 + fy * gy2, side = Math.min(want, st.speed * K.sidestep);
-      let wvx = fx * want * Math.max(0, align) + (gx2 - align * fx) * side;
-      let wvy = fy * want * Math.max(0, align) + (gy2 - align * fy) * side;
+      // a long body can't step sideways: it keeps driving along its facing while that bends round (like a bird
+      // banking); a short one waits to line up before it drives, sidestepping a little meanwhile
+      const long = st.length >= 1;
+      const align = fx * gx2 + fy * gy2, side = long ? 0 : Math.min(want, st.speed * K.sidestep), drive = long ? want : want * Math.max(0, align);
+      let wvx = fx * drive + (gx2 - align * fx) * side;
+      let wvy = fy * drive + (gy2 - align * fy) * side;
       // runners don't run into their own side: against a friend close by, drop the part of its run that would close on them
       for (const f of this.units.values()) {
         if (f === u || f.owner !== u.owner || f.airborne) continue;

@@ -54,10 +54,20 @@ const reedguard: FenUnit = {
   attack: { style: 'strike', crystalMass: 1, shaft: 2.5 },
   gait: { hop: 0.76, period: 0.85 }, // heavier bounds behind the shield
   model(b, p) {
-    body(b, p, guardLook, fenArm(p, 'jab'), (h) => {
-      if (p.anim === 'attack' || p.style === 'brace') { // levelled: braced with the point set, or the jab driving it forward
-        h.limb([-0.35, 0.45, 0], [1.25, -1.15, 0], 0.017, WILLOW);
-        if (p.armed) h.crystal(0.14, [1.3, -1.2, 0], [0, 0, Math.PI * 0.75]);
+    // a spear jab is a thrust, not a swing: the arm reaches out a little and the spear drives forward along itself
+    const attacking = p.anim === 'attack';
+    const thrust = attacking ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0;
+    const arm = attacking ? 0.95 + thrust * 0.3 : fenArm(p, 'jab');
+    body(b, p, guardLook, arm, (h) => {
+      if (attacking || p.style === 'brace') { // levelled: braced with the point set, or the jab driving it forward
+        // the hand's frame turns with the arm (arm + 0.25) and the body's lean (-0.12; a brace leans 0.1 more):
+        // undo that, so the spear holds its own aim: near level on the jab, point raised a little at a charger when braced
+        const aim = attacking ? -0.05 : 0.2;
+        const slide = thrust * 0.4;
+        h.joint([0, 0, 0], [0, 0, aim - (arm + 0.25 - 0.12) + (p.style === 'brace' ? 0.1 : 0)], (s) => {
+          s.limb([-0.6 + slide, 0, 0], [1.85 + slide, 0, 0], 0.017, WILLOW);
+          if (p.armed) s.crystal(0.14, [1.92 + slide, 0, 0], [0, 0, -Math.PI / 2]);
+        });
       } else { // carried upright, butt by the foot
         h.limb([0, -0.35, 0], [0, 1.75, 0], 0.017, WILLOW);
         if (p.armed) h.crystal(0.14, [0, 1.82, 0], [0, 0, 0]);
