@@ -1,7 +1,7 @@
 // Meadowfolk building models. 1 tile = 2 model units; origin = footprint centre,
 // so a building of `size` tiles spans ±size units on x and z.
 import type { Mat, ModelBuilder } from '../../kits/bake3d/types';
-import { stoneWall, tiledRoof, timberFrame, vary } from '../../kits/bake3d/detail';
+import { shingledCone, stoneWall, tiledRoof, timberFrame, vary } from '../../kits/bake3d/detail';
 
 const WOOD: Mat = { color: '#5e4128', tex: 'wood' };
 const DARKWOOD: Mat = { color: '#3d2a1a', tex: 'wood' };
@@ -28,21 +28,7 @@ function crate(b: ModelBuilder, x: number, z: number, s = 0.45, y = 0.35, rot = 
 
 /** Timber-framed walls: plaster box with dark posts and beams on every face. */
 function timberHall(b: ModelBuilder, cx: number, cz: number, w: number, d: number, h: number, base: number): void {
-  b.box([w, h, d], [cx, base + h / 2, cz], PLASTER);
-  const posts = Math.max(2, Math.round(w / 1.3));
-  for (let i = 0; i <= posts; i++) {
-    const x = cx - w / 2 + (i / posts) * w;
-    for (const z of [cz - d / 2, cz + d / 2]) b.box([0.13, h, 0.13], [x, base + h / 2, z], DARKWOOD);
-  }
-  const zp = Math.max(2, Math.round(d / 1.3));
-  for (let i = 0; i <= zp; i++) {
-    const z = cz - d / 2 + (i / zp) * d;
-    for (const x of [cx - w / 2, cx + w / 2]) b.box([0.13, h, 0.13], [x, base + h / 2, z], DARKWOOD);
-  }
-  for (const y of [base + 0.08, base + h * 0.55, base + h - 0.06]) {
-    b.box([w + 0.04, 0.12, 0.12], [cx, y, cz + d / 2], DARKWOOD);
-    b.box([0.12, 0.12, d + 0.04], [cx + w / 2, y, cz], DARKWOOD);
-  }
+  timberFrame(b, { size: [w, h, d], at: [cx, base, cz], mat: PLASTER, wood: DARKWOOD });
 }
 
 function flag(b: ModelBuilder, x: number, y: number, z: number, pole = 1.3): void {
@@ -89,7 +75,7 @@ export function barracks(b: ModelBuilder): void {
   b.box([5.6, base, 5.6], [0, base / 2, 0], { color: '#7a6a52', tex: 'stone' });
   // long hall along x at the back
   timberHall(b, -0.6, -1.0, 4.4, 2.4, 1.6, base);
-  b.roof([5.0, 1.4, 3.0], [-0.6, base + 1.6, -1.0], THATCH);
+  tiledRoof(b, { size: [5.0, 1.4, 3.0], at: [-0.6, base + 1.6, -1.0], mat: THATCH, tile: 0.42 });
   b.box([0.08, 1.0, 0.7], [1.64, base + 0.5, -1.0], { color: '#2e1f14', tex: 'wood' });
   b.box([0.04, 0.8, 0.34], [1.68, base + 1.05, -0.2], BANNER);
   b.box([0.04, 0.8, 0.34], [1.68, base + 1.05, -1.8], BANNER);
@@ -117,7 +103,7 @@ export function lynxDen(b: ModelBuilder): void {
   for (const x of [-2.3, 2.3]) b.box([0.25, 1.5, 3.2], [x, base + 0.75, -0.6], WOOD);
   for (const x of [-2.3, -0.8, 0.8, 2.3]) b.limb([x, base, 0.9], [x, base + 1.6, 0.9], 0.08, DARKWOOD);
   for (const x of [-1.55, 0, 1.55]) b.box([0.12, 0.9, 2.6], [x, base + 0.45, -0.7], DARKWOOD); // stall dividers
-  b.roof([5.6, 1.3, 3.8], [0, base + 1.55, -0.6], THATCH);
+  tiledRoof(b, { size: [5.6, 1.3, 3.8], at: [0, base + 1.55, -0.6], mat: THATCH, tile: 0.42 });
   // hay, troughs, a scratching post with claw marks
   for (const [x, z] of [[-1.9, 1.7], [-1.3, 2.0], [-1.6, 2.3]]) b.box([0.6, 0.4, 0.45], [x, base + 0.2, z], HAY, [0, x, 0]);
   b.box([1.2, 0.25, 0.35], [1.0, base + 0.15, 1.6], WOOD);
@@ -130,16 +116,16 @@ export function lynxDen(b: ModelBuilder): void {
 export function forge(b: ModelBuilder): void {
   const base = 0.2;
   b.box([3.7, base, 3.7], [0, base / 2, 0], DARKSTONE);
-  b.box([2.6, 1.6, 2.2], [-0.4, base + 0.8, -0.4], STONE);
-  b.roof([3.0, 0.9, 2.6], [-0.4, base + 1.6, -0.4], SHINGLE);
+  stoneWall(b, { size: [2.6, 1.6, 2.2], at: [-0.4, base, -0.4], mat: STONE });
+  tiledRoof(b, { size: [3.0, 0.9, 2.6], at: [-0.4, base + 1.6, -0.4], mat: SHINGLE, tile: 0.28 });
   // chimney with a crystal-fire glow
-  b.box([0.7, 3.0, 0.7], [-1.2, base + 1.5, -1.2], STONE);
+  stoneWall(b, { size: [0.7, 3.0, 0.7], at: [-1.2, base, -1.2], mat: STONE, course: 0.22 });
   b.box([0.8, 0.15, 0.8], [-1.2, base + 3.05, -1.2], DARKSTONE);
   b.box([0.08, 0.6, 0.8], [0.92, base + 0.5, -0.4], { color: '#ff8a3a', emissive: '#ff6a1a' });
   // lean-to with the anvil
   b.limb([1.6, base, 0.9], [1.6, base + 1.3, 0.9], 0.06, DARKWOOD);
   b.limb([0.2, base, 1.6], [0.2, base + 1.3, 1.6], 0.06, DARKWOOD);
-  b.roof([1.8, 0.4, 1.8], [0.9, base + 1.3, 0.9], SHINGLE);
+  tiledRoof(b, { size: [1.8, 0.4, 1.8], at: [0.9, base + 1.3, 0.9], mat: SHINGLE, tile: 0.28 });
   b.box([0.25, 0.4, 0.25], [0.9, base + 0.2, 0.9], DARKWOOD);
   b.box([0.5, 0.15, 0.22], [0.9, base + 0.47, 0.9], IRON);
   b.crystal(0.3, [1.15, base + 0.55, 0.95], [0, 0, -1.2]);
@@ -150,18 +136,18 @@ export function forge(b: ModelBuilder): void {
 
 export function greatHall(b: ModelBuilder): void {
   const base = 0.45;
-  b.box([7.7, base, 7.7], [0, base / 2, 0], STONE);
+  stoneWall(b, { size: [7.7, base, 7.7], at: [0, 0, 0], mat: STONE, course: 0.2 });
   b.box([7.9, 0.15, 7.9], [0, 0.07, 0], DARKSTONE);
   // stone ground floor, timber upper floor
-  b.box([5.4, 1.8, 4.2], [0, base + 0.9, 0], STONE);
+  stoneWall(b, { size: [5.4, 1.8, 4.2], at: [0, base, 0], mat: STONE });
   timberHall(b, 0, 0, 5.0, 3.8, 1.5, base + 1.8);
-  b.roof([6.0, 2.4, 4.8], [0, base + 3.3, 0], SHINGLE);
+  tiledRoof(b, { size: [6.0, 2.4, 4.8], at: [0, base + 3.3, 0], mat: SHINGLE, tile: 0.28 });
   b.box([2.4, 0.14, 0.16], [0, base + 5.62, 0], DARKWOOD);
   // twin front towers
   for (const z of [-2.6, 2.6]) {
     b.cylinder(0.9, 1.0, 4.4, [2.6, base + 2.2, z], STONE, undefined, 12);
     b.cylinder(1.05, 1.05, 0.25, [2.6, base + 4.45, z], DARKSTONE, undefined, 12);
-    b.cone(1.15, 1.8, [2.6, base + 5.45, z], SHINGLE, undefined, 12);
+    shingledCone(b, 1.15, 1.8, [2.6, base + 4.55, z], SHINGLE, { color: '#b0823a', tex: 'metal', metal: 0.5 });
     flag(b, 2.6, base + 6.2, z, 1.2);
     b.box([0.06, 0.5, 0.18], [3.5, base + 2.8, z], WINDOW);
   }
@@ -190,7 +176,7 @@ export function watchtower(b: ModelBuilder): void {
   }
   b.box([1.6, 0.14, 1.6], [0, h, 0], WOOD);
   for (const [x, z, w, d] of [[0, 0.78, 1.6, 0.06], [0, -0.78, 1.6, 0.06], [0.78, 0, 0.06, 1.6], [-0.78, 0, 0.06, 1.6]] as const) b.box([w, 0.45, d], [x, h + 0.3, z], WOOD);
-  b.roof([1.9, 1.0, 1.9], [0, h + 1.4, 0], THATCH);
+  tiledRoof(b, { size: [1.9, 1.0, 1.9], at: [0, h + 1.4, 0], mat: THATCH, tile: 0.42 });
   for (const [x, z] of [[-0.7, -0.7], [0.7, -0.7], [-0.7, 0.7], [0.7, 0.7]]) b.limb([x, h, z], [x, h + 1.4, z], 0.04, DARKWOOD);
   // throwing arm poking out the front
   b.limb([0.2, h + 0.3, 0], [1.3, h + 1.1, 0], 0.05, DARKWOOD);
@@ -210,7 +196,7 @@ export function gatheringCamp(b: ModelBuilder): void {
   const base = 0.15;
   b.box([3.7, base, 3.7], [0, base / 2, 0], { color: '#7a6a52', tex: 'stone' });
   for (const [x, z] of [[-1.3, -1.3], [1.3, -1.3], [-1.3, 1.3], [1.3, 1.3]]) b.limb([x, base, z], [x, base + 1.7, z], 0.07, DARKWOOD);
-  b.roof([3.2, 0.9, 3.2], [0, base + 1.7, 0], THATCH);
+  tiledRoof(b, { size: [3.2, 0.9, 3.2], at: [0, base + 1.7, 0], mat: THATCH, tile: 0.42 });
   b.box([2.8, 0.1, 0.1], [0, base + 1.65, 1.3], DARKWOOD);
   b.box([0.1, 0.1, 2.8], [1.3, base + 1.65, 0], DARKWOOD);
   for (let i = 0; i < 7; i++) {
