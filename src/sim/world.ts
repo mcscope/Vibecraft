@@ -247,6 +247,17 @@ export interface ResourceNode {
   sownBy?: number;
 }
 
+/**
+ * Where a charge at `t` should aim: alongside it (the two bodies' radii plus a hand's breadth off its centre, on the
+ * side `u` is already coming from), `beyond` tiles past it. A charge strikes in passing; it doesn't ram the body.
+ */
+function passBeside(u: Unit, t: Unit, beyond: number): [number, number] {
+  const dx = t.x - u.x, dy = t.y - u.y, d = Math.hypot(dx, dy) || 1, nx = dx / d, ny = dy / d;
+  const side = (u.vx * ny - u.vy * nx) > 0 ? -1 : (u.vx * ny - u.vy * nx) < 0 ? 1 : (u.id % 2 ? 1 : -1); // the side its run already favours
+  const off = u.stats.radius + t.stats.radius + 0.15;
+  return [t.x + nx * beyond - ny * off * side, t.y + ny * beyond + nx * off * side];
+}
+
 /** Tiles a body needs to reach its sprint speed from rest, pushing off as hard as its feet grip (v² = 2·a·d). */
 function runUpTiles(u: Unit): number {
   const v = u.stats.sprint * M_PER_TILE;
@@ -1399,7 +1410,8 @@ export class World {
           const coming = (tu.vx * (u.x - tx) + tu.vy * (u.y - ty)) / d; // tiles/s toward us
           if (coming * M_PER_TILE > 1) { this.face(u, tx - u.x, ty - u.y); return true; }
         }
-        this.moveTo(u, tx, ty, wpn.throws ? Math.max(0.05, range - 0.3) : 0.05, sprint, !wpn.throws);
+        if (wpn.throws) this.moveTo(u, tx, ty, Math.max(0.05, range - 0.3), sprint, false);
+        else { const [px, py] = passBeside(u, tu, 0); this.moveTo(u, px, py, 0.05, sprint, true); } // a charge passes beside it, striking on the way
         return true;
       }
       // buildings: walk to the open tile nearest the closest edge point
@@ -1420,7 +1432,7 @@ export class World {
     // in reach at a run: a striker doesn't stop on a dime, it keeps its line and strikes in passing
     // (then turns and comes again); at a walk it just pulls up (coasts to a stop)
     const v = Math.hypot(u.vx, u.vy);
-    if (!u.airborne && !wpn.throws && tu && v > u.stats.speed * 1.1) this.moveTo(u, u.x + (u.vx / v) * 4, u.y + (u.vy / v) * 4, 0, true, true);
+    if (!u.airborne && !wpn.throws && tu && v > u.stats.speed * 1.1) { const [px, py] = passBeside(u, tu, 4); this.moveTo(u, px, py, 0, true, true); } // keeps its line past it, alongside
     // bogged down at a walk, but a run-up blow beats standing and swinging: ride out to come round again
     else if (!u.airborne && !wpn.throws && tu && u.stance !== 'hold' && (u.stance === 'charge' || chargePays(u, tu)) && u.cal > u.stats.maxCalories * K.sprintMinCalories) {
       const d = Math.hypot(u.x - tx, u.y - ty) || 1, out = runUp + 1;
@@ -1987,12 +1999,20 @@ export class World {
       // a long body can't step sideways: it keeps driving along its facing while that bends round (like a bird
       // banking); a short one waits to line up before it drives, sidestepping a little meanwhile
       const long = st.length >= 1;
-      const align = fx * gx2 + fy * gy2, side = long ? 0 : Math.min(want, st.speed * K.sidestep), drive = long ? want : want * Math.max(0, align);
+      const align = fx * gx2 + fy * gy2;
+      // a long body tightens a turn by slowing: if the goal is inside its turning circle (radius = speed ÷ turn rate) it
+      // slows until it fits, rather than circling it like a bird
+      if (long && align < 0.99) {
+        const sin = Math.sqrt(Math.max(0, 1 - align * align)) || 1e-3;
+        want = Math.min(want, Math.max(st.speed * 0.3, (wheelRate(st.mass) * d) / (2 * sin)));
+      }
+      const side = long ? 0 : Math.min(want, st.speed * K.sidestep), drive = long ? want : want * Math.max(0, align);
       let wvx = fx * drive + (gx2 - align * fx) * side;
       let wvy = fy * drive + (gy2 - align * fy) * side;
-      // runners don't run into their own side: against a friend close by, drop the part of its run that would close on them
+      // runners don't run into other bodies (only what they're attacking): against one close by, drop the part of the run that would close on it
+      const aim = u.order.kind === 'attack' ? u.order.target : u.engage;
       for (const f of this.units.values()) {
-        if (f === u || f.owner !== u.owner || f.airborne) continue;
+        if (f === u || f.id === aim || f.airborne) continue;
         const ox = f.x - u.x, oy = f.y - u.y, gap = Math.hypot(ox, oy) || 1e-6;
         if (gap > u.stats.radius + f.stats.radius + 0.35) continue;
         const nx = ox / gap, ny = oy / gap, closing = (wvx - f.vx) * nx + (wvy - f.vy) * ny;
