@@ -25,7 +25,7 @@ const IRON: Mat = { color: '#8d939a', tex: 'metal' };
 
 const villagerLook: HumanLook = {
   skin: '#c99a76', hair: '#4a3020', head: 'hood', scale: 0.95, beard: true,
-  tunic: { color: '#8a7350', tex: 'cloth' }, trousers: { color: '#5d5040', tex: 'cloth' }, boots: LEATHER,
+  tunic: { color: '#b48c52', tex: 'cloth' }, trousers: { color: '#7d6c4c', tex: 'cloth' }, boots: LEATHER,
 };
 
 const villager: MeadowUnit = {
@@ -38,9 +38,14 @@ const villager: MeadowUnit = {
   model(b, p) {
     human(b, p, villagerLook, armAngle(p), (h) => {
       if (!p.armed) return;
-      h.limb([0, 0, 0], [0.32, 0.06, 0], 0.018, WOOD);
-      h.crystal(0.16, [0.34, 0.06, 0], [0, 0, -Math.PI / 2 + 0.1]);
+      h.limb([0, 0, 0], [0.36, 0.06, 0], 0.022, WOOD);
+      h.box([0.06, 0.07, 0.12], [0.36, 0.06, 0], { color: '#8d939a', tex: 'metal' }); // the hammer's iron collar
+      h.crystal(0.2, [0.4, 0.06, 0], [0, 0, -Math.PI / 2 + 0.1]);
     });
+    // a rope belt with a pouch and a water-skin
+    b.cylinder(0.15, 0.15, 0.03, [0, 0.9, 0], { color: '#c8b082', tex: 'cloth' }, undefined, 10);
+    b.sphere([0.06, 0.07, 0.05], [0.05, 0.84, 0.15], LEATHER);
+    b.sphere([0.05, 0.08, 0.05], [-0.06, 0.84, -0.15], { color: '#8a6a40', tex: 'leather' });
     cargoPack(b, p, 0.95);
   },
 };
@@ -54,13 +59,13 @@ const slinger: MeadowUnit = {
   attack: { style: 'throw', crystalMass: 1.2, ammo: 6 },
   model(b, p) {
     const look: HumanLook = {
-      skin: '#b9875f', hair: '#2b1d14', head: 'band', scale: 0.88, bulk: 0.9,
-      tunic: { color: '#6d5a3c', tex: 'leather' }, trousers: { color: '#4d4434', tex: 'cloth' }, boots: LEATHER,
+      skin: '#b9875f', hair: '#2b1d14', head: 'hood', scale: 0.88, bulk: 0.9, tabard: true,
+      tunic: { color: '#9c7c4c', tex: 'leather' }, trousers: { color: '#6d6048', tex: 'cloth' }, boots: LEATHER,
     };
     human(b, p, look, armAngle(p, 'throw'), (h) => {
       // sling: cord and pouch, whirling during the wind-up
       const whirl = p.anim === 'attack' && p.phase < 0.65 ? p.phase * Math.PI * 2 * 3 : 0.4;
-      const pouch: [number, number, number] = [Math.cos(whirl) * 0.08, -0.38, Math.sin(whirl) * 0.1];
+      const pouch: [number, number, number] = [Math.cos(whirl) * 0.12, -0.46, Math.sin(whirl) * 0.14];
       h.limb([0, 0, 0], pouch, 0.006, LEATHER);
       h.sphere([0.04, 0.03, 0.04], pouch, LEATHER);
       if (p.armed && !(p.anim === 'attack' && p.phase > 0.7)) h.crystal(0.08, [pouch[0], pouch[1] - 0.03, pouch[2]]);
@@ -68,6 +73,8 @@ const slinger: MeadowUnit = {
       h.sphere([0.06, 0.05, 0.05], [0.02, -0.05, 0], LEATHER);
     });
     b.sphere([0.08, 0.1, 0.06], [-0.05, 0.8, -0.18], LEATHER); // ammo bag
+    b.cylinder(0.14, 0.14, 0.03, [0, 0.86, 0], LEATHER, undefined, 10); // a belt of sling stones
+    for (const a of [0.6, 1.2, 1.8]) b.crystal(0.05, [Math.cos(a) * 0.14, 0.84, Math.sin(a) * 0.14], [0, 0, 0.3]);
   },
 };
 
