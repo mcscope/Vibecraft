@@ -1080,8 +1080,8 @@ export class World {
     const moved = this.runOrder(u) || midStride(u, this.tick); // a hopper crouching between bounds is still on its way
     tickFlight(this, u, moved, DT);
     if (moved) anim = 'walk';
-    if (u.airborne) anim = 'fly'; // in the air, moving or hovering
-    if (u.swing > 0) anim = 'attack';
+    if (u.airborne) anim = 'fly'; // in the air, moving, hovering or throwing
+    if (u.swing > 0 && !u.airborne) anim = 'attack';
     else if (((u.order.kind === 'gather' && u.order.phase === 'harvest') || (u.order.kind === 'build' && u.order.phase === 'chop')) && !moved && u.busy) anim = 'gather';
     else if ((u.order.kind === 'eatPack' || u.order.kind === 'resupply') && !moved && u.busy) anim = 'eat';
     else if (u.exhausted && !moved) anim = 'tired';
@@ -1458,6 +1458,14 @@ export class World {
 
   /** A dry thrower's nearest crystal: a spent one on the ground, or a bearer to take from. Sets a detour/order; false if none. */
   private seekAmmo(u: Unit, detour: boolean): boolean {
+    if (u.stats.flight) {
+      // a flier doesn't land among the enemy to pick crystals off the ground: it flies home to reload
+      const home = this.nearestCache(u, (b) => b.stock.crystal >= u.crystalMass);
+      if (!home) return false;
+      const order: Order = { kind: 'resupply', building: home.id };
+      if (detour) this.detour(u, order); else u.order = order;
+      return true;
+    }
     const shard = this.nearestNode(u, 'crystal', u.stats.sight, true);
     const bearer = bearerAbility.nearestBearer(this, u);
     const ds = shard ? (shard.x - u.x) ** 2 + (shard.y - u.y) ** 2 : Infinity;
