@@ -95,8 +95,6 @@ export const K = {
   armourFloor: 0.15,
   /** Grip of feet on the ground (× g): caps how fast any body speeds up and swings its line. */
   traction: 0.6,
-  /** A body can step sideways (toward where it's going but not facing) at this share of its speed. */
-  sidestep: 0.3,
   /** Feet planted (× g): how hard a body pulls up, and how fast a shove or a slide dies. Legs, not ice. */
   footBrake: 1.5,
   /** Calories per tile while sprinting, × walking's. */

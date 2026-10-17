@@ -13,7 +13,7 @@ import * as bearerAbility from './abilities/bearer';
 import { midStride, strideFactor } from './abilities/gait';
 import { nearestDropOff } from './abilities/dropoff';
 import { eating, isTamer, runPens, runTame } from './abilities/herding';
-import { BOMB_REACH, canReach, dropTime, wheelRate, FLARE_HEIGHT, FLY_SIGHT, flyTo, heightBonus, LAUNCH_HEIGHT, LEAP_POSE, takeOff, tickFlight, walks } from './abilities/flight';
+import { BOMB_REACH, canReach, dropTime, FLARE_HEIGHT, FLY_SIGHT, flyTo, heightBonus, LAUNCH_HEIGHT, LEAP_POSE, takeOff, tickFlight, walks } from './abilities/flight';
 import { MatchStats } from './stats';
 import { eject, runGarrison, tickGarrison } from './garrison';
 import { isUnderfoot, loadBelt, nearestBelt, roadFactor, routeBelts, runBelts, type BeltRoutes, type Parcel } from './abilities/underfoot';
@@ -1168,7 +1168,7 @@ export class World {
   }
 
   private tickUnit(u: Unit): void {
-    if (u.dummy) { u.animT += DT; return; }
+    if (u.dummy) { u.animT += DT; this.coast(u); return; } // inert, but a body: shoved, it slides to a stop
     const st = u.stats;
     if (u.wild || u.tame) u.cal = st.maxCalories; // they graze
     if (u.cooldown > 0) u.cooldown -= DT;
@@ -1411,7 +1411,11 @@ export class World {
           if (coming * M_PER_TILE > 1) { this.face(u, tx - u.x, ty - u.y); return true; }
         }
         if (wpn.throws) this.moveTo(u, tx, ty, Math.max(0.05, range - 0.3), sprint, false);
-        else { const [px, py] = passBeside(u, tu, 0); this.moveTo(u, px, py, 0.05, sprint, true); } // a charge passes beside it, striking on the way
+        else {
+          // straight at it till the blow lands, then past alongside
+          const [px, py] = u.cooldown > 0 ? passBeside(u, tu, 0) : [tx, ty];
+          this.moveTo(u, px, py, 0.05, sprint, true);
+        }
         return true;
       }
       // buildings: walk to the open tile nearest the closest edge point
@@ -1505,7 +1509,7 @@ export class World {
       const s = p.t / p.duration, x = p.sx + (p.tx - p.sx) * s, y = p.sy + (p.ty - p.sy) * s;
       const h = (1.5 + p.sz) * (1 - s) + 1 * s + 4 * ((K.gravity * p.duration * p.duration) / 8) * s * (1 - s); // metres
       for (const u of this.units.values()) {
-        if (u.owner === p.owner || u.airborne || u.dummy || this.players[u.owner]?.neutral && u.id !== p.target) continue;
+        if (u.owner === p.owner || u.airborne || this.players[u.owner]?.neutral && u.id !== p.target) continue;
         const tall = bodyHeight(u.stats.mass); // m
         if (h > tall || (u.x - x) ** 2 + (u.y - y) ** 2 > (u.stats.radius + 0.1) ** 2) continue;
         this.projectiles.delete(p.id);
@@ -1913,26 +1917,33 @@ export class World {
   }
 
   /**
-   * Turn u's facing toward `angle`, no faster than its body allows this tick: a long body (≥ 1 m) wheels like a
-   * bird banking; a short one as fast as it can bring its weapon round, far slower with a planted shaft. Fliers
-   * and dummies turn at once.
+   * Turn u's facing toward `angle`, no faster than its body allows this tick (all from its physics: length, grip,
+   * speed, gait, weapon). Fliers and dummies turn at once.
    */
   private turnToward(u: Unit, angle: number): void {
     if (u.airborne || u.dummy) u.facing = angle;
     else {
+      const diff = Math.atan2(Math.sin(angle - u.facing), Math.cos(angle - u.facing));
       if (u.turnTick !== this.tick) {
         u.turnTick = this.tick;
-        const v = Math.hypot(u.vx, u.vy) * M_PER_TILE;
-        // a long body wheels round like a bird banking (sim/abilities/flight.ts wheelRate); a short body turns as fast
-        // as its weapon comes round, far slower with a planted shaft
-        u.turnLeft = DT * (u.stats.length >= 1 ? wheelRate(u.stats.mass) : u.stats.turnRate * (u.stats.canPlant && v < 0.5 ? K.plantedTurnMul : 1));
+        const st = u.stats, v = Math.hypot(u.vx, u.vy) * M_PER_TILE, grip = K.traction * K.gravity;
+        // its feet spin it round: sideways grip on a lever of half its length, against its yaw inertia (∝ m·L²),
+        // so α = 6·grip / length, and it can turn θ no faster than √(2·α·θ) (speeding the turn up, then easing it off)
+        const spin = Math.sqrt((2 * 6 * grip * Math.abs(diff)) / st.length);
+        // on the move its run bends no tighter than its grip holds (v²/r ≤ grip: a turn rate of grip / v)
+        const bend = v > 0.3 ? grip / v : Infinity;
+        // a bounding body has grip only with its feet down: it turns crouched between bounds, not in the air
+        const airborneBound = !!st.gait && u.strideMul > 0 && v > 0.3;
+        // and it can't swing round faster than its weapon comes round (leverage), far slower with a planted shaft
+        const weapon = st.turnRate * (st.canPlant && v < 0.5 ? K.plantedTurnMul : 1);
+        u.turnLeft = airborneBound ? 0 : DT * Math.min(spin, bend, weapon);
       }
-      const diff = Math.atan2(Math.sin(angle - u.facing), Math.cos(angle - u.facing));
       const step = Math.max(-u.turnLeft, Math.min(u.turnLeft, diff));
       u.facing += step; u.turnLeft -= Math.abs(step);
     }
     u.heading = ((Math.round(u.facing / (Math.PI / 4)) % 8) + 8) % 8;
   }
+
 
 
 
@@ -1991,29 +2002,17 @@ export class World {
       let want = speed;
       // brake in time to stop at the goal (v² = 2·a·d), unless running through it
       if (u.path.length === 1 && !through) want = Math.min(want, Math.sqrt(2 * (K.footBrake * K.gravity) / M_PER_TILE * Math.max(0, d - arrive * 0.5)));
-      // a body turns itself toward where it's going, then its legs drive it the way it faces: full speed
-      // only once it's lined up, and a little sidestep meanwhile. (Short bodies turn fast, so they pull up,
-      // turn and go; a long body turns at speed ÷ length, so it wheels round on its momentum.)
+      // a body turns itself toward where it's going (turnToward: as fast as its feet can spin its length round, and
+      // its run bends no tighter than its grip holds), and its legs drive it the way it faces: only as hard as it's
+      // lined up. So it slows to turn, and slower turns tighter; fast bodies sweep wide arcs. Nothing else.
       this.turnToward(u, Math.atan2(ddy, ddx));
-      const fx = Math.cos(u.facing), fy = Math.sin(u.facing), gx2 = ddx / d, gy2 = ddy / d;
-      // a long body can't step sideways: it keeps driving along its facing while that bends round (like a bird
-      // banking); a short one waits to line up before it drives, sidestepping a little meanwhile
-      const long = st.length >= 1;
-      const align = fx * gx2 + fy * gy2;
-      // a long body tightens a turn by slowing: if the goal is inside its turning circle (radius = speed ÷ turn rate) it
-      // slows until it fits, rather than circling it like a bird
-      if (long && align < 0.99) {
-        const sin = Math.sqrt(Math.max(0, 1 - align * align)) || 1e-3;
-        want = Math.min(want, Math.max(st.speed * 0.3, (wheelRate(st.mass) * d) / (2 * sin)));
-      }
-      const side = long ? 0 : Math.min(want, st.speed * K.sidestep), drive = long ? want : want * Math.max(0, align);
-      let wvx = fx * drive + (gx2 - align * fx) * side;
-      let wvy = fy * drive + (gy2 - align * fy) * side;
-      // runners don't run into their own side or into things that won't budge (posts): against one close by, drop
-      // the part of the run that would close on it. Enemy bodies are fair game: a charge runs them down
-      const aim = u.order.kind === 'attack' ? u.order.target : u.engage;
+      const fx = Math.cos(u.facing), fy = Math.sin(u.facing);
+      const drive = want * Math.max(0, (fx * ddx + fy * ddy) / d);
+      let wvx = fx * drive, wvy = fy * drive;
+      // runners don't run into their own side: against a friend close by, drop the part of the run that would close
+      // on them. Enemy bodies are fair game: a charge runs them down
       for (const f of this.units.values()) {
-        if (f === u || f.id === aim || f.airborne || (f.owner !== u.owner && !f.dummy)) continue;
+        if (f === u || f.airborne || f.owner !== u.owner) continue;
         const ox = f.x - u.x, oy = f.y - u.y, gap = Math.hypot(ox, oy) || 1e-6;
         if (gap > u.stats.radius + f.stats.radius + 0.35) continue;
         const nx = ox / gap, ny = oy / gap, closing = (wvx - f.vx) * nx + (wvy - f.vy) * ny;
@@ -2038,14 +2037,14 @@ export class World {
 
   /** Knock a body by (dvx, dvy) m/s: its velocity changes, and if that's more than its feet can catch, it staggers. */
   shove(u: Unit, dvx: number, dvy: number): void {
-    if (u.dummy || u.airborne) return;
+    if (u.airborne) return;
     u.vx += dvx / M_PER_TILE; u.vy += dvy / M_PER_TILE;
     this.stagger(u, Math.hypot(dvx, dvy));
   }
 
   /** A jolt of `dv` m/s: past what a step can catch (K.staggerDv), it's off balance, the bigger the jolt the longer. */
   stagger(u: Unit, dv: number): void {
-    if (dv <= K.staggerDv || u.dummy) return;
+    if (dv <= K.staggerDv) return;
     u.staggered = Math.max(u.staggered, 0.3 + dv / (K.footBrake * K.gravity));
   }
 
@@ -2145,7 +2144,7 @@ export class World {
         let nx: number, ny: number;
         if (d < 1e-4) { nx = (a.id % 2 ? 1 : -1) * 0.7071; ny = 0.7071; d = 0; } else { nx = dx / d; ny = dy / d; }
         const overlap = (r - d) * 0.5;
-        const ma = a.dummy ? 1e9 : a.stats.mass, mb = b.dummy ? 1e9 : b.stats.mass;
+        const ma = a.stats.mass, mb = b.stats.mass;
         const total = ma + mb;
         const pa = overlap * (mb / total), pb = overlap * (ma / total);
         const ax = a.x - nx * pa, ay = a.y - ny * pa, bx = b.x + nx * pb, by = b.y + ny * pb;
@@ -2165,7 +2164,7 @@ export class World {
         // takes the jolt, the heavy one barely feels it, and a bump at walking pace hurts nobody
         for (const [body, m] of [[a, ma], [b, mb]] as Array<[Unit, number]>) {
           const jolt = (imp / m) * M_PER_TILE; // m/s
-          if (jolt > K.injuryDv && !body.dummy) this.damage(body.id, 0.5 * m * (jolt - K.injuryDv) ** 2 * K.bodyImpactEfficiency * K.damageScale, body.x, body.y);
+          if (jolt > K.injuryDv) this.damage(body.id, 0.5 * m * (jolt - K.injuryDv) ** 2 * K.bodyImpactEfficiency * K.damageScale, body.x, body.y);
         }
       }
     }

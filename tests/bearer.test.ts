@@ -23,7 +23,7 @@ describe('ammo bearer', () => {
       f.ammo = 0; f.x = f.px = spot[0]; f.y = f.py = spot[1]; f.order = { kind: 'idle' };
     }
     const load = t.crystal;
-    run(w, 20 * 6);
+    run(w, 20 * 12);
     expect(fs.every((f) => f.ammo >= f.stats.loadoutCrystal - 1e-6)).toBe(true);
     expect(t.crystal).toBeCloseTo(load - fs.length * fs[0].stats.loadoutCrystal, 5);
   });
@@ -90,7 +90,7 @@ describe('ammo bearer', () => {
     expect(hall.queue[0]?.paid).toBe(false); // waiting for roots
     const f = w.unitsOf(0).find((u) => u.specId === 'fenling')!;
     w.enqueue({ player: 0, cmd: { type: 'haul', units: [f.id], building: hall.id } });
-    run(w, 20 * 40);
+    run(w, 20 * 80);
     expect(hut.stock.food).toBeLessThan(300); // it hauled roots over
     expect(hall.queue.length === 0 || hall.queue[0].paid).toBe(true); // and the fenling got paid for
   });
