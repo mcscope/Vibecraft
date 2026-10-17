@@ -144,7 +144,7 @@ The snowball is clearly weaker.
 
 **Then built: retreat.** Every 2 s the AI compares an attacking wave's HP × DPS with the enemy's fighting units within 12 tiles. If it's outmatched 1.8:1 and more than 18 tiles from home, the wave falls back home and the next wave must be bigger. Fen vs Meadow: three of four games contested at 20 minutes, with losses down again (for example 28/9). Meadow vs Meadow: two of three contested, one still a late snowball (minute 15–20).
 
-**Still open:** in one Fen-vs-Meadow seed (4), the Meadow AI has 13 units and no army at minute 5 and never recovers. That's an early-economy failure on that map/seed, not combat. Worth a look.
+**Fixed: carts bought too early.** In Fen-vs-Meadow seed 4, the Meadow AI had 13 units and no army at minute 5. Cause: the town center topped up its pool of 3 mule carts whenever food came in, even with no other building to haul to. In seed 4 the first food went to mules instead of villagers (gathered at minute 1: 129 vs about 300 in other seeds). Now a producer buys carts only once there's another building (a site or a consumer). All four seeds open evenly (about 1,400 gathered by minute 3), and seed 4 is a real game. This affects human players too: no more surprise mule purchases at the start.
 
 ### P4: reach strikes first, built (spears)
 

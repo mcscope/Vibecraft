@@ -1,3 +1,4 @@
+import { isUnderfoot } from './abilities/underfoot';
 // Logistics: who needs what, who can spare it, and the carts (and hauling
 // workers) that move it. One rule: take resources from where there's spare to
 // where there's need — most urgent first, over the shortest whole trip — with the
@@ -79,7 +80,10 @@ export class Logistics {
 
   /** Producer buildings (e.g. the town center) keep their cart pool topped up. */
   requestCarters(b: Building): void {
-    const want = b.spec.carters ?? 0;
+    // no carts bought before there's another building to haul to (a site or a consumer)
+    let others = false;
+    for (const o of this.w.buildings.values()) if (o.owner === b.owner && o !== b && !isUnderfoot(o.spec)) { others = true; break; }
+    const want = others ? b.spec.carters ?? 0 : 0;
     const carterId = this.w.factionOf(b.owner).carterId;
     if (!want || !carterId || this.poolSize(b) >= want) return;
     // an idle cart joins before we pay for a new one

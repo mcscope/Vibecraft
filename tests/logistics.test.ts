@@ -51,6 +51,7 @@ describe('carts', () => {
     const w = newWorld();
     const tc = w.baseOf(0)!;
     tc.stock.food = 3000;
+    w.addBuilding(0, 'barracks', tc.ox + 6, tc.oy); // somewhere to haul to: carts are only bought once there is
     run(w, 20 * 90); // automatic pool of 3
     const pool = () => [...w.units.values()].filter((u) => u.owner === 0 && u.carter);
     expect(pool().length).toBe(3);
@@ -80,11 +81,11 @@ describe('supply', () => {
   const tc = w.baseOf(0)!;
   for (const u of w.unitsOf(0)) if (!u.carter) w.units.delete(u.id); // nobody gathering
   tc.stock = { food: 1000, wood: 0, crystal: 0 };
+  const camp = w.addBuilding(0, 'gathering-camp', tc.ox + 8, tc.oy)!;
+  camp.sowing = [];
   run(w, 20 * 60); // the pool of carts gets trained
   expect(w.unitsOf(0).some((u) => u.carter)).toBe(true);
   tc.stock = { food: 0, wood: 0, crystal: 0 };
-  const camp = w.addBuilding(0, 'gathering-camp', tc.ox + 8, tc.oy)!;
-  camp.sowing = [];
   camp.stock = { food: 400, wood: 0, crystal: 15 }; // what villagers dropped there (it keeps 10 crystal for its boost)
   w.enqueue({ player: 0, cmd: { type: 'train', building: tc.id, specId: 'villager' } });
   run(w, 20 * 60);
@@ -108,10 +109,11 @@ describe('supply', () => {
     const w = newWorld();
     const tc = w.baseOf(0)!;
     tc.stock = { food: 1000, wood: 0, crystal: 100 };
+    const b = w.addBuilding(0, 'barracks', tc.ox + 8, tc.oy)!;
     run(w, 20 * 50);
     const carts = w.unitsOf(0).filter((u) => u.carter);
     for (const c of carts.slice(1)) w.units.delete(c.id); // just one cart, so nobody splits the job
-    const b = w.addBuilding(0, 'barracks', tc.ox + 8, tc.oy)!;
+    b.stock = { food: 0, wood: 0, crystal: 0 }; b.queue = [];
     w.enqueue({ player: 0, cmd: { type: 'train', building: b.id, specId: 'maceman' } }); // needs berries and crystal
     let both = false;
     for (let i = 0; i < 20 * 10 && !both; i++) { w.step(); both = carts[0].food > 0 && carts[0].crystal > 0; }
