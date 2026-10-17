@@ -102,7 +102,7 @@ export type Order =
    */
   | { kind: 'cart'; base: number; home: number; from?: number; pinned: boolean; phase: 'load' | 'deliver'; res: ResourceKind };
 
-export type UnitAnim = 'idle' | 'walk' | 'fly' | 'leap' | 'climb' | 'soar' | 'glide' | 'attack' | 'gather' | 'eat' | 'tired';
+export type UnitAnim = 'idle' | 'walk' | 'fly' | 'leap' | 'climb' | 'soar' | 'glide' | 'land' | 'attack' | 'gather' | 'eat' | 'tired';
 
 export interface Unit {
   id: number;
@@ -1103,7 +1103,7 @@ export class World {
     else if ((u.order.kind === 'eatPack' || u.order.kind === 'resupply') && !moved && u.busy) anim = 'eat';
     else if (u.exhausted && !moved) anim = 'tired';
     // in the air: a flight pose pitched to how it's moving: leaping off the ground, climbing, soaring level, or gliding down
-    if (u.airborne) anim = u.vert > 0 ? (u.alt < LAUNCH_HEIGHT ? 'leap' : 'climb') : u.vert < 0 ? 'glide' : 'soar';
+    if (u.airborne) anim = u.vert > 0 ? (u.alt < LAUNCH_HEIGHT ? 'leap' : 'climb') : u.vert < 0 ? (u.alt < 2.5 ? 'land' : 'glide') : 'soar'; // the last few metres down: flaring to land
     if (anim !== u.anim) { u.anim = anim; u.animT = 0; } else u.animT += DT;
 
     if (!u.busy && !moved && u.order.kind !== 'resupply' && u.order.kind !== 'eatPack') {

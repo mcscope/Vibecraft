@@ -228,20 +228,28 @@ const siegeHeron: FenUnit = {
       const t = p.phase * Math.PI * 2;
       const leaping = p.anim === 'leap'; // springing off the ground: legs driving down, body tipped up, wings hauling
       // in the air, pitched to its climb: ~11° up climbing, level soaring, ~17° nose-down gliding in
-      const held = p.anim === 'soar' || p.anim === 'glide'; // wings held out, not beating
-      const pitch = leaping ? 0.38 : p.anim === 'climb' ? 0.2 : p.anim === 'glide' ? -0.3 : 0;
+      const landing = p.anim === 'land'; // flaring to touch down: body up, wings cupped forward as airbrakes, feet out
+      const held = p.anim === 'soar' || p.anim === 'glide' || landing; // wings held out, not beating
+      const pitch = landing ? 0.6 : leaping ? 0.38 : p.anim === 'climb' ? 0.2 : p.anim === 'glide' ? -0.3 : 0;
       const flying = p.anim === 'fly' || leaping || p.anim === 'climb' || held;
       const walking = p.anim === 'walk';
       const attacking = p.anim === 'attack';
       // flight: body level and up off the ground, wings beating slow and deep
       // in the air the body rides low in its own frame (the game lifts the whole bird by its altitude)
-      const lift = leaping ? -0.45 : flying ? -0.8 + Math.sin(t) * 0.05 : 0;
+      const lift = landing ? -0.15 : leaping ? -0.45 : flying ? -0.8 + Math.sin(t) * 0.05 : 0;
       const legLen = 1.15;
       // stilt legs: striding when walking, trailing behind in flight
       for (const z of [1, -1]) {
         const a = walking ? Math.sin(t + (z > 0 ? 0 : Math.PI)) * 0.45 : 0;
         const hip: [number, number, number] = [-0.05, 1.3 + lift, 0.16 * z];
-        if (leaping) {
+        if (landing) {
+          // legs swung forward and down, toes spread to catch the ground
+          const knee: [number, number, number] = [0.3, hip[1] - legLen * 0.45, hip[2]];
+          const foot: [number, number, number] = [0.5, Math.max(0.05, hip[1] - legLen * 0.95), hip[2]];
+          b.limb(hip, knee, 0.045, heronLeg, 0.035);
+          b.limb(knee, foot, 0.035, heronLeg, 0.028);
+          for (const tz of [-0.08, 0, 0.08]) b.limb(foot, [foot[0] + 0.22, foot[1] - 0.03, foot[2] + tz * 1.6], 0.015, heronLeg);
+        } else if (leaping) {
           // springing forward: legs thrust back and down, feet still pushing off the ground behind
           const knee: [number, number, number] = [-0.35, Math.max(0.3, hip[1] * 0.45), hip[2]];
           b.limb(hip, knee, 0.045, heronLeg, 0.035);
@@ -298,7 +306,7 @@ const siegeHeron: FenUnit = {
         // wings: folded along the flanks on the ground, spread and beating in the air
         for (const side of [1, -1]) {
           const spread = flying ? 1 : attacking ? 0.35 : 0;
-          const beat = held ? 0.1 : leaping ? -0.9 + Math.sin(t) * 1.1 : flying ? Math.sin(t) * 0.75 : 0; // a leap hauls the wings high then down hard; soaring holds them out, tips up a touch
+          const beat = landing ? -0.55 : held ? 0.1 : leaping ? -0.9 + Math.sin(t) * 1.1 : flying ? Math.sin(t) * 0.75 : 0; // a leap hauls the wings high then down hard; soaring holds them out, tips up a touch
           if (spread === 0) {
             // folded: the wing lies back along the flank, tilted with the body, dark primaries crossed over the tail
             c.sphere([0.62, 0.24, 0.07], at(-0.22, 1.5, 0.27 * side), heronGrey, [0, 0, tilt]);
@@ -307,7 +315,7 @@ const siegeHeron: FenUnit = {
             continue;
           }
           // spread, it reaches out from the shoulder
-          c.joint(at(0.15, 1.6, 0.3 * side), [beat * side * spread + (1 - spread) * 0.45 * side, -(1 - spread) * 1.4 * side, (1 - spread) * tilt], (wg) => {
+          c.joint(at(0.15, 1.6, 0.3 * side), [beat * side * spread + (1 - spread) * 0.45 * side, -(1 - spread) * 1.4 * side + (landing ? 0.45 * side : 0), (1 - spread) * tilt], (wg) => {
             // a heron's wing: broad and rounded, dark fingered primaries at the tip. Every oval's front edge sits on
             // one line (the leading edge), so they read as one wing; the wing curves down at the wrist when gliding
             // and at the bottom of each downstroke (positive rotation here = tip down).

@@ -25,7 +25,7 @@ export interface Sprite {
 }
 
 /** Animations the engine asks for. Only `idle` is required; others fall back to it. */
-export type ArtAnim = 'idle' | 'walk' | 'fly' | 'leap' | 'climb' | 'soar' | 'glide' | 'attack' | 'gather' | 'eat' | 'tired' | 'die' | 'carryFood' | 'carryWood' | 'carryCrystal';
+export type ArtAnim = 'idle' | 'walk' | 'fly' | 'leap' | 'climb' | 'soar' | 'glide' | 'land' | 'attack' | 'gather' | 'eat' | 'tired' | 'die' | 'carryFood' | 'carryWood' | 'carryCrystal';
 
 export interface AnimArt {
   /**
@@ -131,7 +131,7 @@ export interface MusicSpec {
 // ───────────────────────────── helpers the engine uses ─────────────────────────────
 
 export function anim(art: UnitArt, a: ArtAnim): AnimArt {
-  const flight = a === 'leap' || a === 'climb' || a === 'soar' || a === 'glide';
+  const flight = a === 'leap' || a === 'climb' || a === 'soar' || a === 'glide' || a === 'land';
   return art.anims[a] ?? (flight ? art.anims.fly : undefined) ?? (a.startsWith('carry') || a === 'fly' || flight ? art.anims.walk : undefined) ?? art.anims.idle;
 }
 
