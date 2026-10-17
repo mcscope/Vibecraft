@@ -94,15 +94,10 @@ const bogToad: FenUnit = {
       for (const [x, z] of [[-0.2, 0.3], [0.1, -0.35], [-0.4, -0.1], [0.25, 0.15]]) c.sphere(0.07, [x, 0.98, z], { color: '#4a5a2e', tex: 'leather' }); // warts
       c.sphere([0.36, 0.26, 0.44], [0.62, 0.7, 0], toadSkin); // head
       for (const z of [1, -1]) c.sphere([0.1, 0.1, 0.1], [0.7, 0.92, 0.22 * z], { color: '#d8b84a', rough: 0.3 }); // eyes
-      // a wide mouth full of jagged teeth, gaping open as it lunges
-      const gape = lunge * 0.22;
-      c.box([0.05, 0.05 + gape, 0.62], [0.9, 0.6 - gape / 2, 0], { color: '#2a1410' }); // the dark of the mouth
-      for (let i = 0; i < 11; i++) {
-        const t = -0.95 + (i / 10) * 1.9, x = 0.66 + Math.cos(t) * 0.36, z = Math.sin(t) * 0.44;
-        const len = 0.12 + (i % 2) * 0.07 + (Math.abs(t) < 0.4 ? 0.05 : 0); // longer fangs at the front
-        c.cone(0.038, len, [x, 0.62 - len / 2, z], { color: '#e8dcc0', rough: 0.4 }, [Math.PI, 0, 0], 4); // upper row, pointing down
-        if (i % 2 === 0) c.cone(0.034, len * 0.8, [x - 0.01, 0.58 - gape + len * 0.4, z], { color: '#d8ccaa', rough: 0.4 }, undefined, 4); // lower row, pointing up
-      }
+      // the bite: on the lunge its jaw drops wide open, then snaps shut on the target
+      const gape = Math.sin(Math.min(1, p.phase * 1.6) * Math.PI) * (p.anim === 'attack' ? 1 : 0);
+      c.box([0.05, 0.05 + gape * 0.32, 0.62], [0.92, 0.6 - gape * 0.16, 0], { color: '#5a2420' }); // the pink-dark of its mouth
+      c.joint([0.4, 0.55, 0], [0, 0, -gape * 0.55], (jaw) => jaw.sphere([0.32, 0.1, 0.4], [0.24, -0.04, 0], toadSkin)); // lower jaw
       if (p.armed) c.crystal(0.18, [0.95, 0.75, 0], [0, 0, -1.2]); // crystal-studded jaw
       c.box([0.4, 0.05, 0.5], [-0.05, 1.08, 0], { team: 'primary', tex: 'cloth' });
       c.joint([-0.05, 0.6, 0], [0, 0, 0], (r) => body(r, { ...p, anim: p.anim === 'walk' ? 'idle' : p.anim }, riderLook, fenArm(p, 'jab') * 0.6, (h) => {
@@ -112,13 +107,13 @@ const bogToad: FenUnit = {
   },
 };
 
-const IRON: Mat = { color: '#6a6860', tex: 'metal', metal: 0.35, rough: 0.5 };
+const IRON: Mat = { color: '#9a978c', tex: 'metal', metal: 0.3, rough: 0.5 };
 const BRASS: Mat = { color: '#c0913c', tex: 'metal', metal: 0.45, rough: 0.35 };
 const BONE: Mat = { color: '#d2c6a4', rough: 0.6 };
 const WAX: Mat = { color: '#7a1612', rough: 0.3 };
 const PARCHMENT: Mat = { color: '#d8c8a0', tex: 'cloth' };
 const CHAIN: Mat = { color: '#2a2824', tex: 'metal', metal: 0.8 };
-const hide: Mat = { color: '#6e6c4c', tex: 'leather' };
+const hide: Mat = { color: '#8e8c62', tex: 'leather' };
 const packTortoise: FenUnit = {
   id: 'pack-tortoise',
   name: 'Pack Tortoise',

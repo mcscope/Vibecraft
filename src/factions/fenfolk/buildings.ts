@@ -38,6 +38,15 @@ function thatch(b: ModelBuilder, r: number, h: number, y: number, x = 0, z = 0):
   b.limb([x, y + h, z], [x + r * 0.05, y + h * 1.25, z], r * 0.04, REED); // top-knot
 }
 
+/** The plain layered thatch: three smooth overlapping skirts and a bound top-knot (small buildings). */
+function plainThatch(b: ModelBuilder, r: number, h: number, y: number, x = 0, z = 0): void {
+  b.cone(r * 1.08, h * 0.45, [x, y + h * 0.22, z], REED_DARK, undefined, 14);
+  b.cone(r * 0.85, h * 0.55, [x, y + h * 0.42, z], REED, undefined, 14);
+  b.cone(r * 0.55, h * 0.5, [x, y + h * 0.7, z], REED_DARK, undefined, 12);
+  b.cylinder(r * 0.12, r * 0.16, h * 0.12, [x, y + h * 0.95, z], BRONZE, undefined, 8);
+  b.limb([x, y + h, z], [x + r * 0.05, y + h * 1.25, z], r * 0.04, REED);
+}
+
 /** A crystal lantern hung from a crooked pole. */
 function lantern(b: ModelBuilder, x: number, z: number, h = 1.6): void {
   b.cylinder(0.035, 0.045, h, [x, h / 2, z], WILLOW, undefined, 6);
@@ -119,7 +128,7 @@ export function reedHut(b: ModelBuilder): void {
   stilts(b, 1.6, 1.6, 0.55);
   b.cylinder(0.58, 0.64, 0.6, [0, 0.9, 0], REED_DARK, undefined, 12);
   b.cylinder(0.65, 0.65, 0.04, [0, 0.62, 0], BRONZE, undefined, 12);
-  thatch(b, 0.85, 0.95, 1.15);
+  plainThatch(b, 0.85, 0.95, 1.15);
   b.box([0.05, 0.38, 0.32], [0.62, 0.82, 0], DARK); // door
   b.box([0.35, 0.05, 0.5], [0.85, 0.57, 0], PLANK); // porch
   charms(b, 0.75, 1.15, 0.3);
@@ -165,7 +174,7 @@ export function toadWallow(b: ModelBuilder): void {
   }
   // the saddling platform and its hut
   stilts(b, 1.3, 1.3, 0.6, -0.95, -0.95);
-  thatch(b, 0.85, 0.9, 0.65, -0.95, -0.95);
+  plainThatch(b, 0.85, 0.9, 0.65, -0.95, -0.95);
   for (const z of [-0.2, 0.2]) b.box([0.3, 0.12, 0.25], [-0.2, 0.7, -1.5 + z], { color: '#6a4a2a', tex: 'leather' }); // saddles on a rail
   b.limb([-0.4, 0.75, -1.8], [0.05, 0.75, -1.8], 0.02, WILLOW);
   // two toads: one wallowing, one dozing on the bank
@@ -243,7 +252,7 @@ export function heronPerch(b: ModelBuilder): void {
     b.limb([Math.cos(a) * 0.85, 6.5, Math.sin(a) * 0.85], [Math.cos(a + 0.9) * 0.85, 6.7 + (i % 3) * 0.05, Math.sin(a + 0.9) * 0.85], 0.04, i % 2 ? WILLOW : DARK);
   }
   b.cylinder(0.75, 0.8, 0.18, [0, 6.55, 0], { color: '#5a4a30', tex: 'wood' }, undefined, 14);
-  thatch(b, 0.7, 0.8, 7.2);
+  plainThatch(b, 0.7, 0.8, 7.2);
   for (const [x, z] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]]) b.limb([x, 6.5, z], [x, 7.25, z], 0.035, WILLOW);
   b.limb([-0.3, 6.7, 0], [0.95, 7.35, 0], 0.06, WILLOW, 0.035); // sling-arm
   b.cylinder(0.1, 0.12, 0.14, [0.95, 7.3, 0], BRONZE, undefined, 6);
