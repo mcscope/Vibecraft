@@ -209,7 +209,8 @@ export class Logistics {
       if (!this.w.moveToBuilding(u, src)) return moving();
       const spare = this.spare(src, u), need = this.shortfall(dest, u);
       const homing = dest === base && need[o.res] < 1; // just bringing surplus home
-      for (const r of [o.res, ...RESOURCES.filter((x) => x !== o.res)]) {
+      // the smallest needs first, so a load short of room still brings the little things (a few kilos of crystal) along
+      for (const r of [...RESOURCES].sort((x, y) => (homing ? (x === o.res ? -1 : 1) : need[x] - need[y]))) {
         const want = homing ? (r === o.res ? spare[r] : 0) : need[r] + 0.999;
         const k = Math.floor(Math.min(this.w.freeCapacity(u), want, spare[r]));
         if (k > 0) { src.stock[r] -= k; this.w.carry(u, r, k); }
