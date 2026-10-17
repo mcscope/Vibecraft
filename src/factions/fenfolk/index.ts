@@ -257,19 +257,26 @@ const siegeHeron: FenUnit = {
           for (const tz of [-0.08, 0, 0.08]) b.limb(foot, [foot[0] + 0.22, 0.02, foot[2] + tz * 1.5], 0.015, heronLeg); // splayed toes
         }
       }
-      b.joint([leaping ? 0.3 : 0, lift, 0], [0, 0, flying ? pitch : 0.25], (c) => {
+      b.joint([leaping ? 0.3 : 0, lift, 0], [0, 0, flying ? pitch : 0], (c) => {
         // body, pale breast plumes and a long tail
-        // body: an egg, slim and rounded, fuller at the breast and tapering to the tail
-        c.sphere([0.55, 0.29, 0.29], [0.08, 1.45, 0], heronGrey);
-        c.sphere([0.42, 0.22, 0.22], [-0.38, 1.47, 0], heronGrey);
-        c.sphere([0.36, 0.22, 0.24], [0.24, 1.36, 0], heronPale);
-        for (const z of [-0.1, 0, 0.1]) c.box([0.5, 0.03, 0.12], [-0.85, 1.48, z], heronDark, [0, z * 2, 0.08]);
+        // body: an egg, slim and rounded, fuller at the breast and tapering to the tail. On the ground a heron holds
+        // it tilted steeply up (tail low), leaning forward more as it walks; in the air it lies level.
+        const tilt = flying ? 0 : walking ? 0.45 : 0.8;
+        const hip: [number, number] = [0, 1.45];
+        const at = (x: number, y: number, z: number): [number, number, number] => {
+          const dx = x - hip[0], dy = y - hip[1];
+          return [hip[0] + dx * Math.cos(tilt) - dy * Math.sin(tilt), hip[1] + dx * Math.sin(tilt) + dy * Math.cos(tilt), z];
+        };
+        c.sphere([0.55, 0.29, 0.29], at(0.08, 1.45, 0), heronGrey, [0, 0, tilt]);
+        c.sphere([0.42, 0.22, 0.22], at(-0.38, 1.47, 0), heronGrey, [0, 0, tilt]);
+        c.sphere([0.36, 0.22, 0.24], at(0.24, 1.36, 0), heronPale, [0, 0, tilt]);
+        for (const z of [-0.1, 0, 0.1]) c.box([0.5, 0.03, 0.12], at(-0.85, 1.48, z), heronDark, [0, z * 2, 0.08 + tilt]);
         // neck: an S standing tall, pulled back onto the shoulders in flight (herons fly with the neck tucked)
         const dip = attacking ? Math.sin(Math.min(1, p.phase * 1.5) * Math.PI) * 0.4 : 0;
         const n1: [number, number, number] = flying ? [0.6, 1.62, 0] : [0.62, 1.95 - dip * 0.3, 0];
         const n2: [number, number, number] = flying ? [0.45, 1.85, 0] : [0.5, 2.45 - dip * 0.5, 0];
         const head: [number, number, number] = flying ? [0.72, 1.92, 0] : [0.72 + dip * 0.3, 2.62 - dip * 0.7, 0];
-        c.limb([0.55, 1.55, 0], n1, 0.11, heronPale, 0.08);
+        c.limb(at(0.5, 1.55, 0), n1, 0.11, heronPale, 0.08); // the neck rises from the front of the breast
         c.limb(n1, n2, 0.08, heronPale, 0.07);
         c.limb(n2, head, 0.07, heronPale, 0.06);
         c.sphere([0.15, 0.12, 0.12], head, heronPale);
@@ -292,8 +299,15 @@ const siegeHeron: FenUnit = {
         for (const side of [1, -1]) {
           const spread = flying ? 1 : attacking ? 0.35 : 0;
           const beat = held ? 0.1 : leaping ? -0.9 + Math.sin(t) * 1.1 : flying ? Math.sin(t) * 0.75 : 0; // a leap hauls the wings high then down hard; soaring holds them out, tips up a touch
-          // folded (standing), the wing swings back along the body and lies against the flank; spread, it reaches out
-          c.joint([0.15, 1.6, 0.3 * side], [beat * side * spread + (1 - spread) * 0.45 * side, -(1 - spread) * 1.4 * side, 0], (wg) => {
+          if (spread === 0) {
+            // folded: the wing lies back along the flank, tilted with the body, dark primaries crossed over the tail
+            c.sphere([0.62, 0.24, 0.07], at(-0.22, 1.5, 0.27 * side), heronGrey, [0, 0, tilt]);
+            c.sphere([0.4, 0.12, 0.05], at(-0.62, 1.44, 0.25 * side), heronDark, [0, 0, tilt]);
+            c.sphere([0.18, 0.05, 0.04], at(-0.25, 1.62, 0.31 * side), { team: 'primary', tex: 'cloth' }, [0, 0, tilt]); // war-paint stripe
+            continue;
+          }
+          // spread, it reaches out from the shoulder
+          c.joint(at(0.15, 1.6, 0.3 * side), [beat * side * spread + (1 - spread) * 0.45 * side, -(1 - spread) * 1.4 * side, (1 - spread) * tilt], (wg) => {
             // a heron's wing: broad and rounded, dark fingered primaries at the tip. Every oval's front edge sits on
             // one line (the leading edge), so they read as one wing; the wing curves down at the wrist when gliding
             // and at the bottom of each downstroke (positive rotation here = tip down).
