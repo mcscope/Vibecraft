@@ -29,6 +29,37 @@ export interface UnitBakeOptions {
   fly?: boolean;
 }
 
+/**
+ * Finish a baked image the way RTS sprites are: a touch more contrast and
+ * colour on the model, and a thin dark outline around its silhouette (so it
+ * reads against any ground). Shadows (semi-transparent) are left alone.
+ */
+function polish(ctx: CanvasRenderingContext2D, w: number, h: number): void {
+  const img = ctx.getImageData(0, 0, w, h), d = img.data;
+  const solid = (x: number, y: number) => x >= 0 && y >= 0 && x < w && y < h && d[(y * w + x) * 4 + 3] > 200;
+  const edge: number[] = [];
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = (y * w + x) * 4;
+    if (d[i + 3] > 200) {
+      // contrast and saturation
+      const r = d[i], g = d[i + 1], b = d[i + 2], l = (r + g + b) / 3;
+      for (let c = 0; c < 3; c++) {
+        let v = d[i + c];
+        v = l + (v - l) * 1.12; // saturation
+        v = (v - 128) * 1.07 + 128; // contrast
+        d[i + c] = v < 0 ? 0 : v > 255 ? 255 : v;
+      }
+    } else if (d[i + 3] < 120 && (solid(x - 1, y) || solid(x + 1, y) || solid(x, y - 1) || solid(x, y + 1))) edge.push(i);
+  }
+  for (const i of edge) {
+    // a dark outline pixel, blended over whatever (shadow or nothing) was there
+    const a = d[i + 3] / 255, k = 0.6;
+    d[i] = d[i] * a * (1 - k) + 22 * k; d[i + 1] = d[i + 1] * a * (1 - k) + 16 * k; d[i + 2] = d[i + 2] * a * (1 - k) + 12 * k;
+    d[i + 3] = Math.max(d[i + 3], 150);
+  }
+  ctx.putImageData(img, 0, 0);
+}
+
 /** Game octants (0 = +x, counting toward +y), one sheet row each. */
 const BAKED_DIRS = [0, 1, 2, 3, 4, 5, 6, 7];
 
@@ -56,16 +87,25 @@ export class Baker {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.localClippingEnabled = true; // construction / collapse looks
 
-    this.scene.add(new THREE.HemisphereLight('#d6e4ff', '#5d5236', 1.25));
-    this.sun = new THREE.DirectionalLight('#fff0d6', 2.8);
+    // a three-light rig: a warm key sun (upper left, casting crisp shadows), a cool fill from the
+    // opposite side so shaded faces read blue rather than mud, and a rim light from behind that
+    // picks out silhouettes and top edges; a dim sky/ground bounce under it all
+    this.scene.add(new THREE.HemisphereLight('#cfdcff', '#4a3f2a', 0.75));
+    this.sun = new THREE.DirectionalLight('#ffe6c4', 3.1);
     this.sun.position.set(-7, 9, -2.2);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(1024, 1024);
-    this.sun.shadow.bias = -0.0004;
-    this.sun.shadow.normalBias = 0.02;
-    this.sun.shadow.radius = 3;
+    this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.shadow.bias = -0.0003;
+    this.sun.shadow.normalBias = 0.015;
+    this.sun.shadow.radius = 2;
     this.scene.add(this.sun);
     this.scene.add(this.sun.target);
+    const fill = new THREE.DirectionalLight('#a9c0ff', 0.7);
+    fill.position.set(7, 4, 6);
+    this.scene.add(fill);
+    const rim = new THREE.DirectionalLight('#fff6e8', 1.1);
+    rim.position.set(-4, 6, -9);
+    this.scene.add(rim);
 
     const ground = new THREE.Mesh(new THREE.PlaneGeometry(60, 60), new THREE.ShadowMaterial({ opacity: 0.42 }));
     ground.rotation.x = -Math.PI / 2;
@@ -164,6 +204,7 @@ export class Baker {
     this.clearStage();
     build(new Builder(team, this.stage, opts));
     this.shoot(ext, canvas.getContext('2d')!, 0, 0, r, h);
+    polish(canvas.getContext('2d')!, canvas.width, canvas.height);
     this.ground.visible = true;
     return { img: canvas, sx: 0, sy: 0, sw: canvas.width, sh: canvas.height, ax: ext.left * this.q, ay: ext.top * this.q, q: this.q };
   }
@@ -267,6 +308,7 @@ export class Baker {
       this.renderer.setScissorTest(false);
       ctx.drawImage(this.renderer.domElement, 0, 0, nc * cw, nr * chh, f0 * fw, r0 * fh, nc * fw, nr * fh);
       }
+      polish(ctx, grid.width, grid.height);
       // crop each cell to its alpha bounds
       const data = ctx.getImageData(0, 0, grid.width, grid.height).data;
       const list: Crop[] = [];
