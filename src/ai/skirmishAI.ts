@@ -17,7 +17,10 @@ export class SkirmishAI {
   private trainIndex = new Map<number, number>();
   private plan: Array<[string, number]> | null = null;
   private lastBelt = -Infinity;
-  /** Enemy soldiers and their kinds (for picking counters). */
+  /** Our scout's id, and when the next one goes. */
+  private scout: number | null = null;
+  private nextScout = 0;
+  /** Enemy soldiers we've seen, and their kinds (for picking counters). */
   private seenFoes = new Map<number, { kg: number; flier: boolean; charger: boolean }>();
   private calmSince = -1;
 
@@ -171,11 +174,10 @@ export class SkirmishAI {
     // what the enemy fields: shares of its army that are heavy chargers (melee, 120 kg+) and fliers
     const threat = { chargers: 0, fliers: 0 };
     {
-      // the enemy's army composition. NOTE: this still sees through fog (the AI doesn't scout yet);
-      // fog-limited knowledge was tried and left the Meadowfolk AI unable to counter (GAMEPLAY.md)
+      // the enemy's army composition, as far as we've seen it (scouting below keeps it fresh)
       for (const e of w.units.values()) {
         if (e.owner === this.player || w.players[e.owner]?.neutral || !e.stats.canAttack || e.specId === w.factionOf(e.owner).workerId) continue;
-        this.seenFoes.set(e.id, { kg: e.stats.mass, flier: !!e.stats.flight, charger: !e.throws && !e.stats.flight && e.stats.mass >= 120 });
+        if (w.vision(this.player, e.x, e.y) === 2) this.seenFoes.set(e.id, { kg: e.stats.mass, flier: !!e.stats.flight, charger: !e.throws && !e.stats.flight && e.stats.mass >= 120 });
       }
       let total = 0;
       for (const [id, f] of this.seenFoes) {
@@ -262,7 +264,7 @@ export class SkirmishAI {
         if ((e.x - cx) ** 2 + (e.y - cy) ** 2 < 16 * 16) { threat = e; break; }
       }
       if (threat) {
-        const defenders = army.filter((u) => !this.attacking.has(u.id) || u.order.kind === 'idle').map((u) => u.id);
+        const defenders = army.filter((u) => u.id !== this.scout && (!this.attacking.has(u.id) || u.order.kind === 'idle')).map((u) => u.id);
         if (defenders.length) out.push({ type: 'attackMove', units: defenders, x: threat.x, y: threat.y });
       }
     }
@@ -281,7 +283,7 @@ export class SkirmishAI {
 
     // ── Offense: attack in growing waves.
     for (const id of this.attacking) if (!w.units.has(id)) this.attacking.delete(id);
-    const home = army.filter((u) => !this.attacking.has(u.id));
+    const home = army.filter((u) => !this.attacking.has(u.id) && u.id !== this.scout);
     const fit = home.filter((u) => u.cal > u.stats.maxCalories * 0.6 && w.armed(u));
     const target = this.enemyTarget(w);
     if (fit.length >= this.waveSize && target) {
@@ -289,6 +291,25 @@ export class SkirmishAI {
       for (const u of fit) this.attacking.add(u.id);
       this.waveSize = Math.min(16, this.waveSize + 2);
     }
+    // ── Scouting: every 4 minutes from minute 2, our fastest soldier (a worker if we have none)
+    //    runs to the enemy's side of the map and back, so we know what they field.
+    if (tc && minutes >= 2) {
+      const scout = this.scout !== null ? w.units.get(this.scout) : undefined;
+      if (!scout && w.tick >= this.nextScout) {
+        const pool = army.filter((u) => w.armed(u) && !this.attacking.has(u.id));
+        const pick = (pool.length ? pool : workers.filter((u) => u.order.kind === 'gather')).sort((a, b) => b.stats.speed - a.stats.speed)[0];
+        const there = this.enemyTarget(w);
+        if (pick && there) { out.push({ type: 'move', units: [pick.id], x: there[0], y: there[1] }); this.scout = pick.id; }
+      } else if (scout) {
+        const there = this.enemyTarget(w);
+        const arrived = !there || Math.hypot(scout.x - there[0], scout.y - there[1]) < 6 || scout.order.kind === 'idle';
+        if (arrived) {
+          out.push({ type: 'move', units: [scout.id], x: tc.ox + tc.size / 2, y: tc.oy + tc.size + 2 });
+          this.scout = null; this.nextScout = w.tick + TICK_RATE * 240;
+        }
+      } else if (this.scout !== null) { this.scout = null; this.nextScout = w.tick + TICK_RATE * 240; } // died: try again later
+    }
+
     // ── Retreat: a wave that's clearly outmatched where it stands falls back home to regroup
     //    (under the garrison's fire) instead of dying to the last unit.
     const wave = army.filter((u) => this.attacking.has(u.id));
