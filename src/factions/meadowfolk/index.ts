@@ -119,7 +119,7 @@ const pikeman: MeadowUnit = {
   model(b, p) {
     const look: HumanLook = {
       skin: '#c49270', hair: '#4a3020', head: 'helmet', scale: 1.0, bulk: 1.0, tabard: true,
-      tunic: { color: '#7a6a52', tex: 'leather' }, trousers: { color: '#4a4038', tex: 'cloth' }, boots: LEATHER,
+      tunic: { color: '#a08a62', tex: 'leather' }, trousers: { color: '#6a5a44', tex: 'cloth' }, boots: LEATHER,
     };
     human(b, p, look, armAngle(p) * 0.4, (h) => {
       if (!p.armed) return;
