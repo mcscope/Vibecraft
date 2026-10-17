@@ -12,8 +12,9 @@ describe('physics', () => {
 
   test('damage per second scales with what you pay for', () => {
     // A cheap unit cannot out-damage an expensive one per unit of food by more than a small margin.
-    const plain = meadowfolk.units.filter((s) => !s.role && (s.refinement ?? 1) === 1 && derive(s).canAttack);
-    const ratios = plain.map((s) => { const d = derive(s); return d.dps / d.foodCost; });
+    // (per the body's unrefined price: refinement is a discount bought with capital, not part of the body)
+    const plain = meadowfolk.units.filter((s) => !s.role && derive(s).canAttack);
+    const ratios = plain.map((s) => { const d = derive(s); return d.dps / (d.foodCost * d.refinement); });
     expect(Math.max(...ratios) / Math.min(...ratios)).toBeLessThan(4);
   });
 

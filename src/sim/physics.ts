@@ -275,12 +275,18 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   // a thrown crystal flies alone; a blow swings the striking limb with the weapon (the arm behind a mace, a great
   // beast's head and forequarters behind its bite), as fast as limbs move and as hard as the muscle can put into it
   const strikeMass = throwing ? weaponMass : weaponMass + K.limbShare * mass;
-  const crystalVelocity = Math.min(limbSpeed, Math.sqrt((2 * maxAttackEnergy) / strikeMass));
+  // a sling is a lever: its cord lengthens the throwing arm (~0.4 of the body's height), so the stone leaves faster in
+  // proportion; but never faster than the muscle's energy allows (√(2E/m)), however long the cord
+  const sling = throwing && atk?.sling ? Math.max(0, Math.min(bodyHeight(mass), atk.sling)) : 0;
+  const arm = 0.4 * bodyHeight(mass);
+  const crystalVelocity = Math.min(limbSpeed * (1 + sling / arm), Math.sqrt((2 * maxAttackEnergy) / strikeMass));
   const attackEnergy = 0.5 * strikeMass * crystalVelocity * crystalVelocity;
+  // and it has to be spun up first: about a turn of the arm and cord before release
+  const windUp = sling ? (2 * Math.PI * (arm + sling)) / crystalVelocity : 0;
   const damage = canAttack ? attackEnergy * (throwing ? K.throwEfficiency : K.strikeEfficiency) * K.damageScale : 0;
   const attackCalories = attackEnergy / K.muscleEfficiency;
   const power = K.powerPerMuscleKg * muscleMass;
-  const cooldown = Math.max(K.minCooldown, attackEnergy / power) + (throwing ? K.throwReload : 0); // a heavier weapon takes longer to bring round
+  const cooldown = Math.max(K.minCooldown, attackEnergy / power) + (throwing ? K.throwReload : 0) + windUp; // a heavier weapon takes longer to bring round
 
   const sizeRel = Math.cbrt(mass / 70);
   const radius = clamp(0.25 * sizeRel, 0.15, 0.8);

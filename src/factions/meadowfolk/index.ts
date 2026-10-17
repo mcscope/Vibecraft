@@ -58,7 +58,7 @@ const slinger: MeadowUnit = {
   mass: 32,
   refinement: 1.42, // as refined as its building affords
   physique: { muscle: 0.5, frame: 0.25, reserve: 0.25 },
-  attack: { style: 'throw', crystalMass: 1.2, ammo: 6 },
+  attack: { style: 'throw', crystalMass: 0.3, ammo: 12, sling: 1.0 }, // light stones: the sling's leverage pays on them
   model(b, p) {
     const look: HumanLook = {
       skin: '#b9875f', hair: '#2b1d14', head: 'hood', scale: 0.88, bulk: 0.9, tabard: true,

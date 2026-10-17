@@ -30,6 +30,8 @@ export interface AttackSpec {
   crystalMass: number;
   /** Throwers only: how many crystals the unit spawns with / restocks to. */
   ammo?: number;
+  /** Throwers only: metres of sling cord (0 up to its body's height). A lever: the stone leaves faster in proportion to arm + cord, up to what the muscle's energy allows, but each throw has to be spun up first (sim/physics.ts). */
+  sling?: number;
   /** Strikers only: metres of wooden shaft (0–3), a spear or pike. Held a quarter of the way along, ¾ of it adds reach; its wood (1.5 kg/m) is priced like body mass and swung with the crystal, so it hits harder and recovers slower. Like every blow, a strike also carries the collision energy of the bodies closing (sim/world.ts). */
   shaft?: number;
 }

@@ -31,7 +31,7 @@ const fenling: FenUnit = {
   description: 'Small, tireless marsh folk. Every fenling gathers, builds and slings crystal stones; alone they are frail, together a flood.',
   mass: 32,
   physique: { muscle: 0.5, frame: 0.22, reserve: 0.28 },
-  attack: { style: 'throw', crystalMass: 1, ammo: 3 },
+  attack: { style: 'throw', crystalMass: 0.3, ammo: 6, sling: 0.6 }, // light stones: the sling's leverage pays on them
   workRefinement: 1.4, // nimble: gathers, wades and carries 40% more
   gait: { hop: 0.76, period: 0.7 }, // quick little bounds (the rig's hop is airborne 0.16–0.92)
   model(b, p) {
