@@ -222,7 +222,7 @@ export class Baker {
     const cw = Math.ceil(fw * this.ss), chh = Math.ceil(fh * this.ss);
     const rows = BAKED_DIRS.length;
     const ax0 = ext.left * this.q, ay0 = ext.top * this.q;
-    type Crop = { src: HTMLCanvasElement; x: number; y: number; w: number; h: number; ax: number; ay: number; dx: number; dy: number };
+    type Crop = { src: HTMLCanvasElement; x: number; y: number; w: number; h: number; ax: number; ay: number; dx: number; dy: number; page?: number };
     const crops = new Map<BakedAnim, Crop[]>();
     this.aim(ext, r, h);
     for (const anim of anims) {
@@ -290,30 +290,38 @@ export class Baker {
       await new Promise((res) => setTimeout(res, 0));
     }
 
-    // shelf-pack all crops, tallest first
+    // shelf-pack all crops, tallest first, onto pages no bigger than a GPU texture
+    // can hold (a huge body's frames overflow one page and would draw as a black box)
     const all = [...crops.values()].flat();
-    const MAXW = 2048, PAD = 2;
-    let cx = 0, cy = 0, shelf = 0, width = 0;
+    const MAXW = 2048, MAXH = 4096, PAD = 2;
+    const pages: Array<{ w: number; h: number }> = [{ w: 0, h: 0 }];
+    let cx = 0, cy = 0, shelf = 0;
     for (const c of [...all].sort((a, b) => b.h - a.h)) {
       if (cx + c.w > MAXW) { cx = 0; cy += shelf + PAD; shelf = 0; }
-      c.dx = cx; c.dy = cy;
+      if (cy + c.h > MAXH && cy > 0) { pages.push({ w: 0, h: 0 }); cx = 0; cy = 0; shelf = 0; }
+      const pg = pages.length - 1;
+      c.dx = cx; c.dy = cy; c.page = pg;
       cx += c.w + PAD;
       shelf = Math.max(shelf, c.h);
-      width = Math.max(width, cx);
+      pages[pg].w = Math.max(pages[pg].w, cx);
+      pages[pg].h = Math.max(pages[pg].h, cy + shelf);
     }
-    const atlas = document.createElement('canvas');
-    atlas.width = Math.max(1, width);
-    atlas.height = Math.max(1, cy + shelf);
-    const actx = atlas.getContext('2d')!;
-    for (const c of all) actx.drawImage(c.src, c.x, c.y, c.w, c.h, c.dx, c.dy, c.w, c.h);
-    // GPU-resident bitmap: plain canvases get re-uploaded on every draw
-    const img = await createImageBitmap(atlas);
+    const imgs: ImageBitmap[] = [];
+    for (let pg = 0; pg < pages.length; pg++) {
+      const atlas = document.createElement('canvas');
+      atlas.width = Math.max(1, pages[pg].w);
+      atlas.height = Math.max(1, pages[pg].h);
+      const actx = atlas.getContext('2d')!;
+      for (const c of all) if (c.page === pg) actx.drawImage(c.src, c.x, c.y, c.w, c.h, c.dx, c.dy, c.w, c.h);
+      // GPU-resident bitmap: plain canvases get re-uploaded on every draw
+      imgs.push(await createImageBitmap(atlas));
+    }
     const q = this.q;
     const out: Partial<Record<BakedAnim, AnimArt>> = {};
     for (const [anim, list] of crops) {
       const n = FRAMES[anim];
       const frames: Sprite[][] = [];
-      for (let di = 0; di < rows; di++) frames.push(list.slice(di * n, di * n + n).map((c) => ({ img, sx: c.dx, sy: c.dy, sw: c.w, sh: c.h, ax: c.ax, ay: c.ay, q })));
+      for (let di = 0; di < rows; di++) frames.push(list.slice(di * n, di * n + n).map((c) => ({ img: imgs[c.page ?? 0], sx: c.dx, sy: c.dy, sw: c.w, sh: c.h, ax: c.ax, ay: c.ay, q })));
       out[anim] = { frames, fps: FPS[anim] };
     }
     return { height: (h * Math.cos(Math.PI / 6)) * PX_PER_UNIT, anims: out as UnitArt['anims'] };
