@@ -236,6 +236,20 @@ export interface ResourceNode {
 /** Where a flier will be (m up) after `t` seconds at its current climb or dive: a throw at it is aimed there. */
 const leadAlt = (u: Unit, t: number): number => Math.max(0.3, Math.min(u.stats.flyHeight, u.alt + u.vz * t));
 
+/**
+ * Energy (J) in a collision between `u` and what it strikes: ½·μ·v², with v the speed the two
+ * close at along the line between them (1 tile = 1 m) and μ = m₁m₂/(m₁+m₂) the reduced mass
+ * (a building doesn't move: μ is the striker's mass). Zero when they're drawing apart.
+ */
+function collisionEnergy(u: Unit, t: Unit | null, tx: number, ty: number): number {
+  const dx = tx - u.x, dy = ty - u.y, d = Math.hypot(dx, dy) || 1;
+  const rvx = u.vx - (t?.vx ?? 0), rvy = u.vy - (t?.vy ?? 0);
+  const closing = (rvx * dx + rvy * dy) / d;
+  if (closing <= 0) return 0;
+  const mu = t ? (u.stats.mass * t.stats.mass) / (u.stats.mass + t.stats.mass) : u.stats.mass;
+  return 0.5 * mu * closing * closing;
+}
+
 export interface Projectile {
   id: number;
   owner: number;
@@ -1320,14 +1334,9 @@ export class World {
       };
       this.projectiles.set(p.id, p);
     } else {
-      // braced: a longer weapon meeting a melee attacker charging in turns its momentum against it
-      let impale = 0;
-      if (tu && !tu.throws && tu.stats.range < wpn.range - 0.2) {
-        const dx = u.x - tu.x, dy = u.y - tu.y, d = Math.hypot(dx, dy) || 1;
-        const closing = Math.max(0, (tu.vx * dx + tu.vy * dy) / d); // tiles/s toward us = m/s (1 tile = 1 m)
-        impale = 0.5 * tu.stats.mass * closing * closing * K.braceShare * K.strikeEfficiency * K.damageScale;
-      }
-      this.damage(targetId, wpn.damage + impale, tx, ty);
+      // the blow carries the collision too: ½·μ·v² of the two bodies' closing speed, whoever is moving
+      // (a charge onto a set point, or a charger's own weapon, hits as hard as the bodies meet)
+      this.damage(targetId, wpn.damage + collisionEnergy(u, tu ?? null, tx, ty) * K.strikeEfficiency * K.damageScale, tx, ty);
     }
     return true;
   }

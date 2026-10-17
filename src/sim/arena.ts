@@ -79,10 +79,15 @@ export const arenaScore = (w: World, A: ArenaSide, B: ArenaSide) => strength(w, 
 
 export const fightOver = (w: World, A: ArenaSide, B: ArenaSide, ticks: number) => !alive(w, A) || !alive(w, B) || ticks >= ARENA_SECONDS * TICK_RATE;
 
-/** Run one fight to the end, headless; the score (+ = a wins). */
-export function runFight(a: ArenaEntry, b: ArenaEntry, budget: number): number {
+/** One fight to the end, headless, `a` on the left; the score (+ = a wins). */
+function fightOnce(a: ArenaEntry, b: ArenaEntry, budget: number): number {
   const w = new World({ seed: 1, scenario: arenaScenario(2), players: [{ name: 'A', faction: a.faction }, { name: 'B', faction: b.faction }] });
   const [A, B] = stageFight(w, { owner: 0, specId: a.id }, { owner: 1, specId: b.id }, budget);
   for (let t = 0; !fightOver(w, A, B, t); t++) w.step();
   return arenaScore(w, A, B);
+}
+
+/** The fight run both ways round (each side once on the left) and averaged, so formation and side don't decide it. + = a wins. */
+export function runFight(a: ArenaEntry, b: ArenaEntry, budget: number): number {
+  return (fightOnce(a, b, budget) - fightOnce(b, a, budget)) / 2;
 }

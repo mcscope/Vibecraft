@@ -86,8 +86,6 @@ export const K = {
   armourFloor: 0.15,
   /** kg of wood per metre of spear shaft. */
   shaftKgPerM: 1.5,
-  /** Share of a charging attacker's kinetic energy a braced longer weapon turns into damage. */
-  braceShare: 0.5,
 } as const;
 
 export interface DerivedStats {
@@ -211,17 +209,19 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
 
   const limbSpeed = K.limbSpeedBase * Math.pow(mass / 70, 0.1) * Math.sqrt(muscleRel);
   const maxAttackEnergy = K.energyPerMuscleKg * muscleMass;
-  const crystalVelocity = Math.min(limbSpeed, Math.sqrt((2 * maxAttackEnergy) / crystalMass));
-  const attackEnergy = 0.5 * crystalMass * crystalVelocity * crystalVelocity;
+  // a striker swings its whole weapon: the crystal and any wooden shaft it's mounted on
+  const shaft = !throwing && atk?.shaft ? Math.max(0, Math.min(3, atk.shaft)) : 0;
+  const weaponMass = crystalMass + shaft * K.shaftKgPerM;
+  const crystalVelocity = Math.min(limbSpeed, Math.sqrt((2 * maxAttackEnergy) / weaponMass));
+  const attackEnergy = 0.5 * weaponMass * crystalVelocity * crystalVelocity;
   const damage = canAttack ? attackEnergy * (throwing ? K.throwEfficiency : K.strikeEfficiency) * K.damageScale : 0;
   const attackCalories = attackEnergy / K.muscleEfficiency;
   const power = K.powerPerMuscleKg * muscleMass;
-  const shaft = !throwing && atk?.shaft ? Math.max(0, Math.min(3, atk.shaft)) : 0;
-  const cooldown = Math.max(K.minCooldown, attackEnergy / power) + (throwing ? K.throwReload : 0) + shaft * 0.08; // a long pole swings slower
+  const cooldown = Math.max(K.minCooldown, attackEnergy / power) + (throwing ? K.throwReload : 0); // a heavier weapon takes longer to bring round
 
   const sizeRel = Math.cbrt(mass / 70);
   const radius = clamp(0.25 * sizeRel, 0.15, 0.8);
-  const reach = radius + 0.35 + 0.1 * Math.cbrt(crystalMass) + shaft / 2; // a spear's shaft: 2 m is one more tile
+  const reach = radius + 0.35 + 0.1 * Math.cbrt(crystalMass) + shaft * 0.75; // a shaft held a quarter of the way along: ¾ of it reaches forward (1 tile = 1 m)
   const range = throwing
     ? Math.min(K.maxThrowRange, (crystalVelocity * crystalVelocity) / K.gravity)
     : reach;
