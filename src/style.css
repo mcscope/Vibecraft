@@ -449,3 +449,6 @@ button.bell.on b { color: #ff8a7a; }
 #chat.open .chat-line.old { opacity: 0.75; }
 #chat .chat-input { display: none; }
 #chat.open .chat-input { display: block; }
+
+/* technology flavour text */
+.flavor { font-style: italic; color: var(--dim); border-left: 2px solid var(--bronze); padding-left: 8px; margin: 6px 0; }

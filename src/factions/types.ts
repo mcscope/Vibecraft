@@ -170,6 +170,8 @@ export interface TechSpec {
   id: string;
   name: string;
   description: string;
+  /** A line of flavour text, shown in italics (no rules in it). */
+  flavor?: string;
   unit: string;
   /** Refinement added. */
   refinement: number;

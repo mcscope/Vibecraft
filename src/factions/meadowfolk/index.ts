@@ -285,17 +285,40 @@ export const buildings: MeadowBuilding[] = [
 
 // Each line has three levels; each level must follow the one before (the engine
 // prices it from where the last left off, so deeper levels cost more).
-const level = (base: TechSpec, n: 1 | 2 | 3): TechSpec => ({
+const level = (base: TechSpec, n: 1 | 2 | 3, flavor: [string, string, string]): TechSpec => ({
   ...base,
   id: n === 1 ? base.id : `${base.id}-${n}`,
   name: n === 1 ? base.name : `${base.name} ${n === 2 ? 'II' : 'III'}`,
+  flavor: flavor[n - 1],
 });
-const tools: TechSpec = { id: 'villager-tools', name: 'Better Tools', description: 'Villagers gather, walk and carry 30% more (work refinement +0.3).', unit: 'villager', refinement: 0.3, channel: 'work' };
-const sling: TechSpec = { id: 'sling-drills', name: 'Sling Drills', description: 'Slingers +0.4 refinement: cheaper to train.', unit: 'slinger', refinement: 0.4 };
-const mail: TechSpec = { id: 'mail-hardening', name: 'Hardened Mail', description: 'Crystal Macemen +0.4 refinement: cheaper to train.', unit: 'maceman', refinement: 0.4 };
-const breeding: TechSpec = { id: 'lynx-breeding', name: 'Lynx Breeding', description: 'Lynx Lancers +0.3 refinement: cheaper to train.', unit: 'lynx', refinement: 0.3 };
+const tools: TechSpec = { id: 'villager-tools', name: 'Better Tools', description: 'You buy better tools for every villager, the ones you have and the ones to come: they gather, walk and carry 30% more (work refinement +0.3).', unit: 'villager', refinement: 0.3, channel: 'work' };
+const sling: TechSpec = { id: 'sling-drills', name: 'Sling Drills', description: 'You buy a drill-yard\'s know-how: slingers train for less (refinement +0.4, so each costs its body\'s price ÷ refinement). The same sling, cheaper hands.', unit: 'slinger', refinement: 0.4 };
+const mail: TechSpec = { id: 'mail-hardening', name: 'Hardened Mail', description: 'You buy the forge\'s craft: Crystal Macemen train for less (refinement +0.4). Same mace, same mail, cheaper to put in the field.', unit: 'maceman', refinement: 0.4 };
+const breeding: TechSpec = { id: 'lynx-breeding', name: 'Lynx Breeding', description: 'You buy bloodlines: Lynx Lancers train for less (refinement +0.3). The cats are no bigger; there are just more of them.', unit: 'lynx', refinement: 0.3 };
+const FLAVOR: Record<string, [string, string, string]> = {
+  'villager-tools': [
+    '"A good hoe is half the harvest." — Meadow saying',
+    '"My grandmother broke her back on this field. I\'ll break mine on a better one." — Wenna, plough-wright',
+    'When the iron is good enough, the work starts singing.',
+  ],
+  'sling-drills': [
+    'Whirl, release, and pray the wind is your friend.',
+    '"Any shepherd can hit a wolf. A slinger hits the wolf\'s eye." — Drillmaster Hob',
+    'They practise until the stone leaves the pouch before the thought leaves the head.',
+  ],
+  'mail-hardening': [
+    '"Quench it in cold spring water and it remembers the winter." — Forge-mother Edda',
+    'A thousand rings, each one a promise to come home.',
+    'The maces got heavier. The macemen did not notice.',
+  ],
+  'lynx-breeding': [
+    'Gentle with the kittens, they say. The kittens are not gentle with anyone.',
+    '"Feed it well, ride it often, and never, ever turn your back on it at supper." — Den-keeper Rowe',
+    'Bred for silence, for spring, and for the moment the shield wall breaks.',
+  ],
+};
 
-const techs: TechSpec[] = [tools, sling, mail, breeding].flatMap((t) => [level(t, 1), level(t, 2), level(t, 3)]);
+const techs: TechSpec[] = [tools, sling, mail, breeding].flatMap((t) => [level(t, 1, FLAVOR[t.id]), level(t, 2, FLAVOR[t.id]), level(t, 3, FLAVOR[t.id])]);
 
 export const units: MeadowUnit[] = [villager, slinger, maceman, lynx, hurlhorn, mule];
 

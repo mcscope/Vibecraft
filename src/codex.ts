@@ -283,6 +283,7 @@ function techDetail(t: TechSpec): string {
     <div class="dhead"><h2>${esc(t.name)}</h2><code>${t.id}</code></div>
     ${u ? `<div class="hero small">${img('unit', u.id, 140)}</div>` : ''}
     <p class="desc">${esc(t.description)}</p>
+    ${t.flavor ? `<p class="flavor">${esc(t.flavor)}</p>` : ''}
     <h3>Effect</h3>
     <ul class="abil"><li><b>${work ? 'Work' : 'Combat'} refinement +${t.refinement}</b> for ${u ? link('unit', u.id, u.name) : t.unit}: ${f1(from, 2)}× → ${f1(from + t.refinement, 2)}×. ${work ? 'Every one of them, existing ones too, gathers and walks faster.' : 'Every one you train from now on costs less.'}</li></ul>
     ${diff}

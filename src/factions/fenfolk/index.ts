@@ -357,12 +357,18 @@ export const buildings: FenBuilding[] = [
 ];
 
 const techs: TechSpec[] = [
-  { id: 'long-breath', name: 'Long Breath', description: 'Fenlings work, wade and carry 30% more (work refinement +0.3).', unit: 'fenling', refinement: 0.3, channel: 'work' },
-  { id: 'fen-lore', name: 'Fen Lore', description: 'Fenlings +0.5 refinement: cheaper to raise.', unit: 'fenling', refinement: 0.5 },
-  { id: 'fen-lore-2', name: 'Fen Lore II', description: 'Fenlings +0.5 more.', unit: 'fenling', refinement: 0.5 },
-  { id: 'fen-lore-3', name: 'Fen Lore III', description: 'Fenlings +0.5 more: 2.5× in all, about 40% of their first price.', unit: 'fenling', refinement: 0.5 },
-  { id: 'reed-lore', name: 'Reed Lore', description: 'Reedguards +0.6 refinement: cheaper to raise.', unit: 'reedguard', refinement: 0.6 },
-  { id: 'toad-lore', name: 'Toad Lore', description: 'Bog Toads +0.6 refinement: cheaper to raise.', unit: 'bog-toad', refinement: 0.6 },
+  { id: 'long-breath', name: 'Long Breath', description: 'You buy the old breathing songs: every fenling, now and to come, works, wades and carries 30% more (work refinement +0.3).', unit: 'fenling', refinement: 0.3, channel: 'work',
+    flavor: '"Hum low, and the bog forgets you are tired." — Elder Murk' },
+  { id: 'fen-lore', name: 'Fen Lore', description: 'You buy the spawning lore: fenlings are cheaper to raise (refinement +0.5, so each costs its body\'s price ÷ refinement). Same frog, less food.', unit: 'fenling', refinement: 0.5,
+    flavor: 'The first lesson of the Mound: a hungry tadpole is a wasted tadpole.' },
+  { id: 'fen-lore-2', name: 'Fen Lore II', description: 'Deeper lore: fenlings +0.5 refinement more, cheaper again.', unit: 'fenling', refinement: 0.5,
+    flavor: '"We do not raise an army. We let the fen remember it has one." — Spawn-singer Oolu' },
+  { id: 'fen-lore-3', name: 'Fen Lore III', description: 'The whole lore: fenlings +0.5 more, 2.5× in all — about 40% of their first price.', unit: 'fenling', refinement: 0.5,
+    flavor: 'By the third spring the pools boil with them, and the Meadowfolk stop sleeping near water.' },
+  { id: 'reed-lore', name: 'Reed Lore', description: 'You buy the weaving of reed shields: Reedguards are cheaper to raise (refinement +0.6).', unit: 'reedguard', refinement: 0.6,
+    flavor: 'A single reed bends. Woven a thousand times, it turns a mace.' },
+  { id: 'toad-lore', name: 'Toad Lore', description: 'You buy the toad-wrangler\'s secrets: Bog Toads are cheaper to raise (refinement +0.6). Just as big, just as hungry.', unit: 'bog-toad', refinement: 0.6,
+    flavor: '"Sing to it while it eats. It is less likely to eat you." — Toad-wrangler Glim' },
 ];
 
 export const fenfolk: FactionSpec = {

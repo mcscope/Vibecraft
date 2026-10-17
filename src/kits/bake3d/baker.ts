@@ -210,6 +210,7 @@ export class Baker {
     });
     const samples = [poseFor('idle', 0), poseFor('walk', 0.25), poseFor('attack', 0.3), poseFor('attack', 0.6), poseFor('gather', 0.5)];
     if (withCarry) samples.push(poseFor('carryFood', 0.25));
+    if (opts.fly) samples.push(poseFor('fly', 0), poseFor('fly', 0.25), poseFor('fly', 0.5), poseFor('fly', 0.75)); // spread wings need room
     let { r, h } = this.measure(model, team, samples);
     r = Math.max(r, h * 1.05); // room to fall over
     const ext = this.extent(r, h);

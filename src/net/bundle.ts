@@ -141,7 +141,7 @@ export function checkSpec(s: unknown): string[] {
     if (b.attack && (!isNum(b.attack.mechanism) || !isNum(b.attack.crystalMass) || !isNum(b.attack.height))) e.push(`building ${i}: bad attack`);
     e.push(...validateBuildingAbilities(b, `building ${i}`)); // sim/abilities
   }
-  for (const [i, t] of (f.techs ?? []).entries()) if (!isId(t.id) || !isId(t.unit) || !isNum(t.refinement) || t.refinement <= 0 || t.refinement > 5) e.push(`tech ${i}: bad`);
+  for (const [i, t] of (f.techs ?? []).entries()) if (!isId(t.id) || !isId(t.unit) || !isNum(t.refinement) || t.refinement <= 0 || t.refinement > 5 || (t.flavor !== undefined && !isStr(t.flavor))) e.push(`tech ${i}: bad`);
   if (e.length) return e;
   // the rules every faction lives by (refinement paid for by capital, footprints, references...),
   // and the fairness bounds on what a match hands out for free

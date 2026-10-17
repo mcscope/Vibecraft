@@ -163,7 +163,7 @@ export class Hud {
       const st = w.techStatus(this.player, t.id, b);
       const from = w.refinementOf(this.player, t.unit);
       const unit = w.specOf(this.player, t.unit)?.spec.name ?? t.unit;
-      this.tooltip.innerHTML = `<h3>${t.name}</h3><p>${t.description}</p>
+      this.tooltip.innerHTML = `<h3>${t.name}</h3><p>${t.description}</p>${t.flavor ? `<p class="flavor">${t.flavor}</p>` : ''}
         <p>${unit}: refinement <b>${fmt(from, 2)} → ${fmt(from + t.refinement, 2)}</b> everywhere, existing units included.</p>
         <p>Costs <b>${st.cost} ${this.names().wood}</b> (burned) · needs a ${n0(st.gate)}-capital building${st.blocker ? ` · <span class="bad">${st.blocker}</span>` : ''}</p>`;
     } else {
