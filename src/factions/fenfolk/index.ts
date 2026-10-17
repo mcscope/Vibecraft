@@ -259,8 +259,10 @@ const siegeHeron: FenUnit = {
       }
       b.joint([leaping ? 0.3 : 0, lift, 0], [0, 0, flying ? pitch : 0.25], (c) => {
         // body, pale breast plumes and a long tail
-        c.sphere([0.75, 0.36, 0.38], [0, 1.45, 0], heronGrey);
-        c.sphere([0.5, 0.26, 0.3], [0.2, 1.32, 0], heronPale);
+        // body: an egg, slim and rounded, fuller at the breast and tapering to the tail
+        c.sphere([0.55, 0.29, 0.29], [0.08, 1.45, 0], heronGrey);
+        c.sphere([0.42, 0.22, 0.22], [-0.38, 1.47, 0], heronGrey);
+        c.sphere([0.36, 0.22, 0.24], [0.24, 1.36, 0], heronPale);
         for (const z of [-0.1, 0, 0.1]) c.box([0.5, 0.03, 0.12], [-0.85, 1.48, z], heronDark, [0, z * 2, 0.08]);
         // neck: an S standing tall, pulled back onto the shoulders in flight (herons fly with the neck tucked)
         const dip = attacking ? Math.sin(Math.min(1, p.phase * 1.5) * Math.PI) * 0.4 : 0;
