@@ -117,17 +117,17 @@ Equal-budget fights (1,200), with armour on:
 
 Their economy *is* an army. Every fenling is a 7-tile thrower, so 25 fenlings put out about 72 ranged DPS while working, and Bog Toads come early. Meadow villagers are melee, and the AI fills half of every Meadow army with slingers, the worst unit in the arena.
 
-Range is nearly free in the physics: a thrown crystal costs only its ammo, which can be picked up again. That is the deepest open question.
+(Range itself is not over-strong: the arena shows ranged infantry losing to melee per cost.)
 
 ## Decisions for the user (not made unilaterally)
 
-1. **Should range cost more?** Options:
-   - throwing costs extra calories per throw (a sling needs effort);
-   - accuracy falls with range, so the expected damage drops at the edge;
-   - an arm/technique "mechanism" mass, like a tower's, priced into the unit.
+1. **Workers that are also soldiers.** Correction to an earlier guess: the arena shows ranged units are *weak* per cost, not strong. What made the Fenfolk dominant was that their *workers* are a ranged militia they'd have paid for anyway. That's a legitimate faction identity, but it's under-priced. Options:
+   - give a worker's weapon its own cost (it does cost crystal ammo today, a little);
+   - make fighting tire workers more (calories);
+   - let a faction choose either a worker or a soldier body, and price dual-use bodies on both counts.
 2. **Should bigger and refined bodies be less efficient per cost?** For example, food cost growing slightly faster than mass (an elite's upbringing), or crystal as an elite's main cost (AoE "gold"). Today big refined units dominate cost-for-cost, so "trash" units have no job.
-3. **Splash (P3) and reach-first-strike (P4).** Splash would make artillery the counter to massed throwers (like fenling swarms). Reach would make pikes the counter to cavalry such as the Lynx. Both are prototyped on paper only so far.
-4. **Faction designs.** The Meadowfolk slinger needs a redesign (heavier stone, fewer of them), and the Meadow AI should stop building half its army from it.
+3. **Splash (P3), tested and reverted.** In the arena it made the Hurlhorn and the heron stronger against *everything* they already beat (Hurlhorn vs Reedguard +0.57 → +0.93). It created no new counter, because swarms already lose to artillery. Revisit once swarm units are worth something (decisions 1–2). **Reach-first-strike (P4)** is still on paper.
+4. **Faction designs.** Done for the AI: it now builds by army value (HP × DPS ÷ cost²), which turned Fen routs into mostly close games. The Meadowfolk slinger still needs a redesign (heavier stone, fewer of them), but arena tests of five variants (heavier stones, more muscle, refinement) still lost to every Fenfolk unit: per cost, ranged infantry loses to melee in this engine.
 
 ## Plan
 
