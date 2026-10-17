@@ -74,12 +74,13 @@ export interface UnitSpec {
   /** 'carter': auto-produced supply hauler; never fights, never gathers. */
   role?: 'carter';
   /**
-   * Ammo bearer: a walking pile of crystal. Friendly throwers that run dry come
-   * to it and take a load, just like picking spent crystals off the ground (from
-   * up to `radius` tiles beyond their sight). Refills at any of its side's
-   * buildings with crystal in stock (right-click the building).
+   * Bearer: a walking pile of `resource` (default crystal). Crystal: an ammo
+   * bearer; friendly throwers that run dry come to it and take a load, just like
+   * picking spent crystals off the ground (from up to `radius` tiles beyond their
+   * sight). Food: hungry units nearby eat from it instead of walking home.
+   * Refills at any of its side's buildings (right-click the building).
    */
-  bearer?: { radius: number };
+  bearer?: { radius: number; resource?: 'crystal' | 'food' };
   /** A walking drop-off: gatherers unload into it like a building (up to its cargo capacity); it unloads at a building. */
   dropOff?: boolean;
   /** Can tame wild animals by feeding them from its pack (sim/abilities/herding.ts). */

@@ -78,6 +78,8 @@ export type Order =
   | { kind: 'tame'; target: number }
   /** A dry thrower going to an ammo bearer for a load. */
   | { kind: 'rearm'; unit: number }
+  /** Walk to a food bearer and eat from it. */
+  | { kind: 'eatFrom'; unit: number }
   /** Wildlife: roam around a home spot (tx/ty: current wander target, rest: ticks until the next). */
   | { kind: 'wild'; hx: number; hy: number; tx: number; ty: number; rest: number }
   | { kind: 'move'; x: number; y: number }
@@ -788,7 +790,7 @@ export class World {
     const d = Math.sqrt(dx * dx + dy * dy) || 1;
     const pos = this.grid.nearestOpen(cx + (dx / d) * (from.size / 2 + 0.7), cy + (dy / d) * (from.size / 2 + 0.7)) ?? [cx + 2.5, cy + 2.5];
     const u = this.makeUnit(owner, specId, pos[0], pos[1]);
-    bearerAbility.loadUp(this, u, from); // an ammo bearer comes out loaded with crystal from the building's stock
+    bearerAbility.loadUp(this, u, from); // a bearer comes out loaded from the building's stock
     const rx = from.rallyX, ry = from.rallyY;
     if (from.rallyRes && !u.carter && this.gathers(u, from.rallyRes)) {
       // rallied onto a resource: go gather it (the nearest of that kind to the rally point, if it's gone)
@@ -1096,6 +1098,7 @@ export class World {
       case 'muster': return this.runMuster(u, o.building);
       case 'tame': return runTame(this, u, o.target);
       case 'rearm': return bearerAbility.runRearm(this, u, o.unit);
+      case 'eatFrom': return bearerAbility.runEatFrom(this, u, o.unit);
       case 'move': {
         if (this.moveTo(u, o.x, o.y, 0.3)) { this.finish(u); }
         return u.x !== u.px || u.y !== u.py;
@@ -1141,6 +1144,11 @@ export class World {
   private autoFeed(u: Unit): boolean {
     if (u.food > 0.01) { this.detour(u, { kind: 'eatPack' }); return true; }
     const b = this.nearestCache(u, (x) => x.stock.food > 1);
+    // a food bearer close by beats walking home (sim/abilities/bearer.ts)
+    const fb = bearerAbility.nearestFoodBearer(this, u);
+    const dFb = fb ? (fb.x - u.x) ** 2 + (fb.y - u.y) ** 2 : Infinity;
+    const dB = b ? (b.ox + b.size / 2 - u.x) ** 2 + (b.oy + b.size / 2 - u.y) ** 2 : Infinity;
+    if (fb && dFb < dB) { this.detour(u, { kind: 'eatFrom', unit: fb.id }); return true; }
     if (b) { this.detour(u, { kind: 'resupply', building: b.id }); return true; }
     return false;
   }
@@ -1395,7 +1403,7 @@ export class World {
       if (o.stopWhenArmed) {
         if (u.ammo >= u.stats.loadoutCrystal - 1e-6 || n.amount <= 0.001) this.finish(u);
       } else if (full) {
-        if (this.isBearer(u)) this.finish(u); // a bearer keeps its crystal to hand out
+        if (this.isBearer(u)) this.finish(u); // a bearer keeps what it carries to hand out
         else o.phase = 'toDrop';
       }
       return false;
@@ -1435,6 +1443,7 @@ export class World {
 
   /** An ammo bearer: a walking crystal pile (see sim/abilities/bearer.ts). */
   isBearer(u: Unit): boolean { return bearerAbility.isBearer(this, u); }
+  bearerRes(u: Unit): 'crystal' | 'food' | null { return bearerAbility.bearerRes(this, u); }
 
   /** Can this unit gather `r` (any resource if omitted)? Ammo bearers gather crystal only, and keep it. */
   gathers(u: Unit, r?: ResourceKind): boolean { return bearerAbility.gathers(this, u, r); }
@@ -1475,7 +1484,7 @@ export class World {
     // Restock loadout crystal from this building's stock.
     const need = Math.min(Math.max(0, u.stats.loadoutCrystal - u.ammo), b.stock.crystal);
     if (need > 0) { u.ammo += need; b.stock.crystal -= need; }
-    bearerAbility.loadUp(this, u, b); // ammo bearers fill their cargo with crystal to hand out
+    bearerAbility.loadUp(this, u, b); // bearers fill their cargo with what they hand out
     if (!this.eat(u, b)) this.finish(u);
     return false;
   }

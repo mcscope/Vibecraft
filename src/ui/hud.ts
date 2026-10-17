@@ -567,6 +567,7 @@ export function describeOrder(w: World, u: Unit): string {
     case 'resupply': return u.anim === 'eat' ? 'Eating' : 'Going to resupply';
     case 'give': return 'Delivering supplies';
     case 'eatPack': return 'Eating from pack';
+    case 'eatFrom': return `Eating from the ${w.specOf(u.owner, w.units.get(o.unit)?.specId ?? '')?.spec.name ?? 'bearer'}`;
     case 'build': {
       const site = w.buildings.get(o.site);
       const name = site?.spec.name ?? 'building';

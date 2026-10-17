@@ -560,7 +560,7 @@ export class Renderer {
       const w = Math.max(20, 24 * Math.cbrt(u.stats.mass / 70)) * Math.min(1.3, cam.zoom);
       const f = u.hp / u.stats.maxHp;
       bar(sx - w / 2, top, w, 3, f, f > 0.5 ? 0x3fcf4a : f > 0.25 ? 0xe8c547 : 0xd9352b);
-      if (bearer) { top += 4; bar(sx - w / 2, top, w, 3, u.crystal / Math.max(1e-6, u.stats.cargoCapacity), 0x8fe6ff); }
+      if (bearer) { const food = world.bearerRes(u) === 'food'; top += 4; bar(sx - w / 2, top, w, 3, (food ? u.food : u.crystal) / Math.max(1e-6, u.stats.cargoCapacity), food ? 0xe0457a : 0x8fe6ff); }
       if (!sel || u.owner !== 0 || u.dummy) continue;
       top += 4;
       bar(sx - w / 2, top, w, 2, u.cal / u.stats.maxCalories, u.exhausted ? 0x8a7a5a : 0xe09a3a);

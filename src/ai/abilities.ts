@@ -27,7 +27,7 @@ const centre = (b: Building): [number, number] => [b.ox + b.size / 2, b.oy + b.s
 /** Ammo bearers: keep one per six throwers and walk them behind the attack. */
 export function useBearers(t: AiTurn): void {
   const { w, player, faction } = t;
-  const bearerIds = (faction.units ?? []).filter((u) => u.bearer).map((u) => u.id);
+  const bearerIds = (faction.units ?? []).filter((u) => u.bearer && (u.bearer.resource ?? 'crystal') === 'crystal').map((u) => u.id);
   if (!bearerIds.length) return;
   const bearers = t.army.filter((u) => bearerIds.includes(u.specId));
   const throwers = t.army.filter((u) => u.stats.loadoutCrystal > 0).length;

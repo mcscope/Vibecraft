@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { fenfolk } from '../src/factions/fenfolk';
 import { World } from '../src/sim/world';
+import { withExtras } from './kit';
 
 const run = (w: World, ticks: number) => { for (let i = 0; i < ticks; i++) w.step(); };
 
@@ -103,5 +104,22 @@ describe('ammo bearer', () => {
     const t = w.unitsOf(0).find((u) => u.specId === 'pack-tortoise')!;
     expect(t).toBeTruthy();
     expect(t.crystal).toBeGreaterThan(20);
+  });
+  test('a food bearer feeds hungry units nearby, so they don\'t walk home', () => {
+    const larder = withExtras(fenfolk, { units: [{ ...fenfolk.units.find((u) => u.id === 'pack-tortoise')!, id: 'larder-tortoise', name: 'Larder Tortoise', bearer: { radius: 4, resource: 'food' } }] });
+    const w = new World({ seed: 7, players: [{ name: 'Fen', faction: larder }, { name: 'Fen2', faction: fenfolk }] });
+    for (const u of [...w.units.values()]) if (w.players[u.owner].neutral) w.units.delete(u.id);
+    const hall = w.baseOf(0)!;
+    const spot = w.grid.nearestOpen(hall.ox + 18, hall.oy + 14)!; // far from home
+    const t = w.spawnAt(0, 'larder-tortoise', spot[0], spot[1])!;
+    t.order = { kind: 'idle' }; t.food = 60;
+    const f = w.unitsOf(0).find((u) => u.specId === 'fenling')!;
+    const s2 = w.grid.nearestOpen(spot[0] + 2, spot[1])!;
+    f.x = f.px = s2[0]; f.y = f.py = s2[1]; f.order = { kind: 'idle' }; f.food = 0;
+    f.cal = f.stats.maxCalories * 0.1; // starving
+    run(w, 20 * 20);
+    expect(t.food).toBeLessThan(60); // it ate from the tortoise
+    expect(f.cal).toBeGreaterThan(f.stats.maxCalories * 0.5);
+    expect(Math.hypot(f.x - spot[0], f.y - spot[1])).toBeLessThan(4); // without going home
   });
 });
