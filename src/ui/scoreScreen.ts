@@ -46,7 +46,7 @@ export function showScore(box: HTMLElement, w: World, me: number, onClose: () =>
       <h2>${esc(title)}</h2>
       <p class="sub">${esc(sub)}${sub ? ' · ' : ''}${clock(w.tick / 20)} played</p>
       <table class="score-table">
-        <tr><th></th>${players.map((p) => `<th><i class="chip" style="background:${TEAM_COLORS[p.id % TEAM_COLORS.length].primary}"></i>${esc(p.name)}${p.id === w.winner ? ' ★' : ''}</th>`).join('')}</tr>
+        <tr><th></th>${players.map((p) => `<th><i class="score-swatch" style="background:${TEAM_COLORS[p.id % TEAM_COLORS.length].primary}"></i>${esc(p.name)}${p.id === w.winner ? ' ★' : ''}</th>`).join('')}</tr>
         ${row('Food gathered', res('food'))}
         ${row('Wood gathered', res('wood'))}
         ${row('Crystal gathered', res('crystal'))}
@@ -79,7 +79,7 @@ export function showScore(box: HTMLElement, w: World, me: number, onClose: () =>
       while (i < d.t.length - 1 && d.t[i + 1] <= t) i++;
       const sx = d.L + (d.t[i] / d.tMax) * (d.W - d.L - d.R);
       cross.setAttribute('x1', String(sx)); cross.setAttribute('x2', String(sx)); cross.setAttribute('visibility', 'visible');
-      out.innerHTML = `${clock(d.t[i])} · ${players.map((p, k) => `<span><i class="chip" style="background:${TEAM_COLORS[p.id % TEAM_COLORS.length].primary}"></i>${n0(d.v[k][i])}</span>`).join(' ')}`;
+      out.innerHTML = `${clock(d.t[i])} · ${players.map((p, k) => `<span><i class="score-swatch" style="background:${TEAM_COLORS[p.id % TEAM_COLORS.length].primary}"></i>${n0(d.v[k][i])}</span>`).join(' ')}`;
     });
     svg.addEventListener('mouseleave', () => { cross.setAttribute('visibility', 'hidden'); out.textContent = ''; });
   }

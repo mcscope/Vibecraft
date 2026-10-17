@@ -423,7 +423,7 @@ button.bell.on b { color: #ff8a7a; }
 .score-table th, .score-table td { padding: 4px 14px; text-align: right; border-bottom: 1px solid #3a3128; }
 .score-table th:first-child { text-align: left; color: var(--dim); font-weight: 400; }
 .score-table tr:first-child th { color: var(--gold); font-family: 'Cinzel', serif; }
-.chip { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+.score-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
 .score-charts { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
 .score-chart { margin: 0; background: var(--inset); border: 1px solid #3a3128; padding: 8px 10px; }
 .score-chart figcaption { color: var(--gold); font-size: 13px; margin-bottom: 4px; }
