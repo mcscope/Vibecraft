@@ -4,7 +4,7 @@ The engine already supports these abilities, but no shipped faction uses them. T
 
 | Ability | Field | What it does | Ideas |
 |---|---|---|---|
-| **Flight** | unit `flight: true` | Takes off to move and flies straight over walls, water and buildings at 1.6× speed. It burns calories every second aloft (∝ mass², so only light bodies stay up long) and lands when it stops. In the air only thrown crystals and towers reach it, and it sees 3 tiles further. Melee fliers land to strike. | War-eagles, bats, gliders, a light scout cavalry that can't hold ground |
+| **Flight** | unit `flight: true` | Walks short hops; takes off to go further and flies straight over walls, water and buildings at 1.6× speed. It burns calories every second aloft (∝ mass, so endurance comes from how much of the body is reserve) and lands when it stops or runs low, with enough left to walk home. In the air only thrown crystals and towers reach it, and it sees 3 tiles further. Melee fliers land to strike. | War-eagles, bats, gliders, a light scout cavalry that can't hold ground |
 | **Living building** | building `living: { seed, grow }` | Planted at `seed` × its materials, then eats food from its stock to grow `grow` kg/s up to full size. HP and capital grow with it, so a young one can only train units its current size can support. Haulers bring it food. | Hives, coral, fungal mounds, a tree that becomes a fortress |
 | **Food bearer** | unit `bearer: { radius, resource: 'food' }` | A walking larder: hungry units within reach eat from it instead of walking home. It loads up at buildings, comes out of training loaded, and gathers only food. (The crystal ammo bearer is the same ability with the default resource.) | Supply wagons, a camel train, a hive's nurse caste that feeds the swarm in the field |
 | **Walking drop-off** | unit `dropOff: true` | Gatherers unload into it when it's nearer than a building, and it carries the haul home. | Pack beasts, a mobile camp, a mothership |
@@ -13,7 +13,7 @@ The engine already supports these abilities, but no shipped faction uses them. T
 | **Taming** | unit `tamer: true` | Feeds a wild animal food from its pack (0.15 kg per kg of animal) until it joins you. Passive animals take food right away; fierce ones must be worn below 40% HP first. Tamed passive animals can be butchered for meat. | Herders, beast-masters, druids |
 | **Pen** | building `pen: { radius }` | Pairs of your tamed animals within `radius` breed young, paid for from the pen's food. | Ranchers, a faction whose army is entirely bred |
 
-Already used by shipped factions, for reference: `gait` (Fenfolk hop), `bearer` (Pack Tortoise ammo carrier), `wall` (Fenfolk canal), `gatherBoost` and `sow` (Meadowfolk gathering camp), `wheeled`, `workRefinement`.
+Already used by shipped factions, for reference: `flight` (Fenfolk Siege Heron), `gait` (Fenfolk hop), `bearer` (Pack Tortoise ammo carrier), `wall` (Fenfolk canal), `gatherBoost` and `sow` (Meadowfolk gathering camp), `wheeled`, `workRefinement`.
 
 **Still to work out:**
 - Abilities are free beyond body physics. A flier pays in calories and a bearer in cargo, but nothing yet prices an ability itself.

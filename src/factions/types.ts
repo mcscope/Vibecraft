@@ -52,7 +52,7 @@ export interface UnitSpec {
    * airborne from (1 − hop) × ⅔ to that plus hop.
    */
   gait?: { hop: number; period?: number };
-  /** It flies: takes off to move, straight over everything; burns calories aloft (∝ mass²); lands when it stops. Melee fliers land to strike. */
+  /** It flies: walks short hops, takes off to go further, straight over everything; burns calories aloft (∝ mass, so endurance comes from its reserve); lands when it stops or runs low. Melee fliers land to strike. */
   flight?: boolean;
   /** Can this unit harvest resource nodes? Default true. */
   canGather?: boolean;

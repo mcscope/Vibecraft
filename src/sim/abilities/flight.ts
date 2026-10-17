@@ -1,8 +1,9 @@
 // Flight (UnitSpec.flight): it takes off whenever it goes further than a short
 // walk (or the way is blocked), flies straight over
 // walls, water and everyone's heads, and lands when it stops. Staying up burns
-// calories every second, in proportion to its mass squared, so small fliers stay
-// up for a minute or two and big ones barely get off the ground. In the air,
+// calories every second in proportion to its mass, so how long it can stay up
+// depends on how much of its body is reserve, not on its size. It comes down
+// before it's spent (and won't take off nearly empty), so it can walk home. In the air,
 // only thrown crystals (and towers) can reach it; a melee flier must land to
 // strike, then takes off again. Airborne throwers throw from height: their
 // crystals fall further and hit harder, and they see further.
@@ -20,16 +21,19 @@ export const FLY_SIGHT = 3;
 export const FLY_SPEED = 1.6;
 /** A grounded flier walks rather than flies to anywhere this close (tiles) with a clear way there. */
 export const WALK_HOP = 3;
-/** Calories per second aloft: mass² / FLY_BURN_DIV. */
-export const FLY_BURN_DIV = 30;
+/** Calories per second aloft, per kg of body. */
+export const FLY_BURN_PER_KG = 0.9;
+/** It lands below this share of its calories, and takes off only above LAUNCH_FRACTION. */
+export const LAND_FRACTION = 0.1;
+export const LAUNCH_FRACTION = 0.2;
 
-export const flightBurn = (d: DerivedStats): number => (d.mass * d.mass) / FLY_BURN_DIV;
+export const flightBurn = (d: DerivedStats): number => d.mass * FLY_BURN_PER_KG;
 /** Seconds it can stay up on full calories. */
 export const airtime = (d: DerivedStats): number => d.maxCalories / flightBurn(d);
 
 /** Take off (if it can fly and has the strength). */
 export function takeOff(u: Unit): void {
-  if (u.stats.flight && !u.exhausted && u.cal > 0) u.airborne = true;
+  if (u.stats.flight && !u.exhausted && u.cal > u.stats.maxCalories * LAUNCH_FRACTION) u.airborne = true;
 }
 
 /** Would a grounded flier rather walk to (gx, gy)? Short and clear: yes. */
@@ -53,7 +57,7 @@ export function tickFlight(w: World, u: Unit, moved: boolean, dt: number): void 
   if (!u.airborne) return;
   u.cal -= flightBurn(u.stats) * dt;
   const hovering = u.throws && (u.engage || u.order.kind === 'attack' || u.order.kind === 'attackMove');
-  if (u.cal <= 0 || u.exhausted || (!moved && !hovering)) {
+  if (u.cal <= u.stats.maxCalories * LAND_FRACTION || u.exhausted || (!moved && !hovering)) {
     if (!w.grid.isBlocked(u.x, u.y)) { u.airborne = false; return; }
     const open = w.grid.nearestOpen(u.x, u.y, 6); // over a wall or water: glide to open ground first
     if (open) { u.x = open[0]; u.y = open[1]; u.airborne = false; }
@@ -71,6 +75,6 @@ export const flight: Ability = {
   id: 'flight',
   validateUnit: (u: UnitSpec, where: string) => (u.flight !== undefined && typeof u.flight !== 'boolean' ? [`${where}: bad flight`] : []),
   unitCodex: (u: UnitSpec, d: DerivedStats) => (u.flight
-    ? `<b>Flies.</b> Walks a few tiles, takes off to go further, straight over walls and water; burns ${f1(flightBurn(d), 1)} cal/s aloft (about ${n0(airtime(d))} s on full calories) and lands when it stops. In the air only thrown crystals reach it${u.attack?.style === 'strike' ? '; it lands to strike' : '; it throws from height, harder and further, and sees further'}.`
+    ? `<b>Flies.</b> Walks a few tiles, takes off to go further, straight over walls and water; burns ${f1(flightBurn(d), 1)} cal/s aloft (about ${n0(airtime(d) * (1 - LAND_FRACTION))} s on full calories) and lands when it stops or runs low. In the air only thrown crystals reach it${u.attack?.style === 'strike' ? '; it lands to strike' : '; it throws from height, harder and further, and sees further'}.`
     : null),
 };
