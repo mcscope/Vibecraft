@@ -291,13 +291,18 @@ const siegeHeron: FenUnit = {
           const spread = flying ? 1 : attacking ? 0.35 : 0;
           const beat = held ? -0.12 : leaping ? -0.9 + Math.sin(t) * 1.1 : flying ? Math.sin(t) * 0.75 : 0; // a leap hauls the wings high then down hard; soaring holds them out, tips up a touch
           c.joint([0.15, 1.6, 0.3 * side], [beat * side * spread + (1 - spread) * 1.35 * side, 0, 0], (wg) => {
-            for (let i = 0; i < 6; i++) {
-              const len = 0.9 + spread * 0.9 - i * 0.08;
-              wg.box([0.24 - i * 0.012, 0.035, len], [-0.06 - i * 0.14, 0, (len / 2) * side * (0.35 + spread * 0.65)], i < 3 ? heronGrey : heronDark, [0, -side * (0.1 + i * 0.1) * spread, 0]);
-            }
-            // war paint: a team-coloured bar across each wing, and battle ribbons from the tips
-            wg.box([0.1, 0.04, 0.5 + spread * 0.5], [-0.2, 0.01, (0.3 + spread * 0.5) * side * (0.35 + spread * 0.65)], { team: 'primary', tex: 'cloth' });
-            if (spread > 0.5) for (const k of [0, 1]) wg.box([0.3, 0.01, 0.05], [-0.35 - k * 0.25, -0.02, (1.6 - k * 0.1) * side], { team: 'secondary', tex: 'cloth' }, [0, 0, Math.sin(t * 2 + k) * 0.3]);
+            // a heron's wing: broad and rounded, bowed down at the wrist in flight, dark fingered primaries at the tip
+            const inner = 0.45 + spread * 0.5, outer = 0.35 + spread * 0.5;
+            wg.sphere([0.34, 0.035, inner / 2 + 0.04], [-0.12, 0, side * inner / 2], heronGrey); // arm: the broad inner wing
+            wg.sphere([0.12, 0.03, inner / 2 + 0.04], [-0.4, -0.005, side * inner / 2], heronDark); // dark trailing secondaries
+            wg.sphere([0.05, 0.04, inner * 0.35], [-0.1, 0.02, side * inner * 0.45], { team: 'primary', tex: 'cloth' }); // a thin war-paint stripe
+            wg.joint([-0.08, 0, side * inner], [-side * 0.28 * spread, 0, 0], (hand) => { // the wrist bows the hand down
+              hand.sphere([0.28, 0.03, outer / 2 + 0.03], [-0.1, 0, side * outer / 2], heronGrey);
+              for (let k = 0; k < 5; k++) { // primaries splayed like fingers, longest at the front
+                const len = (0.32 - k * 0.03) * (0.55 + spread * 0.45);
+                hand.sphere([0.045, 0.014, len / 2], [-0.02 - k * 0.07, -0.005, side * (outer + len / 2 - 0.05)], heronDark, [0, side * (k * 0.13 - 0.1) * spread, 0]);
+              }
+            });
           });
         }
         // bronze-bound siege basket hung on chains beneath the belly, glowing with heavy crystals
