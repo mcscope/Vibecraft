@@ -55,7 +55,7 @@ const reedguard: FenUnit = {
   gait: { hop: 0.76, period: 0.85 }, // heavier bounds behind the shield
   model(b, p) {
     body(b, p, guardLook, fenArm(p, 'jab'), (h) => {
-      if (p.anim === 'attack') { // levelled: the jab drives the tip forward
+      if (p.anim === 'attack' || p.style === 'brace') { // levelled: braced with the point set, or the jab driving it forward
         h.limb([-0.35, 0.45, 0], [1.25, -1.15, 0], 0.017, WILLOW);
         if (p.armed) h.crystal(0.14, [1.3, -1.2, 0], [0, 0, Math.PI * 0.75]);
       } else { // carried upright, butt by the foot

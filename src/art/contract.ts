@@ -25,7 +25,7 @@ export interface Sprite {
 }
 
 /** Animations the engine asks for. Only `idle` is required; others fall back to it. */
-export type ArtAnim = 'idle' | 'walk' | 'fly' | 'leap' | 'climb' | 'soar' | 'glide' | 'land' | 'attack' | 'gather' | 'eat' | 'tired' | 'die' | 'carryFood' | 'carryWood' | 'carryCrystal';
+export type ArtAnim = 'idle' | 'walk' | 'charge' | 'brace' | 'stagger' | 'fly' | 'leap' | 'climb' | 'soar' | 'glide' | 'land' | 'attack' | 'gather' | 'eat' | 'tired' | 'die' | 'carryFood' | 'carryWood' | 'carryCrystal';
 
 export interface AnimArt {
   /**
@@ -132,7 +132,7 @@ export interface MusicSpec {
 
 export function anim(art: UnitArt, a: ArtAnim): AnimArt {
   const flight = a === 'leap' || a === 'climb' || a === 'soar' || a === 'glide' || a === 'land';
-  return art.anims[a] ?? (flight ? art.anims.fly : undefined) ?? (a.startsWith('carry') || a === 'fly' || flight ? art.anims.walk : undefined) ?? art.anims.idle;
+  return art.anims[a] ?? (flight ? art.anims.fly : undefined) ?? (a.startsWith('carry') || a === 'fly' || a === 'charge' || flight ? art.anims.walk : undefined) ?? (a === 'stagger' ? art.anims.tired : undefined) ?? art.anims.idle;
 }
 
 /** The frame to show for a unit facing map octant 0..7. `progress` (0..1) for one-shot anims, else `time` in seconds. */

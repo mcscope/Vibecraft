@@ -15,6 +15,11 @@ export interface Pose {
   armed: boolean;
   /** What it's hauling, if anything. */
   cargo: 'food' | 'wood' | 'crystal' | null;
+  /**
+   * A whole-body style on top of `anim` (the baker leans/tilts the model for it; a model may do more):
+   * 'charge' runs the walk flat out, leaning in; 'stagger' stumbles off balance; 'brace' sets low, point ready.
+   */
+  style?: 'charge' | 'stagger' | 'brace';
 }
 
 export type Vec3 = [number, number, number];

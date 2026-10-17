@@ -98,6 +98,12 @@ export const K = {
   sprintRange: 5,
   /** ...if they have more than this share of their calories left. */
   sprintMinCalories: 0.35,
+  /** Newtons a body can hold behind its weapon per kg of muscle (arms, wrists, stance) before the shaft slips or it buckles. */
+  holdForcePerMuscleKg: 40,
+  /** Metres a blow drives in: a blow does at most (holding force × this) joules of work, unless the weapon is braced. */
+  blowDepth: 0.15,
+  /** A change of velocity (m/s) bigger than this in one hit or collision knocks a body off its feet for a moment: staggered. */
+  staggerDv: 1.5,
   /** Bodies colliding: impacts under this many joules are just jostling... */
   impactThreshold: 60,
   /** ...above it, this share of the collision energy (½·μ·v²) hurts each body. */
@@ -149,6 +155,10 @@ export interface DerivedStats {
   /** Strike reach or throw range, tiles. */
   range: number;
   dps: number;
+  /** Newtons it can hold behind its weapon (from its muscle): caps how much of a collision a blow passes on, unless braced. */
+  holdForce: number;
+  /** Strikers with a shaft: tiles inside which the point can't be brought to bear (it chokes up only so far). 0 otherwise. */
+  minReach: number;
 
   gatherRate: number;
   moveCalPerTile: number;
@@ -264,6 +274,8 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
     maxHp, armour, maxCalories, speed, sprint: Math.max(speed, limbSpeed / M_PER_TILE), canAttack, wheeled, gait: deriveGait(spec), flight: !!spec.flight, flyHeight: !spec.flight ? 0 : spec.flight === true ? DEFAULT_FLY_HEIGHT : spec.flight.height, carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, sight,
     limbSpeed, maxAttackEnergy, crystalVelocity, attackEnergy, damage, attackCalories, cooldown, range,
     dps: damage / cooldown,
+    holdForce: K.holdForcePerMuscleKg * muscleMass,
+    minReach: shaft ? reach - (shaft * 0.75 * 0.5) / M_PER_TILE : 0, // it can choke up half the shaft's forward length
     gatherRate,
     moveCalPerTile: K.moveCalPerKgTile * mass,
     restRegen: K.restRegenFraction * maxCalories,

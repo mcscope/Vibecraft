@@ -46,6 +46,9 @@ export function unitFrame(u: Unit): { anim: ArtAnim; time?: number; progress?: n
       if (u.stats.gait) return { anim, progress: u.stride }; // sim/abilities/gait.ts
       return { anim, time: u.animT * Math.max(0.5, u.stats.speed) / 1.7 };
     }
+    case 'charge': // flat out: the legs turn over as fast as it's going
+      if (u.stats.gait) return { anim: 'charge', progress: u.stride };
+      return { anim: 'charge', time: (u.animT * Math.hypot(u.vx, u.vy)) / 1.7 };
     case 'attack': {
       const dur = Math.min(0.45, u.stats.cooldown * 0.8);
       return { anim: 'attack', progress: 1 - u.swing / dur };

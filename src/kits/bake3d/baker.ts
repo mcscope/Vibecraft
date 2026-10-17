@@ -16,9 +16,9 @@ export const PX_PER_UNIT = 32 * Math.SQRT2 / UNITS_PER_TILE;
 export type BakedAnim = ArtAnim;
 
 const FRAMES: Record<BakedAnim, number> = {
-  idle: 4, walk: 8, fly: 8, leap: 6, climb: 8, soar: 4, glide: 4, land: 4, attack: 8, gather: 6, eat: 4, tired: 2, die: 6, carryFood: 8, carryWood: 8, carryCrystal: 8,
+  idle: 4, walk: 8, charge: 8, brace: 2, stagger: 4, fly: 8, leap: 6, climb: 8, soar: 4, glide: 4, land: 4, attack: 8, gather: 6, eat: 4, tired: 2, die: 6, carryFood: 8, carryWood: 8, carryCrystal: 8,
 };
-const FPS: Partial<Record<BakedAnim, number>> = { idle: 2.5, walk: 8, fly: 6, leap: 10, climb: 6, soar: 2, glide: 2, land: 4, gather: 7, eat: 4, tired: 1.5, carryFood: 8, carryWood: 8, carryCrystal: 8 };
+const FPS: Partial<Record<BakedAnim, number>> = { idle: 2.5, walk: 8, charge: 8, brace: 1.5, stagger: 6, fly: 6, leap: 10, climb: 6, soar: 2, glide: 2, land: 4, gather: 7, eat: 4, tired: 1.5, carryFood: 8, carryWood: 8, carryCrystal: 8 };
 
 export interface UnitBakeOptions {
   /** Inert units only get idle + die. */
@@ -27,6 +27,8 @@ export interface UnitBakeOptions {
   withCarry?: boolean;
   /** A flier: also bake flying (pose anim 'fly'), separate from walking a short hop. */
   fly?: boolean;
+  /** Carries a shaft: also bake the braced stance (point set, waiting). */
+  brace?: boolean;
 }
 
 /**
@@ -296,12 +298,17 @@ export class Baker {
   async bakeUnit(model: UnitModel, team: TeamColors, opts: UnitBakeOptions = {}, onFrame?: () => void): Promise<UnitArt> {
     const withCarry = !!opts.withCarry;
     const anims: BakedAnim[] = opts.dummy ? ['idle', 'die'] : ['idle', 'walk', 'attack', 'gather', 'eat', 'tired', 'die'];
+    if (!opts.dummy) anims.push('charge', 'stagger');
+    if (opts.brace && !opts.dummy) anims.push('brace');
     if (withCarry && !opts.dummy) anims.push('carryFood', 'carryWood', 'carryCrystal');
     if (opts.fly && !opts.dummy) anims.push('fly', 'leap', 'climb', 'soar', 'glide', 'land');
+    // the whole-body styles ride on poses every model already knows: a charge is the walk, a stagger
+    // is tired (hunched, arms down), a brace is standing; the baker leans the body for each (below)
     const poseFor = (anim: BakedAnim, phase: number): Pose => ({
-      anim: anim === 'carryFood' || anim === 'carryWood' || anim === 'carryCrystal' ? 'walk' : anim,
+      anim: anim === 'carryFood' || anim === 'carryWood' || anim === 'carryCrystal' || anim === 'charge' ? 'walk' : anim === 'stagger' ? 'tired' : anim === 'brace' ? 'idle' : anim,
       phase, team, armed: true,
       cargo: anim === 'carryFood' ? 'food' : anim === 'carryWood' ? 'wood' : anim === 'carryCrystal' ? 'crystal' : null,
+      style: anim === 'charge' || anim === 'stagger' || anim === 'brace' ? anim : undefined,
     });
     const samples = [poseFor('idle', 0), poseFor('walk', 0.25), poseFor('attack', 0.3), poseFor('attack', 0.6), poseFor('gather', 0.5)];
     if (withCarry) samples.push(poseFor('carryFood', 0.25));
@@ -345,6 +352,15 @@ export class Baker {
           const body = new THREE.Group();
           this.stage.add(body);
           model(new Builder(team, body), poseFor(anim === 'die' ? 'idle' : anim, anim === 'die' ? 0 : phase));
+          // the body styles: models face +x, so leaning in is a tip about z toward +x
+          if (anim === 'charge') { body.rotation.z = -0.2; body.position.x = 0.04; } // flat out, weight forward
+          if (anim === 'brace') { body.rotation.z = -0.1; body.scale.set(1, 0.92, 1); } // set low, leaning into the point
+          if (anim === 'stagger') { // knocked back off balance, swaying as it catches itself
+            const s = Math.sin(phase * Math.PI * 2);
+            body.rotation.z = 0.28 + s * 0.06;
+            body.rotation.x = s * 0.14;
+            body.position.x = -0.05;
+          }
           if (anim === 'die') {
             // generic topple onto the left side
             const k = phase * phase;

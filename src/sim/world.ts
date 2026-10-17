@@ -103,7 +103,7 @@ export type Order =
    */
   | { kind: 'cart'; base: number; home: number; from?: number; pinned: boolean; phase: 'load' | 'deliver'; res: ResourceKind };
 
-export type UnitAnim = 'idle' | 'walk' | 'fly' | 'leap' | 'climb' | 'soar' | 'glide' | 'land' | 'attack' | 'gather' | 'eat' | 'tired';
+export type UnitAnim = 'idle' | 'walk' | 'charge' | 'brace' | 'stagger' | 'fly' | 'leap' | 'climb' | 'soar' | 'glide' | 'land' | 'attack' | 'gather' | 'eat' | 'tired';
 
 export interface Unit {
   id: number;
@@ -157,6 +157,10 @@ export interface Unit {
   vx: number; vy: number;
   /** Tick its velocity was last steered (else it coasts to a stop). */
   steered: number;
+  /** A bounding body's speed right now over its travel speed: 0 crouched, more mid-bound (sim/abilities/gait.ts). */
+  strideMul: number;
+  /** Seconds left off balance (a hard hit or collision): it can't steer or strike, it just stumbles to a stop. */
+  staggered: number;
   /** Which way a flier went this tick: +1 climbing, -1 coming down, 0 level. */
   vert: number;
   /** Climb (+) or dive (−) rate last tick, m/s (fliers). */
@@ -243,13 +247,18 @@ const leadAlt = (u: Unit, t: number): number => Math.max(0.3, Math.min(u.stats.f
  * close at along the line between them (in m/s: tiles × M_PER_TILE) and μ = m₁m₂/(m₁+m₂) the reduced mass
  * (a building doesn't move: μ is the striker's mass). Zero when they're drawing apart.
  */
-function collisionEnergy(u: Unit, t: Unit | null, tx: number, ty: number): number {
+function collisionEnergy(u: Unit, t: Unit | null, tx: number, ty: number): { delivered: number; excess: number; mu: number } {
   const dx = tx - u.x, dy = ty - u.y, d = Math.hypot(dx, dy) || 1;
   const rvx = u.vx - (t?.vx ?? 0), rvy = u.vy - (t?.vy ?? 0);
   const closing = ((rvx * dx + rvy * dy) / d) * M_PER_TILE; // m/s
-  if (closing <= 0) return 0;
+  if (closing <= 0) return { delivered: 0, excess: 0, mu: 0 };
   const mu = t ? (u.stats.mass * t.stats.mass) / (u.stats.mass + t.stats.mass) : u.stats.mass;
-  return 0.5 * mu * closing * closing;
+  const energy = 0.5 * mu * closing * closing;
+  // the weapon passes on only what the body can hold behind it (work = force × depth); a braced
+  // shaft (standing, butt set) has the ground behind it instead, so a charge onto it takes it all
+  const braced = u.stats.minReach > 0 && Math.hypot(u.vx, u.vy) * M_PER_TILE < 0.5;
+  const delivered = braced ? energy : Math.min(energy, u.stats.holdForce * K.blowDepth);
+  return { delivered, excess: energy - delivered, mu };
 }
 
 export interface Projectile {
@@ -858,7 +867,7 @@ export class World {
       food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
       order: { kind: 'idle' }, resume: null, queue: [], engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
-      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1,
+      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0,
       dummy: !!spec.dummy,
       carter: spec.role === 'carter',
       gatherAcc: 0,
@@ -1093,7 +1102,7 @@ export class World {
     const flight = Math.max(0.3, (dist * M_PER_TILE) / (tw.velocity * 0.7)); // metres over its horizontal speed
     const p: Projectile = {
       id: this.nextId++, owner: b.owner, sx: cx, sy: cy, sz: atk.height,
-      tx: target.x + ((target.x - target.px) / DT) * flight, ty: target.y + ((target.y - target.py) / DT) * flight,
+      tx: target.x + target.vx * flight, ty: target.y + target.vy * flight,
       t: 0, duration: flight, damage: tw.damage, crystalKg: atk.crystalMass, target: target.id,
       tz: target.airborne && target.alt > 0.5 ? leadAlt(target, flight) : undefined,
     };
@@ -1113,10 +1122,15 @@ export class World {
     if (u.crystal > 0 && u.ammo < st.loadoutCrystal) { const k = Math.min(u.crystal, st.loadoutCrystal - u.ammo); u.crystal -= k; u.ammo += k; }
 
     let anim: UnitAnim = 'idle';
-    const moved = this.runOrder(u) || midStride(u, this.tick); // a hopper crouching between bounds is still on its way
+    // off balance: no orders, no blows, it stumbles to a stop
+    const reeling = u.staggered > 0;
+    if (reeling) u.staggered = Math.max(0, u.staggered - DT);
+    const moved = reeling ? false : this.runOrder(u) || midStride(u, this.tick); // a hopper crouching between bounds is still on its way
     tickFlight(this, u, moved, DT, (fx, fy) => this.face(u, fx, fy));
-    if (moved) anim = 'walk';
+    if (moved) anim = Math.hypot(u.vx, u.vy) > st.speed * 1.15 ? 'charge' : 'walk'; // flat out: a sprint, a charge
     if (u.swing > 0) anim = 'attack';
+    else if (!moved && st.minReach > 0 && (u.engage || u.order.kind === 'attack' || u.order.kind === 'attackMove') && u.cooldown <= 0) anim = 'brace'; // point set, waiting
+    if (reeling) anim = 'stagger';
     else if (((u.order.kind === 'gather' && u.order.phase === 'harvest') || (u.order.kind === 'build' && u.order.phase === 'chop')) && !moved && u.busy) anim = 'gather';
     else if ((u.order.kind === 'eatPack' || u.order.kind === 'resupply') && !moved && u.busy) anim = 'eat';
     else if (u.exhausted && !moved) anim = 'tired';
@@ -1319,6 +1333,12 @@ export class World {
       return true;
     }
     if (tu && !canReach(u, tu)) return false; // a flier in the air: only thrown crystals reach it
+    // too close for a long shaft: step back until the point can be brought to bear
+    if (tu && !wpn.throws && edge < u.stats.minReach) {
+      const d = Math.hypot(u.x - tu.x, u.y - tu.y) || 1, back = u.stats.minReach + tu.stats.radius + 0.15;
+      this.moveTo(u, tu.x + ((u.x - tu.x) / d) * back, tu.y + ((u.y - tu.y) / d) * back, 0.05);
+      return true;
+    }
     if (u.airborne && !wpn.throws) u.airborne = false; // a melee flier lands to strike
     // in reach at a run: a striker doesn't stop on a dime, it keeps its line and strikes in passing
     // (then turns and comes again); at a walk it just pulls up (coasts to a stop)
@@ -1337,7 +1357,7 @@ export class World {
       const bomb = u.airborne && u.alt > 0.5;
       const flight = bomb ? dropTime(u.alt) : Math.max(0.25, (Math.sqrt((tx - u.x) ** 2 + (ty - u.y) ** 2) * M_PER_TILE) / (u.stats.crystalVelocity * 0.7));
       let ax = tx, ay = ty;
-      if (tu) { ax += ((tu.x - tu.px) / DT) * flight; ay += ((tu.y - tu.py) / DT) * flight; } // lead the target
+      if (tu) { ax += tu.vx * flight; ay += tu.vy * flight; } // lead the target by its travel velocity
       const p: Projectile = {
         id: this.nextId++, owner: u.owner, sx: u.x, sy: u.y, sz: bomb ? u.alt : 0, tx: ax, ty: ay, t: 0, duration: flight,
         damage: u.stats.damage + heightBonus(u), crystalKg: u.crystalMass, target: targetId, drop: bomb || undefined,
@@ -1347,7 +1367,15 @@ export class World {
     } else {
       // the blow carries the collision too: ½·μ·v² of the two bodies' closing speed, whoever is moving
       // (a charge onto a set point, or a charger's own weapon, hits as hard as the bodies meet)
-      this.damage(targetId, wpn.damage + collisionEnergy(u, tu ?? null, tx, ty) * K.strikeEfficiency * K.damageScale, tx, ty);
+      const hit = collisionEnergy(u, tu ?? null, tx, ty);
+      this.damage(targetId, wpn.damage + hit.delivered * K.strikeEfficiency * K.damageScale, tx, ty);
+      if (tu && hit.delivered > 0) {
+        // the blow's momentum knocks the target back along the line (and off its feet if it's enough)
+        const d = Math.hypot(tx - u.x, ty - u.y) || 1, dv = Math.sqrt(2 * hit.mu * hit.delivered) / tu.stats.mass; // m/s
+        this.shove(tu, ((tx - u.x) / d) * dv, ((ty - u.y) / d) * dv);
+      }
+      // what the weapon couldn't pass on, the striker takes itself: it stumbles into it
+      if (hit.excess > 0) this.stagger(u, Math.sqrt((2 * hit.excess) / u.stats.mass));
     }
     return true;
   }
@@ -1806,6 +1834,7 @@ export class World {
     if (u.exhausted) speed *= K.exhaustedSpeedMul;
     // a bounding gait (sim/abilities/gait.ts): still while crouched, faster in the air
     const stride = strideFactor(u, this.tick, DT);
+    u.strideMul = stride;
     // a bounding body (gait) covers its ground in bounds, still while crouched: its travel velocity
     // (averaged over the bound cycle) speeds up and slows within the same grip as any body's
     const feetDown = stride === 0;
@@ -1839,6 +1868,19 @@ export class World {
     if (u.stuck > 8 && after <= (arrive + 1.6) ** 2) { u.stuck = 0; u.path = []; return true; }
     if (u.stuck > 40) { u.stuck = 0; u.path = []; u.repathIn = 0; }
     return false;
+  }
+
+  /** Knock a body by (dvx, dvy) m/s: its velocity changes, and if that's more than its feet can catch, it staggers. */
+  shove(u: Unit, dvx: number, dvy: number): void {
+    if (u.dummy || u.airborne) return;
+    u.vx += dvx / M_PER_TILE; u.vy += dvy / M_PER_TILE;
+    this.stagger(u, Math.hypot(dvx, dvy));
+  }
+
+  /** A jolt of `dv` m/s: past what a step can catch (K.staggerDv), it's off balance, the bigger the jolt the longer. */
+  stagger(u: Unit, dv: number): void {
+    if (dv <= K.staggerDv || u.dummy) return;
+    u.staggered = Math.max(u.staggered, 0.3 + dv / (K.footBrake * K.gravity));
   }
 
   /** Change u's velocity toward (wvx, wvy), by at most `acc`·DT (what its feet can push). */
@@ -1946,11 +1988,14 @@ export class World {
         if (!this.grid.isBlocked(bx, by)) { b.x = bx; b.y = by; }
         // momentum: if they're closing, they meet in an inelastic collision along the line between them
         // (the lighter body is knocked aside more), and a hard enough impact hurts both
-        const closing = (a.vx - b.vx) * nx + (a.vy - b.vy) * ny;
+        // what each body is actually doing this instant: a bounding body mid-leap is going faster than its average
+        const ka = a.stats.gait ? a.strideMul : 1, kb = b.stats.gait ? b.strideMul : 1;
+        const closing = (a.vx * ka - b.vx * kb) * nx + (a.vy * ka - b.vy * kb) * ny;
         if (closing <= 0) continue;
         const mu = (ma * mb) / total, imp = mu * closing;
         a.vx -= (imp / ma) * nx; a.vy -= (imp / ma) * ny;
         b.vx += (imp / mb) * nx; b.vy += (imp / mb) * ny;
+        this.stagger(a, (imp / ma) * M_PER_TILE); this.stagger(b, (imp / mb) * M_PER_TILE); // knocked harder than a step can catch
         const energy = 0.5 * mu * (closing * M_PER_TILE) ** 2; // J, closing speed in m/s
         if (energy > K.impactThreshold) {
           const hurt = (energy - K.impactThreshold) * K.bodyImpactEfficiency * K.damageScale;
