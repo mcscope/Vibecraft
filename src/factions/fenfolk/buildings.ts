@@ -239,10 +239,24 @@ export function elderMound(b: ModelBuilder): void {
 
 export function heronPerch(b: ModelBuilder): void {
   // a very tall stilt tower with a great stick nest on top and a sling-arm
-  for (const [x, z] of [[-0.6, -0.6], [0.6, -0.6], [-0.6, 0.6], [0.6, 0.6]]) b.limb([x * 1.3, 0, z * 1.3], [x * 0.75, 6.4, z * 0.75], 0.08, WILLOW, 0.055);
+  const ROPE: Mat = { color: '#c2a870', tex: 'thatch' };
+  const leg = (y: number, sx: number, sz: number): [number, number, number] => { const k = 1.3 - (y / 6.4) * 0.55; return [sx * 0.6 * k, y, sz * 0.6 * k]; };
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    b.limb(leg(0, sx, sz), leg(6.4, sx, sz), 0.09, WILLOW, 0.06);
+    // a mound of stones round each foot, rope lashings up the pole
+    for (let i = 0; i < 4; i++) b.sphere([0.2, 0.12, 0.18], [leg(0, sx, sz)[0] + Math.cos(i * 1.7) * 0.18, 0.06, leg(0, sx, sz)[2] + Math.sin(i * 1.7) * 0.18], STONE);
+    for (const y of [1.6, 3.2, 4.8, 6.2]) b.cylinder(0.1, 0.1, 0.1, leg(y, sx, sz), ROPE, undefined, 8);
+  }
+  // braced on every face: an X in each storey
+  for (const [y0, y1] of [[0.2, 1.6], [1.6, 3.2], [3.2, 4.8], [4.8, 6.3]]) {
+    for (const [ax, az, bx, bz] of [[-1, -1, 1, -1], [1, -1, 1, 1], [1, 1, -1, 1], [-1, 1, -1, -1]]) {
+      b.limb(leg(y0, ax, az), leg(y1, bx, bz), 0.025, WILLOW);
+      b.limb(leg(y0, bx, bz), leg(y1, ax, az), 0.025, WILLOW);
+    }
+  }
   for (const y of [1.6, 3.2, 4.8]) {
-    b.box([1.3, 0.06, 1.3], [0, y, 0], PLANK);
-    b.limb([-0.75, y, -0.75], [0.75, y + 1.5, -0.75], 0.025, WILLOW); // zig-zag braces
+    const k = 1.3 - (y / 6.4) * 0.55;
+    b.box([1.25 * k, 0.06, 1.25 * k], [0, y, 0], PLANK);
   }
   for (let i = 0; i < 12; i++) b.limb([0.95, 0.3 + i * 0.5, 0.1], [0.95, 0.3 + i * 0.5, 0.45], 0.02, WILLOW); // ladder rungs
   b.box([1.5, 0.1, 1.5], [0, 6.4, 0], PLANK);
@@ -252,6 +266,12 @@ export function heronPerch(b: ModelBuilder): void {
     b.limb([Math.cos(a) * 0.85, 6.5, Math.sin(a) * 0.85], [Math.cos(a + 0.9) * 0.85, 6.7 + (i % 3) * 0.05, Math.sin(a + 0.9) * 0.85], 0.04, i % 2 ? WILLOW : DARK);
   }
   b.cylinder(0.75, 0.8, 0.18, [0, 6.55, 0], { color: '#5a4a30', tex: 'wood' }, undefined, 14);
+  // a woven reed screen round the lookout
+  for (let i = 0; i < 16; i++) {
+    const a = (i / 16) * Math.PI * 2;
+    if (i === 0 || i === 1) continue; // the gap the sling-arm swings through
+    b.box([0.34, 0.45, 0.04], [Math.cos(a) * 0.78, 6.85, Math.sin(a) * 0.78], i % 2 ? REED : REED_DARK, [0, -a + Math.PI / 2, 0]);
+  }
   plainThatch(b, 0.7, 0.8, 7.2);
   for (const [x, z] of [[-0.5, -0.5], [0.5, -0.5], [-0.5, 0.5], [0.5, 0.5]]) b.limb([x, 6.5, z], [x, 7.25, z], 0.035, WILLOW);
   b.limb([-0.3, 6.7, 0], [0.95, 7.35, 0], 0.06, WILLOW, 0.035); // sling-arm
