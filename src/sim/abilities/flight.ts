@@ -24,11 +24,11 @@ export const FLY_SPEED = 1.6;
 /** A grounded flier walks rather than flies to anywhere this close (tiles) with a clear way there. */
 export const WALK_HOP = 5;
 /** Calories per second flapping (taking off and climbing), per kg of body. */
-export const FLY_BURN_PER_KG = 0.3;
+export const FLY_BURN_PER_KG = 0.43;
 /** Calories per second soaring at its ceiling, per kg: riding the air costs little. */
-export const SOAR_BURN_PER_KG = 0.1;
+export const SOAR_BURN_PER_KG = 0.143;
 /** Calories to climb one metre, per kg of body. */
-export const CLIMB_CAL_PER_KG_M = 0.5;
+export const CLIMB_CAL_PER_KG_M = 0.71;
 /** Metres per second it climbs toward its ceiling. */
 export const CLIMB_RATE = 1;
 /** Metres of the take-off burst (climbs 3× as fast up to here). */

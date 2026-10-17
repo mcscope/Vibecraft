@@ -351,7 +351,7 @@ const siegeHeron: FenUnit = {
   },
 };
 
-/** The same bird, grown vast: a 400-root body that carries twice the load (for comparing against the Siege Heron). */
+/** The Great Siege Heron: the siege-heron model grown vast, a 400-root body carrying twelve crystals. */
 const greatSiegeHeron: FenUnit = {
   ...siegeHeron,
   id: 'great-siege-heron',
@@ -362,7 +362,7 @@ const greatSiegeHeron: FenUnit = {
   model: (b, p) => b.joint([0, 0, 0], [0, 0, 0], (s) => siegeHeron.model(s, p), 1.45),
 };
 
-export const units: FenUnit[] = [fenling, reedguard, bogToad, packTortoise, siegeHeron, greatSiegeHeron];
+export const units: FenUnit[] = [fenling, reedguard, bogToad, packTortoise, greatSiegeHeron];
 
 // ── Buildings (capital curve K = 720). Cheap and many, except the Elder Mound.
 export const buildings: FenBuilding[] = [
@@ -389,7 +389,7 @@ export const buildings: FenBuilding[] = [
   },
   {
     id: 'elder-mound', name: 'Elder Mound', description: 'Where the fen\'s lore is kept and taught: every deep technology is learned here, and only here. The great siege herons roost on its crown.',
-    size: 3, materials: 700, requires: ['reed-hut'], trains: ['siege-heron', 'great-siege-heron'], researches: ['fen-lore', 'fen-lore-2', 'fen-lore-3', 'reed-lore', 'toad-lore'], model: models.elderMound,
+    size: 3, materials: 700, requires: ['reed-hut'], trains: ['great-siege-heron'], researches: ['fen-lore', 'fen-lore-2', 'fen-lore-3', 'reed-lore', 'toad-lore'], model: models.elderMound,
   },
   {
     id: 'heron-perch', name: 'Heron Perch', description: 'A spindly platform on very tall stilts with a sling-arm on top: reaches far, but can\'t hit the ground right beneath it.',
