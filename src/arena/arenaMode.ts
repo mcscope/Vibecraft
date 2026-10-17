@@ -84,7 +84,7 @@ export async function runArena(params: URLSearchParams): Promise<void> {
       <h2>Arena</h2>
       <a href="./">menu</a>
     </div>
-    <p class="arena-help">Equal-budget fights. Each cell: the share of its budget the winner keeps, <b class="win">+ row wins</b>, <b class="lose">− column wins</b>. Click a cell to watch it live.</p>
+    <p class="arena-help">Equal food budgets (crystal is free). Each cell: the share of its budget the winner keeps, <b class="win">+ row wins</b>, <b class="lose">− column wins</b>. Click a cell to watch it live.</p>
     <div class="arena-controls">
       Budget <select class="arena-budget">${BUDGETS.map((b) => `<option value="${b}"${b === budget ? ' selected' : ''}>${b}</option>`).join('')}</select>
       <span class="arena-speed">${[0.5, 1, 2, 4].map((s) => `<button data-speed="${s}">${s}×</button>`).join('')}</span>
@@ -149,7 +149,7 @@ export async function runArena(params: URLSearchParams): Promise<void> {
   const statsBox = panel.querySelector<HTMLElement>('.arena-stats')!;
   const fmt = (v: number, d = 1) => (Math.abs(v) >= 100 ? Math.round(v).toString() : v.toFixed(d));
   const statRows = (s: DerivedStats, cost: number): Array<[string, string]> => [
-    ['Cost', `${s.foodCost} food${s.crystalCost ? ` + ${s.crystalCost} crystal` : ''} (${Math.round(cost)})`],
+    ['Cost', `${Math.round(cost)} food${s.crystalCost ? ` (+ ${s.crystalCost} crystal, free here)` : ''}`],
     ['Mass', `${fmt(s.mass)} kg`],
     ['Health', fmt(s.maxHp)],
     ['Armour', fmt(s.armour)],

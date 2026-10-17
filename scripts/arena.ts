@@ -1,4 +1,4 @@
-// Balance tool: equal-budget fights between every pair of combat units of the playable factions.
+// Balance tool: equal food-budget fights (crystal free) between every pair of combat units of the playable factions.
 // Run: npm run arena [budget=1200] [all]. Each cell: the share of its budget the winner keeps (+ = the row wins).
 // To watch the fights, open the game with ?mode=arena (or Arena on the menu).
 import { PLAYABLE } from '../src/factions';
