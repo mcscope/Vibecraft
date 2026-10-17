@@ -10,7 +10,7 @@ import type { Minimap } from './minimap';
 import { keymap, settings, settingsOpen, updateSettings } from './settings';
 
 /** resupplyDest: units were just sent to resupply; a ground click picks where they go afterwards. */
-type Mode = 'attackMove' | 'give' | 'resupplyDest' | 'place' | null;
+type Mode = 'attackMove' | 'move' | 'give' | 'resupplyDest' | 'place' | null;
 
 export class Input {
   readonly rs: RenderState = { selected: new Set(), hoverId: 0, box: null, ping: null, ghost: null };
@@ -99,7 +99,7 @@ export class Input {
     cam.clampTo(this.world.grid.width, this.world.grid.height);
     // hover shows what a right-click would target
     this.rs.hoverId = this.mouse.inside ? this.renderer.pick(this.mouse.x, this.mouse.y, this.alpha, this.orderPicker()) : 0;
-    this.canvas.style.cursor = this.mode === 'attackMove' ? 'crosshair' : this.mode === 'give' ? 'copy' : this.mode === 'resupplyDest' ? 'alias' : this.mode === 'place' ? 'cell' : 'default';
+    this.canvas.style.cursor = this.mode === 'attackMove' ? 'crosshair' : this.mode === 'move' ? 'pointer' : this.mode === 'give' ? 'copy' : this.mode === 'resupplyDest' ? 'alias' : this.mode === 'place' ? 'cell' : 'default';
     // building placement preview follows the cursor
     if (this.mode === 'place' && this.mouse.inside) {
       const spec = this.world.buildingSpecOf(this.player, this.placeSpec);
@@ -170,7 +170,11 @@ export class Input {
         }
         return;
       }
-      if (this.mode === 'attackMove') {
+      if (this.mode === 'move') {
+        // a plain move: walk there whatever's under the cursor (pull out of a fight)
+        this.formationMove(units, wx, wy);
+        this.ping(wx, wy, TEAM_COLORS[this.player].secondary);
+      } else if (this.mode === 'attackMove') {
         const t = this.world.units.get(target) ?? this.world.buildings.get(target);
         if (t && t.owner !== this.player) this.issue({ type: 'attack', units, target });
         else this.issue({ type: 'attackMove', units, x: wx, y: wy });
@@ -234,7 +238,10 @@ export class Input {
   contextCommand(wx: number, wy: number, target: number, _shift: boolean): void {
     const w = this.world;
     const units = this.selectedUnits();
-    const tu = w.units.get(target), tn = w.nodes.get(target);
+    const tu = w.units.get(target);
+    // spent crystals on the ground aren't targets: right-clicking near them in a fight should still move
+    // (throwers pick them up by themselves)
+    const tn0 = w.nodes.get(target), tn = tn0 && !(tn0.shard && !tn0.carcass) ? tn0 : undefined;
     // a finished road or belt is just ground to walk on (sim/abilities/underfoot.ts)
     const tbAny = w.buildings.get(target);
     const tb = tbAny && tbAny.complete && isUnderfoot(tbAny.spec) ? undefined : tbAny;
@@ -348,6 +355,7 @@ export class Input {
     }
     if (units.length) {
       if (k === km.attackMove) { this.mode = 'attackMove'; return; }
+      if (k === km.move) { this.mode = 'move'; return; }
       if (k === km.give) { this.mode = 'give'; return; }
       if (k === km.stop) { this.issue({ type: 'stop', units }); return; }
       // Tap: resupply and come back. Hold and click: resupply, then go there.
@@ -444,7 +452,7 @@ export class Input {
   }
 
   /** Commands triggered from HUD buttons. */
-  hudCommand(kind: 'stop' | 'attackMove' | 'resupply' | 'give'): void {
+  hudCommand(kind: 'stop' | 'attackMove' | 'move' | 'resupply' | 'give'): void {
     const units = this.selectedUnits();
     if (!units.length) return;
     if (kind === 'stop') this.issue({ type: 'stop', units });

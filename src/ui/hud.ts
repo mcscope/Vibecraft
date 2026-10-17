@@ -16,7 +16,7 @@ export interface HudActions {
   research(buildingId: number, techId: string): void;
   cancelTrain(buildingId: number, index?: number): void;
   select(ids: number[]): void;
-  command(kind: 'stop' | 'attackMove' | 'resupply' | 'give'): void;
+  command(kind: 'stop' | 'attackMove' | 'move' | 'resupply' | 'give'): void;
   place(specId: string): void;
   idleWorker(): void;
   autoTrain(buildingId: number, specId: string | null): void;
@@ -464,6 +464,7 @@ export class Hud {
   private commandButtons(): string {
     const km = keymap();
     return `<div class="cmds">
+      <button data-cmd="move" title="Move there, ignoring enemies on the way (pull units out of a fight)">Move <kbd>${km.move.toUpperCase()}</kbd></button>
       <button data-cmd="attackMove" title="Attack-move">Attack <kbd>${km.attackMove.toUpperCase()}</kbd></button>
       <button data-cmd="stop" title="Stop">Stop <kbd>${km.stop.toUpperCase()}</kbd></button>
       <button data-cmd="resupply" title="Resupply at the nearest stocked building, then return. Hold the key and click the ground to send them there afterwards.">Resupply <kbd>${km.resupply.toUpperCase()}</kbd></button>
