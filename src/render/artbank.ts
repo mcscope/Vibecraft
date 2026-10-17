@@ -57,7 +57,8 @@ export class ArtBank {
     return [...out];
   }
 
-  static async build(world: World, biome: BiomeLoader, onProgress: (f: number, label: string) => void): Promise<ArtBank> {
+  /** `teams` overrides the seat colours (the arena paints every left side blue, every right side red). */
+  static async build(world: World, biome: BiomeLoader, onProgress: (f: number, label: string) => void, teams?: TeamColors[]): Promise<ArtBank> {
     const players = world.players.filter((p) => !p.neutral);
     // the default biome is only baked if some player brings none of their own
     const loaders = [...new Set(players.map((p) => world.factionOf(p.id).biome ?? biome))];
@@ -71,7 +72,7 @@ export class ArtBank {
     const factions: FactionArt[] = [];
     for (const p of world.players) {
       const f = world.factionOf(p.id);
-      const team = p.neutral ? WILD_COLORS : TEAM_COLORS[p.id % TEAM_COLORS.length];
+      const team = p.neutral ? WILD_COLORS : teams?.[p.id] ?? TEAM_COLORS[p.id % TEAM_COLORS.length];
       if (p.neutral) factions.push(wildsArt(world, p.id, team, biomes));
       else factions.push(f.art ? await f.art(team, sub) : placeholderArt(world, p.id, team));
       base++;

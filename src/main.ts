@@ -47,8 +47,9 @@ if (!mapSel.value) mapSel.value = MAPS[0].id;
 mapSel.addEventListener('change', () => { picked.map = mapSel.value; try { localStorage.setItem(PICK_KEY, JSON.stringify(picked)); } catch { /* private mode */ } });
 const pick = (which: 'you' | 'foe'): FactionSpec => PLAYABLE.find((f) => f.id === menu.querySelector<HTMLSelectElement>(`[data-pick="${which}"]`)!.value) ?? meadowfolk;
 const loading = document.getElementById('loading')!;
-const mode = params.get('mode') as Mode | null;
-if (mode) start(mode);
+const mode = params.get('mode') as Mode | 'arena' | null;
+if (mode === 'arena') { menu.style.display = 'none'; void import('./arena/arenaMode').then((m) => m.runArena(params)); }
+else if (mode) start(mode);
 else {
   menu.style.display = 'flex';
   menu.addEventListener('click', (e) => {
@@ -60,8 +61,9 @@ else {
       openLobby(lobby.querySelector<HTMLElement>('.lobby-box')!, (g) => { lobby.style.display = 'none'; void startOnline(g); }, () => (lobby.style.display = 'none'));
       return;
     }
-    const m = (e.target as HTMLElement).closest<HTMLElement>('[data-mode]')?.dataset.mode as Mode | undefined;
+    const m = (e.target as HTMLElement).closest<HTMLElement>('[data-mode]')?.dataset.mode as Mode | 'arena' | undefined;
     if (!m) return;
+    if (m === 'arena') { location.href = '?mode=arena'; return; }
     history.replaceState(null, '', `?mode=${m}&you=${pick('you').id}&foe=${pick('foe').id}&map=${mapSel.value}`);
     start(m);
   });
