@@ -33,7 +33,7 @@ export interface ArenaEntry { faction: FactionSpec; id: string }
 export function arenaRoster(factions: FactionSpec[], all = false): ArenaEntry[] {
   const out: ArenaEntry[] = [];
   for (const f of factions) for (const u of f.units) {
-    if (!all && (u.id === f.workerId || u.id === f.carterId || u.role === 'carter' || !u.attack || u.bearer)) continue;
+    if (!all && (u.id === f.carterId || u.role === 'carter' || !u.attack || u.bearer)) continue; // anything that fights, workers too
     out.push({ faction: f, id: u.id });
   }
   return out;
