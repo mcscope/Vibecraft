@@ -23,8 +23,10 @@ export const FLY_SIGHT = 3;
 export const FLY_SPEED = 1.6;
 /** A grounded flier walks rather than flies to anywhere this close (tiles) with a clear way there. */
 export const WALK_HOP = 3;
-/** Calories per second of level flight, per kg of body (soaring is cheap). */
+/** Calories per second flapping (taking off and climbing), per kg of body. */
 export const FLY_BURN_PER_KG = 0.3;
+/** Calories per second soaring at its ceiling, per kg: riding the air costs little. */
+export const SOAR_BURN_PER_KG = 0.1;
 /** Calories to climb one metre, per kg of body. */
 export const CLIMB_CAL_PER_KG_M = 0.5;
 /** Metres per second it climbs toward its ceiling. */
@@ -37,8 +39,9 @@ export const dropTime = (h: number): number => Math.max(0.25, Math.sqrt((2 * h) 
 export const LAND_FRACTION = 0.1;
 export const LAUNCH_FRACTION = 0.2;
 
-/** Calories per second of level flight. */
+/** Calories per second flapping up, and soaring once at its ceiling. */
 export const flightBurn = (d: DerivedStats): number => d.mass * FLY_BURN_PER_KG;
+export const soarBurn = (d: DerivedStats): number => d.mass * SOAR_BURN_PER_KG;
 /** Calories to climb all the way to its ceiling. */
 export const climbCost = (d: DerivedStats): number => d.mass * d.flyHeight * CLIMB_CAL_PER_KG_M;
 /** Seconds it can stay up on full calories. */
@@ -70,7 +73,8 @@ export function tickFlight(w: World, u: Unit, moved: boolean, dt: number): void 
   if (!u.airborne) { u.alt = 0; return; }
   const climb = Math.min(CLIMB_RATE * dt, Math.max(0, u.stats.flyHeight - u.alt));
   u.alt += climb;
-  u.cal -= flightBurn(u.stats) * dt + u.stats.mass * CLIMB_CAL_PER_KG_M * climb;
+  const soaring = u.alt >= u.stats.flyHeight - 1e-6; // up at its ceiling it rides the air
+  u.cal -= (soaring ? soarBurn(u.stats) : flightBurn(u.stats)) * dt + u.stats.mass * CLIMB_CAL_PER_KG_M * climb;
   const hovering = u.throws && (u.engage || u.order.kind === 'attack' || u.order.kind === 'attackMove');
   if (u.cal <= u.stats.maxCalories * LAND_FRACTION || u.exhausted || (!moved && !hovering)) {
     if (!w.grid.isBlocked(u.x, u.y)) { u.airborne = false; u.alt = 0; return; }
@@ -90,6 +94,6 @@ export const flight: Ability = {
   id: 'flight',
   validateUnit: (u: UnitSpec, where: string) => (u.flight !== undefined && typeof u.flight !== 'boolean' && !(typeof u.flight === 'object' && typeof u.flight.height === 'number' && u.flight.height >= 3 && u.flight.height <= 30) ? [`${where}: bad flight (true, or { height: 3–30 m })`] : []),
   unitCodex: (u: UnitSpec, d: DerivedStats) => (u.flight
-    ? `<b>Flies</b>, climbing slowly to ${n0(d.flyHeight)} m. Walks a few tiles, takes off to go further, straight over walls and water. Soaring costs ${f1(flightBurn(d), 1)} cal/s; climbing all the way costs ${n0(climbCost(d))} cal more. It lands when it stops or runs low. In the air only thrown crystals reach it${u.attack?.style === 'strike' ? '; it lands to strike' : '; it bombs: flies over its target and drops crystals that hit harder the higher it has climbed'}, and it sees further.`
+    ? `<b>Flies</b>, climbing slowly to ${n0(d.flyHeight)} m. Walks a few tiles, takes off to go further, straight over walls and water. Flapping up costs ${f1(flightBurn(d), 1)} cal/s plus ${n0(climbCost(d))} cal for the whole climb; once at its ceiling it soars on ${f1(soarBurn(d), 1)} cal/s. It lands when it stops or runs low. In the air only thrown crystals reach it${u.attack?.style === 'strike' ? '; it lands to strike' : '; it bombs: flies over its target and drops crystals that hit harder the higher it has climbed'}, and it sees further.`
     : null),
 };
