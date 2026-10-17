@@ -208,14 +208,21 @@ const hurlhorn: MeadowUnit = {
   model(outer, p) {
     // modelled at 700 kg; drawn at the cube-root scale of its actual mass
     outer.joint([0, 0, 0], [0, 0, 0], (b) => {
-      const wool: Mat = { color: '#5b4330', tex: 'fur' };
-      const woolLight: Mat = { color: '#7a5d40', tex: 'fur' };
+      const wool: Mat = { color: '#80603f', tex: 'fur' };
+      const woolLight: Mat = { color: '#a8875e', tex: 'fur' };
       const horn: Mat = { color: '#d9ccb0', tex: 'stone', rough: 0.5 };
       const bob = quadLegs(b, p, { fx: 0.8, bx: -0.85, z: 0.38, hip: 1.25, len: 1.25, r: 0.17, mat: wool, paw: { color: '#2d241c', tex: 'leather' } });
       b.joint([0, bob, 0], [0, 0, 0], (c) => {
         c.sphere([1.3, 0.75, 0.7], [0, 1.65, 0], wool);
         c.sphere([0.7, 0.6, 0.62], [0.65, 1.85, 0], woolLight); // hump
         c.sphere([1.0, 0.45, 0.6], [0, 1.25, 0], wool); // shaggy skirt
+        c.sphere([1.15, 0.35, 0.66], [-0.05, 1.12, 0], woolLight); // shaggy fringe below
+        // panniers of spare crystal on each flank
+        for (const z of [1, -1]) {
+          c.box([0.55, 0.42, 0.18], [-0.45, 1.75, z * 0.74], WOOD, [z * 0.1, 0, 0]);
+          c.box([0.58, 0.06, 0.2], [-0.45, 1.97, z * 0.74], IRON, [z * 0.1, 0, 0]);
+          if (p.armed) for (const dx of [-0.6, -0.42, -0.28]) c.crystal(0.16, [dx, 2.08, z * 0.76], [z * 0.3, 0, dx]);
+        }
         c.joint([1.45, 1.6, 0], [0, 0, p.anim === 'tired' ? -0.4 : p.anim === 'gather' ? -0.5 : 0], (h) => {
           h.sphere([0.45, 0.38, 0.38], [0, 0, 0], wool);
           h.sphere([0.22, 0.2, 0.24], [0.36, -0.12, 0], { color: '#3a2c20', tex: 'leather' });
@@ -242,7 +249,11 @@ const hurlhorn: MeadowUnit = {
         let arm = -2.3;
         if (p.anim === 'attack') arm = p.phase < 0.4 ? -2.3 - p.phase * 0.5 : p.phase < 0.6 ? -2.5 + ((p.phase - 0.4) / 0.2) * 3.4 : 0.9 - ((p.phase - 0.6) / 0.4) * 3.2;
         const tip = swing([-0.05, 3.15, 0], 1.5, Math.PI + arm);
-        c.limb([-0.05, 3.15, 0], tip, 0.055, WOOD, 0.04);
+        c.limb([-0.05, 3.15, 0], tip, 0.07, WOOD, 0.05);
+        // iron-banded counterweight on the short end
+        const back = swing([-0.05, 3.15, 0], 0.45, arm);
+        c.limb([-0.05, 3.15, 0], back, 0.07, WOOD);
+        c.box([0.22, 0.22, 0.26], back, IRON, [0, 0, arm]);
         c.cylinder(0.14, 0.09, 0.08, [tip[0], tip[1] + 0.02, tip[2]], LEATHER);
         if (p.armed && !(p.anim === 'attack' && p.phase > 0.55 && p.phase < 0.95)) c.crystal(0.38, [tip[0], tip[1] + 0.05, tip[2]], [0.3, 0, 0.4]);
       });
