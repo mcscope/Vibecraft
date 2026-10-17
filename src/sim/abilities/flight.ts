@@ -53,6 +53,9 @@ export const airtime = (d: DerivedStats): number => d.maxCalories / flightBurn(d
 export const FLY_TURN = 2.5;
 /** Metres per second it sinks while coming in to land. */
 export const DESCENT_RATE = 1.5;
+/** Below this (m) it flares to land: wings braking, it drops fast and stops circling. */
+export const FLARE_HEIGHT = 2.5;
+export const FLARE_DESCENT = 4;
 /** It starts coming in to land this close (tiles) to where it has to be on foot. */
 export const LAND_APPROACH = 4;
 
@@ -109,14 +112,15 @@ export function tickFlight(w: World, u: Unit, _moved: boolean, dt: number, face:
   if (!u.airborne) { u.alt = 0; u.vert = 0; return; }
   const alt0 = u.alt;
   const flew = u.flewTick === w.tick;
-  if (!flew) { u.flyDir += turnRate(u) * dt; glide(w, u, u.flySpeed || airSpeed(u), dt, face); } // no stopping in the air: circle at its pace
+  const flaring = !flew && u.alt < FLARE_HEIGHT && (u.vert < 0 || u.alt < 0.5); // the last few metres down: straight in, airbrakes out
+  if (!flew) { if (!flaring) u.flyDir += turnRate(u) * dt; glide(w, u, (u.flySpeed || airSpeed(u)) * (flaring ? 0.5 : 1), dt, face); } // no stopping in the air: circle at its pace
   const fighting = u.throws && (u.engage || u.order.kind === 'attack' || u.order.kind === 'attackMove');
   const travelling = flew && (u.order.kind === 'move' || u.order.kind === 'attackMove' || u.order.kind === 'attack');
   const nearFootGoal = flew && !travelling && Math.hypot(u.goalX - u.x, u.goalY - u.y) < LAND_APPROACH;
   const low = u.cal <= u.stats.maxCalories * LAND_FRACTION || u.exhausted;
   const comingIn = low || (!fighting && (!flew || nearFootGoal));
   if (comingIn) {
-    u.alt = Math.max(0, u.alt - DESCENT_RATE * dt);
+    u.alt = Math.max(0, u.alt - (u.alt < FLARE_HEIGHT ? FLARE_DESCENT : DESCENT_RATE) * dt);
     u.cal -= soarBurn(u.stats) * dt; // gliding down
     if (u.alt <= 0) {
       if (!w.grid.isBlocked(u.x, u.y)) { u.airborne = false; u.alt = 0; }

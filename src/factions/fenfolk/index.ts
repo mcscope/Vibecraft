@@ -12,7 +12,7 @@
 //     but so heavy they can only stay up for a few seconds' bombing run
 // Self-contained: only engine types and kits, never another faction.
 import type { BuildingSpec, FactionSpec, TechSpec, UnitSpec } from '../types';
-import type { BuildingModel, Mat, UnitModel } from '../../kits/bake3d/types';
+import type { BuildingModel, Mat, ModelBuilder, UnitModel } from '../../kits/bake3d/types';
 import { fenWildlife } from './wildlife';
 import { fenArm, fenLoad, fenling as body, type FenLook } from './rig';
 import * as models from './buildings';
@@ -265,7 +265,8 @@ const siegeHeron: FenUnit = {
           for (const tz of [-0.08, 0, 0.08]) b.limb(foot, [foot[0] + 0.22, 0.02, foot[2] + tz * 1.5], 0.015, heronLeg); // splayed toes
         }
       }
-      b.joint([leaping ? 0.3 : 0, lift, 0], [0, 0, flying ? pitch : 0], (c) => {
+      // the body pitches about the hip (so the legs stay attached however it tilts)
+      b.joint([leaping ? 0.3 : 0, lift + 1.3, 0], [0, 0, flying ? pitch : 0], (cp) => cp.joint([0, -1.3, 0], [0, 0, 0], (c) => {
         // body, pale breast plumes and a long tail
         // body: an egg, slim and rounded, fuller at the breast and tapering to the tail. On the ground a heron holds
         // it tilted steeply up (tail low), leaning forward more as it walks; in the air it lies level.
@@ -327,16 +328,21 @@ const siegeHeron: FenUnit = {
             }
             wg.sphere([0.05, 0.04, inner * 0.4], [LE - 0.12, 0.02, side * inner * 0.5], { team: 'primary', tex: 'cloth' }); // a thin war-paint stripe
             const bow = held ? 0.45 : 0.15 + 0.35 * Math.max(0, Math.sin(t)); // deepest at the bottom of the downstroke
-            wg.joint([0, 0, side * inner * 0.9], [side * bow * spread, 0, 0], (hand) => {
-              for (const f of [0.15, 0.4, 0.65, 0.85]) {
-                const rx = 0.3 - f * 0.1;
-                hand.sphere([rx, 0.03, outer * 0.32], [LE - 0.02 * f - rx, 0, side * outer * f], heronGrey);
+            // the hand curves down smoothly: four ovals, each bent a little more than the last (no hinge)
+            const seg = outer / 4, step = (side * bow * spread) / 4;
+            const curve = (j: ModelBuilder, k: number): void => {
+              if (k === 4) {
+                for (let f = 0; f < 5; f++) { // primaries splayed like fingers, longest at the front, rooted in the last oval
+                  const len = (0.34 - f * 0.03) * (0.55 + spread * 0.45);
+                  j.sphere([0.05, 0.014, len / 2], [LE - 0.07 - f * 0.07, -0.005, side * (len / 2 - seg * 0.2)], heronDark, [0, side * (f * 0.13 - 0.1) * spread, 0]);
+                }
+                return;
               }
-              for (let k = 0; k < 5; k++) { // primaries splayed like fingers, longest at the front, rooted well inside the hand
-                const len = (0.34 - k * 0.03) * (0.55 + spread * 0.45);
-                hand.sphere([0.05, 0.014, len / 2], [LE - 0.07 - k * 0.07, -0.005, side * (outer * 0.8 + len / 2)], heronDark, [0, side * (k * 0.13 - 0.1) * spread, 0]);
-              }
-            });
+              const rx = 0.3 - (k / 4) * 0.1;
+              j.sphere([rx, 0.03, seg * 0.75], [LE - 0.02 * (k / 4) - rx, 0, side * seg * 0.5], heronGrey);
+              j.joint([0, 0, side * seg], [step, 0, 0], (n) => curve(n, k + 1));
+            };
+            wg.joint([0, 0, side * inner * 0.9], [step, 0, 0], (hand) => curve(hand, 0));
           });
         }
         // bronze-bound siege basket hung on chains beneath the belly, glowing with heavy crystals
@@ -354,7 +360,7 @@ const siegeHeron: FenUnit = {
         c.limb([-0.3, 1.8, 0.18], [-0.38, 2.85, 0.18], 0.014, WILLOW);
         c.box([0.42, 0.26, 0.02], [-0.6 - (flying ? 0.08 : 0), 2.7, 0.18], { team: 'primary', tex: 'cloth' }, [0, 0, flying ? Math.sin(t * 2) * 0.15 : 0]);
         c.sphere(0.035, [-0.38, 2.87, 0.18], HERON_BRONZE);
-      });
+      }));
     }, 1.4); // drawn big: it towers over a reed hut
   },
 };

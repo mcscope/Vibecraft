@@ -133,8 +133,8 @@ export class Renderer {
   /** Px above the ground unit `id` is drawn at (zoom 1). */
   /** Pixels a flier is drawn above its ground spot (at zoom 1). */
   lift(id: number): number { return this.alt.get(id) ?? 0; }
-  /** Screen height for an altitude in metres: 34 px at 6 m, about 65 px at 18 m (rising more slowly higher up). */
-  static altPx(m: number): number { return m <= 0 ? 0 : 34 * Math.pow(m / 6, 0.6); }
+  /** Screen height for an altitude in metres: 6 px per metre (108 px at 18 m). */
+  static altPx(m: number): number { return Math.max(0, m) * 6; }
   private fog: { canvas: HTMLCanvasElement; img: ImageData; tex: Texture; sprite: PixiSprite; tick: number } | null = null;
 
   /** Can the viewer see this spot right now? (Their own things always.) */

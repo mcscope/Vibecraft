@@ -13,7 +13,7 @@ import * as bearerAbility from './abilities/bearer';
 import { midStride, strideFactor } from './abilities/gait';
 import { nearestDropOff } from './abilities/dropoff';
 import { eating, isTamer, runPens, runTame } from './abilities/herding';
-import { BOMB_REACH, canReach, dropTime, FLY_SIGHT, flyTo, heightBonus, LAUNCH_HEIGHT, takeOff, tickFlight, walks } from './abilities/flight';
+import { BOMB_REACH, canReach, dropTime, FLARE_HEIGHT, FLY_SIGHT, flyTo, heightBonus, LAUNCH_HEIGHT, takeOff, tickFlight, walks } from './abilities/flight';
 import { MatchStats } from './stats';
 import { isUnderfoot, loadBelt, nearestBelt, roadFactor, routeBelts, runBelts, type BeltRoutes, type Parcel } from './abilities/underfoot';
 import { grow, grownEnough, livingStats, seedMaterials } from './abilities/living';
@@ -1103,7 +1103,7 @@ export class World {
     else if ((u.order.kind === 'eatPack' || u.order.kind === 'resupply') && !moved && u.busy) anim = 'eat';
     else if (u.exhausted && !moved) anim = 'tired';
     // in the air: a flight pose pitched to how it's moving: leaping off the ground, climbing, soaring level, or gliding down
-    if (u.airborne) anim = u.vert > 0 ? (u.alt < LAUNCH_HEIGHT ? 'leap' : 'climb') : u.vert < 0 ? (u.alt < 2.5 ? 'land' : 'glide') : 'soar'; // the last few metres down: flaring to land
+    if (u.airborne) anim = u.vert > 0 ? (u.alt < LAUNCH_HEIGHT ? 'leap' : 'climb') : u.vert < 0 ? (u.alt < FLARE_HEIGHT ? 'land' : 'glide') : 'soar'; // the last few metres down: flaring to land
     if (anim !== u.anim) { u.anim = anim; u.animT = 0; } else u.animT += DT;
 
     if (!u.busy && !moved && u.order.kind !== 'resupply' && u.order.kind !== 'eatPack') {
