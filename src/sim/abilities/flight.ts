@@ -93,7 +93,8 @@ export function flyTo(w: World, u: Unit, gx: number, gy: number, arrive: number,
   const max = turnRate(u) * dt;
   turn = Math.max(-max, Math.min(max, turn));
   u.flyDir += turn;
-  glide(w, u, speed * FLY_SPEED, dt, face);
+  u.flySpeed = speed * FLY_SPEED; // it keeps this pace when it coasts
+  glide(w, u, u.flySpeed, dt, face);
   u.flewTick = w.tick;
   return Math.hypot(gx - u.x, gy - u.y) <= arrive;
 }
@@ -107,7 +108,7 @@ export function flyTo(w: World, u: Unit, gx: number, gy: number, arrive: number,
 export function tickFlight(w: World, u: Unit, _moved: boolean, dt: number, face: (dx: number, dy: number) => void): void {
   if (!u.airborne) { u.alt = 0; return; }
   const flew = u.flewTick === w.tick;
-  if (!flew) { u.flyDir += turnRate(u) * dt; glide(w, u, airSpeed(u), dt, face); } // no stopping in the air: circle
+  if (!flew) { u.flyDir += turnRate(u) * dt; glide(w, u, u.flySpeed || airSpeed(u), dt, face); } // no stopping in the air: circle at its pace
   const fighting = u.throws && (u.engage || u.order.kind === 'attack' || u.order.kind === 'attackMove');
   const travelling = flew && (u.order.kind === 'move' || u.order.kind === 'attackMove' || u.order.kind === 'attack');
   const nearFootGoal = flew && !travelling && Math.hypot(u.goalX - u.x, u.goalY - u.y) < LAND_APPROACH;
