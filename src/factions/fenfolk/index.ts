@@ -78,12 +78,15 @@ const bogToad: FenUnit = {
   id: 'bog-toad',
   name: 'Bog Toad',
   description: 'A huge marsh toad with a fenling on its back. Lunges and slams with its crystal-studded jaw: brutal up close.',
-  mass: 150,
+  mass: 400, // horse-sized: a fenling rides it
   physique: { muscle: 0.55, frame: 0.3, reserve: 0.15 },
   attack: { style: 'strike', crystalMass: 2.5 },
   refinement: 1.3,
   gait: { hop: 0.5, period: 1.1 }, // great lumbering leaps: airborne 1/3–5/6 of each stride
-  model(b, p) {
+  model(outer, p) {
+    // drawn at its old 150 kg proportions, scaled up by the cube root of its mass (the rider stays fenling-sized)
+    const K = Math.cbrt(400 / 150);
+    outer.joint([0, 0, 0], [0, 0, 0], (b) => {
     const ph = p.phase;
     const hop = p.anim === 'walk' && ph > 1 / 3 && ph < 5 / 6 ? Math.sin(((ph - 1 / 3) / 0.5) * Math.PI) * 0.32 : 0;
     const lunge = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase * 1.3) * Math.PI) * 0.45 : 0;
@@ -107,8 +110,9 @@ const bogToad: FenUnit = {
       c.box([0.4, 0.05, 0.5], [-0.05, 1.08, 0], { team: 'primary', tex: 'cloth' });
       c.joint([-0.05, 0.6, 0], [0, 0, 0], (r) => body(r, { ...p, anim: p.anim === 'walk' ? 'idle' : p.anim }, riderLook, fenArm(p, 'jab') * 0.6, (h) => {
         h.limb([0, 0.2, 0], [0, -0.5, 0], 0.014, WILLOW);
-      }), 0.9);
+      }), 0.9 / K);
     });
+    }, K);
   },
 };
 
