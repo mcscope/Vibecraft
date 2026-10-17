@@ -33,6 +33,10 @@ export const CLIMB_CAL_PER_KG_M = 0.71;
 export const CLIMB_RATE = 1;
 /** Metres of the take-off burst (climbs 3× as fast up to here). */
 export const LAUNCH_HEIGHT = 1.5;
+/** Extra climb rate (× CLIMB_RATE) right off the ground, easing away by 1.5 × LAUNCH_HEIGHT. 0: no burst. */
+export const LAUNCH_BURST = 0;
+/** Show the steep 'leap' pose for the first LAUNCH_HEIGHT metres (the sprites stay baked either way). */
+export const LEAP_POSE = false;
 /** How close (tiles) a bomber gets over its target before it drops. */
 export const BOMB_REACH = 0.6;
 /** Seconds a crystal takes to fall `h` metres. */
@@ -128,7 +132,8 @@ export function tickFlight(w: World, u: Unit, _moved: boolean, dt: number, face:
     }
   } else {
     // a burst off the ground (wings pounding) for the first couple of metres, then a steady climb
-    const rate = CLIMB_RATE * (1 + 2 * Math.max(0, 1 - u.alt / (LAUNCH_HEIGHT * 1.5))); // 3 m/s off the ground, easing to 1
+    // (trying it without the take-off burst: set LAUNCH_BURST to 2 for 3 m/s off the ground, easing to 1)
+    const rate = CLIMB_RATE * (1 + LAUNCH_BURST * Math.max(0, 1 - u.alt / (LAUNCH_HEIGHT * 1.5)));
     const climb = Math.min(rate * dt, Math.max(0, u.stats.flyHeight - u.alt));
     u.alt += climb;
     const soaring = u.alt >= u.stats.flyHeight - 1e-6; // up at its ceiling it rides the air
