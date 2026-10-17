@@ -31,6 +31,8 @@ export const SOAR_BURN_PER_KG = 0.1;
 export const CLIMB_CAL_PER_KG_M = 0.5;
 /** Metres per second it climbs toward its ceiling. */
 export const CLIMB_RATE = 1;
+/** Metres of the take-off burst (climbs 3× as fast up to here). */
+export const LAUNCH_HEIGHT = 2;
 /** How close (tiles) a bomber gets over its target before it drops. */
 export const BOMB_REACH = 0.6;
 /** Seconds a crystal takes to fall `h` metres. */
@@ -119,7 +121,9 @@ export function tickFlight(w: World, u: Unit, _moved: boolean, dt: number, face:
       else u.alt = 0.3; // over a wall or water: keep circling until there's ground
     }
   } else {
-    const climb = Math.min(CLIMB_RATE * dt, Math.max(0, u.stats.flyHeight - u.alt));
+    // a burst off the ground (wings pounding) for the first couple of metres, then a steady climb
+    const rate = u.alt < LAUNCH_HEIGHT ? CLIMB_RATE * 3 : CLIMB_RATE;
+    const climb = Math.min(rate * dt, Math.max(0, u.stats.flyHeight - u.alt));
     u.alt += climb;
     const soaring = u.alt >= u.stats.flyHeight - 1e-6; // up at its ceiling it rides the air
     u.cal -= (soaring ? soarBurn(u.stats) : flightBurn(u.stats)) * dt + u.stats.mass * CLIMB_CAL_PER_KG_M * climb;

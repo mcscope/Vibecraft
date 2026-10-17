@@ -128,11 +128,12 @@ export class Renderer {
   private alt = new Map<number, number>();
   private dt = 0;
   /** Screen px a flier is drawn above the ground at full height (zoom 1). */
-  private altV = new Map<number, number>();
-  private wasAirborne = new Set<number>();
   static readonly FLY_PX = 56;
   /** Px above the ground unit `id` is drawn at (zoom 1). */
-  lift(id: number): number { return (this.alt.get(id) ?? 0) * Renderer.FLY_PX; }
+  /** Pixels a flier is drawn above its ground spot (at zoom 1). */
+  lift(id: number): number { return this.alt.get(id) ?? 0; }
+  /** Screen height for an altitude in metres: 56 px at 6 m, rising more slowly higher up. */
+  static altPx(m: number): number { return m <= 0 ? 0 : Renderer.FLY_PX * Math.pow(m / 6, 0.7); }
   private fog: { canvas: HTMLCanvasElement; img: ImageData; tex: Texture; sprite: PixiSprite; tick: number } | null = null;
 
   /** Can the viewer see this spot right now? (Their own things always.) */
@@ -367,16 +368,9 @@ export class Renderer {
       // fliers (sim/abilities/flight.ts) leap into the air on take-off, overshoot a little
       // and settle at height on a spring; they glide down to land
       if (u.stats.flight) {
-        const a0 = this.alt.get(u.id) ?? 0;
-        let v = this.altV.get(u.id) ?? 0;
-        if (u.airborne && !this.wasAirborne.has(u.id)) v = Math.max(v, 5.5); // the leap
-        if (u.airborne) this.wasAirborne.add(u.id); else this.wasAirborne.delete(u.id);
-        const dt = Math.min(this.dt, 0.05);
-        const target = Math.min(2, 0.35 + u.alt / 12); // drawn higher as it climbs (sim/abilities/flight.ts)
-        if (u.airborne) v += ((target - a0) * 22 - v * 5) * dt; // springy climb to its height
-        else v = (0 - a0) * 3; // a gentle glide down
-        const a = Math.max(0, a0 + v * dt);
-        this.alt.set(u.id, a); this.altV.set(u.id, a > 0 ? v : 0);
+        // drawn at its real altitude (sim/abilities/flight.ts), smoothed between ticks
+        const a0 = this.alt.get(u.id) ?? 0, target = u.airborne ? Renderer.altPx(u.alt) : 0;
+        this.alt.set(u.id, a0 + (target - a0) * Math.min(1, this.dt * 10));
       }
       sp.position.set(isoX(x, y), isoY(x, y) - this.lift(u.id));
       sp.zIndex = x + y + (u.airborne ? 2 : 0);
@@ -408,7 +402,7 @@ export class Renderer {
       const x = p.sx + (p.tx - p.sx) * t, y = p.sy + (p.ty - p.sy) * t;
       const dist = Math.hypot(p.tx - p.sx, p.ty - p.sy);
       // a bomb falls from the bird (accelerating); a throw arcs; a tower's shot starts up its stilts
-      const h = p.drop ? ((0.35 + p.sz / 12) * Renderer.FLY_PX + 30) * (1 - t * t) : (10 + dist * 6) * 4 * t * (1 - t) + (26 + p.sz * 16) * (1 - t);
+      const h = p.drop ? (Renderer.altPx(p.sz) + 30) * (1 - t * t) : (10 + dist * 6) * 4 * t * (1 - t) + (26 + p.sz * 16) * (1 - t);
       sp.position.set(isoX(x, y), isoY(x, y) - h);
       sp.rotation = this.time * 14 + p.id;
       sp.visible = this.seen(p.owner, x, y);
@@ -530,7 +524,7 @@ export class Renderer {
       const lift = this.lift(u.id);
       if (lift < 2 || !this.seen(u.owner, u.x, u.y)) continue;
       const x = u.px + (u.x - u.px) * alpha, y = u.py + (u.y - u.py) * alpha;
-      const r = u.stats.radius * 40 * (1 - lift / Renderer.FLY_PX * 0.3);
+      const r = u.stats.radius * 40 * Math.max(0.45, 1 - lift / Renderer.FLY_PX * 0.3);
       ellipse(this.discTex, isoX(x, y), isoY(x, y), r, r * 0.5, 0x000000, 0.3);
     }
     P.end();
