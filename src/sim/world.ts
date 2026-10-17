@@ -157,6 +157,8 @@ export interface Unit {
   vx: number; vy: number;
   /** Which way a flier went this tick: +1 climbing, -1 coming down, 0 level. */
   vert: number;
+  /** Climb (+) or dive (−) rate last tick, m/s (fliers). */
+  vz: number;
   /** Training dummy: inert target. */
   dummy: boolean;
   /** Wildlife temper (wild units only). */
@@ -230,6 +232,9 @@ export interface ResourceNode {
   /** Building that sowed it. */
   sownBy?: number;
 }
+
+/** Where a flier will be (m up) after `t` seconds at its current climb or dive: a throw at it is aimed there. */
+const leadAlt = (u: Unit, t: number): number => Math.max(0.3, Math.min(u.stats.flyHeight, u.alt + u.vz * t));
 
 export interface Projectile {
   id: number;
@@ -837,7 +842,7 @@ export class World {
       food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
       order: { kind: 'idle' }, resume: null, queue: [], engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
-      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0, vx: 0, vy: 0,
+      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0,
       dummy: !!spec.dummy,
       carter: spec.role === 'carter',
       gatherAcc: 0,
@@ -1074,7 +1079,7 @@ export class World {
       id: this.nextId++, owner: b.owner, sx: cx, sy: cy, sz: atk.height,
       tx: target.x + ((target.x - target.px) / DT) * flight, ty: target.y + ((target.y - target.py) / DT) * flight,
       t: 0, duration: flight, damage: tw.damage, crystalKg: atk.crystalMass, target: target.id,
-      tz: target.airborne && target.alt > 0.5 ? target.alt : undefined,
+      tz: target.airborne && target.alt > 0.5 ? leadAlt(target, flight) : undefined,
     };
     this.projectiles.set(p.id, p);
   }
@@ -1311,7 +1316,7 @@ export class World {
       const p: Projectile = {
         id: this.nextId++, owner: u.owner, sx: u.x, sy: u.y, sz: bomb ? u.alt : 0, tx: ax, ty: ay, t: 0, duration: flight,
         damage: u.stats.damage + heightBonus(u), crystalKg: u.crystalMass, target: targetId, drop: bomb || undefined,
-        tz: !bomb && tu?.airborne && tu.alt > 0.5 ? tu.alt : undefined,
+        tz: !bomb && tu?.airborne && tu.alt > 0.5 ? leadAlt(tu, flight) : undefined,
       };
       this.projectiles.set(p.id, p);
     } else {
@@ -1319,7 +1324,7 @@ export class World {
       let impale = 0;
       if (tu && !tu.throws && tu.stats.range < wpn.range - 0.2) {
         const dx = u.x - tu.x, dy = u.y - tu.y, d = Math.hypot(dx, dy) || 1;
-        const closing = Math.max(0, (tu.vx * dx + tu.vy * dy) / d) * 2; // tiles/s toward us → m/s
+        const closing = Math.max(0, (tu.vx * dx + tu.vy * dy) / d); // tiles/s toward us = m/s (1 tile = 1 m)
         impale = 0.5 * tu.stats.mass * closing * closing * K.braceShare * K.strikeEfficiency * K.damageScale;
       }
       this.damage(targetId, wpn.damage + impale, tx, ty);
@@ -1331,7 +1336,7 @@ export class World {
   launch(owner: number, x: number, y: number, h: number, tx: number, ty: number, damage: number, kg: number, target: number): void {
     const flight = Math.max(0.3, Math.hypot(tx - x, ty - y) / 8);
     const tu = this.units.get(target);
-    const p: Projectile = { id: this.nextId++, owner, sx: x, sy: y, sz: h, tx, ty, t: 0, duration: flight, damage, crystalKg: kg, target, tz: tu?.airborne && tu.alt > 0.5 ? tu.alt : undefined };
+    const p: Projectile = { id: this.nextId++, owner, sx: x, sy: y, sz: h, tx, ty, t: 0, duration: flight, damage, crystalKg: kg, target, tz: tu?.airborne && tu.alt > 0.5 ? leadAlt(tu, flight) : undefined };
     this.projectiles.set(p.id, p);
   }
 

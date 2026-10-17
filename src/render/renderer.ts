@@ -84,6 +84,9 @@ function shapeTexture(draw: (ctx: CanvasRenderingContext2D, w: number, h: number
   return Texture.from(c);
 }
 
+/** Pixels from a flier's altitude to the middle of its body: where bombs leave and anti-air throws arrive. */
+const AIR_BODY_PX = 30;
+
 export class Renderer {
   readonly cam = new Camera();
   private app = new Application();
@@ -404,10 +407,9 @@ export class Renderer {
       const dist = Math.hypot(p.tx - p.sx, p.ty - p.sy);
       // a bomb falls from the bird (accelerating); a throw arcs; a tower's shot starts up its stilts
       // thrown at a flier: the arc ends up at the bird (its altitude, plus half its body)
-      // (where the bird is drawn now, so the stone meets it even as it climbs or dives)
-      const tu = p.tz !== undefined ? this.world.units.get(p.target) : undefined;
-      const end = p.tz === undefined ? 0 : tu?.airborne ? this.lift(tu.id) + (this.bank.unit(tu.owner, tu.specId)?.height ?? 40) * 0.35 : Renderer.altPx(p.tz) + 20;
-      const h = p.drop ? (Renderer.altPx(p.sz) + 30) * (1 - t * t) : (10 + dist * 6) * 4 * t * (1 - t) + (26 + p.sz * 16) * (1 - t) + end * t;
+      // (its path is fixed when it leaves the hand: up to where the thrower aimed, the bird's body there)
+      const end = p.tz === undefined ? 0 : Renderer.altPx(p.tz) + AIR_BODY_PX;
+      const h = p.drop ? (Renderer.altPx(p.sz) + AIR_BODY_PX) * (1 - t * t) : (10 + dist * 6) * 4 * t * (1 - t) + (26 + p.sz * 16) * (1 - t) + end * t;
       sp.position.set(isoX(x, y), isoY(x, y) - h);
       sp.rotation = this.time * 14 + p.id;
       sp.visible = this.seen(p.owner, x, y);

@@ -113,7 +113,7 @@ export function flyTo(w: World, u: Unit, gx: number, gy: number, arrive: number,
  * or nearly at a place it has to reach on foot.
  */
 export function tickFlight(w: World, u: Unit, _moved: boolean, dt: number, face: (dx: number, dy: number) => void): void {
-  if (!u.airborne) { u.alt = 0; u.vert = 0; return; }
+  if (!u.airborne) { u.alt = 0; u.vert = 0; u.vz = 0; return; }
   const alt0 = u.alt;
   const flew = u.flewTick === w.tick;
   const flaring = !flew && u.alt < FLARE_HEIGHT && (u.vert < 0 || u.alt < 0.5); // the last few metres down: straight in, airbrakes out
@@ -141,6 +141,7 @@ export function tickFlight(w: World, u: Unit, _moved: boolean, dt: number, face:
   }
   if (u.cal < 0) u.cal = 0;
   u.vert = u.alt > alt0 + 1e-6 ? 1 : u.alt < alt0 - 1e-6 ? -1 : 0;
+  u.vz = (u.alt - alt0) / dt;
 }
 
 /** Can `attacker` reach `target`? Only thrown crystals reach a flier in the air. */
