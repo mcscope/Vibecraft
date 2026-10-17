@@ -84,8 +84,8 @@ export type Order =
   /** Wildlife: roam around a home spot (tx/ty: current wander target, rest: ticks until the next). */
   | { kind: 'wild'; hx: number; hy: number; tx: number; ty: number; rest: number }
   | { kind: 'move'; x: number; y: number }
-  | { kind: 'attackMove'; x: number; y: number }
-  | { kind: 'attack'; target: number }
+  | { kind: 'attackMove'; x: number; y: number; charge?: boolean }
+  | { kind: 'attack'; target: number; charge?: boolean }
   | { kind: 'gather'; node: number; nodeType: ResourceKind; phase: 'toNode' | 'harvest' | 'toDrop'; stopWhenArmed: boolean }
   | { kind: 'resupply'; building: number }
   | { kind: 'give'; to: number }
@@ -656,11 +656,11 @@ export class World {
     const ownBuilding = (id: number) => { const b = this.buildings.get(id); return b && b.owner === player ? b : undefined; };
     switch (cmd.type) {
       case 'move': return set(mineAll(cmd.units), { kind: 'move', x: cmd.x, y: cmd.y });
-      case 'attackMove': return set(mine(cmd.units), { kind: 'attackMove', x: cmd.x, y: cmd.y });
+      case 'attackMove': return set(mine(cmd.units), { kind: 'attackMove', x: cmd.x, y: cmd.y, charge: cmd.charge || undefined });
       case 'attack': {
         const tgt = this.units.get(cmd.target) ?? this.buildings.get(cmd.target);
         if (!tgt || tgt.owner === player) return;
-        return set(mine(cmd.units), { kind: 'attack', target: cmd.target });
+        return set(mine(cmd.units), { kind: 'attack', target: cmd.target, charge: cmd.charge || undefined });
       }
       case 'gather': {
         const n = this.nodes.get(cmd.node);
@@ -1227,7 +1227,7 @@ export class World {
       }
       case 'attackMove': {
         if (this.runEngage(u)) return u.x !== u.px || u.y !== u.py;
-        if (this.moveTo(u, o.x, o.y, u.queue.length ? 0.8 : 0.5, false, u.queue.length > 0)) this.finish(u);
+        if (this.moveTo(u, o.x, o.y, u.queue.length ? 0.8 : 0.5, !!o.charge, u.queue.length > 0 || !!o.charge)) this.finish(u); // a charge sprints there and runs on
         return u.x !== u.px || u.y !== u.py;
       }
       case 'attack': {
@@ -1383,7 +1383,9 @@ export class World {
     // than pulling up, and a thrower brakes to stop at its range
     // sprint from far enough out to reach top speed by contact (v² = 2·a·d)
     const runUp = runUpTiles(u);
-    const sprint = !u.airborne && (edge < Math.max(K.sprintRange, runUp + range) || u.stance === 'charge');
+    // charging: its stance, or this order is a charge (C)
+    const charging = u.stance === 'charge' || ((u.order.kind === 'attack' || u.order.kind === 'attackMove') && !!u.order.charge);
+    const sprint = !u.airborne && (edge < Math.max(K.sprintRange, runUp + range) || charging);
     // riding out to come round for another charge: get clear, then wheel and come again
     if (u.runOut && tu) {
       const [ox, oy] = u.runOut;
@@ -1438,7 +1440,7 @@ export class World {
     const v = Math.hypot(u.vx, u.vy);
     if (!u.airborne && !wpn.throws && tu && v > u.stats.speed * 1.1) { const [px, py] = passBeside(u, tu, 4); this.moveTo(u, px, py, 0, true, true); } // keeps its line past it, alongside
     // bogged down at a walk, but a run-up blow beats standing and swinging: ride out to come round again
-    else if (!u.airborne && !wpn.throws && tu && u.stance !== 'hold' && (u.stance === 'charge' || chargePays(u, tu)) && u.cal > u.stats.maxCalories * K.sprintMinCalories) {
+    else if (!u.airborne && !wpn.throws && tu && u.stance !== 'hold' && (charging || chargePays(u, tu)) && u.cal > u.stats.maxCalories * K.sprintMinCalories) {
       const d = Math.hypot(u.x - tx, u.y - ty) || 1, out = runUp + 1;
       const dx = v > 0.2 ? u.vx / v : (u.x - tx) / d, dy = v > 0.2 ? u.vy / v : (u.y - ty) / d;
       u.runOut = [u.x + dx * out, u.y + dy * out];

@@ -8,8 +8,9 @@ export type Command = CommandBody & {
 
 export type CommandBody =
   | { type: 'move'; units: number[]; x: number; y: number }
-  | { type: 'attackMove'; units: number[]; x: number; y: number }
-  | { type: 'attack'; units: number[]; target: number }
+  /** charge: sprint in from any distance and run on through (C). */
+  | { type: 'attackMove'; units: number[]; x: number; y: number; charge?: boolean }
+  | { type: 'attack'; units: number[]; target: number; charge?: boolean }
   | { type: 'gather'; units: number[]; node: number }
   /**
    * Go to own town center: drop off cargo, restock crystal loadout, eat to full.

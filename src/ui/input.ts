@@ -192,11 +192,10 @@ export class Input {
         this.formationMove(units, wx, wy);
         this.ping(wx, wy, TEAM_COLORS[this.player].secondary);
       } else if (this.mode === 'charge') {
-        // a charge: sprint at it from wherever they are and run on through (they keep charging till told otherwise)
+        // a charge order: sprint at it from wherever they are and run on through (shift: queued after the rest)
         const t = this.world.units.get(target) ?? this.world.buildings.get(target);
-        this.issue({ type: 'stance', units, stance: 'charge' });
-        if (t && t.owner !== this.player) this.issue({ type: 'attack', units, target });
-        else this.issue({ type: 'attackMove', units, x: wx, y: wy });
+        if (t && t.owner !== this.player) this.issue({ type: 'attack', units, target, charge: true });
+        else this.issue({ type: 'attackMove', units, x: wx, y: wy, charge: true });
         this.ping(wx, wy, '#ff9a3a');
       } else if (this.mode === 'attackMove') {
         const t = this.world.units.get(target) ?? this.world.buildings.get(target);
