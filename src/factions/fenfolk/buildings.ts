@@ -179,39 +179,52 @@ export function toadWallow(b: ModelBuilder): void {
 }
 
 export function elderMound(b: ModelBuilder): void {
-  b.sphere([2.7, 1.55, 2.7], [0, 0, 0], { color: '#4f5a34', tex: 'leaf' }); // grassed earthen mound
-  b.sphere([2.0, 1.2, 2.0], [-0.3, 0.15, -0.4], { color: '#56643a', tex: 'leaf' }); // a second swell
-  // the doorway is the gaping mouth of a great stone frog head
-  b.sphere([1.0, 0.75, 1.1], [0.2, 0.75, 2.05], STONE);
-  b.box([0.25, 0.55, 0.85], [0.45, 0.45, 2.75], DARK); // the dark mouth
-  b.box([0.3, 0.08, 1.1], [0.48, 0.78, 2.7], STONE); // upper lip
-  for (const s of [1, -1]) {
-    b.sphere(0.32, [0.35, 1.35, 2.05 + 0.55 * s], STONE); // eye bulges
-    b.sphere(0.2, [0.55, 1.4, 2.12 + 0.55 * s], GLOW); // crystal eyes
+  const PALE: Mat = { color: '#a8a290', tex: 'stone' };
+  const TURF: Mat = { color: '#6a7a3e', tex: 'leaf' };
+  // a stepped earthen barrow: three turfed terraces, each ringed with pale stone
+  for (const [r, y, h] of [[2.75, 0, 0.55], [2.15, 0.55, 0.55], [1.5, 1.1, 0.5]]) {
+    b.cylinder(r, r + 0.12, h, [0, y + h / 2, 0], { color: '#5a4a34', tex: 'stone' }, undefined, 20);
+    b.cylinder(r + 0.13, r + 0.13, 0.12, [0, y + h - 0.02, 0], PALE, undefined, 20); // stone kerb
+    b.cylinder(r - 0.05, r - 0.05, 0.06, [0, y + h + 0.03, 0], TURF, undefined, 20); // turf on top
   }
-  // glowing runes cut into the mound
-  for (const [x, y, z, r] of [[-1.6, 0.8, 1.8, 0.7], [1.9, 0.7, 1.2, -0.5], [-2.2, 0.6, -0.6, 1.4], [1.0, 1.1, -1.9, 2.6]]) {
-    b.box([0.04, 0.35, 0.08], [x, y, z], GLOW, [0, r, 0]);
-    b.box([0.04, 0.08, 0.25], [x, y + 0.08, z], GLOW, [0, r, 0]);
+  // the shrine on the crown: a tall layered thatch roof and a great crystal, seen from across the fen
+  b.cylinder(0.75, 0.85, 0.7, [0, 1.95, 0], REED_DARK, undefined, 12);
+  for (const y of [1.65, 2.25]) b.cylinder(0.87, 0.87, 0.05, [0, y, 0], BRONZE, undefined, 12);
+  thatch(b, 1.15, 1.6, 2.3);
+  b.crystal(0.55, [0, 4.15, 0], [0, 0, 0]);
+  b.sphere(0.2, [0, 4.0, 0], GLOW);
+  // the gate: a great stone frog head facing out, its open mouth the door, steps up its back
+  const a = Math.PI / 4; // toward the viewer
+  b.joint([Math.cos(a) * 2.35, 0, Math.sin(a) * 2.35], [0, -a, 0], (g) => {
+    g.sphere([0.95, 0.8, 1.15], [0, 0.75, 0], PALE);
+    g.box([0.4, 0.62, 0.95], [0.62, 0.45, 0], DARK); // the dark open mouth: the way in
+    g.box([0.5, 0.12, 1.25], [0.6, 0.86, 0], PALE); // upper lip
+    g.box([0.45, 0.1, 1.2], [0.55, 0.12, 0], PALE); // lower lip / threshold
+    for (const sd of [1, -1]) {
+      g.sphere(0.36, [0.15, 1.45, 0.55 * sd], PALE); // eye bulges
+      g.sphere(0.22, [0.38, 1.5, 0.58 * sd], GLOW); // crystal eyes
+      g.sphere([0.3, 0.25, 0.25], [0.55, 0.25, 0.85 * sd], PALE); // forefeet
+    }
+    g.sphere([0.5, 0.2, 0.55], [-0.2, 1.45, 0], TURF); // moss on its crown
+  });
+  for (let k = 0; k < 3; k++) b.box([0.9, 0.12, 0.5], [Math.cos(a) * (1.6 - k * 0.5), 0.6 + k * 0.55, Math.sin(a) * (1.6 - k * 0.5)], PALE, [0, -a, 0]); // steps up the terraces
+  // glowing runes on the terraces
+  for (const [ang, y] of [[2.2, 0.3], [3.3, 0.85], [4.6, 0.3], [5.6, 0.85], [1.4, 1.35]]) {
+    const r = y < 0.6 ? 2.82 : y < 1.1 ? 2.22 : 1.57;
+    b.box([0.05, 0.3, 0.07], [Math.cos(ang) * r, y, Math.sin(ang) * r], GLOW, [0, -ang, 0]);
+    b.box([0.05, 0.07, 0.24], [Math.cos(ang) * r, y + 0.08, Math.sin(ang) * r], GLOW, [0, -ang, 0]);
   }
-  // a ring of standing stones, each crowned with a crystal
-  for (let i = 0; i < 7; i++) {
-    const a = (i / 7) * Math.PI * 2 + 0.3;
-    const h = 1.3 + (i % 2) * 0.5, x = Math.cos(a) * 3.35, z = Math.sin(a) * 3.35;
-    if (z > 2.4 && Math.abs(x) < 1.2) continue; // leave the doorway clear
-    b.box([0.32, h, 0.24], [x, h / 2, z], STONE, [0, -a, 0.05]);
-    b.crystal(0.22, [x, h + 0.12, z], [0, 0, 0]);
-  }
-  // an old willow growing out of the top, hung with charms
-  b.limb([0, 1.4, 0], [0.15, 2.9, 0.1], 0.2, WILLOW, 0.11);
+  // a ring of pale standing stones, each crowned with a crystal (the gate's way left open)
   for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    b.sphere([0.75, 0.45, 0.75], [Math.cos(a) * 0.65, 3.0, Math.sin(a) * 0.65], { color: '#6a7a3a', tex: 'leaf' });
-    b.limb([Math.cos(a) * 0.9, 2.9, Math.sin(a) * 0.9], [Math.cos(a) * 1.25, 1.7, Math.sin(a) * 1.25], 0.03, { color: '#7a8a44', tex: 'leaf' }); // trailing fronds
-    if (i % 2) charms(b, Math.cos(a) * 1.1, 2.6, Math.sin(a) * 1.1);
+    const ang = (i / 8) * Math.PI * 2 + 0.2;
+    if (Math.abs(Math.atan2(Math.sin(ang - a), Math.cos(ang - a))) < 0.5) continue;
+    const h = 1.2 + (i % 2) * 0.5, x = Math.cos(ang) * 3.4, z = Math.sin(ang) * 3.4;
+    b.box([0.3, h, 0.22], [x, h / 2, z], PALE, [0, -ang, 0.05]);
+    b.crystal(0.2, [x, h + 0.1, z], [0, 0, 0]);
   }
-  lantern(b, 1.5, 2.6, 1.8);
-  lantern(b, -1.2, 2.7, 1.8);
+  for (const ang of [a - 0.55, a + 0.55]) lantern(b, Math.cos(ang) * 3.0, Math.sin(ang) * 3.0, 1.7);
+  b.cylinder(0.035, 0.045, 3.2, [-1.4, 2.6, -0.9], WILLOW, undefined, 8); // a banner on the second terrace
+  b.box([0.04, 0.7, 0.55], [-1.4, 3.6, -0.6], BANNER);
 }
 
 export function heronPerch(b: ModelBuilder): void {
