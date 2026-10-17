@@ -3,7 +3,8 @@
 // Every unit stat is derived here from a UnitSpec's physical description.
 // If a stat can't be derived from mass, physique and crystal, it doesn't exist.
 //
-// Units: distance in tiles (1 tile = 1 m), mass in kg, energy in calories
+// Units: distance in tiles (1 tile = 2 m, the scale the art is drawn at: a person is a bit
+// under a tile tall; see M_PER_TILE), mass in kg, energy in calories
 // ("cal", a game unit — damage, HP and calories are all the same currency).
 //
 // Core identities:
@@ -16,6 +17,9 @@
 // is capped by how much energy the muscles can dump in one go. Damage per
 // second is bounded by muscle *power*, which is bounded by muscle mass, which
 // costs food. You cannot make a 10k-damage unit that costs 1 food.
+
+/** Metres per map tile. Physics works in metres (m/s, m/s², J); positions, speeds and ranges in tiles. */
+export const M_PER_TILE = 2;
 
 import type { BuildingSpec, FactionSpec, Physique, TechSpec, UnitSpec } from '../factions/types';
 import { deriveGait } from './abilities/gait';
@@ -237,9 +241,9 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
 
   const sizeRel = Math.cbrt(mass / 70);
   const radius = clamp(0.25 * sizeRel, 0.15, 0.8);
-  const reach = radius + 0.35 + 0.1 * Math.cbrt(crystalMass) + shaft * 0.75; // a shaft held a quarter of the way along: ¾ of it reaches forward (1 tile = 1 m)
+  const reach = radius + 0.35 + 0.1 * Math.cbrt(crystalMass) + (shaft * 0.75) / M_PER_TILE; // a shaft held a quarter of the way along: ¾ of it reaches forward
   const range = throwing
-    ? Math.min(K.maxThrowRange, (crystalVelocity * crystalVelocity) / K.gravity)
+    ? Math.min(K.maxThrowRange, (crystalVelocity * crystalVelocity) / K.gravity / M_PER_TILE) // v²/g metres, in tiles
     : reach;
   const sight = Math.max(7, range + 3);
 
@@ -257,7 +261,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   return {
     improvised,
     mass, physique, muscleMass, frameMass, reserveMass,
-    maxHp, armour, maxCalories, speed, sprint: Math.max(speed, limbSpeed), canAttack, wheeled, gait: deriveGait(spec), flight: !!spec.flight, flyHeight: !spec.flight ? 0 : spec.flight === true ? DEFAULT_FLY_HEIGHT : spec.flight.height, carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, sight,
+    maxHp, armour, maxCalories, speed, sprint: Math.max(speed, limbSpeed / M_PER_TILE), canAttack, wheeled, gait: deriveGait(spec), flight: !!spec.flight, flyHeight: !spec.flight ? 0 : spec.flight === true ? DEFAULT_FLY_HEIGHT : spec.flight.height, carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, sight,
     limbSpeed, maxAttackEnergy, crystalVelocity, attackEnergy, damage, attackCalories, cooldown, range,
     dps: damage / cooldown,
     gatherRate,
@@ -408,9 +412,9 @@ export function towerStats(t: BuildingSpec['attack']): TowerStats | null {
   const h = Math.max(0, t.height);
   const damage = (energy + mc * K.gravity * h) * K.throwEfficiency * K.damageScale;
   const vy = v * Math.SQRT1_2;
-  const range = Math.min(K.maxThrowRange + h, vy * ((vy + Math.sqrt(vy * vy + 2 * K.gravity * h)) / K.gravity));
+  const range = Math.min(K.maxThrowRange + h / M_PER_TILE, (vy * ((vy + Math.sqrt(vy * vy + 2 * K.gravity * h)) / K.gravity)) / M_PER_TILE);
   const cooldown = Math.max(K.minCooldown, energy / (K.powerPerMuscleKg * m)) + K.throwReload;
-  return { energy, velocity: v, damage, range, cooldown, minRange: h * 0.5 + 1 };
+  return { energy, velocity: v, damage, range, cooldown, minRange: (h * 0.5) / M_PER_TILE + 1 };
 }
 
 export function deriveBuilding(spec: BuildingSpec, faction: FactionSpec): BuildingStats {

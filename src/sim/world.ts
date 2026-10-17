@@ -19,7 +19,7 @@ import { eject, runGarrison, tickGarrison } from './garrison';
 import { isUnderfoot, loadBelt, nearestBelt, roadFactor, routeBelts, runBelts, type BeltRoutes, type Parcel } from './abilities/underfoot';
 import { grow, grownEnough, livingStats, seedMaterials } from './abilities/living';
 import {
-  derive, deriveBuilding, loadedSpeed, CAP, K, techCost, techGate, techTime,
+  derive, deriveBuilding, loadedSpeed, CAP, K, M_PER_TILE, techCost, techGate, techTime,
   type BuildingStats, type DerivedStats,
 } from './physics';
 
@@ -153,7 +153,7 @@ export interface Unit {
   flewTick: number;
   /** Its air speed (tiles/s) when it last flew somewhere, kept while it coasts. */
   flySpeed: number;
-  /** Velocity (tiles/s = m/s): ground bodies carry momentum (moveTo, coast, separate). */
+  /** Velocity (tiles/s; × M_PER_TILE for m/s): ground bodies carry momentum (moveTo, coast, separate). */
   vx: number; vy: number;
   /** Tick its velocity was last steered (else it coasts to a stop). */
   steered: number;
@@ -240,13 +240,13 @@ const leadAlt = (u: Unit, t: number): number => Math.max(0.3, Math.min(u.stats.f
 
 /**
  * Energy (J) in a collision between `u` and what it strikes: ½·μ·v², with v the speed the two
- * close at along the line between them (1 tile = 1 m) and μ = m₁m₂/(m₁+m₂) the reduced mass
+ * close at along the line between them (in m/s: tiles × M_PER_TILE) and μ = m₁m₂/(m₁+m₂) the reduced mass
  * (a building doesn't move: μ is the striker's mass). Zero when they're drawing apart.
  */
 function collisionEnergy(u: Unit, t: Unit | null, tx: number, ty: number): number {
   const dx = tx - u.x, dy = ty - u.y, d = Math.hypot(dx, dy) || 1;
   const rvx = u.vx - (t?.vx ?? 0), rvy = u.vy - (t?.vy ?? 0);
-  const closing = (rvx * dx + rvy * dy) / d;
+  const closing = ((rvx * dx + rvy * dy) / d) * M_PER_TILE; // m/s
   if (closing <= 0) return 0;
   const mu = t ? (u.stats.mass * t.stats.mass) / (u.stats.mass + t.stats.mass) : u.stats.mass;
   return 0.5 * mu * closing * closing;
@@ -1090,7 +1090,7 @@ export class World {
     b.cooldown = tw.cooldown;
     this.events.push({ type: 'attack', x: cx, y: cy, owner: b.owner, style: 'throw', kg: atk.crystalMass });
     const dist = Math.sqrt(bestD);
-    const flight = Math.max(0.3, dist / (tw.velocity * 0.7));
+    const flight = Math.max(0.3, (dist * M_PER_TILE) / (tw.velocity * 0.7)); // metres over its horizontal speed
     const p: Projectile = {
       id: this.nextId++, owner: b.owner, sx: cx, sy: cy, sz: atk.height,
       tx: target.x + ((target.x - target.px) / DT) * flight, ty: target.y + ((target.y - target.py) / DT) * flight,
@@ -1335,7 +1335,7 @@ export class World {
     if (wpn.throws) {
       u.ammo -= u.crystalMass;
       const bomb = u.airborne && u.alt > 0.5;
-      const flight = bomb ? dropTime(u.alt) : Math.max(0.25, Math.sqrt((tx - u.x) ** 2 + (ty - u.y) ** 2) / (u.stats.crystalVelocity * 0.7));
+      const flight = bomb ? dropTime(u.alt) : Math.max(0.25, (Math.sqrt((tx - u.x) ** 2 + (ty - u.y) ** 2) * M_PER_TILE) / (u.stats.crystalVelocity * 0.7));
       let ax = tx, ay = ty;
       if (tu) { ax += ((tu.x - tu.px) / DT) * flight; ay += ((tu.y - tu.py) / DT) * flight; } // lead the target
       const p: Projectile = {
@@ -1354,7 +1354,7 @@ export class World {
 
   /** Launch a crystal from (x, y), `h` metres up, at (tx, ty) (towers, garrisons). */
   launch(owner: number, x: number, y: number, h: number, tx: number, ty: number, damage: number, kg: number, target: number): void {
-    const flight = Math.max(0.3, Math.hypot(tx - x, ty - y) / 8);
+    const flight = Math.max(0.3, (Math.hypot(tx - x, ty - y) * M_PER_TILE) / 8);
     const tu = this.units.get(target);
     const p: Projectile = { id: this.nextId++, owner, sx: x, sy: y, sz: h, tx, ty, t: 0, duration: flight, damage, crystalKg: kg, target, tz: tu?.airborne && tu.alt > 0.5 ? leadAlt(tu, flight) : undefined };
     this.projectiles.set(p.id, p);
@@ -1810,14 +1810,14 @@ export class World {
     // (averaged over the bound cycle) speeds up and slows within the same grip as any body's
     const feetDown = stride === 0;
     // steer for the next waypoint (passing ones we're on top of)
-    const acc = K.traction * K.gravity;
+    const acc = (K.traction * K.gravity) / M_PER_TILE;
     while (u.path.length > 1 && Math.hypot(u.path[0][0] - u.x, u.path[0][1] - u.y) < Math.max(0.3, Math.hypot(u.vx, u.vy) * DT * 2)) u.path.shift();
     if (u.path.length) {
       const [wx, wy] = u.path[0];
       const ddx = wx - u.x, ddy = wy - u.y, d = Math.hypot(ddx, ddy) || 1e-6;
       let want = speed;
       // brake in time to stop at the goal (v² = 2·a·d), unless running through it
-      if (u.path.length === 1 && !through) want = Math.min(want, Math.sqrt(2 * K.footBrake * K.gravity * Math.max(0, d - arrive * 0.5)));
+      if (u.path.length === 1 && !through) want = Math.min(want, Math.sqrt(2 * (K.footBrake * K.gravity) / M_PER_TILE * Math.max(0, d - arrive * 0.5)));
       // legs turn by slowing: the sharper the turn, the more it pulls up first, then pivots and goes
       const v0 = Math.hypot(u.vx, u.vy);
       if (v0 > 0.3) {
@@ -1846,7 +1846,7 @@ export class World {
     const dvx = wvx - u.vx, dvy = wvy - u.vy, dv = Math.hypot(dvx, dvy);
     // pushing off is limited by grip; pulling up is feet planted, much harder
     const slowing = dvx * u.vx + dvy * u.vy < 0;
-    const max = (slowing ? Math.max(acc, K.footBrake * K.gravity) : acc) * DT;
+    const max = (slowing ? Math.max(acc, (K.footBrake * K.gravity) / M_PER_TILE) : acc) * DT;
     if (dv <= max) { u.vx = wvx; u.vy = wvy; } else { u.vx += (dvx / dv) * max; u.vy += (dvy / dv) * max; }
     u.steered = this.tick;
   }
@@ -1854,7 +1854,7 @@ export class World {
   /** Nobody's driving it this tick: it brakes as hard as its feet allow, sliding on meanwhile. */
   private coast(u: Unit): void {
     if (u.airborne || u.steered === this.tick || (u.vx === 0 && u.vy === 0)) return;
-    this.steer(u, 0, 0, K.footBrake * K.gravity);
+    this.steer(u, 0, 0, (K.footBrake * K.gravity) / M_PER_TILE);
     if (u.vx || u.vy) this.step1(u, u.vx * DT, u.vy * DT, 0, false);
   }
 
@@ -1951,7 +1951,7 @@ export class World {
         const mu = (ma * mb) / total, imp = mu * closing;
         a.vx -= (imp / ma) * nx; a.vy -= (imp / ma) * ny;
         b.vx += (imp / mb) * nx; b.vy += (imp / mb) * ny;
-        const energy = 0.5 * mu * closing * closing;
+        const energy = 0.5 * mu * (closing * M_PER_TILE) ** 2; // J, closing speed in m/s
         if (energy > K.impactThreshold) {
           const hurt = (energy - K.impactThreshold) * K.bodyImpactEfficiency * K.damageScale;
           if (!a.dummy) this.damage(a.id, hurt, a.x, a.y);

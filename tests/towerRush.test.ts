@@ -18,7 +18,7 @@ describe('answering a tower rush', () => {
     const hp = e.hp;
     run(w, 20 * 5);
     expect(e.hp).toBe(hp);
-    expect(t.stats.tower!.minRange).toBeCloseTo(3);
+    expect(t.stats.tower!.minRange).toBeCloseTo(2); // a 4 m tower: half its height (2 m = 1 tile) plus a tile
   });
 
   test('an unarmed worker sent to attack grabs a crystal first, then hits', () => {
