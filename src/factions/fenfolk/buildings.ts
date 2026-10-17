@@ -181,18 +181,21 @@ export function toadWallow(b: ModelBuilder): void {
 export function elderMound(b: ModelBuilder): void {
   const PALE: Mat = { color: '#a8a290', tex: 'stone' };
   const TURF: Mat = { color: '#6a7a3e', tex: 'leaf' };
-  // a stepped earthen barrow: three turfed terraces, each ringed with pale stone
-  for (const [r, y, h] of [[2.75, 0, 0.55], [2.15, 0.55, 0.55], [1.5, 1.1, 0.5]]) {
-    b.cylinder(r, r + 0.12, h, [0, y + h / 2, 0], { color: '#5a4a34', tex: 'stone' }, undefined, 20);
-    b.cylinder(r + 0.13, r + 0.13, 0.12, [0, y + h - 0.02, 0], PALE, undefined, 20); // stone kerb
-    b.cylinder(r - 0.05, r - 0.05, 0.06, [0, y + h + 0.03, 0], TURF, undefined, 20); // turf on top
+  // a stone-kerbed terrace for a base, the old grassy mound rising from it
+  b.cylinder(2.85, 2.95, 0.5, [0, 0.25, 0], { color: '#5a4a34', tex: 'stone' }, undefined, 20);
+  b.cylinder(2.98, 2.98, 0.12, [0, 0.48, 0], PALE, undefined, 20); // stone kerb
+  b.sphere([2.45, 1.45, 2.45], [0, 0.5, 0], TURF); // grassed earthen mound
+  b.sphere([1.8, 1.15, 1.8], [-0.35, 0.65, -0.45], { color: '#728446', tex: 'leaf' }); // a second swell
+  // an old willow growing out of the crown, trailing fronds hung with charms, a crystal glowing at its roots
+  b.limb([0, 1.75, 0], [0.15, 3.2, 0.1], 0.22, WILLOW, 0.12);
+  for (let i = 0; i < 8; i++) {
+    const ang = (i / 8) * Math.PI * 2;
+    b.sphere([0.75, 0.45, 0.75], [Math.cos(ang) * 0.65, 3.3, Math.sin(ang) * 0.65], { color: '#7a8a44', tex: 'leaf' });
+    b.limb([Math.cos(ang) * 0.9, 3.2, Math.sin(ang) * 0.9], [Math.cos(ang) * 1.3, 2.0, Math.sin(ang) * 1.3], 0.03, { color: '#8a9a50', tex: 'leaf' });
+    if (i % 2) charms(b, Math.cos(ang) * 1.15, 2.9, Math.sin(ang) * 1.15);
   }
-  // the shrine on the crown: a tall layered thatch roof and a great crystal, seen from across the fen
-  b.cylinder(0.75, 0.85, 0.7, [0, 1.95, 0], REED_DARK, undefined, 12);
-  for (const y of [1.65, 2.25]) b.cylinder(0.87, 0.87, 0.05, [0, y, 0], BRONZE, undefined, 12);
-  thatch(b, 1.15, 1.6, 2.3);
-  b.crystal(0.55, [0, 4.15, 0], [0, 0, 0]);
-  b.sphere(0.2, [0, 4.0, 0], GLOW);
+  b.crystal(0.4, [0.35, 1.95, 0.3], [0.2, 0, 0.25]);
+  b.sphere(0.16, [0.35, 1.9, 0.3], GLOW);
   // the gate: a great stone frog head facing out, its open mouth the door, steps up its back
   const a = Math.PI / 4; // toward the viewer
   b.joint([Math.cos(a) * 2.35, 0, Math.sin(a) * 2.35], [0, -a, 0], (g) => {
@@ -207,10 +210,9 @@ export function elderMound(b: ModelBuilder): void {
     }
     g.sphere([0.5, 0.2, 0.55], [-0.2, 1.45, 0], TURF); // moss on its crown
   });
-  for (let k = 0; k < 3; k++) b.box([0.9, 0.12, 0.5], [Math.cos(a) * (1.6 - k * 0.5), 0.6 + k * 0.55, Math.sin(a) * (1.6 - k * 0.5)], PALE, [0, -a, 0]); // steps up the terraces
-  // glowing runes on the terraces
-  for (const [ang, y] of [[2.2, 0.3], [3.3, 0.85], [4.6, 0.3], [5.6, 0.85], [1.4, 1.35]]) {
-    const r = y < 0.6 ? 2.82 : y < 1.1 ? 2.22 : 1.57;
+  // glowing runes cut into the mound
+  for (const [ang, y] of [[2.2, 1.0], [3.4, 1.2], [4.5, 0.9], [5.5, 1.1]]) {
+    const r = Math.sqrt(Math.max(0, 1 - ((y - 0.5) / 1.45) ** 2)) * 2.45 + 0.04;
     b.box([0.05, 0.3, 0.07], [Math.cos(ang) * r, y, Math.sin(ang) * r], GLOW, [0, -ang, 0]);
     b.box([0.05, 0.07, 0.24], [Math.cos(ang) * r, y + 0.08, Math.sin(ang) * r], GLOW, [0, -ang, 0]);
   }
@@ -223,8 +225,8 @@ export function elderMound(b: ModelBuilder): void {
     b.crystal(0.2, [x, h + 0.1, z], [0, 0, 0]);
   }
   for (const ang of [a - 0.55, a + 0.55]) lantern(b, Math.cos(ang) * 3.0, Math.sin(ang) * 3.0, 1.7);
-  b.cylinder(0.035, 0.045, 3.2, [-1.4, 2.6, -0.9], WILLOW, undefined, 8); // a banner on the second terrace
-  b.box([0.04, 0.7, 0.55], [-1.4, 3.6, -0.6], BANNER);
+  b.cylinder(0.035, 0.045, 3.4, [-2.2, 1.7, -1.3], WILLOW, undefined, 8); // a banner on the terrace
+  b.box([0.04, 0.7, 0.55], [-2.2, 3.0, -1.0], BANNER);
 }
 
 export function heronPerch(b: ModelBuilder): void {
