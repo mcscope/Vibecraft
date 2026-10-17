@@ -271,29 +271,38 @@ const mule: MeadowUnit = {
   canGather: false,
   role: 'carter',
   model(b, p) {
-    const hide: Mat = { color: '#7a6450', tex: 'fur' };
+    const hide: Mat = { color: '#9a8068', tex: 'fur' };
+    const pale: Mat = { color: '#d8ccb4', tex: 'fur' };
     const dark: Mat = { color: '#3a2e24', tex: 'fur' };
+    const plank: Mat = { color: '#9a7448', tex: 'wood' };
     const bob = quadLegs(b, p, { fx: 0.95, bx: 0.35, z: 0.16, hip: 0.85, len: 0.85, r: 0.07, mat: hide, paw: dark });
     b.joint([0, bob, 0], [0, 0, 0], (m) => {
       m.sphere([0.5, 0.28, 0.25], [0.65, 0.95, 0], hide);
       m.limb([1.05, 1.05, 0], [1.3, 1.35, 0], 0.11, hide, 0.09);
       m.sphere([0.2, 0.12, 0.12], [1.42, 1.3, 0], hide);
+      m.sphere([0.1, 0.09, 0.1], [1.56, 1.26, 0], pale); // pale muzzle
+      m.limb([0.95, 1.12, 0], [1.25, 1.48, 0], 0.035, dark, 0.03); // short upright mane
+      m.cylinder(0.14, 0.14, 0.06, [1.12, 1.15, 0], LEATHER, [0, 0, -0.9], 10); // collar
+      m.sphere([0.3, 0.12, 0.2], [0.65, 0.78, 0], pale); // pale belly
       for (const z of [0.07, -0.07]) m.limb([1.28, 1.42, z], [1.22, 1.68, z * 1.6], 0.035, hide, 0.02);
-      m.limb([0.15, 1.0, 0], [0.05, 0.75, 0], 0.03, dark);
+      m.limb([0.15, 1.0, 0], [0.05, 0.6, 0], 0.03, hide, 0.02);
+      m.sphere([0.04, 0.1, 0.04], [0.04, 0.55, 0], dark); // tail tuft
       m.box([0.3, 0.12, 0.55], [0.6, 1.2, 0], { team: 'primary', tex: 'cloth' });
     });
     // shafts and cart
     for (const z of [0.3, -0.3]) b.limb([0.55, 0.85, z], [-0.35, 0.7, z], 0.035, WOOD);
-    b.box([1.2, 0.08, 0.95], [-0.95, 0.72, 0], WOOD);
-    for (const z of [0.47, -0.47]) b.box([1.2, 0.35, 0.05], [-0.95, 0.92, z], WOOD);
-    b.box([0.05, 0.35, 0.95], [-1.55, 0.92, 0], WOOD);
+    b.box([1.2, 0.08, 0.95], [-0.95, 0.72, 0], plank);
+    for (const z of [0.47, -0.47]) b.box([1.2, 0.35, 0.05], [-0.95, 0.92, z], plank);
+    for (const z of [0.5, -0.5]) for (const x of [-0.45, -1.45]) b.box([0.06, 0.4, 0.04], [x, 0.92, z], IRON); // iron corner straps
+    b.box([0.05, 0.35, 0.95], [-1.55, 0.92, 0], plank);
     // wheels roll about the axle (z); spokes make the roll visible
     const roll = p.anim === 'walk' ? -p.phase * Math.PI * 2 : 0;
     for (const z of [0.55, -0.55]) {
       b.joint([-0.95, 0.42, z], [0, 0, roll], (wh) => {
-        wh.cylinder(0.42, 0.42, 0.05, [0, 0, 0], WOOD, [Math.PI / 2, 0, 0], 16);
-        wh.cylinder(0.36, 0.36, 0.06, [0, 0, 0], { color: '#3d2a1a', tex: 'wood' }, [Math.PI / 2, 0, 0], 16);
-        for (const a of [0, Math.PI / 3, (2 * Math.PI) / 3]) wh.box([0.7, 0.05, 0.075], [0, 0, 0], WOOD, [0, 0, a]);
+        wh.cylinder(0.43, 0.43, 0.045, [0, 0, 0], DARK_IRON, [Math.PI / 2, 0, 0], 16); // iron tyre
+        wh.cylinder(0.4, 0.4, 0.055, [0, 0, 0], plank, [Math.PI / 2, 0, 0], 16);
+        wh.cylinder(0.33, 0.33, 0.06, [0, 0, 0], { color: '#7a5a3a', tex: 'wood' }, [Math.PI / 2, 0, 0], 16);
+        for (const a of [0, Math.PI / 3, (2 * Math.PI) / 3]) wh.box([0.7, 0.05, 0.075], [0, 0, 0], plank, [0, 0, a]);
         wh.cylinder(0.08, 0.08, 0.1, [0, 0, 0], DARK_IRON, [Math.PI / 2, 0, 0], 8);
       });
     }
