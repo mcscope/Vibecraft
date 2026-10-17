@@ -36,23 +36,7 @@ describe('answering a tower rush', () => {
     expect(t.hp).toBeLessThan(hp);
   });
 
-  test('the town bell arms every worker as militia, and sends them back to work after', () => {
-    const w = newWorld(); tidy(w);
-    const tc = w.baseOf(0)!;
-    tc.stock.crystal = 50;
-    const vs = w.unitsOf(0).filter((u) => u.specId === 'villager');
-    const tree = [...w.nodes.values()].find((n) => n.tree)!;
-    w.enqueue({ player: 0, cmd: { type: 'gather', units: vs.map((u) => u.id), node: tree.id } });
-    run(w, 5);
-    w.enqueue({ player: 0, cmd: { type: 'townBell', on: true } });
-    run(w, 20 * 12);
-    expect(vs.every((u) => u.militia && w.armed(u))).toBe(true);
-    w.enqueue({ player: 0, cmd: { type: 'townBell', on: false } });
-    run(w, 2);
-    expect(vs.every((u) => !u.militia && u.order.kind === 'gather')).toBe(true);
-  });
-
-  test('the AI, tower-rushed before it has an army, rings the bell and pulls the tower down', () => {
+  test('the AI, tower-rushed before it has an army, sends its workers to pull the tower down', () => {
     const w = newWorld(); tidy(w);
     const ai = new SkirmishAI(1);
     const tc = w.baseOf(1)!;
@@ -60,12 +44,9 @@ describe('answering a tower rush', () => {
     let t = null;
     for (let d = 7; d < 14 && !t; d++) for (const [dx, dy] of [[-d, 0], [0, -d], [-d, -d]]) { t = w.addBuilding(0, 'watchtower', tc.ox + dx, tc.oy + dy); if (t) break; }
     t!.stock.crystal = 40;
-    let rang = false;
     for (let i = 0; i < 20 * 120 && w.buildings.has(t!.id); i++) {
       w.step(ai.think(w).map((cmd) => ({ player: 1, cmd })));
-      if (w.players[1].bell) rang = true;
     }
-    expect(rang).toBe(true);
     expect(w.buildings.has(t!.id)).toBe(false);
   });
 });

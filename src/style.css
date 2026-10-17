@@ -407,11 +407,6 @@ table.diff .up { color: #9fdc80; }
 .lobby-box .hint { color: var(--dim); font-size: 13px; margin: 14px 0 0; }
 .menu-factions { display: flex; gap: 6px; align-items: center; justify-content: center; color: var(--dim); font-size: 14px; margin: 2px 0 -2px; }
 .menu-factions select { font: inherit; color: var(--text); background: var(--inset); border: 1px solid #4a3d2c; border-radius: 3px; padding: 3px 6px; }
-button.bell { display: flex; flex-direction: column; align-items: flex-start; padding: 5px 12px; margin-bottom: 6px; min-width: 140px; }
-button.bell b { color: var(--gold); font-size: 13.5px; }
-button.bell span { font-size: 11.5px; color: var(--dim); }
-button.bell.on { box-shadow: inset 0 0 0 1px #ff8a7a; }
-button.bell.on b { color: #ff8a7a; }
 
 /* resign + post-match score screen */
 #resign { position: absolute; top: 4px; right: 46px; height: 28px; padding: 0 10px; font-size: 13px; z-index: 2; }

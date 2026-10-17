@@ -208,11 +208,9 @@ export class SkirmishAI {
       const tower = [...w.buildings.values()].find((b) => b.owner !== this.player && !w.players[b.owner]?.neutral && b.spec.attack && (b.ox + b.size / 2 - cx) ** 2 + (b.oy + b.size / 2 - cy) ** 2 < 22 * 22);
       const fighters = army.filter((u) => w.armed(u)).length;
       if (tower && fighters < 4) {
-        if (!me.bell) out.push({ type: 'townBell', on: true });
         const idle = workers.filter((u) => !(u.order.kind === 'attack' && u.order.target === tower.id) && u.order.kind !== 'muster').map((u) => u.id);
         if (idle.length) out.push({ type: 'attack', units: idle, target: tower.id });
-      } else if (!tower && me.bell) out.push({ type: 'townBell', on: false });
-      else if (tower) out.push({ type: 'attack', units: army.filter((u) => !this.attacking.has(u.id)).map((u) => u.id), target: tower.id });
+      } else if (tower) out.push({ type: 'attack', units: army.filter((u) => !this.attacking.has(u.id)).map((u) => u.id), target: tower.id });
     }
 
     // ── Offense: attack in growing waves.

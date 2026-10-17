@@ -162,7 +162,6 @@ async function run(g: GameSetup): Promise<void> {
     idleWorker: () => input.nextIdleWorker(),
     autoTrain: (building, specId) => local.issue({ type: 'autoTrain', building, specId }),
     setSowing: (building, resources) => local.issue({ type: 'setSowing', building, resources }),
-    townBell: (on) => local.issue({ type: 'townBell', on }),
     cancelTrain: (building, index) => local.issue({ type: 'cancelTrain', building, index }),
     select: (ids) => input.setSelection(ids),
     command: (kind) => input.hudCommand(kind),

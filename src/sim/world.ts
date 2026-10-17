@@ -61,8 +61,6 @@ export interface PlayerState {
   researched: string[];
   /** The Wilds: owns the wildlife, never wins or loses, isn't anyone's opponent. */
   neutral?: boolean;
-  /** The town bell is ringing: workers are militia. */
-  bell?: boolean;
 }
 
 /** Wildlife tuning (engine-wide). */
@@ -72,7 +70,7 @@ export type Order =
   | { kind: 'idle' }
   /** A worker hunting a passive animal (x/y: where it was last seen). */
   | { kind: 'hunt'; target: number; x: number; y: number }
-  /** Town bell: go to a building and take a crystal to fight with. */
+  /** An unarmed worker sent to fight: go to a building and take a crystal first. */
   | { kind: 'muster'; building: number }
   /** A tamer feeding a wild animal until it joins us. */
   | { kind: 'tame'; target: number }
@@ -161,10 +159,6 @@ export interface Unit {
   /** A tamed animal's temper (sim/abilities/herding.ts); and, while being tamed, who's feeding it and how much so far. */
   tame?: 'passive' | 'aggressive';
   tameBy?: number; tameFed?: number; tameTick?: number;
-  /** Called up by the town bell: fights on its own while holding a crystal. */
-  militia?: boolean;
-  /** What it was doing when the bell rang (resumed when it stops). */
-  bellResume?: Order | null;
   carter: boolean;
   /** Progress toward the next whole kilogram being gathered. */
   gatherAcc: number;
@@ -718,25 +712,6 @@ export class World {
         this.stats.resigned = player;
         return;
       }
-      case 'townBell': {
-        // every worker: on → grab a crystal and stand as militia; off → back to what they were doing
-        const workers = [...this.units.values()].filter((u) => u.owner === player && !u.carter && u.stats.gatherRate > 0 && (u.stats.improvised || u.specId === this.factionOf(player).workerId));
-        this.players[player].bell = cmd.on;
-        for (const u of workers) {
-          if (cmd.on && !u.militia) {
-            u.militia = true;
-            u.bellResume = u.order.kind === 'muster' ? u.resume : u.order;
-            const b = u.stats.improvised ? this.nearestCache(u, (x) => x.stock.crystal >= u.stats.improvised!.crystalMass) : null;
-            u.order = b && u.crystal < u.stats.improvised!.crystalMass ? { kind: 'muster', building: b.id } : { kind: 'idle' };
-            u.resume = null; u.path = [];
-          } else if (!cmd.on && u.militia) {
-            u.militia = false; u.engage = 0;
-            u.order = u.bellResume ?? { kind: 'idle' };
-            u.bellResume = null; u.path = [];
-          }
-        }
-        return;
-      }
       case 'hunt': {
         const prey = this.units.get(cmd.target);
         if (!prey || !(prey.wild === 'passive' || (prey.tame === 'passive' && prey.owner === player))) return; // wild game, or your own herd to butcher
@@ -1241,7 +1216,7 @@ export class World {
   /** Auto-acquire and fight enemies in sight. Returns true while engaged. */
   private runEngage(u: Unit): boolean {
     if (!this.armed(u) || u.exhausted || u.carter) { u.engage = 0; return false; }
-    if (!u.stats.canAttack && !u.militia && u.order.kind !== 'attackMove') { u.engage = 0; return false; } // workers don't start fights on their own
+    if (!u.stats.canAttack && u.order.kind !== 'attackMove') { u.engage = 0; return false; } // workers don't start fights on their own
     if (u.engage) {
       const p = this.entityPos(u.engage);
       if (p && (p[0] - u.x) ** 2 + (p[1] - u.y) ** 2 < (u.stats.sight * 1.5) ** 2 && this.attackTarget(u, u.engage)) return true;

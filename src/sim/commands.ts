@@ -34,8 +34,6 @@ export type CommandBody =
   | { type: 'assignCart'; units: number[]; building: number }
   /** Workers carry what a building is missing from the base, trip after trip, until it's stocked. */
   | { type: 'haul'; units: number[]; building: number }
-  /** Ring (on) or stop (off) the town bell: workers grab crystals and fight as militia. */
-  | { type: 'townBell'; on: boolean }
   /** Throwers restock from a friendly ammo bearer. */
   | { type: 'rearm'; units: number[]; bearer: number }
   /** Tamers feed a wild animal until it joins you. */

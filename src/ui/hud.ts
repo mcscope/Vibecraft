@@ -21,7 +21,6 @@ export interface HudActions {
   idleWorker(): void;
   autoTrain(buildingId: number, specId: string | null): void;
   setSowing(buildingId: number, resources: Array<'food' | 'wood'>): void;
-  townBell(on: boolean): void;
 }
 
 
@@ -134,7 +133,6 @@ export class Hud {
     if (this.suppressClick) { this.suppressClick = false; return; } // that was a hold, not a click
     const el = (e.target as HTMLElement).closest('[data-train],[data-research],[data-cancel],[data-select],[data-cmd],[data-place],[data-sow],[data-bell]') as HTMLElement | null;
     if (!el || el.classList.contains('locked')) return;
-    if (el.dataset.bell) { this.actions.townBell(el.dataset.bell === 'on'); return; }
     if (el.dataset.sow) {
       const b = this.world.buildings.get(+el.dataset.building!);
       if (!b) return;
@@ -222,7 +220,7 @@ export class Hud {
     const building = [...selected].map((id) => w.buildings.get(id)).find((b): b is Building => !!b);
     const p = w.players[this.player];
     const sig = units.length === 1 ? `u${units[0].id}`
-      : building ? `b${building.id}:${building.complete}:${building.queue.map((q) => (q.kind === 'unit' ? q.specId : q.techId)).join(',')}:${p.researched.length}:${building.owner}:${building.sowing.join('')}:${w.players[building.owner]?.bell ? 1 : 0}`
+      : building ? `b${building.id}:${building.complete}:${building.queue.map((q) => (q.kind === 'unit' ? q.specId : q.techId)).join(',')}:${p.researched.length}:${building.owner}:${building.sowing.join('')}`
       : `m${units.map((u) => u.id).join(',')}`;
     if (sig !== this.sig) {
       this.sig = sig;
@@ -538,7 +536,6 @@ export class Hud {
           ${train || research ? '<div class="bar train" data-bar="train"><i></i><span></span></div>' : ''}
         </div>
         <div class="actions">
-          ${b === w.baseOf(b.owner) ? `<button class="bell${w.players[b.owner].bell ? ' on' : ''}" data-bell="${w.players[b.owner].bell ? 'off' : 'on'}" title="Every worker grabs a crystal and fights as militia. Ring again to send them back to work.">${w.players[b.owner].bell ? '<b>Back to work</b><span>stop the town bell</span>' : '<b>Town Bell</b><span>call workers to arms</span>'}</button>` : ''}
           ${train ? `<div class="trains">${train}</div>` : ''}
           ${research ? `<div class="techs">${research}</div>` : ''}
         </div>
@@ -551,7 +548,7 @@ export function describeOrder(w: World, u: Unit): string {
   if (u.dummy) return 'Training target';
   if (u.exhausted) return 'Exhausted — resting';
   switch (o.kind) {
-    case 'idle': return u.engage ? 'Fighting' : u.carter ? 'Waiting for orders' : u.militia ? (w.armed(u) ? 'Militia: ready' : 'Militia: no crystal') : 'Idle';
+    case 'idle': return u.engage ? 'Fighting' : u.carter ? 'Waiting for orders' : 'Idle';
     case 'muster': return 'Grabbing a crystal';
     case 'tame': return `Taming the ${w.specOf(w.units.get(o.target)?.owner ?? 0, w.units.get(o.target)?.specId ?? '')?.spec.name ?? 'animal'}`;
     case 'rearm': return `Restocking from the ${w.specOf(u.owner, w.units.get(o.unit)?.specId ?? '')?.spec.name ?? 'bearer'}`;
