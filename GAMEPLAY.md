@@ -142,6 +142,10 @@ In Meadow-vs-Meadow and Fen-vs-Fen AI games, first blood comes at about 4.5–5.
 
 The snowball is clearly weaker.
 
+**Then built: retreat.** Every 2 s the AI compares an attacking wave's HP × DPS with the enemy's fighting units within 12 tiles. If it's outmatched 1.8:1 and more than 18 tiles from home, the wave falls back home and the next wave must be bigger. Fen vs Meadow: three of four games contested at 20 minutes, with losses down again (for example 28/9). Meadow vs Meadow: two of three contested, one still a late snowball (minute 15–20).
+
+**Still open:** in one Fen-vs-Meadow seed (4), the Meadow AI has 13 units and no army at minute 5 and never recovers. That's an early-economy failure on that map/seed, not combat. Worth a look.
+
 ### P4: reach strikes first, built (spears)
 
 - **New attack field `shaft`** (0–3 m, strikers only): each 2 m of shaft adds one tile of reach. The shaft's wood (1.5 kg/m) is priced like body mass, and a long pole swings a little slower (+0.08 s per metre).

@@ -281,6 +281,25 @@ export class SkirmishAI {
       for (const u of fit) this.attacking.add(u.id);
       this.waveSize = Math.min(16, this.waveSize + 2);
     }
+    // ── Retreat: a wave that's clearly outmatched where it stands falls back home to regroup
+    //    (under the garrison's fire) instead of dying to the last unit.
+    const wave = army.filter((u) => this.attacking.has(u.id));
+    if (wave.length && tc && w.tick % (TICK_RATE * 2) === 0) {
+      const gx = wave.reduce((n, u) => n + u.x, 0) / wave.length, gy = wave.reduce((n, u) => n + u.y, 0) / wave.length;
+      const power = (u: Unit) => u.hp * (u.stats.damage / u.stats.cooldown);
+      const ours = wave.reduce((n, u) => n + power(u), 0);
+      let theirs = 0;
+      for (const e of w.units.values()) {
+        if (e.owner === this.player || w.players[e.owner]?.neutral || e.carter || !w.armed(e)) continue;
+        if ((e.x - gx) ** 2 + (e.y - gy) ** 2 < 12 * 12) theirs += power(e);
+      }
+      const homeDist = Math.hypot(gx - (tc.ox + tc.size / 2), gy - (tc.oy + tc.size / 2));
+      if (theirs > ours * 1.8 && homeDist > 18) {
+        out.push({ type: 'move', units: wave.map((u) => u.id), x: tc.ox + tc.size / 2, y: tc.oy + tc.size + 2 });
+        for (const u of wave) this.attacking.delete(u.id);
+        this.waveSize = Math.max(this.waveSize, wave.length + 4); // come back bigger
+      }
+    }
     if (target) {
       const stalled = army.filter((u) => this.attacking.has(u.id) && u.order.kind === 'idle' && u.engage === 0).map((u) => u.id);
       if (stalled.length) out.push({ type: 'attackMove', units: stalled, x: target[0], y: target[1] });
