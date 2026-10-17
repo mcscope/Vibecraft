@@ -291,13 +291,13 @@ export class SkirmishAI {
       for (const u of fit) this.attacking.add(u.id);
       this.waveSize = Math.min(16, this.waveSize + 2);
     }
-    // ── Scouting: every 4 minutes from minute 2, our fastest soldier (a worker if we have none)
+    // ── Scouting: every 4 minutes from minute 2, our fastest idle soldier
     //    runs to the enemy's side of the map and back, so we know what they field.
     if (tc && minutes >= 2) {
       const scout = this.scout !== null ? w.units.get(this.scout) : undefined;
       if (!scout && w.tick >= this.nextScout) {
         const pool = army.filter((u) => w.armed(u) && !this.attacking.has(u.id));
-        const pick = (pool.length ? pool : workers.filter((u) => u.order.kind === 'gather')).sort((a, b) => b.stats.speed - a.stats.speed)[0];
+        const pick = pool.sort((a, b) => b.stats.speed - a.stats.speed)[0]; // soldiers only: a worker sent out just dies
         const there = this.enemyTarget(w);
         if (pick && there) { out.push({ type: 'move', units: [pick.id], x: there[0], y: there[1] }); this.scout = pick.id; }
       } else if (scout) {

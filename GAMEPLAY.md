@@ -163,7 +163,11 @@ That's a real triangle: **spears beat chargers, heavy infantry and artillery bea
 ### AI and fog of war
 
 - **The AI now attacks only what it has scouted:** enemy buildings on ground it has explored, then enemy units in sight. Failing both, it heads for the mirror of its own base (skirmish maps are point-symmetric). It used to head straight for the first enemy building anywhere.
-- **Counter-picking still sees through fog.** Restricting it to enemy units actually seen left the Meadowfolk AI unable to counter, because it never sees the enemy army until it arrives. That gave Fen-favoured games, with the Meadowfolk gathering about half as much in three of four games. **Fixed with scouting:** from minute 2, every 4 minutes, the AI sends its fastest idle soldier (or a gatherer if it has none) to the enemy's side and back. It remembers every enemy soldier it has seen, and counters from that memory only. Fen vs Meadow with a fully fog-honest AI, at 20 minutes: Meadow ahead in two games, Fen in one, one even. No omniscience left in the AI's decisions.
+- **Counter-picking still sees through fog.** Restricting it to enemy units actually seen left the Meadowfolk AI unable to counter, because it never sees the enemy army until it arrives. That gave Fen-favoured games, with the Meadowfolk gathering about half as much in three of four games. **Fixed with scouting:** from minute 2, every 4 minutes, the AI sends its fastest idle soldier to the enemy's side and back (gatherers were tried and just died). It remembers every enemy soldier it has seen, and counters from that memory only. Fen vs Meadow with a fully fog-honest AI, at 20 minutes: Meadow ahead in two games, Fen in one, one even. No omniscience left in the AI's decisions.
+
+**Mirror matches still snowball** (Meadow vs Meadow: two of three one-sided by minute 20, with the loser's economy at half). Garrison, retreat and scouting all helped Fen-vs-Meadow but not the mirror. The likely remaining cause: identical armies make the first lost fight decisive, and nothing makes defending cheaper than attacking. Levers for you to choose between:
+- **A defender's advantage from the engine:** the height bonus for towers on hills, or cheaper and earlier towers.
+- **Making losses cost the winner more:** for example, attackers far from home can't resupply crystal.
 
 ## Decisions for the user (not made unilaterally)
 
