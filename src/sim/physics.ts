@@ -282,7 +282,9 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   const range = throwing
     ? Math.min(K.maxThrowRange, (crystalVelocity * crystalVelocity) / K.gravity / M_PER_TILE) // v²/g metres, in tiles
     : reach;
-  const sight = Math.max(7, range + 3);
+  // it sees 10 tiles, past its reach, and at least as far as it rides out to charge (the run-up to its sprint, plus reach)
+  const sprintTiles = speed * K.sprintPerCruise, runUpTiles = ((sprintTiles * M_PER_TILE) ** 2 / (2 * K.traction * K.gravity)) / M_PER_TILE;
+  const sight = Math.max(10, range + 3, runUpTiles + range + 1);
 
   const gatherRate = (spec.canGather ?? true) ? K.gatherKgPerSec * Math.sqrt(muscleMass / 18) * workRefinement : 0;
 
