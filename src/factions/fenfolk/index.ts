@@ -299,8 +299,12 @@ const siegeHeron: FenUnit = {
               wg.sphere([0.13, 0.03, inner * 0.32], [-0.4, -0.005, side * inner * f], heronDark); // dark trailing secondaries
             }
             wg.sphere([0.05, 0.04, inner * 0.4], [-0.1, 0.02, side * inner * 0.5], { team: 'primary', tex: 'cloth' }); // a thin war-paint stripe
+            // the leading edge: one smooth rounded rod from shoulder to wrist, a rounded wrist joint
+            wg.limb([0.17, 0, 0], [0.16, 0, side * inner * 0.9], 0.05, heronGrey, 0.045);
+            wg.sphere(0.048, [0.16, 0, side * inner * 0.9], heronGrey);
             wg.joint([-0.08, 0, side * inner * 0.9], [-side * 0.28 * spread, 0, 0], (hand) => { // the wrist bows the hand down
               for (const f of [0.15, 0.4, 0.65, 0.85]) hand.sphere([0.3 - f * 0.08, 0.03, outer * 0.32], [-0.1 - f * 0.03, 0, side * outer * f], heronGrey);
+              hand.limb([0.16, 0, 0], [0.06, 0, side * outer * 0.95], 0.045, heronGrey, 0.02); // the leading edge runs on, tapering to the tip
               for (let k = 0; k < 5; k++) { // primaries splayed like fingers, longest at the front, rooted well inside the hand
                 const len = (0.34 - k * 0.03) * (0.55 + spread * 0.45);
                 hand.sphere([0.05, 0.014, len / 2], [-0.02 - k * 0.07, -0.005, side * (outer * 0.8 + len / 2)], heronDark, [0, side * (k * 0.13 - 0.1) * spread, 0]);
