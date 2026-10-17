@@ -2,7 +2,7 @@
 // between frames and are batched by the GPU, so thousands of trees and units
 // stay cheap. Reads simulation state, never writes it.
 import { Application, Container, ImageSource, Matrix, Rectangle, Sprite as PixiSprite, Text, Texture, type TextureSource } from 'pixi.js';
-import { type Building, type ResourceNode, type Unit, type World, type WorldEvent } from '../sim/world';
+import { type Building, type Order, type ResourceNode, type Unit, type World, type WorldEvent } from '../sim/world';
 import { Camera, isoX, isoY, TILE_H, TILE_W } from './camera';
 import { isUnderfoot, parcelPos } from '../sim/abilities/underfoot';
 import { buildingSprite, unitSprite, type ArtAnim, type Sprite } from '../art/contract';
@@ -483,6 +483,40 @@ export class Renderer {
         const reach = Math.max(b.spec.gatherBoost?.radius ?? 0, b.spec.sow?.radius ?? 0);
         if (reach) ellipse(this.ringTex, isoX(cx, cy), isoY(cx, cy), (reach + b.size / 2) * 45.25, (reach + b.size / 2) * 22.6, 0xa8e070, 0.6);
         if (b.owner === 0) rally = b;
+      }
+    }
+    // where your selected units are headed: a dotted path through the current order and everything queued after it
+    const stop = (o: Order): [number, number, number] | null => {
+      const ent = (id: number): [number, number] | null => {
+        const t = w.units.get(id); if (t) return [t.x, t.y];
+        const b = w.buildings.get(id); if (b) return [b.ox + b.size / 2, b.oy + b.size / 2];
+        const n = w.nodes.get(id); return n ? [n.x, n.y] : null;
+      };
+      let p: [number, number] | null = null, color = 0xffffff;
+      switch (o.kind) {
+        case 'move': p = [o.x, o.y]; break;
+        case 'attackMove': p = [o.x, o.y]; color = 0xff6b5a; break;
+        case 'attack': p = ent(o.target); color = 0xff6b5a; break;
+        case 'gather': p = ent(o.node); color = 0xe0457a; break;
+        case 'build': p = ent(o.site); color = 0x7aff7a; break;
+        case 'resupply': p = ent(o.building); color = 0xffd23f; break;
+        case 'hunt': p = ent(o.target); color = 0xe0457a; break;
+        default: return null;
+      }
+      return p ? [p[0], p[1], color] : null;
+    };
+    let shown = 0;
+    for (const id of rs.selected) {
+      const u = w.units.get(id);
+      if (!u || u.owner !== 0 || shown++ > 40) continue;
+      let fx = u.px + (u.x - u.px) * alpha, fy = u.py + (u.y - u.py) * alpha;
+      for (const o of [u.order, ...u.queue]) {
+        const s = stop(o);
+        if (!s) continue;
+        const [tx, ty, color] = s, d = Math.hypot(tx - fx, ty - fy);
+        for (let k = 0.5; k < d; k += 0.5) { const x = fx + ((tx - fx) * k) / d, y = fy + ((ty - fy) * k) / d; ellipse(this.discTex, isoX(x, y), isoY(x, y), 2.2, 1.1, color, 0.55); }
+        ellipse(this.ringTex, isoX(tx, ty), isoY(tx, ty), 9, 4.5, color, 0.85);
+        fx = tx; fy = ty;
       }
     }
     if (rs.hoverId && !rs.selected.has(rs.hoverId)) {
