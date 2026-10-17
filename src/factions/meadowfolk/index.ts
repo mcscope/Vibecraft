@@ -33,6 +33,7 @@ const villager: MeadowUnit = {
   name: 'Villager',
   description: 'Gathers berries, wood and crystal, hauls them home and raises buildings, and can defend itself with a crystal-headed hammer.',
   mass: 45,
+  refinement: 2.07, // as refined as its building affords
   physique: { muscle: 0.4, frame: 0.35, reserve: 0.25 },
   attack: { style: 'strike', crystalMass: 1 },
   model(b, p) {
@@ -55,6 +56,7 @@ const slinger: MeadowUnit = {
   name: 'Slinger',
   description: 'Light skirmisher who whirls a sling of crystal chips. Fragile, but hits from range — then has to collect the spent crystals.',
   mass: 32,
+  refinement: 1.42, // as refined as its building affords
   physique: { muscle: 0.5, frame: 0.25, reserve: 0.25 },
   attack: { style: 'throw', crystalMass: 1.2, ammo: 6 },
   model(b, p) {
@@ -85,7 +87,7 @@ const maceman: MeadowUnit = {
   mass: 80,
   physique: { muscle: 0.45, frame: 0.45, reserve: 0.1 },
   attack: { style: 'strike', crystalMass: 2 },
-  refinement: 1.3,
+  refinement: 1.42, // as refined as its building affords
   model(b, p) {
     const look: HumanLook = {
       skin: '#c08e6c', hair: '#3a2a1c', head: 'helmet', scale: 1.02, bulk: 1.15, tabard: true, pads: true, beard: true,
@@ -114,6 +116,7 @@ const pikeman: MeadowUnit = {
   name: 'Pikeman',
   description: 'A steady soldier behind a 3-metre crystal-tipped pike. Strikes first, and anything that charges onto the set pike drives it home with its own weight: the answer to Lynx Lancers and other heavy chargers. Slow to swing, and no match for a swarm.',
   mass: 62,
+  refinement: 1.42, // as refined as its building affords
   physique: { muscle: 0.45, frame: 0.4, reserve: 0.15 },
   attack: { style: 'strike', crystalMass: 1.5, shaft: 3 },
   model(b, p) {
@@ -143,7 +146,7 @@ const lynx: MeadowUnit = {
   length: 2.6, // m nose to tail: a long body, it wheels
   physique: { muscle: 0.6, frame: 0.28, reserve: 0.12 },
   attack: { style: 'strike', crystalMass: 5, shaft: 3 }, // the couched lance it's drawn with
-  refinement: 1.5,
+  refinement: 1.83, // as refined as its building affords
   model(b, p) {
     const fur: Mat = { color: '#bf9a62', tex: 'fur' };
     const belly: Mat = { color: '#eadcbc', tex: 'fur' };
@@ -208,7 +211,7 @@ const hurlhorn: MeadowUnit = {
   length: 2.9, // m nose to tail: a long body, it wheels
   physique: { muscle: 0.55, frame: 0.3, reserve: 0.15 },
   attack: { style: 'throw', crystalMass: 9, ammo: 12 },
-  refinement: 2.4,
+  refinement: 2.5, // as refined as its building affords
   model(outer, p) {
     // modelled at 700 kg; drawn at the cube-root scale of its actual mass
     outer.joint([0, 0, 0], [0, 0, 0], (b) => {
@@ -270,6 +273,7 @@ const mule: MeadowUnit = {
   name: 'Mule Cart',
   description: 'A small, patient mule hauling a two-wheeled cart. Keeps outlying buildings stocked from the town center.',
   mass: 80,
+  refinement: 2.07, // as refined as its building affords
   length: 1.8, // m nose to tail: a long body, it wheels
   physique: { muscle: 0.55, frame: 0.3, reserve: 0.15 },
   wheeled: true,
@@ -331,7 +335,7 @@ export const buildings: MeadowBuilding[] = [
   },
   {
     id: 'forge', name: 'Crystal Forge', description: 'Researches better slings, mail and lynx breeding (levels I and II).',
-    size: 2, materials: 300, requires: ['barracks'], researches: ['sling-drills', 'sling-drills-2', 'mail-hardening', 'mail-hardening-2', 'lynx-breeding', 'lynx-breeding-2'], model: models.forge,
+    size: 2, materials: 300, requires: ['barracks'], researches: ['sling-drills', 'mail-hardening', 'lynx-breeding'], model: models.forge,
   },
   {
     id: 'lynx-den', name: 'Lynx Den', description: 'Raises and trains lynx lancers.',
@@ -339,7 +343,7 @@ export const buildings: MeadowBuilding[] = [
   },
   {
     id: 'great-hall', name: 'Great Hall', description: 'The top of the tree. Its capital (with everything beneath it) supports the refined Hurlhorn and the third level of every combat tech.',
-    size: 4, materials: 540, requires: ['forge', 'lynx-den'], trains: ['hurlhorn'], researches: ['sling-drills-3', 'mail-hardening-3', 'lynx-breeding-3'], model: models.greatHall,
+    size: 4, materials: 540, requires: ['forge', 'lynx-den'], trains: ['hurlhorn'], researches: ['sling-drills-2', 'sling-drills-3', 'mail-hardening-2', 'mail-hardening-3', 'lynx-breeding-2', 'lynx-breeding-3'], model: models.greatHall,
   },
   {
     id: 'gathering-camp', name: 'Gathering Camp', description: 'A drop-off shed that speeds up gathering nearby (by its capital) and keeps sowing berry bushes and trees around it from its own seed stock.',

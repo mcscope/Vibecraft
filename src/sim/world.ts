@@ -2035,10 +2035,10 @@ export class World {
       // slows to stop, arriving or pulling up)
       const drive = Math.max(want * Math.max(0, (fx * ddx + fy * ddy) / d), Math.min(want, Math.hypot(u.vx, u.vy)));
       let wvx = fx * drive, wvy = fy * drive;
-      // runners don't run into their own side: against a friend close by, drop the part of the run that would close
-      // on them. Enemy bodies are fair game: a charge runs them down
+      // runners don't run into their own side on the move: against a moving friend close by, drop the part of the run
+      // that would close on them (a standing one just gets nudged aside as it passes). Enemy bodies are fair game
       for (const f of this.units.values()) {
-        if (f === u || f.airborne || f.owner !== u.owner) continue;
+        if (f === u || f.airborne || f.owner !== u.owner || Math.hypot(f.vx, f.vy) < 0.3) continue;
         const ox = f.x - u.x, oy = f.y - u.y, gap = Math.hypot(ox, oy) || 1e-6;
         if (gap > u.stats.radius + f.stats.radius + 0.35) continue;
         const nx = ox / gap, ny = oy / gap, closing = (wvx - f.vx) * nx + (wvy - f.vy) * ny;

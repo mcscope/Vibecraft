@@ -58,14 +58,16 @@ describe('training and research', () => {
     b.stock = { food: 200, wood: 0, crystal: 50 };
     w.enqueue({ player: 0, cmd: { type: 'autoTrain', building: b.id, specId: 'slinger' } });
     run(w, 20 * 60);
-    expect(w.unitsOf(0).filter((u) => u.specId === 'slinger').length).toBe(3); // 200 food buys 3 slingers (60 each)
+    const each = w.specOf(0, 'slinger')!.stats;
+    expect(w.unitsOf(0).filter((u) => u.specId === 'slinger').length).toBe(Math.min(Math.floor(200 / each.foodCost), Math.floor(50 / each.crystalCost))); // as many as 200 food (and 50 crystal) buys
+    const trained = w.unitsOf(0).filter((u) => u.specId === 'slinger').length;
     // turning it off stops new orders; the one already waiting in the queue still trains
     w.enqueue({ player: 0, cmd: { type: 'autoTrain', building: b.id, specId: null } });
     b.stock.food = 500;
     run(w, 20 * 30);
-    expect(w.unitsOf(0).filter((u) => u.specId === 'slinger').length).toBe(4);
+    expect(w.unitsOf(0).filter((u) => u.specId === 'slinger').length).toBe(trained + 1);
     run(w, 20 * 30);
-    expect(w.unitsOf(0).filter((u) => u.specId === 'slinger').length).toBe(4);
+    expect(w.unitsOf(0).filter((u) => u.specId === 'slinger').length).toBe(trained + 1);
   });
 
   test('a click queues even when the building is short; it pays and trains once stock arrives', () => {
@@ -102,7 +104,7 @@ describe('training and research', () => {
   const tc = w.baseOf(0)!;
   tc.stock.wood = 500;
   const v = w.unitsOf(0)[0];
-  const hp0 = v.stats.maxHp, rate0 = v.stats.gatherRate, speed0 = v.stats.speed, carry0 = v.stats.carryCapacity;
+  const hp0 = v.stats.maxHp, rate0 = v.stats.gatherRate, speed0 = v.stats.speed, carry0 = v.stats.carryCapacity, ref0 = v.stats.refinement;
   w.enqueue({ player: 0, cmd: { type: 'research', building: tc.id, techId: 'villager-tools' } });
   run(w, 20 * 20);
   expect(w.players[0].researched).toContain('villager-tools');
@@ -111,7 +113,7 @@ describe('training and research', () => {
   expect(v.stats.gatherRate).toBeCloseTo(rate0 * 1.3);
   expect(v.stats.speed).toBeCloseTo(speed0 * 1.3);
   expect(v.stats.carryCapacity).toBeCloseTo(carry0 * 1.3);
-  expect(v.stats.refinement).toBeCloseTo(1);
+  expect(v.stats.refinement).toBeCloseTo(ref0); // a work tech leaves combat refinement alone
   expect(v.stats.maxHp).toBeCloseTo(hp0);
   expect(tc.stock.wood).toBe(500 - techCost(1, 0.3));
   });
