@@ -13,7 +13,7 @@ import * as bearerAbility from './abilities/bearer';
 import { midStride, strideFactor } from './abilities/gait';
 import { nearestDropOff } from './abilities/dropoff';
 import { eating, isTamer, runPens, runTame } from './abilities/herding';
-import { BOMB_REACH, canReach, dropTime, FLY_SIGHT, flyTo, heightBonus, takeOff, tickFlight, walks } from './abilities/flight';
+import { BOMB_REACH, canReach, dropTime, FLY_SIGHT, flyTo, heightBonus, LAUNCH_HEIGHT, takeOff, tickFlight, walks } from './abilities/flight';
 import { MatchStats } from './stats';
 import { isUnderfoot, loadBelt, nearestBelt, roadFactor, routeBelts, runBelts, type BeltRoutes, type Parcel } from './abilities/underfoot';
 import { grow, grownEnough, livingStats, seedMaterials } from './abilities/living';
@@ -102,7 +102,7 @@ export type Order =
    */
   | { kind: 'cart'; base: number; home: number; from?: number; pinned: boolean; phase: 'load' | 'deliver'; res: ResourceKind };
 
-export type UnitAnim = 'idle' | 'walk' | 'fly' | 'attack' | 'gather' | 'eat' | 'tired';
+export type UnitAnim = 'idle' | 'walk' | 'fly' | 'leap' | 'attack' | 'gather' | 'eat' | 'tired';
 
 export interface Unit {
   id: number;
@@ -1096,11 +1096,11 @@ export class World {
     const moved = this.runOrder(u) || midStride(u, this.tick); // a hopper crouching between bounds is still on its way
     tickFlight(this, u, moved, DT, (fx, fy) => this.face(u, fx, fy));
     if (moved) anim = 'walk';
-    if (u.airborne) anim = 'fly'; // in the air, moving, hovering or throwing
-    if (u.swing > 0 && !u.airborne) anim = 'attack';
+    if (u.swing > 0) anim = 'attack';
     else if (((u.order.kind === 'gather' && u.order.phase === 'harvest') || (u.order.kind === 'build' && u.order.phase === 'chop')) && !moved && u.busy) anim = 'gather';
     else if ((u.order.kind === 'eatPack' || u.order.kind === 'resupply') && !moved && u.busy) anim = 'eat';
     else if (u.exhausted && !moved) anim = 'tired';
+    if (u.airborne) anim = u.alt < LAUNCH_HEIGHT && u.flewTick === this.tick ? 'leap' : 'fly'; // in the air: always flying (leaping off the ground first)
     if (anim !== u.anim) { u.anim = anim; u.animT = 0; } else u.animT += DT;
 
     if (!u.busy && !moved && u.order.kind !== 'resupply' && u.order.kind !== 'eatPack') {
@@ -1800,8 +1800,16 @@ export class World {
 
   /** @internal sim helper, also used by logistics */
   moveToBuilding(u: Unit, b: Building): boolean {
-    const cx = Math.max(b.ox, Math.min(u.x, b.ox + b.size)), cy = Math.max(b.oy, Math.min(u.y, b.oy + b.size));
     const reach = u.stats.radius + 0.6;
+    if (u.airborne) {
+      // a flier comes down on open ground beside it and walks up (it can't land on a roof)
+      const mx = b.ox + b.size / 2, my = b.oy + b.size / 2;
+      const d = Math.sqrt((u.x - mx) ** 2 + (u.y - my) ** 2) || 1;
+      const open = this.grid.nearestOpen(mx + ((u.x - mx) / d) * (b.size / 2 + 1), my + ((u.y - my) / d) * (b.size / 2 + 1), 5);
+      if (open) this.moveTo(u, open[0], open[1], 0.2);
+      return false;
+    }
+    const cx = Math.max(b.ox, Math.min(u.x, b.ox + b.size)), cy = Math.max(b.oy, Math.min(u.y, b.oy + b.size));
     if ((cx - u.x) ** 2 + (cy - u.y) ** 2 <= reach * reach) { u.path = []; return true; }
     const mx = b.ox + b.size / 2, my = b.oy + b.size / 2;
     const d = Math.sqrt((u.x - mx) ** 2 + (u.y - my) ** 2) || 1;

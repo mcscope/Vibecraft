@@ -226,17 +226,22 @@ const siegeHeron: FenUnit = {
   model(root, p) {
     root.joint([0, 0, 0], [0, 0, 0], (b) => {
       const t = p.phase * Math.PI * 2;
-      const flying = p.anim === 'fly';
+      const leaping = p.anim === 'leap'; // springing off the ground: legs driving down, body tipped up, wings hauling
+      const flying = p.anim === 'fly' || leaping;
       const walking = p.anim === 'walk';
       const attacking = p.anim === 'attack';
       // flight: body level and up off the ground, wings beating slow and deep
-      const lift = flying ? 0.9 + Math.sin(t) * 0.06 : 0;
+      const lift = leaping ? 0.35 + Math.sin(p.phase * Math.PI) * 0.4 : flying ? 0.9 + Math.sin(t) * 0.06 : 0;
       const legLen = 1.15;
       // stilt legs: striding when walking, trailing behind in flight
       for (const z of [1, -1]) {
         const a = walking ? Math.sin(t + (z > 0 ? 0 : Math.PI)) * 0.45 : 0;
         const hip: [number, number, number] = [-0.05, 1.3 + lift, 0.16 * z];
-        if (flying) {
+        if (leaping) {
+          // legs straight down, still pushing off
+          b.limb(hip, [-0.1, hip[1] - legLen * 0.6, hip[2]], 0.045, heronLeg, 0.035);
+          b.limb([-0.1, hip[1] - legLen * 0.6, hip[2]], [-0.25, Math.max(0.04, hip[1] - legLen * 1.05), hip[2]], 0.035, heronLeg, 0.028);
+        } else if (flying) {
           b.limb(hip, [-0.75, 1.2 + lift, 0.12 * z], 0.04, heronLeg, 0.03);
           b.limb([-0.75, 1.2 + lift, 0.12 * z], [-1.35, 1.15 + lift, 0.1 * z], 0.03, heronLeg, 0.025);
         } else {
@@ -247,7 +252,7 @@ const siegeHeron: FenUnit = {
           for (const tz of [-0.08, 0, 0.08]) b.limb(foot, [foot[0] + 0.22, 0.02, foot[2] + tz * 1.5], 0.015, heronLeg); // splayed toes
         }
       }
-      b.joint([0, lift, 0], [0, 0, flying ? 0 : 0.25], (c) => {
+      b.joint([0, lift, 0], [0, 0, leaping ? 0.45 : flying ? 0 : 0.25], (c) => {
         // body, pale breast plumes and a long tail
         c.sphere([0.75, 0.36, 0.38], [0, 1.45, 0], heronGrey);
         c.sphere([0.5, 0.26, 0.3], [0.2, 1.32, 0], heronPale);
@@ -279,7 +284,7 @@ const siegeHeron: FenUnit = {
         // wings: folded along the flanks on the ground, spread and beating in the air
         for (const side of [1, -1]) {
           const spread = flying ? 1 : attacking ? 0.35 : 0;
-          const beat = flying ? Math.sin(t) * 0.75 : 0;
+          const beat = leaping ? -0.9 + Math.sin(t) * 1.1 : flying ? Math.sin(t) * 0.75 : 0; // a leap hauls the wings high, then down hard
           c.joint([0.15, 1.6, 0.3 * side], [beat * side * spread + (1 - spread) * 1.35 * side, 0, 0], (wg) => {
             for (let i = 0; i < 6; i++) {
               const len = 0.9 + spread * 0.9 - i * 0.08;
