@@ -81,7 +81,7 @@ const bogToad: FenUnit = {
   mass: 400, // horse-sized: a fenling rides it
   physique: { muscle: 0.55, frame: 0.3, reserve: 0.15 },
   attack: { style: 'strike', crystalMass: 2.5 },
-  refinement: 1.3,
+  refinement: 2.0, // as refined as the Toad Wallow allows (2.05): a big body bred well
   gait: { hop: 0.5, period: 1.1 }, // great lumbering leaps: airborne 1/3–5/6 of each stride
   model(outer, p) {
     // drawn at its old 150 kg proportions, scaled up by the cube root of its mass (the rider stays fenling-sized)
