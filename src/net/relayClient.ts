@@ -2,6 +2,9 @@
 import type { TickBundle, Transport } from './lockstep';
 
 export interface Peer { id: number; name: string }
+/** A chat line: travels beside the game (never through lockstep), so it can't affect play. */
+export interface ChatLine { from: number; name: string; text: string }
+export const CHAT_MAX = 200;
 
 export class RelayClient {
   you = -1;
@@ -9,7 +12,24 @@ export class RelayClient {
   onPeers?: (peers: Peer[]) => void;
   onMessage?: (from: number, data: unknown) => void;
   onClose?: () => void;
+  /** Everything said in the room since we joined (lobby and game). */
+  readonly chat: ChatLine[] = [];
+  private chatListeners = new Set<(line: ChatLine) => void>();
   private constructor(private readonly ws: WebSocket) {}
+
+  /** Listen for chat lines; returns a function that stops listening. */
+  onChat(cb: (line: ChatLine) => void): () => void { this.chatListeners.add(cb); return () => this.chatListeners.delete(cb); }
+  say(text: string, name: string): void {
+    const t = text.trim().slice(0, CHAT_MAX);
+    if (!t) return;
+    this.send({ k: 'chat', name: name.slice(0, 24), text: t });
+    this.heard({ from: this.you, name, text: t });
+  }
+  private heard(line: ChatLine): void {
+    this.chat.push(line);
+    if (this.chat.length > 200) this.chat.shift();
+    for (const cb of this.chatListeners) cb(line);
+  }
 
   static connect(url: string, room: string, name: string, timeoutMs = 6000): Promise<RelayClient> {
     return new Promise((resolve, reject) => {
@@ -25,7 +45,11 @@ export class RelayClient {
         try { m = JSON.parse(String(e.data)); } catch { return; }
         if (m.t === 'joined') { c.you = m.you!; clearTimeout(timer); resolve(c); }
         else if (m.t === 'peers') { c.peers = m.peers ?? []; c.onPeers?.(c.peers); }
-        else if (m.t === 'msg') c.onMessage?.(m.from!, m.data);
+        else if (m.t === 'msg') {
+          const d = m.data as { k?: string; name?: unknown; text?: unknown } | null;
+          if (d?.k === 'chat') { if (typeof d.text === 'string' && typeof d.name === 'string') c.heard({ from: m.from!, name: d.name.slice(0, 24), text: d.text.slice(0, CHAT_MAX) }); }
+          else c.onMessage?.(m.from!, m.data);
+        }
       };
     });
   }

@@ -11,6 +11,8 @@ import { NetTransport } from './net/relayClient';
 import type { OnlineGame } from './net/online';
 import { openLobby } from './ui/lobby';
 import { showScore } from './ui/scoreScreen';
+import { mountChat } from './ui/chat';
+import { TEAM_COLORS } from './render/artbank';
 import { SkirmishAI } from './ai/skirmishAI';
 import { CartDebug } from './ui/cartDebug';
 import { Renderer } from './render/renderer';
@@ -89,6 +91,12 @@ async function startOnline(g: OnlineGame): Promise<void> {
   g.relay.onPeers = (peers) => { if (peers.length < seats) showNotice(`${g.names.find((_, i) => i !== g.me) ?? 'Your opponent'} left the game.`); };
   g.relay.onClose = () => showNotice('Lost the connection to the relay.');
   await run({ mode: 'online', world, me: g.me, transport, delay: 4, sources: (local) => [local] });
+  // talk to the room: Enter to chat
+  const seatColor = (from: number) => {
+    const seat = from === g.relay.you ? g.me : g.relay.peers.findIndex((p) => p.id === from);
+    return seat >= 0 && seat < seats ? TEAM_COLORS[seat % TEAM_COLORS.length].primary : 'var(--dim)';
+  };
+  mountChat(document.getElementById('chat')!, g.relay, () => g.names[g.me], true, seatColor);
 }
 
 function showNotice(text: string): void {

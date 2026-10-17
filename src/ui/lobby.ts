@@ -5,6 +5,7 @@ import { Handshake, SEATS, type OnlineGame } from '../net/online';
 import { RelayClient } from '../net/relayClient';
 import { esc } from './format';
 import { MAPS } from '../sim/map';
+import { mountChat } from './chat';
 
 const KEY = 'vibecraft.online';
 const remembered = (): { relay?: string; room?: string; name?: string; faction?: string; map?: string } => {
@@ -25,6 +26,7 @@ export function openLobby(box: HTMLElement, onGame: (g: OnlineGame) => void, onB
       <label>Faction <select name="faction">${PLAYABLE.map((f) => `<option value="${esc(f.id)}" ${r.faction === f.id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label>
     </div>
     <div class="lobby-peers"></div>
+    <div class="lobby-chat" hidden></div>
     <div class="lobby-status"></div>
     <div class="lobby-buttons"><button data-act="join"><b>Join room</b></button><button data-act="back"><b>Back</b></button></div>
     <p class="hint">Run the relay with <code>npm run relay</code> on one machine; everyone uses its address (port 5190).</p>`;
@@ -58,6 +60,9 @@ export function openLobby(box: HTMLElement, onGame: (g: OnlineGame) => void, onB
     try {
       relay = await RelayClient.connect(v('relay'), v('room').toUpperCase(), name);
     } catch (err) { status(`${(err as Error).message}. Is the relay running? (npm run relay)`, true); return; }
+    const chatBox = $('.lobby-chat');
+    chatBox.hidden = false;
+    mountChat(chatBox, relay, () => name, false);
     box.querySelectorAll<HTMLInputElement>('.lobby-form input, .lobby-form select').forEach((el) => (el.disabled = true));
     hs = new Handshake(relay, faction, (t) => status(t));
     relay.onPeers = showPeers;
