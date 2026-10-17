@@ -87,30 +87,26 @@ export function provingGrounds(): Scenario {
       return { grid, features, starts: [[6, 24], [fort.ox, fort.oy]], seed };
     },
     setup(w) {
-      const tc = w.addBuilding(0, 'town-center', 6, 24)!;
-      tc.stock = { food: 6000, wood: 4000, crystal: 3000 }; // over the cache cap on purpose: a demo stockpile
-      tc.rallyX = 13; tc.rallyY = 26;
-      // a finished tech tree to play with (Great Hall's effective capital = 1,380)
-      const add = (id: string, x: number, y: number, stock: Partial<Record<'food' | 'wood' | 'crystal', number>>) => {
-        const b = w.addBuilding(0, id, x, y);
-        if (b) Object.assign(b.stock, stock);
-      };
-      add('barracks', 6, 30, { food: 400, crystal: 40 });
-      add('lynx-den', 6, 17, { food: 900, crystal: 20 });
-      add('forge', 2, 28, { wood: 600 });
-      add('great-hall', 1, 19, { food: 1500, crystal: 120 });
-      add('watchtower', 20, 36, { food: 40, crystal: 60 });
-      // the army, in ranks facing the range (heading 0 = +x)
-      const ranks: Array<[string, number, number, number]> = [
-        // spec, count, x, spacing
-        ['hurlhorn', 2, 11, 3.2],
-        ['slinger', 8, 14, 1.1],
-        ['villager', 4, 12.5, 1.4],
-        ['maceman', 6, 16, 1.4],
-        ['lynx', 4, 18.5, 2.2],
-      ];
-      for (const [spec, n, x, gap] of ranks) {
-        for (let i = 0; i < n; i++) w.spawnAt(0, spec, x, 26 + (i - (n - 1) / 2) * gap, 0);
+      // any faction: its base, its whole tree, and ranks of everything it can train
+      const f = w.factionOf(0);
+      const tc = w.addBuilding(0, f.townCenterId ?? '', 6, 24);
+      if (tc) { tc.stock = { food: 6000, wood: 4000, crystal: 3000 }; tc.rallyX = 13; tc.rallyY = 26; } // a demo stockpile
+      for (const b of f.buildings ?? []) {
+        if (b.unbuildable || b.wall || b.road || b.conveyor || b.id === f.townCenterId) continue;
+        const spot = w.findBuildSpot(b.size, 5, 24, 14);
+        const built = spot && w.addBuilding(0, b.id, spot[0], spot[1]);
+        if (built) built.stock = { food: 1500, wood: 600, crystal: 200 };
+      }
+      const trained = new Set((f.buildings ?? []).flatMap((b) => b.trains ?? []));
+      let x = 11;
+      for (const u of f.units) {
+        if (!trained.has(u.id) || u.id === f.carterId) continue;
+        const s = w.specOf(0, u.id);
+        if (!s) continue;
+        const n = u.id === f.workerId ? 4 : u.mass > 100 ? 2 : u.mass > 50 ? 4 : 6;
+        const gap = s.stats.radius * 2 + 0.5;
+        for (let i = 0; i < n; i++) w.spawnAt(0, u.id, x, 26 + (i - (n - 1) / 2) * gap, 0);
+        x += Math.max(1.4, gap);
       }
       // the range
       const row = (spec: string, x: number, ys: number[]) => {

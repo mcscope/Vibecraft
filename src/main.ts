@@ -69,7 +69,7 @@ else {
 
 async function start(m: Mode): Promise<void> {
   const world = m === 'demo'
-    ? new World({ seed, scenario: provingGrounds(), players: [{ name: 'You', faction: meadowfolk }, { name: 'Training Grounds', faction: training }] })
+    ? new World({ seed, scenario: provingGrounds(), players: [{ name: 'You', faction: pick('you') }, { name: 'Training Grounds', faction: training }] })
     : new World({ seed, scenario: skirmish(mapSel.value), players: [{ name: m === 'spectate' ? pick('you').name : 'You', faction: pick('you') }, { name: pick('foe').name, faction: pick('foe') }] });
   await run({
     mode: m, world, me: 0, transport: new LoopbackTransport(), delay: 2,
