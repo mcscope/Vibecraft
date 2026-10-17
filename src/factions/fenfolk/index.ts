@@ -231,16 +231,18 @@ const siegeHeron: FenUnit = {
       const walking = p.anim === 'walk';
       const attacking = p.anim === 'attack';
       // flight: body level and up off the ground, wings beating slow and deep
-      const lift = leaping ? 0.35 + Math.sin(p.phase * Math.PI) * 0.4 : flying ? 0.9 + Math.sin(t) * 0.06 : 0;
+      // in the air the body rides low in its own frame (the game lifts the whole bird by its altitude)
+      const lift = leaping ? -0.45 : flying ? -0.8 + Math.sin(t) * 0.05 : 0;
       const legLen = 1.15;
       // stilt legs: striding when walking, trailing behind in flight
       for (const z of [1, -1]) {
         const a = walking ? Math.sin(t + (z > 0 ? 0 : Math.PI)) * 0.45 : 0;
         const hip: [number, number, number] = [-0.05, 1.3 + lift, 0.16 * z];
         if (leaping) {
-          // legs straight down, still pushing off
-          b.limb(hip, [-0.1, hip[1] - legLen * 0.6, hip[2]], 0.045, heronLeg, 0.035);
-          b.limb([-0.1, hip[1] - legLen * 0.6, hip[2]], [-0.25, Math.max(0.04, hip[1] - legLen * 1.05), hip[2]], 0.035, heronLeg, 0.028);
+          // springing forward: legs thrust back and down, feet still pushing off the ground behind
+          const knee: [number, number, number] = [-0.35, Math.max(0.3, hip[1] * 0.45), hip[2]];
+          b.limb(hip, knee, 0.045, heronLeg, 0.035);
+          b.limb(knee, [-0.85, 0.04, hip[2]], 0.035, heronLeg, 0.028);
         } else if (flying) {
           b.limb(hip, [-0.75, 1.2 + lift, 0.12 * z], 0.04, heronLeg, 0.03);
           b.limb([-0.75, 1.2 + lift, 0.12 * z], [-1.35, 1.15 + lift, 0.1 * z], 0.03, heronLeg, 0.025);
@@ -252,7 +254,7 @@ const siegeHeron: FenUnit = {
           for (const tz of [-0.08, 0, 0.08]) b.limb(foot, [foot[0] + 0.22, 0.02, foot[2] + tz * 1.5], 0.015, heronLeg); // splayed toes
         }
       }
-      b.joint([0, lift, 0], [0, 0, leaping ? 0.45 : flying ? 0 : 0.25], (c) => {
+      b.joint([leaping ? 0.3 : 0, lift, 0], [0, 0, leaping ? 0.3 : flying ? 0 : 0.25], (c) => {
         // body, pale breast plumes and a long tail
         c.sphere([0.75, 0.36, 0.38], [0, 1.45, 0], heronGrey);
         c.sphere([0.5, 0.26, 0.3], [0.2, 1.32, 0], heronPale);
