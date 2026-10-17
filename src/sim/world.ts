@@ -1395,14 +1395,11 @@ export class World {
     if (edge > range - 0.05) {
       if (u.airborne) { this.moveTo(u, tx, ty, 0.05); return true; }
       if (tu) {
-        // no chasing what it can't catch: a target pulling away faster than it can sprint is let go (an explicit
-        // attack order stands and watches it instead)
+        // it lets go of a target that's got out beyond its charge distance (the run-up it needs, plus its reach) and is
+        // still going away (an order to attack it still chases)
         {
           const d = Math.hypot(tx - u.x, ty - u.y) || 1, away = (tu.ovx * (tx - u.x) + tu.ovy * (ty - u.y)) / d;
-          if (!wpn.throws && edge > range + 1 && away > 0.9 * u.stats.sprint) {
-            if (u.order.kind === 'attack' && u.order.target === tu.id) { this.face(u, tx - u.x, ty - u.y); return true; }
-            return false;
-          }
+          if (!wpn.throws && edge > Math.max(K.sprintRange, runUp + range) && away > 0 && u.order.kind !== 'attack') return false;
         }
         // holding ground: it doesn't go to meet anything (an explicit attack order still sends it)
         if (u.stance === 'hold' && u.order.kind !== 'attack') { this.face(u, tx - u.x, ty - u.y); return true; }
@@ -2011,7 +2008,9 @@ export class World {
       // lined up. So it slows to turn, and slower turns tighter; fast bodies sweep wide arcs. Nothing else.
       this.turnToward(u, Math.atan2(ddy, ddx));
       const fx = Math.cos(u.facing), fy = Math.sin(u.facing);
-      const drive = want * Math.max(0, (fx * ddx + fy * ddy) / d);
+      // not lined up, its legs stop pushing, but they don't brake: it keeps its pace while it swings round (it only
+      // slows to stop, arriving or pulling up)
+      const drive = Math.max(want * Math.max(0, (fx * ddx + fy * ddy) / d), Math.min(want, Math.hypot(u.vx, u.vy)));
       let wvx = fx * drive, wvy = fy * drive;
       // runners don't run into their own side: against a friend close by, drop the part of the run that would close
       // on them. Enemy bodies are fair game: a charge runs them down
