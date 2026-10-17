@@ -83,7 +83,7 @@ export const K = {
   gatherKgPerSec: 1.0, // at 18 kg muscle
   foodPerKg: 1.0,
   foodPerMuscleKg: 1.5,
-  foodPerFrameKg: 0.5,
+  foodPerFrameKg: 1.5, // a kilo of frame (health and plate) costs what a kilo of muscle does
   trainBaseSec: 6,
   trainSecPerKg: 1 / 12,
   /** Plate: a blow landing on it loses this much damage per unit of plate thickness (frame kg over body surface, ∝ mass^⅔)... */
