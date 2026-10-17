@@ -2066,11 +2066,11 @@ export class World {
         a.vx -= (imp / ma) * nx; a.vy -= (imp / ma) * ny;
         b.vx += (imp / mb) * nx; b.vy += (imp / mb) * ny;
         this.stagger(a, (imp / ma) * M_PER_TILE); this.stagger(b, (imp / mb) * M_PER_TILE); // knocked harder than a step can catch
-        const energy = 0.5 * mu * (closing * M_PER_TILE) ** 2; // J, closing speed in m/s
-        if (energy > K.impactThreshold) {
-          const hurt = (energy - K.impactThreshold) * K.bodyImpactEfficiency * K.damageScale;
-          if (!a.dummy) this.damage(a.id, hurt, a.x, a.y);
-          if (!b.dummy) this.damage(b.id, hurt, b.x, b.y);
+        // injury goes by how hard each body is jolted (its change of velocity), like a fall: the light one
+        // takes the jolt, the heavy one barely feels it, and a bump at walking pace hurts nobody
+        for (const [body, m] of [[a, ma], [b, mb]] as Array<[Unit, number]>) {
+          const jolt = (imp / m) * M_PER_TILE; // m/s
+          if (jolt > K.injuryDv && !body.dummy) this.damage(body.id, 0.5 * m * (jolt - K.injuryDv) ** 2 * K.bodyImpactEfficiency * K.damageScale, body.x, body.y);
         }
       }
     }

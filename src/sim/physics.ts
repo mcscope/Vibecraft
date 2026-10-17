@@ -108,9 +108,9 @@ export const K = {
   blowDepth: 0.15,
   /** A change of velocity (m/s) bigger than this in one hit or collision knocks a body off its feet for a moment: staggered. */
   staggerDv: 1.5,
-  /** Bodies colliding: impacts under this many joules are just jostling... */
-  impactThreshold: 60,
-  /** ...above it, this share of the collision energy (½·μ·v²) hurts each body. */
+  /** Bodies colliding: a jolt (change of velocity, m/s) under this is just jostling; it's how hard a body is jolted that injures it, like a fall... */
+  injuryDv: 3,
+  /** ...above it, this share of ½·m·(jolt − injuryDv)² hurts the body. */
   bodyImpactEfficiency: 0.15,
   /** kg of wood per metre of spear shaft. */
   shaftKgPerM: 1.5,
