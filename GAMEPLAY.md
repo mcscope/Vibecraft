@@ -106,7 +106,7 @@ Macemen get 2.7 armour, Reedguard 3.3, fenlings 1.3, the Lynx 1.7, all with a 15
 
 Equal-budget fights (1,200), with armour on:
 
-- **Big refined units beat nearly everything.** The Lynx beats everything except the heron.
+- **Big refined units beat nearly everything, as they should.** Refinement is the payoff for capital: the Lynx Den, the Elder Mound and their research cost wood that the arena doesn't count. An equal-*unit*-budget fight leaves that investment out, so top-tier units (the Lynx, Hurlhorn and heron at refinement 1.5–2.4) are meant to win it. The arena measures counters *within a tier* and between tiers *net of capital*, not whether elites should win.
 - **The heron is untouchable by melee in the air**, so only ranged units answer it. The Hurlhorn trades evenly.
 - **Slingers lose to everything.** Per unit of cost, the Lynx has about 2× the HP and 4× the damage of a slinger:
   - refinement 1.5 divides its cost;
@@ -175,9 +175,9 @@ That's a real triangle: **spears beat chargers, heavy infantry and artillery bea
    - give a worker's weapon its own cost (it does cost crystal ammo today, a little);
    - make fighting tire workers more (calories);
    - let a faction choose either a worker or a soldier body, and price dual-use bodies on both counts.
-2. **Should bigger and refined bodies be less efficient per cost?** For example, food cost growing slightly faster than mass (an elite's upbringing), or crystal as an elite's main cost (AoE "gold"). Today big refined units dominate cost-for-cost, so "trash" units have no job.
+2. ~~Should bigger and refined bodies be less efficient per cost?~~ **Withdrawn.** This forgot refinement. Elite units punching above their unit cost is the intended return on the capital (buildings and techs) behind them. The real question is whether cheap units have a job *before* that capital exists and as screens later, which is about timing and the economy, not unit efficiency.
 3. **Splash (P3), tested and reverted.** In the arena it made the Hurlhorn and the heron stronger against *everything* they already beat (Hurlhorn vs Reedguard +0.57 → +0.93). It created no new counter, because swarms already lose to artillery. Revisit once swarm units are worth something (decisions 1–2). Reach-first-strike (P4) is now built: see above.
-4. **Thrower strength, tested and reverted.** Throwing at strike parity (efficiency 0.75 → 1.0, reload 0.4 → 0.2 s) barely helped slingers (they still lost every matchup) and made the Hurlhorn and heron stronger again. Small stones carry too little energy, and armour takes most of it. Making light ranged units viable needs decision 2 (elites less efficient per cost), or ranged-specific physics such as a sling multiplying throw speed.
+4. **Thrower strength, tested and reverted.** Throwing at strike parity (efficiency 0.75 → 1.0, reload 0.4 → 0.2 s) barely helped slingers (they still lost every matchup) and made the Hurlhorn and heron stronger again. Small stones carry too little energy, and armour takes most of it. Making light ranged units viable needs ranged-specific physics, such as a sling multiplying throw speed (not nerfing elites, see decision 2).
 5. **Faction designs.** Done for the AI: it now builds by army value (HP × DPS ÷ cost²), which turned Fen routs into mostly close games. The Meadowfolk slinger still needs a redesign (heavier stone, fewer of them), but arena tests of five variants (heavier stones, more muscle, refinement) still lost to every Fenfolk unit: per cost, ranged infantry loses to melee in this engine.
 
 ## Plan
