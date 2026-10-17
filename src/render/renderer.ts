@@ -403,7 +403,9 @@ export class Renderer {
       const x = p.sx + (p.tx - p.sx) * t, y = p.sy + (p.ty - p.sy) * t;
       const dist = Math.hypot(p.tx - p.sx, p.ty - p.sy);
       // a bomb falls from the bird (accelerating); a throw arcs; a tower's shot starts up its stilts
-      const h = p.drop ? (Renderer.altPx(p.sz) + 30) * (1 - t * t) : (10 + dist * 6) * 4 * t * (1 - t) + (26 + p.sz * 16) * (1 - t);
+      // thrown at a flier: the arc ends up at the bird (its altitude, plus half its body)
+      const end = p.tz !== undefined ? Renderer.altPx(p.tz) + 20 : 0;
+      const h = p.drop ? (Renderer.altPx(p.sz) + 30) * (1 - t * t) : (10 + dist * 6) * 4 * t * (1 - t) + (26 + p.sz * 16) * (1 - t) + end * t;
       sp.position.set(isoX(x, y), isoY(x, y) - h);
       sp.rotation = this.time * 14 + p.id;
       sp.visible = this.seen(p.owner, x, y);

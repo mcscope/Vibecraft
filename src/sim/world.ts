@@ -244,6 +244,8 @@ export interface Projectile {
   target: number;
   /** Dropped from a flier: falls straight down from `sz` metres. */
   drop?: boolean;
+  /** Thrown at a flier: metres up where it meets the target (it can only hit something in the air). */
+  tz?: number;
 }
 
 export type WorldEvent =
@@ -1072,6 +1074,7 @@ export class World {
       id: this.nextId++, owner: b.owner, sx: cx, sy: cy, sz: atk.height,
       tx: target.x + ((target.x - target.px) / DT) * flight, ty: target.y + ((target.y - target.py) / DT) * flight,
       t: 0, duration: flight, damage: tw.damage, crystalKg: atk.crystalMass, target: target.id,
+      tz: target.airborne && target.alt > 0.5 ? target.alt : undefined,
     };
     this.projectiles.set(p.id, p);
   }
@@ -1308,6 +1311,7 @@ export class World {
       const p: Projectile = {
         id: this.nextId++, owner: u.owner, sx: u.x, sy: u.y, sz: bomb ? u.alt : 0, tx: ax, ty: ay, t: 0, duration: flight,
         damage: u.stats.damage + heightBonus(u), crystalKg: u.crystalMass, target: targetId, drop: bomb || undefined,
+        tz: !bomb && tu?.airborne && tu.alt > 0.5 ? tu.alt : undefined,
       };
       this.projectiles.set(p.id, p);
     } else {
@@ -1326,7 +1330,8 @@ export class World {
   /** Launch a crystal from (x, y), `h` metres up, at (tx, ty) (towers, garrisons). */
   launch(owner: number, x: number, y: number, h: number, tx: number, ty: number, damage: number, kg: number, target: number): void {
     const flight = Math.max(0.3, Math.hypot(tx - x, ty - y) / 8);
-    const p: Projectile = { id: this.nextId++, owner, sx: x, sy: y, sz: h, tx, ty, t: 0, duration: flight, damage, crystalKg: kg, target };
+    const tu = this.units.get(target);
+    const p: Projectile = { id: this.nextId++, owner, sx: x, sy: y, sz: h, tx, ty, t: 0, duration: flight, damage, crystalKg: kg, target, tz: tu?.airborne && tu.alt > 0.5 ? tu.alt : undefined };
     this.projectiles.set(p.id, p);
   }
 
@@ -1347,6 +1352,21 @@ export class World {
     this.projectiles.delete(p.id);
     let hit = 0;
     const tu = this.units.get(p.target);
+    if (p.tz !== undefined) {
+      // thrown up at a flier: it hits a flier there, or falls back to earth harmlessly
+      if (tu && tu.airborne && (tu.x - p.tx) ** 2 + (tu.y - p.ty) ** 2 < (tu.stats.radius + 0.5) ** 2) hit = tu.id;
+      else {
+        let best = 0.5 ** 2;
+        for (const u of this.units.values()) {
+          if (u.owner === p.owner || !u.airborne) continue;
+          const d = (u.x - p.tx) ** 2 + (u.y - p.ty) ** 2;
+          if (d < best + u.stats.radius ** 2) { best = d; hit = u.id; }
+        }
+      }
+      if (hit) this.damage(hit, p.damage, p.tx, p.ty);
+      this.dropShard(p.tx, p.ty, p.crystalKg);
+      return;
+    }
     if (tu && (tu.x - p.tx) ** 2 + (tu.y - p.ty) ** 2 < (tu.stats.radius + 0.4) ** 2) hit = tu.id;
     if (!hit) {
       let best = 0.45 ** 2;
