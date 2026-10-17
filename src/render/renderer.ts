@@ -372,7 +372,8 @@ export class Renderer {
         if (u.airborne && !this.wasAirborne.has(u.id)) v = Math.max(v, 5.5); // the leap
         if (u.airborne) this.wasAirborne.add(u.id); else this.wasAirborne.delete(u.id);
         const dt = Math.min(this.dt, 0.05);
-        if (u.airborne) v += ((1 - a0) * 22 - v * 5) * dt; // springy climb to cruising height
+        const target = Math.min(2, 0.35 + u.alt / 12); // drawn higher as it climbs (sim/abilities/flight.ts)
+        if (u.airborne) v += ((target - a0) * 22 - v * 5) * dt; // springy climb to its height
         else v = (0 - a0) * 3; // a gentle glide down
         const a = Math.max(0, a0 + v * dt);
         this.alt.set(u.id, a); this.altV.set(u.id, a > 0 ? v : 0);
@@ -381,7 +382,8 @@ export class Renderer {
       sp.zIndex = x + y + (u.airborne ? 2 : 0);
       const art = this.bank.unit(u.owner, u.specId);
       if (art) {
-        const f = unitFrame(u);
+        // a bird still off the ground (taking off, gliding in to land) keeps its wings spread
+        const f = u.stats.flight && !u.airborne && this.lift(u.id) > 6 ? { anim: 'fly' as const, time: this.time } : unitFrame(u);
         this.setFrame(sp, unitSprite(art, f.anim, u.heading, f));
       }
       // no crystal to fight with: visibly greyed out
@@ -405,7 +407,8 @@ export class Renderer {
       const t = Math.min(1, (p.t + alpha / 20) / p.duration);
       const x = p.sx + (p.tx - p.sx) * t, y = p.sy + (p.ty - p.sy) * t;
       const dist = Math.hypot(p.tx - p.sx, p.ty - p.sy);
-      const h = (10 + dist * 6) * 4 * t * (1 - t) + (26 + p.sz * 16) * (1 - t);
+      // a bomb falls from the bird (accelerating); a throw arcs; a tower's shot starts up its stilts
+      const h = p.drop ? ((0.35 + p.sz / 12) * Renderer.FLY_PX + 30) * (1 - t * t) : (10 + dist * 6) * 4 * t * (1 - t) + (26 + p.sz * 16) * (1 - t);
       sp.position.set(isoX(x, y), isoY(x, y) - h);
       sp.rotation = this.time * 14 + p.id;
       sp.visible = this.seen(p.owner, x, y);

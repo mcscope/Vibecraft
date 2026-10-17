@@ -13,7 +13,7 @@ import * as bearerAbility from './abilities/bearer';
 import { midStride, strideFactor } from './abilities/gait';
 import { nearestDropOff } from './abilities/dropoff';
 import { eating, isTamer, runPens, runTame } from './abilities/herding';
-import { canReach, FLY_SIGHT, flyTo, heightBonus, takeOff, tickFlight, walks } from './abilities/flight';
+import { BOMB_REACH, canReach, dropTime, FLY_SIGHT, flyTo, heightBonus, takeOff, tickFlight, walks } from './abilities/flight';
 import { MatchStats } from './stats';
 import { isUnderfoot, loadBelt, nearestBelt, roadFactor, routeBelts, runBelts, type BeltRoutes, type Parcel } from './abilities/underfoot';
 import { grow, grownEnough, livingStats, seedMaterials } from './abilities/living';
@@ -142,6 +142,8 @@ export interface Unit {
   stride: number; strideTick: number;
   /** A flier in the air (sim/abilities/flight.ts). */
   airborne: boolean;
+  /** Metres up (fliers climb slowly toward their ceiling while airborne; 0 on the ground). */
+  alt: number;
   /** Training dummy: inert target. */
   dummy: boolean;
   /** Wildlife temper (wild units only). */
@@ -229,6 +231,8 @@ export interface Projectile {
   damage: number;
   crystalKg: number;
   target: number;
+  /** Dropped from a flier: falls straight down from `sz` metres. */
+  drop?: boolean;
 }
 
 export type WorldEvent =
@@ -825,7 +829,7 @@ export class World {
       food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
       order: { kind: 'idle' }, resume: null, engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
-      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false,
+      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0,
       dummy: !!spec.dummy,
       carter: spec.role === 'carter',
       gatherAcc: 0,
@@ -1262,9 +1266,10 @@ export class World {
       edge = Math.sqrt((cx - u.x) ** 2 + (cy - u.y) ** 2);
     }
     // buildings: units stop near tile centres, so anyone on a tile touching it (≤ ~0.75 from a corner) can reach
-    const range = tb ? Math.max(wpn.range, 1) : wpn.range;
+    // a flier in the air bombs: it flies right over the target and drops (sim/abilities/flight.ts)
+    const range = u.airborne && wpn.throws ? BOMB_REACH : tb ? Math.max(wpn.range, 1) : wpn.range;
     if (edge > range - 0.05) {
-      if (tu) { this.moveTo(u, tx, ty, 0.05); return true; }
+      if (tu || u.airborne) { this.moveTo(u, tx, ty, 0.05); return true; }
       // buildings: walk to the open tile nearest the closest edge point
       const b = tb!;
       const ex = Math.max(b.ox - 0.5, Math.min(u.x, b.ox + b.size + 0.5)), ey = Math.max(b.oy - 0.5, Math.min(u.y, b.oy + b.size + 0.5));
@@ -1284,12 +1289,13 @@ export class World {
     this.events.push({ type: 'attack', x: u.x, y: u.y, owner: u.owner, specId: u.specId, style: wpn.throws ? 'throw' : 'strike', kg: wpn.crystalMass });
     if (wpn.throws) {
       u.ammo -= u.crystalMass;
-      const flight = Math.max(0.25, Math.sqrt((tx - u.x) ** 2 + (ty - u.y) ** 2) / (u.stats.crystalVelocity * 0.7));
+      const bomb = u.airborne && u.alt > 0.5;
+      const flight = bomb ? dropTime(u.alt) : Math.max(0.25, Math.sqrt((tx - u.x) ** 2 + (ty - u.y) ** 2) / (u.stats.crystalVelocity * 0.7));
       let ax = tx, ay = ty;
       if (tu) { ax += ((tu.x - tu.px) / DT) * flight; ay += ((tu.y - tu.py) / DT) * flight; } // lead the target
       const p: Projectile = {
-        id: this.nextId++, owner: u.owner, sx: u.x, sy: u.y, sz: 0, tx: ax, ty: ay, t: 0, duration: flight,
-        damage: u.stats.damage + heightBonus(u), crystalKg: u.crystalMass, target: targetId,
+        id: this.nextId++, owner: u.owner, sx: u.x, sy: u.y, sz: bomb ? u.alt : 0, tx: ax, ty: ay, t: 0, duration: flight,
+        damage: u.stats.damage + heightBonus(u), crystalKg: u.crystalMass, target: targetId, drop: bomb || undefined,
       };
       this.projectiles.set(p.id, p);
     } else {
