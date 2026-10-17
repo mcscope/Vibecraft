@@ -1,6 +1,7 @@
 // Meadowfolk building models. 1 tile = 2 model units; origin = footprint centre,
 // so a building of `size` tiles spans ±size units on x and z.
 import type { Mat, ModelBuilder } from '../../kits/bake3d/types';
+import { stoneWall, tiledRoof, timberFrame, vary } from '../../kits/bake3d/detail';
 
 const WOOD: Mat = { color: '#5e4128', tex: 'wood' };
 const DARKWOOD: Mat = { color: '#3d2a1a', tex: 'wood' };
@@ -50,32 +51,35 @@ function flag(b: ModelBuilder, x: number, y: number, z: number, pole = 1.3): voi
 }
 
 export function townCenter(b: ModelBuilder): void {
-  b.box([5.7, 0.35, 5.7], [0, 0.175, 0], STONE);
-  b.box([5.9, 0.12, 5.9], [0, 0.06, 0], DARKSTONE);
-  const hw = 4.0, hd = 3.0, hh = 2.0, base = 0.35;
-  timberHall(b, 0.3, 0.4, hw, hd, hh, base);
-  b.limb([0.3 + hw / 2 + 0.02, base + 0.1, 0.4 - hd / 2 + 0.1], [0.3 + hw / 2 + 0.02, base + hh * 0.55, 0.35], 0.05, DARKWOOD);
-  b.box([0.08, 1.15, 0.8], [0.3 + hw / 2 + 0.04, base + 0.575, 0.6], { color: '#2e1f14', tex: 'wood' });
-  b.roof([0.9, 0.45, 1.3], [0.3 + hw / 2 + 0.4, base + 1.4, 0.6], THATCH);
-  for (const z of [0.05, 1.15]) b.limb([0.3 + hw / 2 + 0.75, base, z], [0.3 + hw / 2 + 0.75, base + 1.4, z], 0.05, DARKWOOD);
-  for (const z of [-0.6, 1.4]) b.box([0.06, 0.4, 0.35], [0.3 + hw / 2 + 0.03, base + 1.25, z], WINDOW);
-  for (const x of [-1.2, 1.4]) b.box([0.35, 0.4, 0.06], [0.3 + x, base + 1.25, 0.4 + hd / 2 + 0.03], WINDOW);
-  b.roof([hw + 0.9, 1.9, hd + 0.9], [0.3, base + hh, 0.4], THATCH);
-  b.box([hw * 0.45, 0.12, 0.14], [0.3, base + hh + 1.82, 0.4], DARKWOOD);
+  const base = 0.4;
+  // a coursed-stone plinth
+  stoneWall(b, { size: [5.7, base, 5.7], at: [0, 0, 0], mat: STONE, course: 0.2 });
+  // the hall: timber-framed over plaster, under a tiled hip roof
+  const hx = 0.3, hz = 0.4, hw = 4.0, hd = 3.0, hh = 2.0;
+  timberFrame(b, { size: [hw, hh, hd], at: [hx, base, hz], mat: PLASTER, wood: DARKWOOD });
+  tiledRoof(b, { size: [hw + 0.9, 1.9, hd + 0.9], at: [hx, base + hh, hz], mat: { color: '#8a5a3a', tex: 'wood' }, tile: 0.3 });
+  // porch on the +x face
+  b.box([0.08, 1.15, 0.8], [hx + hw / 2 + 0.04, base + 0.575, 0.6], { color: '#2e1f14', tex: 'wood' });
+  tiledRoof(b, { size: [1.0, 0.45, 1.4], at: [hx + hw / 2 + 0.45, base + 1.4, 0.6], mat: { color: '#8a5a3a', tex: 'wood' }, tile: 0.25, rows: 3 });
+  for (const z of [0.05, 1.15]) b.limb([hx + hw / 2 + 0.85, base, z], [hx + hw / 2 + 0.85, base + 1.4, z], 0.05, DARKWOOD);
+  for (const z of [-0.6, 1.4]) { b.box([0.06, 0.42, 0.36], [hx + hw / 2 + 0.05, base + 1.25, z], WINDOW); b.box([0.07, 0.05, 0.42], [hx + hw / 2 + 0.06, base + 1.48, z], DARKWOOD); }
+  for (const x of [-1.2, 1.4]) { b.box([0.36, 0.42, 0.06], [hx + x, base + 1.25, hz + hd / 2 + 0.05], WINDOW); b.box([0.42, 0.05, 0.07], [hx + x, base + 1.48, hz + hd / 2 + 0.06], DARKWOOD); }
   for (const z of [-0.2, 1.0]) {
-    b.box([0.04, 0.9, 0.36], [0.3 + hw / 2 + 0.1, base + 1.3, z], BANNER);
-    b.box([0.045, 0.12, 0.38], [0.3 + hw / 2 + 0.1, base + 1.7, z], TRIM);
+    b.box([0.04, 0.9, 0.36], [hx + hw / 2 + 0.1, base + 1.3, z], BANNER);
+    b.box([0.045, 0.12, 0.38], [hx + hw / 2 + 0.1, base + 1.7, z], TRIM);
   }
-  b.box([0.36, 0.9, 0.04], [-0.1, base + 1.3, 0.4 + hd / 2 + 0.1], BANNER);
+  b.box([0.36, 0.9, 0.04], [-0.1, base + 1.3, hz + hd / 2 + 0.1], BANNER);
+  // the tower: coursed stone, crenellated, a tiled spire
   const tx = -1.75, tz = -1.75;
-  b.box([1.5, 3.6, 1.5], [tx, base + 1.8, tz], STONE);
-  b.box([1.7, 0.25, 1.7], [tx, base + 3.65, tz], DARKSTONE);
-  for (const [dx, dz] of [[-0.7, -0.7], [0.7, -0.7], [-0.7, 0.7], [0.7, 0.7]]) b.box([0.3, 0.4, 0.3], [tx + dx, base + 3.95, tz + dz], STONE);
-  b.roof([1.4, 1.5, 1.4], [tx, base + 3.9, tz], SHINGLE);
-  flag(b, tx, base + 5.1, tz);
-  b.box([0.2, 0.6, 0.06], [tx + 0.76, base + 2.6, tz], WINDOW);
+  stoneWall(b, { size: [1.5, 3.6, 1.5], at: [tx, base, tz], mat: STONE });
+  stoneWall(b, { size: [1.7, 0.25, 1.7], at: [tx, base + 3.6, tz], mat: DARKSTONE, course: 0.25 });
+  for (const [dx, dz] of [[-0.7, -0.7], [0.7, -0.7], [-0.7, 0.7], [0.7, 0.7], [0, 0.7], [0.7, 0]]) b.box([0.28, 0.4, 0.28], [tx + dx, base + 4.05, tz + dz], vary(STONE, (dx + dz + 2) / 4));
+  tiledRoof(b, { size: [1.4, 1.6, 1.4], at: [tx, base + 3.85, tz], mat: SHINGLE, tile: 0.22 });
+  flag(b, tx, base + 5.4, tz);
+  b.box([0.2, 0.6, 0.06], [tx + 0.78, base + 2.6, tz], WINDOW);
+  b.box([0.06, 0.6, 0.2], [tx, base + 2.6, tz + 0.78], WINDOW);
   barrel(b, 2.35, -1.9); barrel(b, 2.0, -2.3);
-  crate(b, 2.4, 2.3, 0.5); crate(b, 2.1, 2.35, 0.4, 0.8, 0.8);
+  crate(b, 2.4, 2.3, 0.5); crate(b, 2.1, 2.35, 0.4, 0.85, 0.8);
   b.crystal(0.45, [-0.8, base, 2.5], [0.2, 0, 0.3]);
   b.crystal(0.35, [-0.55, base, 2.6], [-0.3, 0, -0.2]);
 }
