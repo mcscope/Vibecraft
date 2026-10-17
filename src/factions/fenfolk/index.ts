@@ -221,7 +221,7 @@ const siegeHeron: FenUnit = {
   mass: 180,
   physique: { muscle: 0.45, frame: 0.2, reserve: 0.35 },
   attack: { style: 'throw', crystalMass: 8, ammo: 4 },
-  refinement: 1.5,
+  refinement: 2.4, // as refined as the Elder Mound can raise (its capital supports up to 2.42)
   flight: { height: 18 }, // a siege bird climbs high: each crystal falls 18 m, but holding up there burns calories 3× as fast
   model(root, p) {
     root.joint([0, 0, 0], [0, 0, 0], (b) => {
@@ -315,10 +315,10 @@ const greatSiegeHeron: FenUnit = {
   ...siegeHeron,
   id: 'great-siege-heron',
   name: 'Great Siege Heron',
-  description: 'The eldest of the siege herons, vast as a reed hut, its basket heaped with eight great crystals. Slow to rise and hungry in the air, but one pass can flatten a hall.',
-  mass: 340,
-  attack: { style: 'throw', crystalMass: 8, ammo: 8 },
-  model: (b, p) => b.joint([0, 0, 0], [0, 0, 0], (s) => siegeHeron.model(s, p), 1.3),
+  description: 'The eldest of the siege herons, vast as a reed hut, its basket heaped with twelve great crystals. Slow to rise and hungry in the air, but one pass can flatten a hall.',
+  mass: 540,
+  attack: { style: 'throw', crystalMass: 8, ammo: 12 },
+  model: (b, p) => b.joint([0, 0, 0], [0, 0, 0], (s) => siegeHeron.model(s, p), 1.45),
 };
 
 export const units: FenUnit[] = [fenling, reedguard, bogToad, packTortoise, siegeHeron, greatSiegeHeron];
