@@ -128,7 +128,7 @@ const packTortoise: FenUnit = {
   name: 'Pack Tortoise',
   description: 'An ancient war-tortoise in bolted iron, a crystal reliquary chained to its back. Fenlings that run dry come to it for more, like crystals on the ground.',
   mass: 160,
-  physique: { muscle: 0.6, frame: 0.3, reserve: 0.1 },
+  physique: { muscle: 0.3, frame: 0.6, reserve: 0.1 }, // a tortoise: mostly shell, slow and hard to hurt
   refinement: 1.5,
   bearer: { radius: 4 }, // gathers crystal only (spent ones off the ground, or from a deposit) and keeps it
   model(root, p) {

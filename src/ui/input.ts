@@ -32,7 +32,7 @@ export class Input {
     private world: World,
     private renderer: Renderer,
     minimap: Minimap,
-    readonly player: number,
+    public player: number,
     private send: (cmd: Command) => void,
   ) {
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());

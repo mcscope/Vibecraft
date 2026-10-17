@@ -41,7 +41,9 @@ export async function runArena(params: URLSearchParams): Promise<void> {
   await renderer.init();
   renderer.viewer = -1;
   const minimap = new Minimap(document.createElement('canvas'), world, 200);
-  const input = new Input(canvas, world, renderer, minimap, 0, () => {}); // camera, selection, pause ([P]) and speed ([ ])
+  // camera, selection, pause ([P]) and speed ([ ]); with 'you command blue' on, orders go to the left side
+  const input = new Input(canvas, world, renderer, minimap, 0, (cmd) => { if (control) world.enqueue({ player: input.player, cmd }); });
+  let control = params.get('control') === '1';
   const resize = () => renderer.resize(window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
   window.addEventListener('resize', resize);
   loading.style.display = 'none';
@@ -90,6 +92,7 @@ export async function runArena(params: URLSearchParams): Promise<void> {
       <span class="arena-speed">${[0.5, 1, 2, 4].map((s) => `<button data-speed="${s}">${s}×</button>`).join('')}</span>
       <button class="arena-pause">Pause</button>
       <button class="arena-rematch">Rematch</button>
+      <label class="arena-control" title="Command the blue (left) side yourself: select, right-click to move or attack, B hold ground, C charge. They wait for your orders."><input type="checkbox"${control ? ' checked' : ''}> You command blue</label>
     </div>
     <table class="arena-matrix">
       <thead><tr><th class="corner"><span style="color:${LEFT.primary}">row</span> vs <span style="color:${RIGHT.primary}">col</span></th>${roster.map((e) => `<th class="col" title="${name(e)} (${e.faction.name})"><span>${short(e)}</span><i class="fac">${e.faction.name[0]}</i></th>`).join('')}</tr></thead>
@@ -116,12 +119,14 @@ export async function runArena(params: URLSearchParams): Promise<void> {
   const stage = (i: number, j: number) => {
     const a = roster[i], b = roster[j];
     const [A, B] = stageFight(world, { owner: seat(a, 0), specId: a.id }, { owner: seat(b, 1), specId: b.id }, budget);
+    input.player = A.owner;
+    if (control) { world.enqueue({ player: A.owner, cmd: { type: 'stop', units: A.ids } }); input.setSelection(A.ids); } // yours: they wait for orders
     const hp = (s: ArenaSide) => s.ids.reduce((t, id) => t + (world.units.get(id)?.stats.maxHp ?? 0), 0);
     fight = { i, j, A, B, ticks: 0, over: false, result: 0, startHp: [hp(A), hp(B)] };
     panel.querySelectorAll('td.sel').forEach((td) => td.classList.remove('sel'));
     cell(i, j).classList.add('sel');
     look();
-    history.replaceState(null, '', `?mode=arena&a=${entryKey(a)}&b=${entryKey(b)}&budget=${budget}`);
+    history.replaceState(null, "", `?mode=arena&a=${entryKey(a)}&b=${entryKey(b)}&budget=${budget}${control ? "&control=1" : ""}`);
     drawStats();
   };
 
@@ -132,6 +137,7 @@ export async function runArena(params: URLSearchParams): Promise<void> {
     if (t.dataset.speed) { input.speed = +t.dataset.speed; input.paused = false; syncControls(); return; }
     if (t.closest('.arena-pause')) { input.paused = !input.paused; syncControls(); return; }
     if (t.closest('.arena-rematch') && fight) stage(fight.i, fight.j);
+    if (t.closest('.arena-control input')) { control = (t as HTMLInputElement).checked; if (fight) stage(fight.i, fight.j); }
   });
   panel.querySelector<HTMLSelectElement>('.arena-budget')!.addEventListener('change', (e) => {
     budget = +(e.target as HTMLSelectElement).value;
@@ -152,7 +158,7 @@ export async function runArena(params: URLSearchParams): Promise<void> {
     ['Cost', `${Math.round(cost)} food${s.crystalCost ? ` (+ ${s.crystalCost} crystal, free here)` : ''}`],
     ['Mass', `${fmt(s.mass)} kg`],
     ['Health', fmt(s.maxHp)],
-    ['Armour', fmt(s.armour)],
+    ['Armour', `${fmt(s.armour)} on ${Math.round(s.coverage * 100)}% of blows`],
     ['Damage', `${fmt(s.damage)} every ${s.cooldown.toFixed(2)} s`],
     ['DPS', fmt(s.dps)],
     ['Reach', `${s.range.toFixed(1)} tiles`],

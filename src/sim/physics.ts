@@ -84,9 +84,12 @@ export const K = {
   foodPerFrameKg: 0.5,
   trainBaseSec: 6,
   trainSecPerKg: 1 / 12,
-  /** Armour = this × frame share (a 45%-frame maceman: 2.7; a 22%-frame fenling: 1.3). */
-  armourPerFrame: 6,
-  /** However thick the armour, a hit always does at least this share of its damage. */
+  /** Plate: a blow landing on it loses this much damage per unit of plate thickness (frame kg over body surface, ∝ mass^⅔)... */
+  platePerThickness: 4,
+  /** ...and it covers this × the body's frame share of it (the rest is gaps a blow can find), up to plateMaxCover. */
+  coverPerFrame: 1.6,
+  plateMaxCover: 0.9,
+  /** However thick the plate, a blow on it always does at least this share of its damage (bruising through it). */
   armourFloor: 0.15,
   /** Grip of feet on the ground (× g): caps how fast any body speeds up and swings its line. */
   traction: 0.6,
@@ -125,6 +128,8 @@ export interface DerivedStats {
 
   /** Flat damage each hit loses against this body: its frame share (plate thickness). Light hits glance off heavily framed bodies. */
   armour: number;
+  /** Share of blows that land on plate (the rest find a gap and do full damage). */
+  coverage: number;
   maxHp: number;
   maxCalories: number;
   /** Unloaded top speed, tiles/s. */
@@ -165,6 +170,8 @@ export interface DerivedStats {
   holdForce: number;
   /** Strikers with a shaft: tiles inside which the point can't be brought to bear (it chokes up only so far). 0 otherwise. */
   minReach: number;
+  /** Can it plant its shaft against a charge (and hold ground with it)? */
+  canPlant: boolean;
 
   gatherRate: number;
   moveCalPerTile: number;
@@ -227,7 +234,10 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   // costs 1/r of the food (see foodCost below). It never adds HP or damage.
   const refinement = Math.max(1, (spec.refinement ?? 1) + techRefinement);
   const maxHp = K.hpPerFrameKg * frameMass + K.hpPerKg * mass;
-  const armour = K.armourPerFrame * physique.frame; // plate thickness: the share of the body that's frame, not its size
+  // plate: frame spread over the body's surface (a shell, bone, mail): the thicker, the more of a blow it soaks
+  // up; how much of the body it covers goes with the share that's frame
+  const armour = K.platePerThickness * (frameMass / Math.pow(mass, 2 / 3));
+  const coverage = Math.min(K.plateMaxCover, K.coverPerFrame * physique.frame);
   const maxCalories = K.calPerReserveKg * reserveMass + K.calPerKg * mass;
   // work refinement w: gathers, walks and carries w× as much (applied below)
   const workRefinement = Math.max(1, (spec.workRefinement ?? 1) + techWork);
@@ -277,7 +287,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   return {
     improvised,
     mass, physique, muscleMass, frameMass, reserveMass,
-    maxHp, armour, maxCalories, speed, sprint: Math.max(speed, limbSpeed / M_PER_TILE), canAttack, wheeled, gait: deriveGait(spec), flight: !!spec.flight, flyHeight: !spec.flight ? 0 : spec.flight === true ? DEFAULT_FLY_HEIGHT : spec.flight.height, carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, sight,
+    maxHp, armour, coverage, maxCalories, speed, sprint: Math.max(speed, limbSpeed / M_PER_TILE), canAttack, wheeled, gait: deriveGait(spec), flight: !!spec.flight, flyHeight: !spec.flight ? 0 : spec.flight === true ? DEFAULT_FLY_HEIGHT : spec.flight.height, carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, sight,
     limbSpeed, maxAttackEnergy, crystalVelocity, attackEnergy, damage, attackCalories, cooldown, range,
     dps: damage / cooldown,
     holdForce: K.holdForcePerMuscleKg * muscleMass,
@@ -290,6 +300,9 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
       return Math.min(K.turnRate, Math.sqrt(((Math.PI / 2) * torque) / (2 * Math.max(1e-6, I))));
     })(),
     minReach: shaft ? reach - (shaft * 0.75 * 0.5) / M_PER_TILE : 0, // it can choke up half the shaft's forward length
+    // a shaft can be planted (butt on the ground behind, point at the enemy) only if it's well longer than the body is tall:
+    // a pike in a man's hands, not a lance on a mount
+    canPlant: shaft > 1.5 * 1.7 * Math.cbrt(mass / 70),
     gatherRate,
     moveCalPerTile: K.moveCalPerKgTile * mass,
     restRegen: K.restRegenFraction * maxCalories,

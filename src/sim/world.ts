@@ -278,7 +278,7 @@ function collisionEnergy(u: Unit, t: Unit | null, tx: number, ty: number): { del
   const v = Math.hypot(u.vx, u.vy);
   const planted = v * M_PER_TILE < 0.5;
   const couched = v > u.stats.speed && (u.vx * dx + u.vy * dy) / (v * d) > 0.8;
-  const set = u.stats.minReach > 0 && (planted || couched);
+  const set = u.stats.minReach > 0 && ((planted && u.stats.canPlant) || couched);
   return { delivered: set ? energy : Math.min(energy, u.stats.holdForce * K.blowDepth), mu };
 }
 
@@ -1154,7 +1154,7 @@ export class World {
     tickFlight(this, u, moved, DT, (fx, fy) => this.face(u, fx, fy));
     if (moved) anim = Math.hypot(u.vx, u.vy) > st.speed * 1.15 ? 'charge' : 'walk'; // flat out: a sprint, a charge
     if (u.swing > 0) anim = 'attack';
-    else if (!moved && st.minReach > 0 && (u.engage || u.order.kind === 'attack' || u.order.kind === 'attackMove') && u.cooldown <= 0) anim = 'brace'; // point set, waiting
+    else if (!moved && st.canPlant && (u.engage || u.order.kind === 'attack' || u.order.kind === 'attackMove') && u.cooldown <= 0) anim = 'brace'; // point set, waiting
     if (reeling) anim = 'stagger';
     else if (((u.order.kind === 'gather' && u.order.phase === 'harvest') || (u.order.kind === 'build' && u.order.phase === 'chop')) && !moved && u.busy) anim = 'gather';
     else if ((u.order.kind === 'eatPack' || u.order.kind === 'resupply') && !moved && u.busy) anim = 'eat';
@@ -1354,7 +1354,7 @@ export class World {
         // holding ground: it doesn't go to meet anything (an explicit attack order still sends it)
         if (u.stance === 'hold' && u.order.kind !== 'attack') { this.face(u, tx - u.x, ty - u.y); return true; }
         // a long shaft with something coming at it fast doesn't go to meet it: it plants and lets it come onto the point
-        if (u.stance === 'auto' && u.stats.minReach > 0 && !wpn.throws && edge < range + 3) {
+        if (u.stance === 'auto' && u.stats.canPlant && !wpn.throws && edge < range + 3) {
           const d = Math.hypot(u.x - tx, u.y - ty) || 1;
           const coming = (tu.vx * (u.x - tx) + tu.vy * (u.y - ty)) / d; // tiles/s toward us
           if (coming * M_PER_TILE > 1) { this.face(u, tx - u.x, ty - u.y); return true; }
@@ -1430,8 +1430,9 @@ export class World {
   private damage(id: number, amount: number, x: number, y: number): void {
     const tu = this.units.get(id);
     if (tu) {
-      // armour (from its frame) takes a flat bite out of every hit, down to a floor
-      const dealt = Math.max(amount * K.armourFloor, amount - tu.stats.armour);
+      // a blow lands on plate (which soaks up its armour, down to a bruising floor) or finds a gap (full damage)
+      const onPlate = this.rng.next() < tu.stats.coverage;
+      const dealt = onPlate ? Math.max(amount * K.armourFloor, amount - tu.stats.armour) : amount;
       tu.hp -= dealt; this.events.push({ type: 'hit', x, y, damage: dealt, target: id }); return;
     }
     const tb = this.buildings.get(id);
@@ -1854,7 +1855,7 @@ export class World {
     if (!u.airborne && v > u.stats.speed * 1.15) want = Math.atan2(u.vy, u.vx);
     if (u.airborne || u.dummy) u.facing = want;
     else {
-      if (u.turnTick !== this.tick) { u.turnTick = this.tick; u.turnLeft = u.stats.turnRate * DT * (u.stats.minReach > 0 && v * M_PER_TILE < 0.5 ? K.plantedTurnMul : 1); }
+      if (u.turnTick !== this.tick) { u.turnTick = this.tick; u.turnLeft = u.stats.turnRate * DT * (u.stats.canPlant && v * M_PER_TILE < 0.5 ? K.plantedTurnMul : 1); }
       const diff = Math.atan2(Math.sin(want - u.facing), Math.cos(want - u.facing));
       const step = Math.max(-u.turnLeft, Math.min(u.turnLeft, diff));
       u.facing += step; u.turnLeft -= Math.abs(step);
@@ -1923,7 +1924,16 @@ export class World {
         const cos = (u.vx * ddx + u.vy * ddy) / (v0 * d);
         want = Math.min(want, Math.max(st.speed * 0.3, v0 * Math.max(0, cos)) + acc * DT);
       }
-      this.steer(u, (ddx / d) * want, (ddy / d) * want, acc);
+      let wvx = (ddx / d) * want, wvy = (ddy / d) * want;
+      // runners don't run into their own side: against a friend close by, drop the part of its run that would close on them
+      for (const f of this.units.values()) {
+        if (f === u || f.owner !== u.owner || f.airborne) continue;
+        const ox = f.x - u.x, oy = f.y - u.y, gap = Math.hypot(ox, oy) || 1e-6;
+        if (gap > u.stats.radius + f.stats.radius + 0.35) continue;
+        const nx = ox / gap, ny = oy / gap, closing = (wvx - f.vx) * nx + (wvy - f.vy) * ny;
+        if (closing > 0) { wvx -= closing * nx; wvy -= closing * ny; }
+      }
+      this.steer(u, wvx, wvy, acc);
       if (feetDown) return false;
       const moved = Math.hypot(u.vx, u.vy) * DT * stride;
       const over = sprinting ? 1 + (K.sprintCostMul - 1) * Math.max(0, (Math.hypot(u.vx, u.vy) - st.speed) / Math.max(1e-6, st.sprint - st.speed)) : 1;
