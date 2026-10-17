@@ -8,6 +8,7 @@ import type { Command } from '../sim/commands';
 import { TICK_RATE, type Building, type Unit, type World } from '../sim/world';
 import { isWall } from '../sim/abilities/wall';
 import { isUnderfoot } from '../sim/abilities/underfoot';
+import { capacity } from '../sim/garrison';
 import { useBearers, useBelts, useHerds, type AiTurn } from './abilities';
 
 export class SkirmishAI {
@@ -16,6 +17,7 @@ export class SkirmishAI {
   private trainIndex = new Map<number, number>();
   private plan: Array<[string, number]> | null = null;
   private lastBelt = -Infinity;
+  private calmSince = -1;
 
   constructor(readonly player: number, private thinkEvery = TICK_RATE) {}
 
@@ -188,6 +190,28 @@ export class SkirmishAI {
       for (const id of b.spec.researches ?? []) {
         const st = w.techStatus(this.player, id, b);
         if (!st.blocker) { out.push({ type: 'research', building: b.id, techId: id }); break; }
+      }
+    }
+
+    // ── Garrison: raided at home with no army to answer, the workers take shelter (and throw from
+    //    cover if they can); once the raiders are gone, everyone comes out and gets back to work.
+    if (tc) {
+      const cx = tc.ox + tc.size / 2, cy = tc.oy + tc.size / 2;
+      // raiders: enemies near home that are actually fighting (not workers gathering nearby)
+      const raiders = [...w.units.values()].filter((e) => e.owner !== this.player && !w.players[e.owner]?.neutral && !e.carter && w.armed(e) && (e.engage || e.order.kind === 'attack' || e.order.kind === 'attackMove') && (e.x - cx) ** 2 + (e.y - cy) ** 2 < 12 * 12).length;
+      const defenders = army.filter((u) => w.armed(u)).length;
+      if (raiders >= 2 && defenders < raiders) {
+        const homes = buildings.filter((b) => b.complete && b.garrison.length < capacity(b)).sort((p, q) => ((p.ox - cx) ** 2 + (p.oy - cy) ** 2) - ((q.ox - cx) ** 2 + (q.oy - cy) ** 2));
+        let room = homes.reduce((n, b) => n + capacity(b) - b.garrison.length, 0);
+        for (const b of homes) {
+          const free = capacity(b) - b.garrison.length;
+          const go = workers.filter((u) => u.order.kind !== 'garrison' && (u.x - b.ox) ** 2 + (u.y - b.oy) ** 2 < 18 * 18).slice(0, free).map((u) => u.id);
+          if (go.length && room > 0) { out.push({ type: 'garrison', units: go, building: b.id }); room -= go.length; }
+        }
+        this.calmSince = -1;
+      } else if (raiders === 0 && buildings.some((b) => b.garrison.length)) {
+        if (this.calmSince < 0) this.calmSince = w.tick;
+        if (w.tick - this.calmSince > TICK_RATE * 8) for (const b of buildings) if (b.garrison.length) out.push({ type: 'ungarrison', building: b.id });
       }
     }
 

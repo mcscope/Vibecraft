@@ -447,3 +447,8 @@ table.diff .up { color: #9fdc80; }
 
 /* technology flavour text */
 .flavor { font-style: italic; color: var(--dim); border-left: 2px solid var(--bronze); padding-left: 8px; margin: 6px 0; }
+
+/* garrison button on a building's panel */
+button.garrison-btn { display: flex; flex-direction: column; align-items: flex-start; padding: 5px 12px; margin-bottom: 6px; min-width: 140px; }
+button.garrison-btn b { color: var(--gold); font-size: 13.5px; }
+button.garrison-btn span { font-size: 11.5px; color: var(--dim); }

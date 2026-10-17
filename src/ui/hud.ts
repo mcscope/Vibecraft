@@ -1,3 +1,4 @@
+import { capacity } from '../sim/garrison';
 import { resourceName, workerName, baseName, carterName } from '../factions/types';
 // DOM overlay: resources, selection panel, build / train / research buttons, tooltips.
 import type { ResourceKind, Stock, UnitSpec } from '../factions/types';
@@ -16,7 +17,8 @@ export interface HudActions {
   research(buildingId: number, techId: string): void;
   cancelTrain(buildingId: number, index?: number): void;
   select(ids: number[]): void;
-  command(kind: 'stop' | 'attackMove' | 'move' | 'resupply' | 'give'): void;
+  command(kind: 'stop' | 'attackMove' | 'move' | 'resupply' | 'give' | 'garrison'): void;
+  ungarrison(buildingId: number): void;
   place(specId: string): void;
   idleWorker(): void;
   autoTrain(buildingId: number, specId: string | null): void;
@@ -131,8 +133,9 @@ export class Hud {
 
   private onClick(e: MouseEvent): void {
     if (this.suppressClick) { this.suppressClick = false; return; } // that was a hold, not a click
-    const el = (e.target as HTMLElement).closest('[data-train],[data-research],[data-cancel],[data-select],[data-cmd],[data-place],[data-sow],[data-bell]') as HTMLElement | null;
+    const el = (e.target as HTMLElement).closest('[data-train],[data-research],[data-cancel],[data-select],[data-cmd],[data-place],[data-sow],[data-ungarrison]') as HTMLElement | null;
     if (!el || el.classList.contains('locked')) return;
+    if (el.dataset.ungarrison) { this.actions.ungarrison(+el.dataset.ungarrison); return; }
     if (el.dataset.sow) {
       const b = this.world.buildings.get(+el.dataset.building!);
       if (!b) return;
@@ -220,7 +223,7 @@ export class Hud {
     const building = [...selected].map((id) => w.buildings.get(id)).find((b): b is Building => !!b);
     const p = w.players[this.player];
     const sig = units.length === 1 ? `u${units[0].id}`
-      : building ? `b${building.id}:${building.complete}:${building.queue.map((q) => (q.kind === 'unit' ? q.specId : q.techId)).join(',')}:${p.researched.length}:${building.owner}:${building.sowing.join('')}`
+      : building ? `b${building.id}:${building.complete}:${building.queue.map((q) => (q.kind === 'unit' ? q.specId : q.techId)).join(',')}:${p.researched.length}:${building.owner}:${building.sowing.join('')}:${building.garrison.length}`
       : `m${units.map((u) => u.id).join(',')}`;
     if (sig !== this.sig) {
       this.sig = sig;
@@ -467,6 +470,7 @@ export class Hud {
       <button data-cmd="stop" title="Stop">Stop <kbd>${km.stop.toUpperCase()}</kbd></button>
       <button data-cmd="resupply" title="Resupply at the nearest stocked building, then return. Hold the key and click the ground to send them there afterwards.">Resupply <kbd>${km.resupply.toUpperCase()}</kbd></button>
       <button data-cmd="give" title="Give surplus to a friendly unit (then click it)">Give <kbd>${km.give.toUpperCase()}</kbd></button>
+      <button data-cmd="garrison" title="Shelter inside one of your buildings (then click it). Throwers inside throw from cover.">Garrison <kbd>${km.garrison.toUpperCase()}</kbd></button>
     </div>`;
   }
 
@@ -536,6 +540,7 @@ export class Hud {
           ${train || research ? '<div class="bar train" data-bar="train"><i></i><span></span></div>' : ''}
         </div>
         <div class="actions">
+          ${b.owner === this.player && b.complete && capacity(b) > 0 ? `<button class="garrison-btn" data-ungarrison="${b.id}" title="Units shelter inside (Garrison command); throwers inside throw from cover. Click to bring everyone out."><b>Garrison ${b.garrison.length}/${capacity(b)}</b><span>${b.garrison.length ? 'click: everyone out' : 'empty'}</span></button>` : ''}
           ${train ? `<div class="trains">${train}</div>` : ''}
           ${research ? `<div class="techs">${research}</div>` : ''}
         </div>
@@ -564,6 +569,7 @@ export function describeOrder(w: World, u: Unit): string {
     case 'resupply': return u.anim === 'eat' ? 'Eating' : 'Going to resupply';
     case 'give': return 'Delivering supplies';
     case 'eatPack': return 'Eating from pack';
+    case 'garrison': return 'Going inside';
     case 'eatFrom': return `Eating from the ${w.specOf(u.owner, w.units.get(o.unit)?.specId ?? '')?.spec.name ?? 'bearer'}`;
     case 'build': {
       const site = w.buildings.get(o.site);

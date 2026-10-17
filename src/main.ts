@@ -165,6 +165,7 @@ async function run(g: GameSetup): Promise<void> {
     cancelTrain: (building, index) => local.issue({ type: 'cancelTrain', building, index }),
     select: (ids) => input.setSelection(ids),
     command: (kind) => input.hudCommand(kind),
+    ungarrison: (building) => local.issue({ type: 'ungarrison', building }),
   });
 
   const resize = () => renderer.resize(window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);

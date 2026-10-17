@@ -123,7 +123,17 @@ Their economy *is* an army. Every fenling is a 7-tile thrower, so 25 fenlings pu
 
 In Meadow-vs-Meadow and Fen-vs-Fen AI games, first blood comes at about 4.5–5.5 minutes, and whoever wins the fights around minutes 5–10 snowballs. With no army left, the enemy roams the worker lines. Nothing gives a defender a home advantage: the base building has no attack, workers can't take cover, and towers come late.
 
-**Proposed: garrison, from physics.** Units can shelter inside a building (safe while it stands, thrown out when it falls). Throwers inside throw from the building's height, already a priced height bonus, under cover. A rush then runs into the whole economy firing from the Town Center or Stilt Hall. It's AoE's town bell, but it falls out of rules we already have. It costs a garrison command, rendering, and some AI. Not built yet: it's a sizeable feature, so it waits for your go-ahead.
+**Proposed: garrison, from physics.** Units can shelter inside a building (safe while it stands, thrown out when it falls). Throwers inside throw from the building's height, already a priced height bonus, under cover. A rush then runs into the whole economy firing from the Town Center or Stilt Hall. It's AoE's town bell, but it falls out of rules we already have. **Built (prototype):**
+- Garrison command (`V`, then click a building).
+- Two units per tile of footprint.
+- Throwers inside throw from 1.5 m + 1 m per tile of footprint, and units inside restock crystal and eat.
+- Everyone comes out when the building falls, or with the button on its panel.
+- The AI shelters its workers when raided at home by more fighting enemies than it has soldiers.
+
+**Measured:** it barely changes AI-vs-AI outcomes. The losing side loses its army in the field and its workers at outlying worksites, not at home. So the snowball is about map control, not base safety. Next levers to try:
+- **Retreat:** an army that's losing falls back to home, under the garrison's fire.
+- **Workers flee raiders.**
+- **Cheaper early towers at outlying worksites.**
 
 ## Decisions for the user (not made unilaterally)
 

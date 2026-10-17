@@ -15,6 +15,7 @@ import { nearestDropOff } from './abilities/dropoff';
 import { eating, isTamer, runPens, runTame } from './abilities/herding';
 import { BOMB_REACH, canReach, dropTime, FLARE_HEIGHT, FLY_SIGHT, flyTo, heightBonus, LAUNCH_HEIGHT, LEAP_POSE, takeOff, tickFlight, walks } from './abilities/flight';
 import { MatchStats } from './stats';
+import { eject, runGarrison, tickGarrison } from './garrison';
 import { isUnderfoot, loadBelt, nearestBelt, roadFactor, routeBelts, runBelts, type BeltRoutes, type Parcel } from './abilities/underfoot';
 import { grow, grownEnough, livingStats, seedMaterials } from './abilities/living';
 import {
@@ -78,6 +79,8 @@ export type Order =
   | { kind: 'rearm'; unit: number }
   /** Walk to a food bearer and eat from it. */
   | { kind: 'eatFrom'; unit: number }
+  /** Walk to one of our buildings and shelter inside it. */
+  | { kind: 'garrison'; building: number }
   /** Wildlife: roam around a home spot (tx/ty: current wander target, rest: ticks until the next). */
   | { kind: 'wild'; hx: number; hy: number; tx: number; ty: number; rest: number }
   | { kind: 'move'; x: number; y: number }
@@ -176,6 +179,8 @@ export function itemCost(q: QueueItem): Stock {
 
 export interface Building {
   id: number;
+  /** Units sheltering inside (off the map; sim/garrison.ts). */
+  garrison: Unit[];
   owner: number;
   specId: string;
   spec: BuildingSpec;
@@ -698,6 +703,16 @@ export class World {
         }
         return;
       }
+      case 'garrison': {
+        const b = ownBuilding(cmd.building);
+        if (!b || !b.complete) return;
+        return set(mine(cmd.units), { kind: 'garrison', building: b.id });
+      }
+      case 'ungarrison': {
+        const b = ownBuilding(cmd.building);
+        if (b) eject(this, b);
+        return;
+      }
       case 'destroy': {
         for (const id of cmd.ids) {
           const t = this.units.get(id) ?? this.buildings.get(id);
@@ -754,7 +769,7 @@ export class World {
       built: complete ? stats.totalCost : 0, complete,
       queue: [], stock: emptyStock(),
       rallyX: ox + size + 1, rallyY: oy + size + 1, rallyRes: null, cooldown: 0, autoTrain: null,
-      sowing: [...(spec.sow?.resources ?? [])], sowProgress: 0, grown,
+      sowing: [...(spec.sow?.resources ?? [])], sowProgress: 0, grown, garrison: [],
     };
     this.buildings.set(b.id, b);
     this.beltRoutes = null;
@@ -921,6 +936,7 @@ export class World {
 
   private tickBuilding(b: Building): void {
     if (!b.complete) return;
+    tickGarrison(this, b);
     if (b.grown !== undefined) grow(b, this.factionOf(b.owner), DT);
     if (b.autoTrain && b.queue.length === 0) {
       const s = this.specOf(b.owner, b.autoTrain);
@@ -1102,6 +1118,7 @@ export class World {
       case 'tame': return runTame(this, u, o.target);
       case 'rearm': return bearerAbility.runRearm(this, u, o.unit);
       case 'eatFrom': return bearerAbility.runEatFrom(this, u, o.unit);
+      case 'garrison': return runGarrison(this, u, o.building);
       case 'move': {
         if (this.moveTo(u, o.x, o.y, 0.3)) { this.finish(u); }
         return u.x !== u.px || u.y !== u.py;
@@ -1294,6 +1311,13 @@ export class World {
       this.damage(targetId, wpn.damage, tx, ty);
     }
     return true;
+  }
+
+  /** Launch a crystal from (x, y), `h` metres up, at (tx, ty) (towers, garrisons). */
+  launch(owner: number, x: number, y: number, h: number, tx: number, ty: number, damage: number, kg: number, target: number): void {
+    const flight = Math.max(0.3, Math.hypot(tx - x, ty - y) / 8);
+    const p: Projectile = { id: this.nextId++, owner, sx: x, sy: y, sz: h, tx, ty, t: 0, duration: flight, damage, crystalKg: kg, target };
+    this.projectiles.set(p.id, p);
   }
 
   private damage(id: number, amount: number, x: number, y: number): void {
@@ -1844,6 +1868,7 @@ export class World {
     }
     for (const b of this.buildings.values()) {
       if (b.hp > 0) continue;
+      eject(this, b); // anyone sheltering inside comes out as it falls
       this.buildings.delete(b.id);
       this.beltRoutes = null;
       if (isUnderfoot(b.spec)) this.underfootTiles.delete(b.oy * this.grid.width + b.ox);

@@ -10,7 +10,7 @@ import type { Minimap } from './minimap';
 import { keymap, settings, settingsOpen, updateSettings } from './settings';
 
 /** resupplyDest: units were just sent to resupply; a ground click picks where they go afterwards. */
-type Mode = 'attackMove' | 'move' | 'give' | 'resupplyDest' | 'place' | null;
+type Mode = 'attackMove' | 'move' | 'give' | 'garrison' | 'resupplyDest' | 'place' | null;
 
 export class Input {
   readonly rs: RenderState = { selected: new Set(), hoverId: 0, box: null, ping: null, ghost: null };
@@ -179,6 +179,12 @@ export class Input {
           this.ping(g.ox + g.size / 2, g.oy + g.size / 2, '#7aff7a');
           if (!e.shiftKey) this.mode = null;
         }
+        return;
+      }
+      if (this.mode === 'garrison') {
+        const b = this.world.buildings.get(target);
+        if (b && b.owner === this.player) { this.issue({ type: 'garrison', units, building: b.id }); this.ping(b.ox + b.size / 2, b.oy + b.size / 2, '#ffd23f'); }
+        if (!e.shiftKey) this.mode = null;
         return;
       }
       if (this.mode === 'move') {
@@ -374,6 +380,7 @@ export class Input {
       if (k === km.attackMove) { this.mode = 'attackMove'; return; }
       if (k === km.move) { this.mode = 'move'; return; }
       if (k === km.give) { this.mode = 'give'; return; }
+      if (k === km.garrison) { this.mode = 'garrison'; return; }
       if (k === km.stop) { this.issue({ type: 'stop', units }); return; }
       // Tap: resupply and come back. Hold and click: resupply, then go there.
       if (k === km.resupply) {
@@ -473,7 +480,7 @@ export class Input {
   }
 
   /** Commands triggered from HUD buttons. */
-  hudCommand(kind: 'stop' | 'attackMove' | 'move' | 'resupply' | 'give'): void {
+  hudCommand(kind: 'stop' | 'attackMove' | 'move' | 'resupply' | 'give' | 'garrison'): void {
     const units = this.selectedUnits();
     if (!units.length) return;
     if (kind === 'stop') this.issue({ type: 'stop', units });

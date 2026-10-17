@@ -10,6 +10,8 @@ export interface KeyMap {
   stop: string;
   resupply: string;
   give: string;
+  /** Garrison: shelter inside a building (then click it). */
+  garrison: string;
   home: string;
   /** Town Center training slots, in faction unit order. */
   train: string[];
@@ -20,14 +22,14 @@ export const SCHEMES: Record<string, KeyMap> = {
     label: 'WASD camera',
     description: 'Scroll with WASD (and arrows). Commands move off the WASD keys.',
     pan: { up: ['w', 'arrowup'], down: ['s', 'arrowdown'], left: ['a', 'arrowleft'], right: ['d', 'arrowright'] },
-    attackMove: 'f', move: 'q', stop: 'x', resupply: 'r', give: 'g', home: 'h',
+    attackMove: 'f', move: 'q', stop: 'x', resupply: 'r', give: 'g', garrison: 'v', home: 'h',
     train: ['z', 'x', 'c', 'v', 'b', 'n'],
   },
   classic: {
     label: 'Classic RTS',
     description: 'StarCraft/AoE style: arrows and screen edge scroll; A attack-move, S stop.',
     pan: { up: ['arrowup'], down: ['arrowdown'], left: ['arrowleft'], right: ['arrowright'] },
-    attackMove: 'a', move: 'q', stop: 's', resupply: 'r', give: 'g', home: 'h',
+    attackMove: 'a', move: 'q', stop: 's', resupply: 'r', give: 'g', garrison: 'v', home: 'h',
     train: ['q', 'w', 'e', 'r', 't', 'y'],
   },
 };
@@ -105,6 +107,7 @@ export function mountSettingsDialog(): void {
         <tr><td>Stop</td><td><kbd>${keyName(km.stop)}</kbd></td></tr>
         <tr><td>Resupply</td><td>tap <kbd>${keyName(km.resupply)}</kbd> to return after · hold + click to go elsewhere</td></tr>
         <tr><td>Give</td><td><kbd>${keyName(km.give)}</kbd> then click a friendly unit</td></tr>
+        <tr><td>Garrison</td><td><kbd>${keyName(km.garrison)}</kbd> then click one of your buildings</td></tr>
         <tr><td>Home base</td><td><kbd>${keyName(km.home)}</kbd>, then train with ${km.train.slice(0, 5).map((k) => `<kbd>${keyName(k)}</kbd>`).join(' ')}</td></tr>
         <tr><td>Groups</td><td><kbd>Ctrl</kbd>+<kbd>1–8</kbd> set · <kbd>1–8</kbd> select · double-tap to jump</td></tr>
         <tr><td>Other</td><td><kbd>Space</kbd> center · <kbd>P</kbd> pause · <kbd>[</kbd> <kbd>]</kbd> speed · <kbd>9</kbd> cart debug · <kbd>F10</kbd> settings</td></tr>

@@ -46,6 +46,10 @@ export type CommandBody =
   | { type: 'rally'; building: number; x: number; y: number; node?: number }
   /** Give up: you lose, the others play on (or win). */
   | { type: 'resign' }
+  /** Units shelter inside one of your buildings (two per tile of footprint). */
+  | { type: 'garrison'; units: number[]; building: number }
+  /** Everyone inside comes out. */
+  | { type: 'ungarrison'; building: number }
   /** Kill your own units and/or knock down your own buildings (Backspace / Delete). */
   | { type: 'destroy'; ids: number[] };
 
