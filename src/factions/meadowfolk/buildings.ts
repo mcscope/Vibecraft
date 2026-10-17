@@ -1,7 +1,7 @@
 // Meadowfolk building models. 1 tile = 2 model units; origin = footprint centre,
 // so a building of `size` tiles spans ±size units on x and z.
 import type { Mat, ModelBuilder } from '../../kits/bake3d/types';
-import { shingledCone, stoneWall, tiledRoof, timberFrame, vary } from '../../kits/bake3d/detail';
+import { roundStoneWall, shingledCone, stoneWall, tiledRoof, timberFrame, vary } from '../../kits/bake3d/detail';
 
 const WOOD: Mat = { color: '#5e4128', tex: 'wood' };
 const DARKWOOD: Mat = { color: '#3d2a1a', tex: 'wood' };
@@ -145,7 +145,7 @@ export function greatHall(b: ModelBuilder): void {
   b.box([2.4, 0.14, 0.16], [0, base + 5.62, 0], DARKWOOD);
   // twin front towers
   for (const z of [-2.6, 2.6]) {
-    b.cylinder(0.9, 1.0, 4.4, [2.6, base + 2.2, z], STONE, undefined, 12);
+    roundStoneWall(b, 1.0, 4.4, [2.6, base, z], STONE, 0.28, 0.9);
     b.cylinder(1.05, 1.05, 0.25, [2.6, base + 4.45, z], DARKSTONE, undefined, 12);
     shingledCone(b, 1.15, 1.8, [2.6, base + 4.55, z], SHINGLE, { color: '#b0823a', tex: 'metal', metal: 0.5 });
     flag(b, 2.6, base + 6.2, z, 1.2);

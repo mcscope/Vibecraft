@@ -190,3 +190,22 @@ export function thatchedCone(b: ModelBuilder, r: number, h: number, at: Vec3, ma
     }
   }
 }
+
+/** A round tower or column of coursed stone: a cylinder core with rings of blocks on the side the camera sees. */
+export function roundStoneWall(b: ModelBuilder, r: number, h: number, at: Vec3, mat: Mat, course = 0.26, rTop = r): void {
+  const [ax, ay, az] = at;
+  b.cylinder(rTop, r, h, [ax, ay + h / 2, az], vary(mat, 0.2, 0.3), undefined, 16);
+  const courses = Math.max(1, Math.round(h / course)), cH = h / courses;
+  for (let k = 0; k < courses; k++) {
+    const rr = r + (rTop - r) * ((k + 0.5) / courses);
+    const n = Math.max(6, Math.round((2 * Math.PI * rr) / 0.45));
+    for (let i = 0; i < n; i++) {
+      const a = ((i + (k % 2) * 0.5) / n) * Math.PI * 2;
+      if (Math.cos(a) + Math.sin(a) < -0.5) continue; // the far side is never seen
+      const j = hash(k, i, ax, az), proud = 0.03 + (j - 0.5) * 0.025, len = ((2 * Math.PI * rr) / n) * (0.88 + j * 0.1);
+      b.joint([ax + Math.cos(a) * (rr + proud / 2), ay + k * cH + cH / 2, az + Math.sin(a) * (rr + proud / 2)], [0, -a, 0], (s) => {
+        s.box([proud + 0.03, cH * 0.88, len], [0, 0, 0], vary(mat, j, 0.16));
+      });
+    }
+  }
+}
