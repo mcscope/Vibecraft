@@ -127,6 +127,8 @@ export interface Unit {
   resume: Order | null;
   /** Auto-acquired target while idle / attack-moving. */
   engage: number;
+  /** Shift-queued orders, started one by one as each finishes. */
+  queue: Order[];
   path: Array<[number, number]>;
   goalX: number; goalY: number;
   repathIn: number;
@@ -554,7 +556,11 @@ export class World {
     const mineAll = (ids: number[]) => ids.map((id) => this.units.get(id)).filter((u): u is Unit => !!u && u.owner === player);
     const mine = (ids: number[]) => mineAll(ids).filter((u) => !u.carter);
     const set = (units: Unit[], order: Order) => {
-      for (const u of units) { u.order = { ...order } as Order; u.resume = null; u.engage = 0; u.path = []; u.repathIn = 0; }
+      for (const u of units) {
+        // shift-queued: after the current order (and anything queued before it)
+        if (cmd.queue && (u.order.kind !== 'idle' || u.queue.length)) { u.queue.push({ ...order } as Order); continue; }
+        u.order = { ...order } as Order; u.resume = null; u.engage = 0; u.path = []; u.repathIn = 0; u.queue = [];
+      }
     };
     const ownBuilding = (id: number) => { const b = this.buildings.get(id); return b && b.owner === player ? b : undefined; };
     switch (cmd.type) {
@@ -831,7 +837,7 @@ export class World {
       x, y, px: x, py: y,
       hp: s.stats.maxHp, cal: s.stats.maxCalories, exhausted: false,
       food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
-      order: { kind: 'idle' }, resume: null, engage: 0,
+      order: { kind: 'idle' }, resume: null, queue: [], engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
       cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1,
       dummy: !!spec.dummy,
@@ -1143,7 +1149,7 @@ export class World {
   /** Complete the current order, returning to a resumed one if present. */
   /** @internal sim helper, also used by logistics */
   finish(u: Unit): void {
-    u.order = u.resume ?? { kind: 'idle' };
+    u.order = u.resume ?? u.queue.shift() ?? { kind: 'idle' };
     u.resume = null;
     u.path = [];
     u.repathIn = 0;

@@ -1,7 +1,12 @@
 // Everything a player can do is a Command. Commands are the only input to the
 // simulation, which makes it lockstep-ready: clients exchange commands, not state.
 
-export type Command =
+export type Command = CommandBody & {
+  /** Shift-queued: unit orders go after what the units are doing instead of replacing it. */
+  queue?: boolean;
+};
+
+export type CommandBody =
   | { type: 'move'; units: number[]; x: number; y: number }
   | { type: 'attackMove'; units: number[]; x: number; y: number }
   | { type: 'attack'; units: number[]; target: number }

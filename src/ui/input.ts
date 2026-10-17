@@ -33,7 +33,7 @@ export class Input {
     private renderer: Renderer,
     minimap: Minimap,
     readonly player: number,
-    private issue: (cmd: Command) => void,
+    private send: (cmd: Command) => void,
   ) {
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     canvas.addEventListener('mousedown', (e) => this.down(e));
@@ -145,11 +145,22 @@ export class Input {
       if (this.mode === 'place') { this.mode = null; return; }
       if (this.mode === 'resupplyDest') this.mode = null;
       const [wx, wy] = this.renderer.cam.toWorld(e.clientX, e.clientY);
+      this.queueing = e.shiftKey;
       this.contextCommand(wx, wy, this.renderer.pick(e.clientX, e.clientY, this.alpha, this.orderPicker()), e.shiftKey);
+      this.queueing = false;
       return;
     }
     if (d.button !== 0) return;
     if (this.mode) {
+      this.queueing = e.shiftKey && this.mode !== 'place';
+      try { this.modeClick(e, d); } finally { this.queueing = false; }
+      return;
+    }
+    this.selectClick(e, d, box);
+  }
+
+  private modeClick(e: MouseEvent, d: { moved: boolean }): void {
+    {
       const [wx, wy] = this.renderer.cam.toWorld(e.clientX, e.clientY);
       const target = this.renderer.pick(e.clientX, e.clientY, this.alpha, this.orderPicker());
       const units = this.selectedUnits();
@@ -197,6 +208,9 @@ export class Input {
       if (!e.shiftKey) this.mode = null;
       return;
     }
+  }
+
+  private selectClick(e: MouseEvent, d: { moved: boolean }, box: RenderState['box']): void {
     if (box && d.moved) {
       const x0 = Math.min(box.x0, box.x1), x1 = Math.max(box.x0, box.x1), y0 = Math.min(box.y0, box.y1), y1 = Math.max(box.y0, box.y1);
       const hits: number[] = [];
@@ -416,6 +430,10 @@ export class Input {
     }
     return out;
   }
+
+  /** Shift held on this click: unit orders queue after what they're doing. */
+  private queueing = false;
+  private issue(cmd: Command): void { this.send(this.queueing ? { ...cmd, queue: true } : cmd); }
 
   /** Start placing a building (from the HUD build menu). */
   startPlacing(specId: string): void {
