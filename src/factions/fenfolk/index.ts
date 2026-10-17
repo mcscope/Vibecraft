@@ -63,7 +63,7 @@ const reedguard: FenUnit = {
         // the hand's frame turns with the arm (arm + 0.25) and the body's lean (-0.12; a brace leans 0.1 more):
         // undo that, so the spear holds its own aim: near level on the jab, point raised a little at a charger when braced
         const aim = attacking ? -0.05 : 0.2;
-        const slide = thrust * 0.4;
+        const slide = thrust * 0.5;
         h.joint([0, 0, 0], [0, 0, aim - (arm + 0.25 - 0.12) + (p.style === 'brace' ? 0.1 : 0)], (s) => {
           s.limb([-0.6 + slide, 0, 0], [1.85 + slide, 0, 0], 0.017, WILLOW);
           if (p.armed) s.crystal(0.14, [1.92 + slide, 0, 0], [0, 0, -Math.PI / 2]);
