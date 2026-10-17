@@ -2200,7 +2200,10 @@ export class World {
         // injury goes by how hard a body is jolted (its change of velocity), like a fall, and falls on the one that's run
         // into: the rammer (whichever brings more of the closing speed) leads braced for it and isn't hurt, though it
         // still takes the knock. A bump at walking pace hurts nobody
-        const rammer = a.vx * ka * nx + a.vy * ka * ny >= -(b.vx * kb * nx + b.vy * kb * ny) ? a : b;
+        // (two bodies both driving into each other, each bringing a quarter of the closing speed or more, are a clash:
+        // nobody is braced, both are hurt)
+        const ca = a.vx * ka * nx + a.vy * ka * ny, cb = -(b.vx * kb * nx + b.vy * kb * ny);
+        const rammer = Math.min(ca, cb) >= 0.25 * closing ? null : ca >= cb ? a : b;
         for (const [body, m] of [[a, ma], [b, mb]] as Array<[Unit, number]>) {
           const jolt = (imp / m) * M_PER_TILE; // m/s
           if (jolt > K.injuryDv && body !== rammer) this.damage(body.id, 0.5 * m * (jolt - K.injuryDv) ** 2 * K.bodyImpactEfficiency * K.damageScale, body.x, body.y);
