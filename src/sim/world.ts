@@ -1443,10 +1443,14 @@ export class World {
       return true;
     }
     if (tu && !canReach(u, tu)) return false; // a flier in the air: only thrown crystals reach it
-    // too close for a long shaft: step back until the point can be brought to bear
+    // too close for a long shaft: it backs off to bring the point to bear, but a body steps backwards slowly
+    // (K.backstep of its pace), still facing its enemy, so one that presses in can stay inside the point
     if (tu && !wpn.throws && edge < u.stats.minReach) {
-      const d = Math.hypot(u.x - tu.x, u.y - tu.y) || 1, back = u.stats.minReach + tu.stats.radius + 0.15;
-      this.moveTo(u, tu.x + ((u.x - tu.x) / d) * back, tu.y + ((u.y - tu.y) / d) * back, 0.05);
+      const d = Math.hypot(u.x - tu.x, u.y - tu.y) || 1;
+      this.face(u, tx - u.x, ty - u.y);
+      const back = u.stats.speed * K.backstep;
+      this.steer(u, ((u.x - tu.x) / d) * back, ((u.y - tu.y) / d) * back, (K.traction * K.gravity) / M_PER_TILE);
+      this.step1(u, u.vx * DT, u.vy * DT, Math.hypot(u.vx, u.vy) * DT, false);
       return true;
     }
     if (u.airborne && !wpn.throws) u.airborne = false; // a melee flier lands to strike

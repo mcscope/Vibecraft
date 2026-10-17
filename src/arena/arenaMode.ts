@@ -96,7 +96,7 @@ export async function runArena(params: URLSearchParams): Promise<void> {
     </div>
     <table class="arena-matrix">
       <thead><tr><th class="corner"><span style="color:${LEFT.primary}">row</span> vs <span style="color:${RIGHT.primary}">col</span></th>${roster.map((e) => `<th class="col" title="${name(e)} (${e.faction.name})"><span>${short(e)}</span><i class="fac">${e.faction.name[0]}</i></th>`).join('')}</tr></thead>
-      <tbody>${roster.map((a, i) => `<tr><th class="row" title="${name(a)} (${a.faction.name})"><i class="fac">${a.faction.name[0]}</i>${short(a)}</th>${roster.map((_, j) => `<td data-i="${i}" data-j="${j}"></td>`).join('')}</tr>`).join('')}</tbody>
+      <tbody>${roster.map((a, i) => `<tr><th class="row" title="${name(a)} (${a.faction.name}), refinement ${(a.faction.units.find((u) => u.id === a.id)?.refinement ?? 1).toFixed(1)}"><i class="fac">${a.faction.name[0]}</i>${short(a)} <i class="fac">r${(a.faction.units.find((u) => u.id === a.id)?.refinement ?? 1).toFixed(1)}</i></th>${roster.map((_, j) => `<td data-i="${i}" data-j="${j}"></td>`).join('')}</tr>`).join('')}</tbody>
     </table>
     <div class="arena-stats"><p class="arena-help">Pick a fight.</p></div>`;
   const cell = (i: number, j: number) => panel.querySelector<HTMLElement>(`td[data-i="${i}"][data-j="${j}"]`)!;
@@ -156,6 +156,7 @@ export async function runArena(params: URLSearchParams): Promise<void> {
   const fmt = (v: number, d = 1) => (Math.abs(v) >= 100 ? Math.round(v).toString() : v.toFixed(d));
   const statRows = (s: DerivedStats, cost: number): Array<[string, string]> => [
     ['Cost', `${Math.round(cost)} food${s.crystalCost ? ` (+ ${s.crystalCost} crystal, free here)` : ''}`],
+    ['Refinement', s.refinement.toFixed(1)],
     ['Mass', `${fmt(s.mass)} kg`],
     ['Health', fmt(s.maxHp)],
     ['Armour', `${fmt(s.armour)} on ${Math.round(s.coverage * 100)}% of blows`],

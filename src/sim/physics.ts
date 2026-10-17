@@ -99,6 +99,8 @@ export const K = {
   footBrake: 1.5,
   /** Sprint speed as a multiple of cruising speed (a gallop over a trot, a run over a jog). */
   sprintPerCruise: 2.2,
+  /** A body steps backwards (still facing its enemy) at this share of its walking pace. */
+  backstep: 0.3,
   /** Calories per tile while sprinting, × walking's. */
   sprintCostMul: 4,
   /** Units sprint to close on an attack target this near (tiles)... */
