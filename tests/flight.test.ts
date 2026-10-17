@@ -37,16 +37,28 @@ describe('flight', () => {
     expect(minCal).toBeLessThan(cal0 - 20); // flying is hungry work
   });
 
-  test('melee can\'t reach a flier in the air; a melee flier lands to strike', () => {
+  test('a striker can hit a flier only when it comes low enough', () => {
     const w = fresh();
     const hall = w.baseOf(0)!;
     const e = w.spawnAt(0, 'eagle', hall.ox + 8, hall.oy + 12)!;
     const m = w.spawnAt(1, 'maceman', hall.ox + 8.6, hall.oy + 12)!;
-    e.airborne = true; e.order = { kind: 'move', x: hall.ox + 8, y: hall.oy + 20 };
+    e.airborne = true; e.alt = 1; e.order = { kind: 'idle' };
+    const hp = e.hp;
+    m.order = { kind: 'attack', target: e.id };
+    for (let i = 0; i < 20 * 3; i++) w.step();
+    expect(e.hp).toBeLessThan(hp); // a metre up: within a mace's reach
+  });
+
+  test('melee can\'t reach a flier high up; a melee flier lands to strike', () => {
+    const w = fresh();
+    const hall = w.baseOf(0)!;
+    const e = w.spawnAt(0, 'eagle', hall.ox + 8, hall.oy + 12)!;
+    const m = w.spawnAt(1, 'maceman', hall.ox + 8.6, hall.oy + 12)!;
+    e.airborne = true; e.alt = 10; e.order = { kind: 'move', x: hall.ox + 8, y: hall.oy + 20 };
     const hp = e.hp;
     m.order = { kind: 'attack', target: e.id };
     for (let i = 0; i < 10; i++) w.step();
-    expect(e.hp).toBe(hp); // out of reach
+    expect(e.hp).toBe(hp); // 10 m up: out of a mace's reach
     // the eagle attacks the maceman: it comes down to strike
     e.order = { kind: 'attack', target: m.id };
     let landed = false;

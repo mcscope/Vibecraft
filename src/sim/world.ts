@@ -19,7 +19,7 @@ import { eject, runGarrison, tickGarrison } from './garrison';
 import { isUnderfoot, loadBelt, nearestBelt, roadFactor, routeBelts, runBelts, type BeltRoutes, type Parcel } from './abilities/underfoot';
 import { grow, grownEnough, livingStats, seedMaterials } from './abilities/living';
 import {
-  derive, deriveBuilding, loadedSpeed, CAP, K, M_PER_TILE, techCost, techGate, techTime,
+  bodyHeight, derive, deriveBuilding, loadedSpeed, CAP, K, M_PER_TILE, techCost, techGate, techTime,
   type BuildingStats, type DerivedStats,
 } from './physics';
 
@@ -1484,7 +1484,7 @@ export class World {
       const h = (1.5 + p.sz) * (1 - s) + 1 * s + 4 * ((K.gravity * p.duration * p.duration) / 8) * s * (1 - s); // metres
       for (const u of this.units.values()) {
         if (u.owner === p.owner || u.airborne || u.dummy || this.players[u.owner]?.neutral && u.id !== p.target) continue;
-        const tall = 1.7 * Math.cbrt(u.stats.mass / 70); // its body height, m
+        const tall = bodyHeight(u.stats.mass); // m
         if (h > tall || (u.x - x) ** 2 + (u.y - y) ** 2 > (u.stats.radius + 0.1) ** 2) continue;
         this.projectiles.delete(p.id);
         this.damage(u.id, p.damage, u.x, u.y);

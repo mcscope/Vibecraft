@@ -18,6 +18,9 @@
 // second is bounded by muscle *power*, which is bounded by muscle mass, which
 // costs food. You cannot make a 10k-damage unit that costs 1 food.
 
+/** A body's height in metres, from its mass (a 70 kg person is 1.7 m; height scales with ∛mass). */
+export const bodyHeight = (mass: number): number => 1.7 * Math.cbrt(mass / 70);
+
 /** Metres per map tile. Physics works in metres (m/s, m/s², J); positions, speeds and ranges in tiles. */
 export const M_PER_TILE = 2;
 

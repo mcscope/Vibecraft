@@ -11,7 +11,7 @@
 // crystals fall further and hit harder, and they see further.
 import type { UnitSpec } from '../../factions/types';
 import { f1, n0 } from '../../ui/format';
-import { DEFAULT_FLY_HEIGHT, K, type DerivedStats } from '../physics';
+import { bodyHeight, DEFAULT_FLY_HEIGHT, K, M_PER_TILE, type DerivedStats } from '../physics';
 import type { Unit, World } from '../world';
 import type { Ability } from './index';
 
@@ -144,8 +144,15 @@ export function tickFlight(w: World, u: Unit, _moved: boolean, dt: number, face:
   u.vz = (u.alt - alt0) / dt;
 }
 
-/** Can `attacker` reach `target`? Only thrown crystals reach a flier in the air. */
-export const canReach = (attacker: Unit, target: Unit): boolean => !target.airborne || attacker.throws;
+/**
+ * Can `attacker` reach `target`? Thrown crystals reach a flier at any height; a striker only one flying low
+ * enough: within shoulder height (0.8 of its body's) plus its weapon's reach, held straight up.
+ */
+export const canReach = (attacker: Unit, target: Unit): boolean =>
+  !target.airborne || attacker.throws || target.alt <= verticalReach(attacker);
+
+/** Metres up a striker can hit: its shoulders plus its reach (arm and any shaft) beyond its body. */
+export const verticalReach = (u: Unit): number => 0.8 * bodyHeight(u.stats.mass) + Math.max(0, u.stats.range - u.stats.radius) * M_PER_TILE;
 
 /** Extra damage a crystal gains falling from flying height. */
 export const heightBonus = (u: Unit): number => (u.airborne ? u.crystalMass * K.gravity * u.alt * K.throwEfficiency * K.damageScale : 0);
