@@ -301,7 +301,14 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   const damage = canAttack ? attackEnergy * K.damageScale : 0;
   const attackCalories = attackEnergy / K.muscleEfficiency;
   const power = K.powerPerMuscleKg * muscleMass;
-  const cooldown = Math.max(K.minCooldown, attackEnergy / power) + (throwing ? K.throwReload : 0) + windUp; // a heavier weapon takes longer to bring round
+  // the weapon's moment of inertia about the hands (¾ of a shaft and the crystal out front), swung round by the arms'
+  // torque (holding force on a half-metre lever): a quarter turn takes √(2·θ·I/τ). After each blow a striker brings
+  // its weapon round to bear again, so a long pole recovers slower than a club (a thrown crystal is gone)
+  const leverOut = 0.75 * shaft + 0.4, shaftKg = shaft * K.shaftKgPerM;
+  const weaponI = (shaftKg * 0.75 * (0.75 * shaft) ** 2) / 3 + (shaftKg * 0.25 * (0.25 * shaft) ** 2) / 3 + crystalMass * leverOut * leverOut;
+  const armTorque = K.holdForcePerMuscleKg * muscleMass * 0.5;
+  const bringRound = throwing ? 0 : Math.sqrt((2 * (Math.PI / 2) * weaponI) / armTorque);
+  const cooldown = Math.max(K.minCooldown, attackEnergy / power) + (throwing ? K.throwReload : 0) + windUp + bringRound;
 
   const sizeRel = Math.cbrt(mass / 70);
   const radius = clamp(0.25 * sizeRel, 0.15, 0.8);
@@ -343,14 +350,8 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
     holdForce: K.holdForcePerMuscleKg * muscleMass,
     // a round pole of its wood's cross-section A (I = A² / 4π), pushed along its length (Euler buckling)
     shaftForce: shaft ? (Math.PI ** 2 * K.woodStiffness * ((K.shaftKgPerM / K.woodDensity) ** 2 / (4 * Math.PI))) / (0.75 * shaft) ** 2 : 0,
-    turnRate: (() => {
-      // the weapon's moment of inertia about the hands (¾ of a shaft and the crystal out front), swung round
-      // by the arms' torque (holding force on a half-metre lever): a quarter turn takes √(2·θ·I/τ)
-      const L = shaft, kg = shaft * K.shaftKgPerM, out = 0.75 * L + 0.4;
-      const I = (kg * 0.75 * (0.75 * L) ** 2) / 3 + (kg * 0.25 * (0.25 * L) ** 2) / 3 + crystalMass * out * out;
-      const torque = K.holdForcePerMuscleKg * muscleMass * 0.5;
-      return Math.min(K.turnRate, Math.sqrt(((Math.PI / 2) * torque) / (2 * Math.max(1e-6, I))));
-    })(),
+    // its weapon swung round (weaponI, armTorque above) caps how fast it turns to face
+    turnRate: Math.min(K.turnRate, Math.sqrt(((Math.PI / 2) * armTorque) / (2 * Math.max(1e-6, weaponI)))),
     minReach: shaft ? reach - (shaft * 0.75 * 0.5) / M_PER_TILE : 0, // it can choke up half the shaft's forward length
     // a shaft can be planted (butt on the ground behind, point at the enemy) only if it's well longer than the body is tall:
     // a pike in a man's hands, not a lance on a mount
