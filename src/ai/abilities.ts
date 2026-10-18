@@ -58,7 +58,7 @@ export function useHerds(t: AiTurn): void {
   if (herd.length >= 8 || t.workers.some((u) => u.order.kind === 'tame')) return; // one tamer at a time
   let game: Unit | null = null, gameD = 18 * 18;
   for (const a of w.units.values()) {
-    if (a.wild !== 'passive') continue;
+    if (a.wild !== 'passive' || w.vision(player, a.x, a.y) !== 2) continue; // only game we can see
     const d = (a.x - px) ** 2 + (a.y - py) ** 2;
     if (d < gameD) { gameD = d; game = a; }
   }

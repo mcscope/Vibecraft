@@ -67,7 +67,9 @@ Play the shipped factions in your browser at **[mcscope.com/game/vibecraft](http
 
 **Maps:** Woodlands, Steppe (after AoE2's Arabia), Water Donut, Cliff Maze, and Sunken Temple (after StarCraft's Lost Temple). Pick one in the menu. Online, the host picks.
 
-**Shortcut:** start a game straight from a URL, for example `?mode=skirmish&you=fenfolk&foe=meadowfolk&map=cliff-maze&seed=5`.
+**Computer players** come in **Easy** and **Hard** (the default). Both play fair: they see only what their own units see, and use the same rules and commands as you. Hard thinks faster, runs a tighter economy, scouts, and counters what it has seen. It attacks once its army is stronger, focuses fire and pulls back hurt units. Easy reacts slowly and attacks in small waves.
+
+**Shortcut:** start a game straight from a URL, for example `?mode=skirmish&you=fenfolk&foe=meadowfolk&map=cliff-maze&seed=5&ai=easy`.
 
 ---
 
@@ -133,6 +135,7 @@ npm run dev          # play at http://localhost:5173
 npm test             # run the simulation tests
 npm run typecheck
 npm run arena        # print the unit matchup table
+npm run aimatch      # play the computer players against each other
 npm run build        # production build, art pre-baked
 npm run build:fast   # production build, art baked in the browser
 ```
@@ -150,10 +153,10 @@ npm run build:fast   # production build, art baked in the browser
 |---|---|
 | `src/factions/` | Factions: specs, models, homeworld, wildlife. `types.ts` documents every field. |
 | `src/sim/` | The simulation: `world.ts`, `physics.ts` (body to stats), `logistics.ts`, `abilities/` |
-| `src/ai/` | The computer player (`skirmishAI.ts`), and how it uses abilities (`abilities.ts`) |
+| `src/ai/` | The computer player (`skirmishAI.ts`, with its Easy and Hard profiles), and how it uses abilities (`abilities.ts`) |
 | `src/render/`, `src/ui/` | Drawing (PixiJS), the on-screen panels and input |
 | `src/kits/bake3d/` | The three.js sprite baker |
 | `src/art/` | The art contract, and loading pre-baked art |
 | `src/net/` | Online play: lockstep, the relay client, and faction checks |
-| `scripts/` | The relay server, the arena table, pre-baking |
+| `scripts/` | The relay server, the arena table, AI matches, pre-baking |
 | `tests/` | Simulation tests |
