@@ -8,6 +8,7 @@
     "build": "tsc --noEmit && vite build && node scripts/prebake.mjs dist/baked",
     "build:fast": "tsc --noEmit && vite build",
     "prebake": "node scripts/prebake.mjs dist/baked",
+    "voices": "node scripts/import-voices.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "stats": "vitest run tests/stats.test.ts --reporter=verbose",

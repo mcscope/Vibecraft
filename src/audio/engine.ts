@@ -136,12 +136,12 @@ export class AudioEngine {
    * The player selected or ordered a unit (one line for the whole group): it answers, with a recorded voice line
    * (audio/clips.ts, only with ?voices=1), or the faction's own sound for it if it has one.
    */
-  unitLine(owner: number, specId: string, line: 'select' | 'acknowledge' | 'attack', at: Where = { pan: 0, gain: 0.8 }, chorus = false): void {
+  unitLine(owner: number, specId: string, line: 'select' | 'acknowledge' | 'attack', at: Where = { pan: 0, gain: 0.8 }, chorus = false, echo = false): void {
     if (!this.ctx) return;
     const art = this.bank.unit(owner, specId);
     const custom = line !== 'attack' ? art?.sounds?.[line] : undefined;
     if (custom) { this.play(custom, at); return; }
-    if (VOICES_ON) void sayLine(this.ctx, this.out(at, 0.55), this.world.factionOf(owner).id, specId, line === 'acknowledge' ? 'order' : line, chorus);
+    if (VOICES_ON) void sayLine(this.ctx, this.out(at, 0.55), this.world.factionOf(owner).id, specId, line === 'acknowledge' ? 'order' : line, chorus, echo);
   }
 
   ui(): void { if (this.ctx) this.synth({ kind: 'pluck', pitch: 660, timbre: 'triangle', length: 0.08 }, { pan: 0, gain: 0.5 }, 0.25); }

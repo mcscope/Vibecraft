@@ -52,7 +52,11 @@ function room(ctx: AudioContext): AudioBuffer {
  * `factionId:specId` says `line` (or one of its general clips), through `out`. False if voices are off, it has no
  * clip for it, it spoke too recently, or enough voices are already going.
  */
-export async function sayLine(ctx: AudioContext, out: AudioNode, factionId: string, specId: string, line: VoiceLine, chorus = false): Promise<boolean> {
+/**
+ * `chorus`: a group answers (several detuned voices). `echo`: replay the clip this line last played, straight away
+ * (a double-click's group answering the single click it follows).
+ */
+export async function sayLine(ctx: AudioContext, out: AudioNode, factionId: string, specId: string, line: VoiceLine, chorus = false, echo = false): Promise<boolean> {
   if (!VOICES_ON) return false;
   const m = await load();
   const unit = `${factionId}:${specId}`, set = m?.lines[unit];
@@ -60,13 +64,12 @@ export async function sayLine(ctx: AudioContext, out: AudioNode, factionId: stri
   const pool = set[line]?.length ? set[line]! : set.any ?? [];
   if (!pool.length) return false;
   const now = performance.now();
-  // (a chorus answers a double-click straight after the single click's line, so it skips the cooldown)
-  if ((!chorus && now - (last.get(unit) ?? -Infinity) < COOLDOWN_MS) || playing >= MAX_AT_ONCE) return false;
+  // (an echo comes straight after the line it repeats, so it skips the cooldown)
+  if ((!echo && now - (last.get(unit) ?? -Infinity) < COOLDOWN_MS) || playing >= MAX_AT_ONCE) return false;
   last.set(unit, now);
   // round-robin through the type's clips for this line
-  // (a chorus echoes the clip the single click just played: the group repeats it)
-  const key = `${unit}/${line}`, n = turn.get(key) ?? 0, i = ((chorus && n > 0 ? n - 1 : n) % pool.length + pool.length) % pool.length;
-  if (!chorus || n === 0) turn.set(key, n + 1);
+  const key = `${unit}/${line}`, n = turn.get(key) ?? 0, i = ((echo && n > 0 ? n - 1 : n) % pool.length + pool.length) % pool.length;
+  if (!echo || n === 0) turn.set(key, n + 1);
   const id = pool[i], t = fxFor(m, id, unit), buf = await clip(ctx, id);
   // a chorus: the whole group answers, a few voices slightly detuned, a beat apart, spread across the stereo field
   const voices = chorus ? [[0, 0, 0], [-14, 0.025, -0.6], [11, 0.045, 0.6], [-6, 0.07, -0.25]] : [[0, 0, 0]];
