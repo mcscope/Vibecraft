@@ -1,0 +1,296 @@
+{
+ "lines": {
+  "fenfolk:hop": {
+   "order": [
+    "fenfolk_hops_04",
+    "fenfolk_hops_07",
+    "fenfolk_voices_34"
+   ],
+   "any": [
+    "fenfolk_hops_05",
+    "fenfolk_voices_36",
+    "fenfolk_voices_37"
+   ]
+  },
+  "fenfolk:bog-toad": {
+   "attack": [
+    "fenfolk_hops_09"
+   ],
+   "select": [
+    "fenfolk_voices_03"
+   ],
+   "any": [
+    "fenfolk_voices_07",
+    "fenfolk_voices_09",
+    "fenfolk_voices_10",
+    "fenfolk_voices_11",
+    "fenfolk_voices_13"
+   ],
+   "order": [
+    "fenfolk_voices_28"
+   ],
+   "death": [
+    "meadowfolk_voices_92"
+   ]
+  },
+  "fenfolk:fenling": {
+   "any": [
+    "fenfolk_voices_01",
+    "fenfolk_voices_02",
+    "fenfolk_voices_14",
+    "fenfolk_voices_15",
+    "fenfolk_voices_17",
+    "fenfolk_voices_18",
+    "fenfolk_voices_19"
+   ]
+  },
+  "fenfolk:reedguard": {
+   "any": [
+    "fenfolk_voices_04",
+    "fenfolk_voices_05",
+    "fenfolk_voices_06",
+    "fenfolk_voices_12"
+   ]
+  },
+  "fenfolk:great-siege-heron": {
+   "select": [
+    "fenfolk_voices_30"
+   ],
+   "order": [
+    "fenfolk_voices_31"
+   ]
+  },
+  "fenfolk:pack-tortoise": {
+   "any": [
+    "fenfolk_voices_33"
+   ]
+  },
+  "meadowfolk:slinger": {
+   "any": [
+    "meadowfolk_voices_01",
+    "meadowfolk_voices_03",
+    "meadowfolk_voices_05",
+    "meadowfolk_voices_06",
+    "meadowfolk_voices_40",
+    "meadowfolk_voices_46",
+    "meadowfolk_voices_51"
+   ],
+   "select": [
+    "meadowfolk_voices_18"
+   ],
+   "death": [
+    "meadowfolk_voices_21"
+   ],
+   "order": [
+    "meadowfolk_voices_93"
+   ]
+  },
+  "meadowfolk:villager": {
+   "any": [
+    "meadowfolk_voices_02",
+    "meadowfolk_voices_04",
+    "meadowfolk_voices_07",
+    "meadowfolk_voices_27",
+    "meadowfolk_voices_42",
+    "meadowfolk_voices_48",
+    "meadowfolk_voices_53",
+    "meadowfolk_voices_61",
+    "meadowfolk_voices_62"
+   ],
+   "order": [
+    "meadowfolk_voices_14",
+    "meadowfolk_voices_16"
+   ],
+   "select": [
+    "meadowfolk_voices_15",
+    "meadowfolk_voices_17"
+   ],
+   "death": [
+    "meadowfolk_voices_20"
+   ]
+  },
+  "meadowfolk:pikeman": {
+   "any": [
+    "meadowfolk_voices_08",
+    "meadowfolk_voices_25",
+    "meadowfolk_voices_30",
+    "meadowfolk_voices_35",
+    "meadowfolk_voices_37",
+    "meadowfolk_voices_41",
+    "meadowfolk_voices_47",
+    "meadowfolk_voices_88"
+   ],
+   "order": [
+    "meadowfolk_voices_12",
+    "meadowfolk_voices_58"
+   ]
+  },
+  "meadowfolk:maceman": {
+   "select": [
+    "meadowfolk_voices_09",
+    "meadowfolk_voices_10",
+    "meadowfolk_voices_22",
+    "meadowfolk_voices_23",
+    "meadowfolk_voices_24"
+   ],
+   "order": [
+    "meadowfolk_voices_11",
+    "meadowfolk_voices_26",
+    "meadowfolk_voices_28",
+    "meadowfolk_voices_52"
+   ],
+   "any": [
+    "meadowfolk_voices_34",
+    "meadowfolk_voices_45",
+    "meadowfolk_voices_60"
+   ],
+   "death": [
+    "meadowfolk_voices_87"
+   ]
+  },
+  "meadowfolk:mule": {
+   "order": [
+    "meadowfolk_voices_13"
+   ],
+   "any": [
+    "meadowfolk_voices_36",
+    "meadowfolk_voices_43",
+    "meadowfolk_voices_68"
+   ]
+  },
+  "meadowfolk:lynx": {
+   "order": [
+    "meadowfolk_voices_29"
+   ],
+   "select": [
+    "meadowfolk_voices_31"
+   ],
+   "any": [
+    "meadowfolk_voices_39",
+    "meadowfolk_voices_55",
+    "meadowfolk_voices_86"
+   ],
+   "attack": [
+    "meadowfolk_voices_54",
+    "meadowfolk_voices_59"
+   ],
+   "death": [
+    "meadowfolk_voices_91"
+   ]
+  },
+  "meadowfolk:hurlhorn": {
+   "any": [
+    "meadowfolk_voices_38",
+    "meadowfolk_voices_79"
+   ],
+   "select": [
+    "meadowfolk_voices_77"
+   ],
+   "order": [
+    "meadowfolk_voices_82"
+   ],
+   "attack": [
+    "meadowfolk_voices_84",
+    "meadowfolk_voices_85"
+   ]
+  }
+ },
+ "clipFx": {
+  "fenfolk_hops_09": {
+   "drive": 0.1,
+   "reverb": 0.05
+  },
+  "fenfolk_hops_07": {
+   "drive": 0
+  },
+  "fenfolk_voices_28": {
+   "highcut": 5200,
+   "lowcut": 540,
+   "pitch": -1.5,
+   "drive": 0,
+   "gain": -5
+  },
+  "fenfolk_voices_31": {
+   "drive": 0.15,
+   "pitch": -1.5,
+   "lowcut": 870
+  },
+  "fenfolk_voices_33": {
+   "pitch": -1.5,
+   "lowcut": 780
+  },
+  "fenfolk_voices_34": {
+   "lowcut": 20
+  },
+  "fenfolk_voices_37": {
+   "lowcut": 160
+  },
+  "meadowfolk_voices_10": {
+   "drive": 0.05
+  },
+  "meadowfolk_voices_09": {
+   "drive": 0.05
+  },
+  "meadowfolk_voices_18": {
+   "gain": -2,
+   "pitch": -0.5
+  },
+  "meadowfolk_voices_26": {
+   "drive": 0.05
+  },
+  "meadowfolk_voices_29": {
+   "pitch": -2,
+   "drive": 0.05
+  },
+  "meadowfolk_voices_31": {
+   "drive": 0.1
+  },
+  "meadowfolk_voices_93": {
+   "drive": 0.05
+  },
+  "meadowfolk_voices_92": {
+   "highcut": 1900,
+   "drive": 0
+  },
+  "meadowfolk_voices_91": {
+   "highcut": 3500,
+   "pitch": -1.5
+  },
+  "meadowfolk_voices_85": {
+   "pitch": -0.5,
+   "drive": 0.15,
+   "highcut": 11000
+  },
+  "meadowfolk_voices_84": {
+   "drive": 0.3,
+   "highcut": 5300
+  },
+  "meadowfolk_voices_82": {
+   "drive": 0.15
+  },
+  "meadowfolk_voices_77": {
+   "pitch": -2,
+   "drive": 0.1
+  },
+  "meadowfolk_voices_68": {
+   "drive": 0.05,
+   "highcut": 4900
+  },
+  "meadowfolk_voices_59": {
+   "drive": 0.05,
+   "reverb": 0.1,
+   "highcut": 2700
+  },
+  "meadowfolk_voices_48": {
+   "lowcut": 230
+  },
+  "meadowfolk_voices_36": {
+   "lowcut": 20,
+   "highcut": 2300
+  },
+  "meadowfolk_voices_54": {
+   "drive": 0.1
+  }
+ },
+ "unitFx": {}
+}

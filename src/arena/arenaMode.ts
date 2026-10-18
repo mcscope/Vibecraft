@@ -9,6 +9,7 @@ import { ArtBank, TEAM_COLORS } from '../render/artbank';
 import { Renderer } from '../render/renderer';
 import { Input } from '../ui/input';
 import { Minimap } from '../ui/minimap';
+import { AudioEngine } from '../audio/engine';
 
 const BUDGETS = [600, 1200, 2400];
 /** The panel overlays the left of the (full-window) field. */
@@ -42,7 +43,15 @@ export async function runArena(params: URLSearchParams): Promise<void> {
   renderer.viewer = -1;
   const minimap = new Minimap(document.createElement('canvas'), world, 200);
   // camera, selection, pause ([P]) and speed ([ ]); with 'you command blue' on, orders go to the left side
-  const input = new Input(canvas, world, renderer, minimap, 0, (cmd) => { if (control) world.enqueue({ player: input.player, cmd }); });
+  const audio = new AudioEngine(world, bank, 0);
+  const input = new Input(canvas, world, renderer, minimap, 0, (cmd) => {
+    if (!control) return;
+    world.enqueue({ player: input.player, cmd });
+    // the order is answered once, by the first unit given it (voices only with ?voices=1)
+    const first = 'units' in cmd ? cmd.units.map((id) => world.units.get(id)).find((u) => u && u.owner === input.player) : undefined;
+    if (first) audio.unitLine(first.owner, first.specId, cmd.type === 'attack' || cmd.type === 'attackMove' ? 'attack' : 'acknowledge');
+  });
+  input.onSelect = (ids) => { const u = ids.map((id) => world.units.get(id)).find(Boolean); if (u) audio.unitLine(u.owner, u.specId, 'select'); };
   let control = params.get('control') === '1';
   const resize = () => renderer.resize(window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
   window.addEventListener('resize', resize);
@@ -231,6 +240,7 @@ export async function runArena(params: URLSearchParams): Promise<void> {
     }
     input.alpha = Math.min(1, acc / DT);
     renderer.consumeEvents(world.events);
+    audio.handle(world.events, renderer.cam);
     world.events = [];
     input.update(dt);
     renderer.draw(input.alpha, dt, input.rs);

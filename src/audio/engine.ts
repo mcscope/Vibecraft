@@ -4,14 +4,13 @@
 // Whatever a faction leaves out is derived from physics — voices pitch down
 // with mass, impacts get heavier with energy — so every faction sounds like
 // something. Everything is synthesised; clips (URLs / data: URIs) also work.
-import type { MusicSpec, SoundSpec, SynthRecipe, UnitArt } from '../art/contract';
+import type { MusicSpec, SoundSpec, SynthRecipe } from '../art/contract';
 import type { Camera } from '../render/camera';
 import type { ArtBank } from '../render/artbank';
 import type { World, WorldEvent } from '../sim/world';
 import { settings, onSettings } from '../ui/settings';
-import { speak, voiceFor } from './voice';
+import { preloadVoices, sayLine, VOICES_ON } from './clips';
 
-type Timbre = NonNullable<SynthRecipe['timbre']>;
 const FORMANTS: Record<NonNullable<SynthRecipe['vowel']>, [number, number]> = {
   a: [800, 1200], e: [500, 1900], i: [320, 2300], o: [500, 900], u: [350, 700],
 };
@@ -40,6 +39,7 @@ export class AudioEngine {
   private start(): void {
     if (this.ctx) return;
     const ctx = (this.ctx = new AudioContext());
+    preloadVoices();
     const comp = ctx.createDynamicsCompressor();
     comp.connect(ctx.destination);
     this.master = ctx.createGain(); this.master.connect(comp);
@@ -109,14 +109,12 @@ export class AudioEngine {
           if (!this.allow('death', 3, 300)) break;
           const art = this.bank.unit(e.owner, e.specId);
           const at = this.where(cam, e.x, e.y);
-          const said = voiceFor(art?.sounds?.voices, this.world.factionOf(e.owner).id, e.specId, e.id);
           if (art?.sounds?.death) this.play(art.sounds.death, at);
-          else if (said) speak(this.ctx!, this.out(at, 0.5), said, 'death');
-          else { const v = this.voiceOf(art, e.owner, e.specId); this.synth({ kind: 'voice', ...v, pitch: v.pitch * 0.7, vowel: 'o', length: 0.55, count: 1 }, at, 0.6); }
+          else if (VOICES_ON) void sayLine(this.ctx!, this.out(at, 0.5), this.world.factionOf(e.owner).id, e.specId, 'death');
           break;
         }
         case 'trained':
-          if (e.owner === this.player) { const u = this.world.units.get(e.id); if (u) this.unitLine(u.owner, u.specId, 'select', { pan: 0, gain: 0.6 }, u.id); }
+          if (e.owner === this.player) { const u = this.world.units.get(e.id); if (u) this.unitLine(u.owner, u.specId, 'select', { pan: 0, gain: 0.6 }); }
           break;
         case 'built':
           if (e.owner === this.player) this.chord([0, 4, 7, 12], 330, 0.5);
@@ -134,31 +132,16 @@ export class AudioEngine {
     }
   }
 
-  /** The player selected or ordered a unit: it answers. */
-  unitLine(owner: number, specId: string, line: 'select' | 'acknowledge', at: Where = { pan: 0, gain: 0.8 }, unitId = 0): void {
-    if (!this.ctx || !this.allow(`line-${line}`, 1, 160)) return;
+  /**
+   * The player selected or ordered a unit (one line for the whole group): it answers, with a recorded voice line
+   * (audio/clips.ts, only with ?voices=1), or the faction's own sound for it if it has one.
+   */
+  unitLine(owner: number, specId: string, line: 'select' | 'acknowledge' | 'attack', at: Where = { pan: 0, gain: 0.8 }): void {
+    if (!this.ctx) return;
     const art = this.bank.unit(owner, specId);
-    const custom = art?.sounds?.[line];
+    const custom = line !== 'attack' ? art?.sounds?.[line] : undefined;
     if (custom) { this.play(custom, at); return; }
-    // its own voice (one of its type's, by its id), else one derived from its body
-    const said = voiceFor(art?.sounds?.voices, this.world.factionOf(owner).id, specId, unitId);
-    if (said) { speak(this.ctx, this.out(at, 0.55), said, line); return; }
-    const v = this.voiceOf(art, owner, specId);
-    if (line === 'select') this.synth({ kind: 'voice', ...v, length: 0.2, count: 1 }, at, 0.55);
-    else this.synth({ kind: 'voice', ...v, pitch: v.pitch * 1.12, length: 0.13, count: 2 }, at, 0.55);
-  }
-
-  /** Default voice from physics: bigger bodies, deeper voices; the faction can override any part. */
-  private voiceOf(art: UnitArt | undefined, owner: number, specId: string): { pitch: number; vowel: NonNullable<SynthRecipe['vowel']>; timbre: Timbre } {
-    const spec = this.world.specOf(owner, specId);
-    const mass = spec?.stats.mass ?? 70;
-    const hash = [...specId].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
-    const v = art?.sounds?.voice ?? {};
-    return {
-      pitch: v.pitch ?? 190 * Math.pow(70 / mass, 0.35),
-      vowel: v.vowel ?? (['a', 'e', 'o', 'u'] as const)[hash % 4],
-      timbre: v.timbre ?? (['saw', 'square', 'triangle'] as const)[(hash >> 3) % 3],
-    };
+    if (VOICES_ON) void sayLine(this.ctx, this.out(at, 0.55), this.world.factionOf(owner).id, specId, line === 'acknowledge' ? 'order' : line);
   }
 
   ui(): void { if (this.ctx) this.synth({ kind: 'pluck', pitch: 660, timbre: 'triangle', length: 0.08 }, { pan: 0, gain: 0.5 }, 0.25); }
