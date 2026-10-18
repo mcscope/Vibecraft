@@ -78,7 +78,8 @@
   },
   "fenfolk:pack-tortoise": {
    "any": [
-    "fenfolk_voices_33"
+    "fenfolk_voices_33",
+    "supplement2_16"
    ]
   },
   "meadowfolk:villager": {
@@ -241,6 +242,9 @@
    "attack": [
     "meadowfolk_voices_84",
     "meadowfolk_voices_85"
+   ],
+   "death": [
+    "supplement2_15"
    ]
   },
   "combat:swing": {
@@ -249,21 +253,16 @@
     "combat_02",
     "combat_03",
     "combat_06",
-    "combat_09",
     "combat_12",
     "combat_14",
     "combat_25",
     "combat_27",
     "combat_28",
     "combat_30",
-    "combat_31",
-    "combat_33",
     "combat_35",
     "combat_38",
     "combat_39",
-    "combat_40",
     "combat_42",
-    "combat_49",
     "combat_51",
     "combat_53",
     "combat_55",
@@ -288,7 +287,6 @@
    "any": [
     "combat_04",
     "combat_05",
-    "combat_10",
     "combat_11",
     "combat_13",
     "combat_20",
@@ -298,6 +296,7 @@
     "combat_24",
     "combat_26",
     "combat_29",
+    "combat_33",
     "combat_34",
     "combat_36",
     "combat_37",
@@ -321,7 +320,6 @@
   },
   "combat:solid": {
    "any": [
-    "combat_07",
     "combat_08",
     "combat_15",
     "combat_17",
@@ -355,7 +353,6 @@
   },
   "combat:heavy": {
    "any": [
-    "combat_16",
     "combat_70",
     "combat_74",
     "combat_81",
@@ -507,7 +504,21 @@
   "supplement2_41": {
    "drive": 0.05,
    "highcut": 20000
+  },
+  "supplement2_15": {
+   "pitch": -2,
+   "drive": 0.2
+  },
+  "supplement2_43": {
+   "drive": 0.1
+  },
+  "fenfolk_voices_30": {
+   "drive": 0.1
   }
  },
- "unitFx": {}
+ "unitFx": {
+  "combat:heavy": {
+   "drive": 0.05
+  }
+ }
 }
