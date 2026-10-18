@@ -65,27 +65,12 @@
     "fenfolk_voices_33"
    ]
   },
-  "meadowfolk:slinger": {
-   "any": [
-    "meadowfolk_voices_01",
-    "meadowfolk_voices_03",
-    "meadowfolk_voices_05",
-    "meadowfolk_voices_06",
-    "meadowfolk_voices_40",
-    "meadowfolk_voices_46",
-    "meadowfolk_voices_51"
-   ],
-   "select": [
-    "meadowfolk_voices_18"
-   ],
-   "death": [
-    "meadowfolk_voices_21"
-   ],
-   "order": [
-    "meadowfolk_voices_93"
-   ]
-  },
   "meadowfolk:villager": {
+   "select": [
+    "meadowfolk_voices_01",
+    "meadowfolk_voices_15",
+    "meadowfolk_voices_17"
+   ],
    "any": [
     "meadowfolk_voices_02",
     "meadowfolk_voices_04",
@@ -101,12 +86,28 @@
     "meadowfolk_voices_14",
     "meadowfolk_voices_16"
    ],
-   "select": [
-    "meadowfolk_voices_15",
-    "meadowfolk_voices_17"
-   ],
    "death": [
     "meadowfolk_voices_20"
+   ]
+  },
+  "meadowfolk:slinger": {
+   "any": [
+    "meadowfolk_voices_03",
+    "meadowfolk_voices_05",
+    "meadowfolk_voices_06",
+    "meadowfolk_voices_40",
+    "meadowfolk_voices_51"
+   ],
+   "select": [
+    "meadowfolk_voices_18",
+    "meadowfolk_voices_46"
+   ],
+   "death": [
+    "meadowfolk_voices_20",
+    "meadowfolk_voices_21"
+   ],
+   "order": [
+    "meadowfolk_voices_93"
    ]
   },
   "meadowfolk:pikeman": {
@@ -117,12 +118,17 @@
     "meadowfolk_voices_35",
     "meadowfolk_voices_37",
     "meadowfolk_voices_41",
-    "meadowfolk_voices_47",
     "meadowfolk_voices_88"
    ],
    "order": [
     "meadowfolk_voices_12",
     "meadowfolk_voices_58"
+   ],
+   "death": [
+    "meadowfolk_voices_20"
+   ],
+   "select": [
+    "meadowfolk_voices_47"
    ]
   },
   "meadowfolk:maceman": {
@@ -139,13 +145,13 @@
     "meadowfolk_voices_28",
     "meadowfolk_voices_52"
    ],
+   "death": [
+    "meadowfolk_voices_20",
+    "meadowfolk_voices_87"
+   ],
    "any": [
     "meadowfolk_voices_34",
-    "meadowfolk_voices_45",
     "meadowfolk_voices_60"
-   ],
-   "death": [
-    "meadowfolk_voices_87"
    ]
   },
   "meadowfolk:mule": {
@@ -179,12 +185,12 @@
    ]
   },
   "meadowfolk:hurlhorn": {
-   "any": [
-    "meadowfolk_voices_38",
-    "meadowfolk_voices_79"
-   ],
    "select": [
     "meadowfolk_voices_77"
+   ],
+   "any": [
+    "meadowfolk_voices_79",
+    "meadowfolk_voices_90"
    ],
    "order": [
     "meadowfolk_voices_82"
@@ -256,6 +262,12 @@
    "highcut": 3500,
    "pitch": -1.5
   },
+  "meadowfolk_voices_90": {
+   "pitch": -1,
+   "highcut": 20000,
+   "drive": 0.05,
+   "lowcut": 540
+  },
   "meadowfolk_voices_85": {
    "pitch": -0.5,
    "drive": 0.15,
@@ -290,6 +302,11 @@
   },
   "meadowfolk_voices_54": {
    "drive": 0.1
+  },
+  "meadowfolk_voices_21": {
+   "highcut": 6400,
+   "gain": -3,
+   "pitch": -1.5
   }
  },
  "unitFx": {}
