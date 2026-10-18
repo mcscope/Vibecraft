@@ -175,7 +175,7 @@ class MapBuilder {
 /** Woodlands: scattered ponds and thick woods that shape the lanes (the original map). */
 function woodlands(seed: number, size: number): GeneratedMap {
   const m = new MapBuilder(seed, size), rng = m.rng;
-  for (let p = 0; p < 3; p++) {
+  for (let p = 0; p < Math.round(3 * (size / 64) ** 2); p++) {
     const cx = rng.int(14, size - 14), cy = rng.int(4, size - 30);
     if (cx + cy >= size - 8) continue;
     m.pond(cx, cy, rng.range(2, 4.2));
@@ -183,8 +183,8 @@ function woodlands(seed: number, size: number): GeneratedMap {
   m.home();
   m.cluster('crystal', size / 2 - 4, size / 2 - 5, 5, 400, 1.6);
   m.cluster('food', size / 2 + 6, size / 2 - 9, 6, 350, 2);
-  for (let i = 0; i < 3; i++) m.cluster('food', rng.int(6, size - 6), rng.int(6, size / 2 - 4), 4, 300, 1.5);
-  for (let f = 0; f < 12; f++) {
+  for (let i = 0; i < Math.round(3 * (size / 64) ** 2); i++) m.cluster('food', rng.int(6, size - 6), rng.int(6, size / 2 - 4), 4, 300, 1.5);
+  for (let f = 0; f < Math.round(12 * (size / 64) ** 2); f++) {
     const cx = rng.int(3, size - 3), cy = rng.int(3, size - 3);
     if (cx + cy > size) continue;
     m.forest(cx, cy, rng.range(2, 4.5));
@@ -217,7 +217,7 @@ function waterDonut(seed: number, size: number): GeneratedMap {
   // outer lands: a few groves and a hunting meadow each side
   m.cluster('food', 6, size / 2 + 4, 5, 300, 1.8);
   m.cluster('crystal', size / 2 + 6, 5, 4, 300, 1.4);
-  for (let f = 0; f < 8; f++) {
+  for (let f = 0; f < Math.round(8 * (size / 64) ** 2); f++) {
     const x = rng.int(3, size - 3), y = rng.int(3, size - 3);
     const d = Math.hypot(x - c, y - c);
     if (x + y > size || d < outer + 4) continue;
@@ -294,8 +294,8 @@ function steppe(seed: number, size: number): GeneratedMap {
   m.cluster('crystal', 20, 6, 4, 300, 1.2);
   m.cluster('crystal', 6, 22, 4, 300, 1.2);
   m.cluster('crystal', size / 2 - 2, size / 2 + 3, 4, 350, 1.3);
-  for (let i = 0; i < 6; i++) m.cluster('food', rng.int(8, size - 8), rng.int(8, size / 2), 3, 250, 1.4);
-  for (let f = 0; f < 14; f++) {
+  for (let i = 0; i < Math.round(6 * (size / 64) ** 2); i++) m.cluster('food', rng.int(8, size - 8), rng.int(8, size / 2), 3, 250, 1.4);
+  for (let f = 0; f < Math.round(14 * (size / 64) ** 2); f++) {
     const x = rng.int(4, size - 4), y = rng.int(4, size - 4);
     if (x + y > size) continue;
     m.forest(x, y, rng.range(1.3, 2.4), 0.8);
@@ -334,7 +334,7 @@ function sunkenTemple(seed: number, size: number): GeneratedMap {
   m.cluster('food', hx + 16, hy + 10, 4, 300, 1.4);
   m.cluster('crystal', sx + 2, size - sy - 4, 5, 400, 1.3); // corner plateau
   m.cluster('crystal', c, c, 4, 500, 1); // the temple
-  for (let f = 0; f < 10; f++) {
+  for (let f = 0; f < Math.round(10 * (size / 64) ** 2); f++) {
     const x = rng.int(4, size - 4), y = rng.int(4, size - 4);
     if (x + y > size || Math.hypot(x - hx, y - hy) < 15 || Math.hypot(x - c, y - c) < 8) continue;
     m.forest(x, y, rng.range(1.5, 3), 0.85);
@@ -353,6 +353,9 @@ export const MAPS: MapInfo[] = [
   { id: 'sunken-temple', name: 'Sunken Temple', description: 'Plateau bases with one ramp each, naturals below, a walled temple in the middle. After StarCraft\'s Lost Temple.', generate: sunkenTemple },
 ];
 
-export function generateMap(seed: number, size = 64, mapId = 'woodlands'): GeneratedMap {
+/** Map side in tiles (2 m each). */
+export const MAP_SIZE = 96;
+
+export function generateMap(seed: number, size = MAP_SIZE, mapId = 'woodlands'): GeneratedMap {
   return (MAPS.find((m) => m.id === mapId) ?? MAPS[0]).generate(seed, size);
 }

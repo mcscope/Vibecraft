@@ -1,6 +1,6 @@
 // Scenarios: a map, a starting setup, and optional scripted rules that run
 // inside the deterministic tick (so they stay in sync in multiplayer too).
-import { generateMap, Grid, TERRAIN_SAND, TERRAIN_WATER, type GeneratedMap, type MapFeature } from './map';
+import { generateMap, MAP_SIZE, Grid, TERRAIN_SAND, TERRAIN_WATER, type GeneratedMap, type MapFeature } from './map';
 import { Rng } from './rng';
 import { startStock, startWorkers } from './fairness';
 import { TICK_RATE, type World } from './world';
@@ -23,7 +23,7 @@ export function skirmish(mapId = 'woodlands'): Scenario {
   return {
     id: 'skirmish',
     victory: true,
-    map: (seed) => generateMap(seed, 64, mapId),
+    map: (seed) => generateMap(seed, MAP_SIZE, mapId),
     setup(w, map) {
       w.players.forEach((p, i) => {
         const [ox, oy] = map.starts[i % map.starts.length];
