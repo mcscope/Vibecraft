@@ -3,6 +3,7 @@
 import { fenfolk } from './factions/fenfolk';
 import { meadowfolk } from './factions/meadowfolk';
 import type { FactionSpec } from './factions/types';
+import { loadUp } from './sim/abilities/bearer';
 import { provingGrounds, type Scenario } from './sim/scenarios';
 import type { World } from './sim/world';
 
@@ -64,9 +65,10 @@ export const LESSONS: Lesson[] = [
 <p><b>Try:</b> attack the macemen with your fenlings and count the throws. Spent stones lie on the ground as <b>shards</b>, and anyone can pick them up.</p>
 <p>When a fenling runs dry it goes to restock. The <b>pack tortoise</b> is a walking crystal store. Move it up behind your fenlings: it sweeps up shards within sight and rearms fenlings near it, so they don't have to walk home. The Stilt Hall restocks them too (<kbd>R</kbd>).</p>`,
     setup(w) {
-      base(w, 0, 'stilt-hall', 6, 24, { food: 1500, crystal: 300 });
+      const hall = base(w, 0, 'stilt-hall', 6, 24, { food: 1500, crystal: 300 });
       wait(w, block(w, 0, 'fenling', 8, 14, 26, 4));
-      block(w, 0, 'pack-tortoise', 1, 11, 26, 1); // (a bearer goes about its own work)
+      // (a bearer goes about its own work) loaded from the hall, as it would come out of training there
+      for (const id of block(w, 0, 'pack-tortoise', 1, 11, 26, 1)) if (hall) loadUp(w, w.units.get(id)!, hall);
       hold(w, block(w, FOE, 'maceman', 4, 36, 26, 2, 4));
     },
   },

@@ -28,22 +28,28 @@ export async function packArt(art: unknown): Promise<{ json: string; pages: Blob
   return { json, pages: blobs };
 }
 
+/** Rebuild art packed by packArt from its JSON and its page images. */
+export async function unpackArt<T>(art: unknown, pages: Blob[]): Promise<T> {
+  const imgs = await Promise.all(pages.map((b) => createImageBitmap(b)));
+  const revive = (o: unknown): unknown => {
+    if (Array.isArray(o)) return o.map(revive);
+    if (!o || typeof o !== 'object') return o;
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(o)) out[k] = revive(v);
+    if ('img' in out && 'sx' in out && typeof out.img === 'number') out.img = imgs[out.img];
+    return out;
+  };
+  return revive(art) as T;
+}
+
 /** Load art saved by packArt from `base/<key>.json` and `base/<key>.<page>.webp`; null if there's none. */
 export async function loadPrebaked<T>(key: string, base = 'baked'): Promise<T | null> {
   try {
     const res = await fetch(`${base}/${key}.json`);
     if (!res.ok) return null;
     const { pages, art } = (await res.json()) as { pages: number; art: unknown };
-    const imgs = await Promise.all(Array.from({ length: pages }, async (_, i) => createImageBitmap(await (await fetch(`${base}/${key}.${i}.webp`)).blob())));
-    const revive = (o: unknown): unknown => {
-      if (Array.isArray(o)) return o.map(revive);
-      if (!o || typeof o !== 'object') return o;
-      const out: Record<string, unknown> = {};
-      for (const [k, v] of Object.entries(o)) out[k] = revive(v);
-      if ('img' in out && 'sx' in out && typeof out.img === 'number') out.img = imgs[out.img];
-      return out;
-    };
-    return revive(art) as T;
+    const blobs = await Promise.all(Array.from({ length: pages }, async (_, i) => (await fetch(`${base}/${key}.${i}.webp`)).blob()));
+    return await unpackArt<T>(art, blobs);
   } catch {
     return null; // not pre-baked (a custom faction, or dev): bake it here
   }

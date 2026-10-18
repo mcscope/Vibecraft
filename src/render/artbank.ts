@@ -5,6 +5,7 @@ import type { World } from '../sim/world';
 import type { FactionSpec } from '../factions/types';
 import { PLAYABLE } from '../factions';
 import { biomeKey, loadPrebaked, teamKey } from '../art/prebaked';
+import { cacheArt, cachedArt } from '../art/devCache';
 
 /** A shipped faction's art (or its land's) as pre-baked for a production build (scripts/prebake.mjs); null to bake it here. */
 const prebaked = <T>(f: FactionSpec | null, key: string): Promise<T | null> =>
@@ -38,7 +39,10 @@ export class ArtBank {
   async ensureUnits(owner: number, ids: string[]): Promise<void> {
     const f = this.world.factionOf(owner), missing = ids.filter((id) => !this.factions[owner].units[id]);
     if (!missing.length || !f.art) return;
-    Object.assign(this.factions[owner].units, (await f.art(this.teams[owner], undefined, missing)).units);
+    const key = `${teamKey(f.id, this.teams[owner])}.${[...missing].sort().join('+')}`;
+    let art = await cachedArt<FactionArt>(f.id, key);
+    if (!art) { art = await f.art(this.teams[owner], undefined, missing); cacheArt(f.id, key, art); }
+    Object.assign(this.factions[owner].units, art.units);
   }
 
   /** The biome whose half of the map a point is in. */
@@ -87,7 +91,10 @@ export class ArtBank {
     for (const l of loaders) {
       const owner = players.map((p) => world.factionOf(p.id)).find((f) => f.biome === l) ?? null; // whose land (null: the default)
       sub(0, 'Growing the land');
-      baked.set(l, (await prebaked<BiomeArt>(owner, biomeKey(owner?.id ?? null))) ?? (await l(sub)));
+      const key = biomeKey(owner?.id ?? null);
+      let art = (await prebaked<BiomeArt>(owner, key)) ?? (await cachedArt<BiomeArt>(owner?.id ?? null, key));
+      if (!art) { art = await l(sub); cacheArt(owner?.id ?? null, key, art); }
+      baked.set(l, art);
       base++;
     }
     const biomes = players.map((p) => baked.get(world.factionOf(p.id).biome ?? biome)!);
@@ -97,7 +104,13 @@ export class ArtBank {
       const team = p.neutral ? WILD_COLORS : teams?.[p.id] ?? TEAM_COLORS[p.id % TEAM_COLORS.length];
       colours.push(team);
       if (p.neutral) factions.push(wildsArt(world, p.id, team, biomes));
-      else factions.push(f.art ? ((await prebaked<FactionArt>(f, teamKey(f.id, team))) ?? (await f.art(team, sub, only))) : placeholderArt(world, p.id, team));
+      else if (!f.art) factions.push(placeholderArt(world, p.id, team));
+      else {
+        const key = `${teamKey(f.id, team)}${only ? `.${[...only].sort().join('+')}` : ''}`;
+        let art = (await prebaked<FactionArt>(f, teamKey(f.id, team))) ?? (await cachedArt<FactionArt>(f.id, key));
+        if (!art) { art = await f.art(team, sub, only); cacheArt(f.id, key, art); }
+        factions.push(art);
+      }
       base++;
     }
     onProgress(1, 'Ready');
