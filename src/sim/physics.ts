@@ -87,9 +87,11 @@ export const K = {
   foodPerFrameKg: 1.5, // a kilo of frame (health and plate) costs what a kilo of muscle does
   trainBaseSec: 6,
   trainSecPerKg: 1 / 12,
-  /** Plate: a blow landing on it loses this much damage per unit of plate thickness (frame kg over body surface, ∝ mass^⅔)... */
+  /** Share of a body that's skeleton: frame that holds it up, not plate. Only frame beyond it armours. */
+  skeletonShare: 0.15,
+  /** Plate: a blow landing on it loses this much damage per unit of plate thickness (plate kg over body surface, ∝ mass^⅔)... */
   platePerThickness: 4,
-  /** ...and it covers this × the body's frame share of it (the rest is gaps a blow can find), up to plateMaxCover. */
+  /** ...and it covers this × the body's plate share of it (the rest is gaps a blow can find), up to plateMaxCover. */
   coverPerFrame: 1.6,
   plateMaxCover: 0.9,
   /** However thick the plate, a blow on it always does at least this share of its damage (bruising through it). */
@@ -260,8 +262,10 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   const maxHp = K.hpPerFrameKg * frameMass + K.hpPerKg * mass;
   // plate: frame spread over the body's surface (a shell, bone, mail): the thicker, the more of a blow it soaks
   // up; how much of the body it covers goes with the share that's frame
-  const armour = K.platePerThickness * (frameMass / Math.pow(mass, 2 / 3));
-  const coverage = Math.min(K.plateMaxCover, K.coverPerFrame * physique.frame);
+  // (the skeleton's share of the frame holds the body up; only what's beyond it is plate)
+  const plateShare = Math.max(0, physique.frame - K.skeletonShare);
+  const armour = K.platePerThickness * ((plateShare * mass) / Math.pow(mass, 2 / 3));
+  const coverage = Math.min(K.plateMaxCover, K.coverPerFrame * plateShare);
   const maxCalories = K.calPerReserveKg * reserveMass + K.calPerKg * mass;
   // work refinement w: gathers, walks and carries w× as much (applied below)
   const workRefinement = Math.max(1, (spec.workRefinement ?? 1) + techWork);
