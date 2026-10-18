@@ -1,16 +1,10 @@
 // Fenfolk art: baked from their own models with the shared bake3d kit.
-import type { FactionArt, TeamColors, UnitArt } from '../../art/contract';
+import type { FactionArt, TeamColors } from '../../art/contract';
 import { Baker } from '../../kits/bake3d/baker';
 import { toBitmaps } from '../../kits/bake3d/bitmaps';
+import { VOICES } from './voices';
 import { buildings as allBuildings, units as allUnits } from './index';
 import { fenBanner, fenWantFlag } from './buildings';
-
-/** High, chirping voices; the toad croaks. */
-const VOICES: Record<string, UnitArt['sounds']> = {
-  fenling: { voice: { vowel: 'i', timbre: 'triangle', pitch: 330 } },
-  reedguard: { voice: { vowel: 'e', timbre: 'square', pitch: 240 } },
-  'bog-toad': { voice: { vowel: 'o', timbre: 'square', pitch: 60 } },
-};
 
 export async function bakeArt(team: TeamColors, onProgress?: (f: number, label: string) => void, only?: string[]): Promise<FactionArt> {
   const baker = new Baker();
@@ -25,7 +19,7 @@ export async function bakeArt(team: TeamColors, onProgress?: (f: number, label: 
     art.units[u.id] = await baker.bakeUnit(u.model, team, { withCarry: carry(u.id), fly: !!u.flight, brace: !!u.attack?.shaft, sidearm: !!u.attack?.sidearm }, () => {
       if (++done % 24 === 0) onProgress?.(done / total, `Wading in the ${u.name}s`);
     });
-    art.units[u.id].sounds = VOICES[u.id];
+    art.units[u.id].sounds = { voices: VOICES[u.id] };
   }
   for (const b of buildings) {
     onProgress?.(done / total, `Raising the ${b.name}`);

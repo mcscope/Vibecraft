@@ -166,11 +166,11 @@ async function run(g: GameSetup): Promise<void> {
     local.issue(cmd);
     // the first unit given an order answers it
     const first = 'units' in cmd ? cmd.units.map((id) => world.units.get(id)).find((u) => u && u.owner === HUMAN) : undefined;
-    if (first) audio.unitLine(first.owner, first.specId, 'acknowledge');
+    if (first) audio.unitLine(first.owner, first.specId, 'acknowledge', undefined, first.id);
   });
   input.onSelect = (ids) => {
     const u = ids.map((id) => world.units.get(id)).find((x) => x && x.owner === HUMAN);
-    if (u) audio.unitLine(u.owner, u.specId, 'select');
+    if (u) audio.unitLine(u.owner, u.specId, 'select', undefined, u.id);
   };
   const hud = new Hud(world, HUMAN, bank, {
     train: (building, specId) => local.issue({ type: 'train', building, specId }),

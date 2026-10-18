@@ -9,6 +9,7 @@ import type { Camera } from '../render/camera';
 import type { ArtBank } from '../render/artbank';
 import type { World, WorldEvent } from '../sim/world';
 import { settings, onSettings } from '../ui/settings';
+import { speak, voiceFor } from './voice';
 
 type Timbre = NonNullable<SynthRecipe['timbre']>;
 const FORMANTS: Record<NonNullable<SynthRecipe['vowel']>, [number, number]> = {
@@ -108,12 +109,14 @@ export class AudioEngine {
           if (!this.allow('death', 3, 300)) break;
           const art = this.bank.unit(e.owner, e.specId);
           const at = this.where(cam, e.x, e.y);
+          const said = voiceFor(art?.sounds?.voices, this.world.factionOf(e.owner).id, e.specId, e.id);
           if (art?.sounds?.death) this.play(art.sounds.death, at);
+          else if (said) speak(this.ctx!, this.out(at, 0.5), said, 'death');
           else { const v = this.voiceOf(art, e.owner, e.specId); this.synth({ kind: 'voice', ...v, pitch: v.pitch * 0.7, vowel: 'o', length: 0.55, count: 1 }, at, 0.6); }
           break;
         }
         case 'trained':
-          if (e.owner === this.player) { const u = this.world.units.get(e.id); if (u) this.unitLine(u.owner, u.specId, 'select', { pan: 0, gain: 0.6 }); }
+          if (e.owner === this.player) { const u = this.world.units.get(e.id); if (u) this.unitLine(u.owner, u.specId, 'select', { pan: 0, gain: 0.6 }, u.id); }
           break;
         case 'built':
           if (e.owner === this.player) this.chord([0, 4, 7, 12], 330, 0.5);
@@ -132,11 +135,14 @@ export class AudioEngine {
   }
 
   /** The player selected or ordered a unit: it answers. */
-  unitLine(owner: number, specId: string, line: 'select' | 'acknowledge', at: Where = { pan: 0, gain: 0.8 }): void {
+  unitLine(owner: number, specId: string, line: 'select' | 'acknowledge', at: Where = { pan: 0, gain: 0.8 }, unitId = 0): void {
     if (!this.ctx || !this.allow(`line-${line}`, 1, 160)) return;
     const art = this.bank.unit(owner, specId);
     const custom = art?.sounds?.[line];
     if (custom) { this.play(custom, at); return; }
+    // its own voice (one of its type's, by its id), else one derived from its body
+    const said = voiceFor(art?.sounds?.voices, this.world.factionOf(owner).id, specId, unitId);
+    if (said) { speak(this.ctx, this.out(at, 0.55), said, line); return; }
     const v = this.voiceOf(art, owner, specId);
     if (line === 'select') this.synth({ kind: 'voice', ...v, length: 0.2, count: 1 }, at, 0.55);
     else this.synth({ kind: 'voice', ...v, pitch: v.pitch * 1.12, length: 0.13, count: 2 }, at, 0.55);

@@ -13,12 +13,13 @@ import { TEAM_COLORS } from './render/artbank';
 import { statsTable } from './ui/hud';
 import { esc, f1, n0 } from './ui/format';
 import { buildingAbilityLines, unitAbilityLines } from './sim/abilities';
+import { setStruck, speak, struckVoices, voiceKey, type VoiceLine } from './audio/voice';
 
 const FACTIONS: FactionSpec[] = [meadowfolk, fenfolk, training];
 const ANIMS: ArtAnim[] = ['idle', 'walk', 'attack', 'gather', 'eat', 'tired', 'die', 'carryFood', 'carryWood', 'carryCrystal'];
 const FACING = ['E', 'SE', 'S', 'SW', 'W', 'NW', 'N', 'NE'];
 
-type Sel = { kind: 'unit' | 'building' | 'tech'; id: string };
+type Sel = { kind: 'unit' | 'building' | 'tech' | 'voices'; id: string };
 
 const $ = <T extends HTMLElement>(sel: string) => document.querySelector<T>(sel)!;
 const status = $('#status'), tree = $('#tree'), detail = $('#detail'), nav = $('#factions');
@@ -189,6 +190,43 @@ function unitAbilities(u: UnitSpec): string[] {
   return out;
 }
 
+// ── Voices: hear each unit's voices, and strike out any you don't like (the game then leaves them out)
+
+let audio: AudioContext | null = null;
+function say(unitId: string, i: number, line: VoiceLine): void {
+  const v = art?.units[unitId]?.sounds?.voices?.[i];
+  if (!v) return;
+  audio ??= new AudioContext();
+  const g = audio.createGain();
+  g.gain.value = 0.5; g.connect(audio.destination);
+  speak(audio, g, v, line);
+}
+
+function voiceRows(unitId: string): string {
+  const voices = art?.units[unitId]?.sounds?.voices;
+  if (!art) return '<p class="dim">Loading voices…</p>';
+  if (!voices?.length) return '<p class="dim">No voices: it speaks with one derived from its body.</p>';
+  const struck = struckVoices();
+  return voices.map((v, i) => {
+    const key = voiceKey(faction.id, unitId, i), out = struck.has(key);
+    const desc = `${n0(v.pitch)} Hz · ${v.timbre ?? 'saw'} · "${v.vowels ?? 'ao'}" · ${v.consonant ?? 'soft'}${v.vibrato ? ' · vibrato' : ''}${v.breath ? ' · breathy' : ''}`;
+    return `<div class="voice ${out ? 'struck' : ''}"><b>Voice ${i + 1}</b>
+      <button data-say="${unitId}/${i}/select" title="When selected">▶ select</button>
+      <button data-say="${unitId}/${i}/acknowledge" title="When given an order">▶ order</button>
+      <button data-say="${unitId}/${i}/death" title="When it dies">▶ death</button>
+      <button data-strike="${key}" class="x" title="${out ? 'Bring this voice back' : 'Strike this voice out of the game'}">${out ? '↺' : '✕'}</button>
+      <span class="dim">${esc(desc)}</span></div>`;
+  }).join('');
+}
+
+function voicesBoard(): string {
+  const units = faction.units.filter((u) => art?.units[u.id]);
+  const struck = [...struckVoices()].filter((k) => k.startsWith(`${faction.id}/`));
+  return `<div class="dhead"><h2>${esc(faction.name)}: voices</h2></div>
+    <p>Each unit has a few voices, and each unit in play speaks with one of them. Press ▶ to hear a line. Press ✕ to strike a voice: the game leaves it out (in this browser). Struck: ${struck.length ? `<code>${struck.map(esc).join(', ')}</code>` : 'none'}.</p>
+    ${units.map((u) => `<h3>${img('unit', u.id, 28, 'vicon')} ${esc(u.name)}</h3>${voiceRows(u.id)}`).join('') || '<p class="dim">Loading…</p>'}`;
+}
+
 function unitDetail(u: UnitSpec): string {
   const d = derive(u);
   const ua = art?.units[u.id];
@@ -204,6 +242,8 @@ function unitDetail(u: UnitSpec): string {
     <p class="desc">${esc(u.description)}</p>
     <h3>Abilities</h3>
     <ul class="abil">${unitAbilities(u).map((a) => `<li>${a}</li>`).join('')}</ul>
+    <h3>Voices <a class="small" href="#${faction.id}/voices">every unit's →</a></h3>
+    ${voiceRows(u.id)}
     <h3>Where</h3>
     <div class="facts">
       ${row('Trained at', list(trainedAt(u).map((b) => link('building', b.id, b.name))))}
@@ -304,6 +344,7 @@ function renderDetail(): void {
       <p>Pick anything in the tree to see its art, abilities and numbers. Every stat is derived from the design's physical description, so these are exactly what the game uses.</p></div>`;
     return;
   }
+  if (sel.kind === 'voices') { detail.innerHTML = voicesBoard(); detail.scrollTop = 0; return; }
   const u = sel.kind === 'unit' ? unitById(sel.id) : undefined;
   const b = sel.kind === 'building' ? buildingById(sel.id) : undefined;
   const t = sel.kind === 'tech' ? techById(sel.id) : undefined;
@@ -332,7 +373,7 @@ function renderDetail(): void {
 function parseHash(): void {
   const [fid, kind, id] = location.hash.slice(1).split('/');
   const f = FACTIONS.find((x) => x.id === fid) ?? FACTIONS[0];
-  const s: Sel | null = kind && id && ['unit', 'building', 'tech'].includes(kind) ? { kind: kind as Sel['kind'], id } : null;
+  const s: Sel | null = kind === 'voices' ? { kind: 'voices', id: '' } : kind && id && ['unit', 'building', 'tech'].includes(kind) ? { kind: kind as Sel['kind'], id } : null;
   void show(f, s);
 }
 
@@ -342,7 +383,8 @@ async function show(f: FactionSpec, s: Sel | null): Promise<void> {
   const switched = f !== faction || !nav.innerHTML;
   faction = f;
   sel = s;
-  nav.innerHTML = FACTIONS.map((x) => `<a href="#${x.id}" class="${x === faction ? 'on' : ''}">${esc(x.name)}</a>`).join('');
+  nav.innerHTML = FACTIONS.map((x) => `<a href="#${x.id}" class="${x === faction && sel?.kind !== 'voices' ? 'on' : ''}">${esc(x.name)}</a>`).join('')
+    + `<a href="#${faction.id}/voices" class="${sel?.kind === 'voices' ? 'on' : ''}">♪ Voices</a>`;
   if (switched) {
     art = null;
     renderTree(); renderDetail();
@@ -363,6 +405,8 @@ tree.addEventListener('click', (e) => {
 });
 detail.addEventListener('click', (e) => {
   const el = e.target as HTMLElement;
+  if (el.dataset.say) { const [unit, i, line] = el.dataset.say.split('/'); say(unit, +i, line as VoiceLine); return; }
+  if (el.dataset.strike) { setStruck(el.dataset.strike, !struckVoices().has(el.dataset.strike)); renderDetail(); return; }
   if (el.dataset.anim) { view.anim = el.dataset.anim as ArtAnim; view.t0 = performance.now(); }
   else if (el.dataset.facing !== undefined) view.facing = el.dataset.facing === '' ? null : +el.dataset.facing;
   else return;

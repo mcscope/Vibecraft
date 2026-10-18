@@ -1,19 +1,10 @@
 // Meadowfolk art: bake every unit and building model into contract sprites.
-import type { FactionArt, TeamColors, UnitArt } from '../../art/contract';
+import type { FactionArt, TeamColors } from '../../art/contract';
 import { Baker } from '../../kits/bake3d/baker';
 import { toBitmaps } from '../../kits/bake3d/bitmaps';
+import { VOICES } from './voices';
 import { buildings as allBuildings, units as allUnits } from './index';
 import { rallyFlag, wantFlag } from './buildings';
-
-/** Voices for the default sound design (pitch drops with size anyway; these add character). */
-const VOICES: Record<string, UnitArt['sounds']> = {
-  villager: { voice: { vowel: 'o', timbre: 'triangle' } },
-  slinger: { voice: { vowel: 'e', timbre: 'square' } },
-  maceman: { voice: { vowel: 'a', timbre: 'saw' } },
-  lynx: { voice: { vowel: 'a', timbre: 'saw', pitch: 160 } },
-  hurlhorn: { voice: { vowel: 'u', timbre: 'saw', pitch: 70 } },
-  mule: { voice: { vowel: 'i', timbre: 'square', pitch: 260 } },
-};
 
 export async function bakeArt(team: TeamColors, onProgress?: (f: number, label: string) => void, only?: string[]): Promise<FactionArt> {
   const baker = new Baker();
@@ -27,7 +18,7 @@ export async function bakeArt(team: TeamColors, onProgress?: (f: number, label: 
     art.units[u.id] = await baker.bakeUnit(u.model, team, { withCarry: carry(u.id), brace: !!u.attack?.shaft, sidearm: !!u.attack?.sidearm }, () => {
       if (++done % 24 === 0) onProgress?.(done / total, `Mustering ${u.name}`);
     });
-    art.units[u.id].sounds = VOICES[u.id];
+    art.units[u.id].sounds = { voices: VOICES[u.id] };
   }
   for (const b of buildings) {
     onProgress?.(done / total, `Raising the ${b.name}`);
