@@ -5,7 +5,7 @@ import { meadowfolk } from './factions/meadowfolk';
 import type { FactionSpec } from './factions/types';
 import { loadUp } from './sim/abilities/bearer';
 import { provingGrounds, type Scenario } from './sim/scenarios';
-import type { World } from './sim/world';
+import { TICK_RATE, type World } from './sim/world';
 
 export interface Lesson {
   title: string;
@@ -17,6 +17,8 @@ export interface Lesson {
   /** Where the camera starts. */
   look: [number, number];
   setup(w: World): void;
+  /** Each tick, after setup (timed events: an attack that comes later). */
+  tick?(w: World): void;
 }
 
 const FOE = 1;
@@ -115,15 +117,21 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Groupings',
     you: meadowfolk, foe: meadowfolk, look: [26, 26],
-    text: `<p>Who wins depends on <b>how bodies meet</b>, not on a bonus table. Enemy lancers are about to charge you.</p>
+    text: `<p>Who wins depends on <b>how bodies meet</b>, not on a bonus table. Enemy lancers will charge you in <b>30 seconds</b>.</p>
 <p>As it stands, your pikemen are a tight block in front, with the slingers behind. Pikemen plant their pikes by themselves when they see a charge coming, so lancers run onto set points and take the whole collision. <b>Watch</b> it play out.</p>
-<p><b>Then try:</b> press Restart, and before the lancers arrive, scatter the pikemen across the field, or move the slingers out in front. Same units, different grouping, and the same lancers win. The <b>Arena</b> scores every matchup if you want the numbers.</p>`,
+<p><b>Then try:</b> press Restart, and in those 30 seconds scatter the pikemen across the field, or move the slingers out in front. Same units, different grouping, and the same lancers win. The <b>Arena</b> scores every matchup if you want the numbers.</p>`,
     setup(w) {
       block(w, 0, 'pikeman', 8, 20, 26, 4);
       block(w, 0, 'slinger', 6, 15, 26, 3);
       block(w, 0, 'maceman', 4, 17, 34, 2);
-      const lancers = block(w, FOE, 'lynx', 4, 44, 26, 2, 4);
-      w.enqueue({ player: FOE, cmd: { type: 'attackMove', units: lancers, x: 12, y: 26, charge: true } });
+      hold(w, block(w, FOE, 'lynx', 4, 44, 26, 2, 4));
+    },
+    // they charge after 30 s: time to read, and to rearrange your units
+    tick(w) {
+      if (w.tick !== 30 * TICK_RATE) return;
+      const ids = w.unitsOf(FOE).map((u) => u.id);
+      w.enqueue({ player: FOE, cmd: { type: 'stance', units: ids, stance: 'auto' } });
+      w.enqueue({ player: FOE, cmd: { type: 'attackMove', units: ids, x: 12, y: 26, charge: true } });
     },
   },
   {
@@ -144,5 +152,5 @@ export const LESSONS: Lesson[] = [
 /** The lesson's scenario: the Proving Grounds field, no wildlife, nobody wins. */
 export function tutorialScenario(lesson: Lesson): Scenario {
   const pg = provingGrounds();
-  return { id: 'tutorial', victory: false, wildlife: false, map: (seed) => pg.map(seed), setup: (w) => lesson.setup(w) };
+  return { id: 'tutorial', victory: false, wildlife: false, map: (seed) => pg.map(seed), setup: (w) => lesson.setup(w), tick: lesson.tick && ((w) => lesson.tick!(w)) };
 }
