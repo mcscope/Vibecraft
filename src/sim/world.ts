@@ -284,7 +284,7 @@ function runUpTiles(u: Unit): number {
 function chargePays(u: Unit, t: Unit): boolean {
   const st = u.stats, v = st.sprint * M_PER_TILE;
   const mu = (st.mass * t.stats.mass) / (st.mass + t.stats.mass), energy = 0.5 * mu * v * v;
-  const delivered = st.minReach > 0 ? energy : Math.min(energy, st.holdForce * K.blowDepth);
+  const delivered = Math.min(energy, (st.minReach > 0 ? st.shaftForce : st.holdForce) * K.blowDepth);
   const runUp = (v * v) / (2 * K.traction * K.gravity); // m
   const cycle = (4 * runUp) / v + Math.PI / st.turnRate; // out and back at half speed on average, plus turning round
   return (st.damage + delivered * K.strikeEfficiency * K.damageScale) / cycle > 1.5 * (st.damage / st.cooldown);
@@ -319,12 +319,12 @@ function collisionEnergy(u: Unit, t: Unit | null, tx: number, ty: number): { del
   const energy = 0.5 * mu * closing * closing;
   // the weapon passes on only what the body can hold behind it (work = force × depth), unless the
   // shaft is set: planted (standing, the ground behind its butt) or couched (driven straight at the
-  // target, the charging body locked behind it); then it takes the whole collision
+  // target, the charging body locked behind it); then it takes what the pole can before it buckles
   const v = Math.hypot(u.vx, u.vy);
   const planted = v * M_PER_TILE < 0.5;
   const couched = v > u.stats.speed && (u.vx * dx + u.vy * dy) / (v * d) > 0.8;
   const set = u.stats.minReach > 0 && ((planted && u.stats.canPlant) || couched);
-  return { delivered: set ? energy : Math.min(energy, u.stats.holdForce * K.blowDepth), mu };
+  return { delivered: Math.min(energy, (set ? u.stats.shaftForce : u.stats.holdForce) * K.blowDepth), mu };
 }
 
 export interface Projectile {

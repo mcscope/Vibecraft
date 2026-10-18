@@ -132,6 +132,9 @@ export const K = {
   limbShare: 0.06,
   /** kg of wood per metre of spear shaft. */
   shaftKgPerM: 1.5,
+  /** Wood: density (kg/m³) and stiffness (Young's modulus, Pa), for how hard a shaft can be pushed before it buckles. */
+  woodDensity: 700,
+  woodStiffness: 11e9,
 } as const;
 
 export interface DerivedStats {
@@ -183,6 +186,8 @@ export interface DerivedStats {
   turnRate: number;
   /** Newtons it can hold behind its weapon (from its muscle): caps how much of a collision a blow passes on, unless braced. */
   holdForce: number;
+  /** Newtons a set shaft (planted or couched) takes before it buckles: π²·E·I / L² over the length ahead of the hands. 0 without one. */
+  shaftForce: number;
   /** Strikers with a shaft: tiles inside which the point can't be brought to bear (it chokes up only so far). 0 otherwise. */
   minReach: number;
   /** Can it plant its shaft against a charge (and hold ground with it)? */
@@ -326,6 +331,8 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
     limbSpeed, maxAttackEnergy, crystalVelocity, attackEnergy, damage, attackCalories, cooldown, range,
     dps: damage / cooldown,
     holdForce: K.holdForcePerMuscleKg * muscleMass,
+    // a round pole of its wood's cross-section A (I = A² / 4π), pushed along its length (Euler buckling)
+    shaftForce: shaft ? (Math.PI ** 2 * K.woodStiffness * ((K.shaftKgPerM / K.woodDensity) ** 2 / (4 * Math.PI))) / (0.75 * shaft) ** 2 : 0,
     turnRate: (() => {
       // the weapon's moment of inertia about the hands (¾ of a shaft and the crystal out front), swung round
       // by the arms' torque (holding force on a half-metre lever): a quarter turn takes √(2·θ·I/τ)
