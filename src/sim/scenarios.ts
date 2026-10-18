@@ -140,3 +140,40 @@ export function provingGrounds(): Scenario {
 }
 
 export const SCENARIOS = { skirmish, provingGrounds };
+
+/**
+ * Faceoff (?mode=faceoff, a showcase): the Proving Grounds field with two armies in its ranks, player 0 on the
+ * left facing south-east and player 1 mirrored on the right facing south-west, each everything it can train.
+ */
+export function faceoff(): Scenario {
+  const pg = provingGrounds();
+  return {
+    id: 'faceoff',
+    victory: false,
+    inertPlayers: [0, 1],
+    wildlife: false,
+    map: (seed) => pg.map(seed),
+    setup(w) {
+      for (const owner of [0, 1]) {
+        const f = w.factionOf(owner);
+        const trained = new Set((f.buildings ?? []).flatMap((b) => b.trains ?? []));
+        // ranks one behind another along the way it faces (map +x is south-east on screen, +y south-west);
+        // player 1 is the same layout mirrored across the diagonal
+        let along = 10;
+        for (const u of f.units) {
+          if (!trained.has(u.id) || u.id === f.carterId) continue;
+          const s = w.specOf(owner, u.id);
+          if (!s) continue;
+          const n = u.id === f.workerId ? 4 : u.mass > 100 ? 2 : u.mass > 50 ? 4 : 6;
+          const gap = s.stats.radius * 2 + 0.5;
+          for (let i = 0; i < n; i++) {
+            const across = 25 + (i - (n - 1) / 2) * gap;
+            if (owner === 0) w.spawnAt(0, u.id, along, across, 0);
+            else w.spawnAt(1, u.id, across, along, 2);
+          }
+          along += Math.max(1.4, gap);
+        }
+      }
+    },
+  };
+}

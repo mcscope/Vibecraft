@@ -4,7 +4,7 @@ import { PLAYABLE } from './factions';
 import type { FactionSpec } from './factions/types';
 import { training } from './factions/training';
 import { World, DT } from './sim/world';
-import { provingGrounds, skirmish } from './sim/scenarios';
+import { faceoff, provingGrounds, skirmish } from './sim/scenarios';
 import { MAPS } from './sim/map';
 import { Lockstep, LocalInput, LoopbackTransport, type CommandSource, type Transport } from './net/lockstep';
 import { NetTransport } from './net/relayClient';
@@ -23,7 +23,7 @@ import { Minimap } from './ui/minimap';
 import { AudioEngine } from './audio/engine';
 import { mountSettingsDialog, onSettings, settings } from './ui/settings';
 
-type Mode = 'demo' | 'skirmish' | 'spectate' | 'online';
+type Mode = 'demo' | 'skirmish' | 'spectate' | 'online' | 'faceoff';
 const params = new URLSearchParams(location.search);
 // Seed choice happens outside the sim, so Math.random is fine here.
 const seed = Number(params.get('seed') ?? Math.floor(Math.random() * 1e9));
@@ -72,14 +72,16 @@ else {
 }
 
 async function start(m: Mode): Promise<void> {
-  const world = m === 'demo'
+  const world = m === 'faceoff'
+    ? new World({ seed, scenario: faceoff(), players: [{ name: pick('you').name, faction: pick('you') }, { name: pick('foe').name, faction: pick('foe') }] })
+    : m === 'demo'
     ? new World({ seed, scenario: provingGrounds(), players: [{ name: 'You', faction: pick('you') }, { name: 'Training Grounds', faction: training }] })
     : new World({ seed, scenario: skirmish(mapSel.value), players: [{ name: m === 'spectate' ? pick('you').name : 'You', faction: pick('you') }, { name: pick('foe').name, faction: pick('foe') }] });
   await run({
     mode: m, world, me: 0, transport: new LoopbackTransport(), delay: 2,
     sources: (local) => {
       const s: CommandSource[] = m === 'spectate' ? [new SkirmishAI(0), new SkirmishAI(1)] : m === 'skirmish' ? [local, new SkirmishAI(1)] : [local];
-      if (m === 'demo') s.push({ player: 1, poll: () => [] }); // the dummies never act
+      if (m === 'demo' || m === 'faceoff') s.push({ player: 1, poll: () => [] }); // the dummies never act (a faceoff just stands)
       return s;
     },
   });
@@ -147,7 +149,7 @@ async function run(g: GameSetup): Promise<void> {
   await renderer.init();
   const minimap = new Minimap(document.getElementById('minimap') as HTMLCanvasElement, world, 200, (x, y) => bank.biomeAt(x, y).ground);
   // fog of war for whoever's playing (spectators and the proving grounds see everything)
-  renderer.viewer = minimap.viewer = m === 'spectate' || m === 'demo' ? -1 : HUMAN;
+  renderer.viewer = minimap.viewer = m === 'spectate' || m === 'demo' || m === 'faceoff' ? -1 : HUMAN;
   const audio = new AudioEngine(world, bank, HUMAN);
   const input = new Input(canvas, world, renderer, minimap, HUMAN, (cmd) => {
     local.issue(cmd);
@@ -176,7 +178,8 @@ async function run(g: GameSetup): Promise<void> {
   window.addEventListener('resize', resize);
   resize();
 
-  if (m === 'demo') {
+  if (m === 'faceoff') renderer.cam.centerOn(25, 25);
+  else if (m === 'demo') {
     renderer.cam.centerOn(22, 26);
     input.setSelection(world.unitsOf(HUMAN).filter((u) => u.specId !== world.factionOf(HUMAN).workerId).map((u) => u.id));
   } else {

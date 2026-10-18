@@ -10,7 +10,7 @@
   <a href="#development">Development</a>
 </p>
 
-![A Meadowfolk town centre at the start of a game](docs/screenshots/spectate.png)
+![The Fenfolk and the Meadowfolk armies facing each other across the field](docs/screenshots/header.png)
 
 ---
 

@@ -165,7 +165,6 @@ export interface Unit {
   staggered: number;
   /** How it meets the enemy: 'hold' stands its ground (strikes what comes to it, shafts set), 'charge' sprints in from any distance and runs through, 'auto' decides. */
   stance: 'auto' | 'hold' | 'charge';
-  /** Riding out to come round for another charge: where it's heading before it wheels (null: not). */
   /** Where it faces (radians, map space; `heading` is this as an octant) and what turning it has left this tick. */
   facing: number; turnTick: number; turnLeft: number;
   /** How it's actually been moving lately (tiles/s, smoothed over ~½ s): what an onlooker can see, and leads a throw by. */
