@@ -50,9 +50,11 @@ export interface Settings {
   sfxVolume: number;
   musicVolume: number;
   muted: boolean;
+  /** Units answer with recorded voice lines (audio/clips.ts). */
+  voices: boolean;
 }
 
-const DEFAULTS: Settings = { scheme: 'wasd', edgeScroll: true, scrollSpeed: 1, perf: true, cartDebug: false, volume: 0.8, sfxVolume: 0.9, musicVolume: 0.6, muted: false };
+const DEFAULTS: Settings = { scheme: 'wasd', edgeScroll: true, scrollSpeed: 1, perf: true, cartDebug: false, volume: 0.8, sfxVolume: 0.9, musicVolume: 0.6, muted: false, voices: false };
 const KEY = 'vibecraft.settings';
 
 function load(): Settings {
@@ -101,6 +103,7 @@ export function mountSettingsDialog(): void {
       <label class="opt inline">Master <input type="range" name="volume" min="0" max="1" step="0.05" value="${s.volume}"> <span>${Math.round(s.volume * 100)}%</span></label>
       <label class="opt inline">Effects <input type="range" name="sfxVolume" min="0" max="1" step="0.05" value="${s.sfxVolume}"> <span>${Math.round(s.sfxVolume * 100)}%</span></label>
       <label class="opt inline">Music <input type="range" name="musicVolume" min="0" max="1" step="0.05" value="${s.musicVolume}"> <span>${Math.round(s.musicVolume * 100)}%</span></label>
+      <label class="opt inline"><input type="checkbox" name="voices" ${s.voices ? 'checked' : ''}> Unit voices</label>
       <label class="opt inline"><input type="checkbox" name="muted" ${s.muted ? 'checked' : ''}> Mute (<kbd>M</kbd>)</label>
       <h3>Keys</h3>
       <table class="keys">
@@ -127,6 +130,7 @@ export function mountSettingsDialog(): void {
     else if (t.name === 'cartDebug') updateSettings({ cartDebug: t.checked });
     else if (t.name === 'volume' || t.name === 'sfxVolume' || t.name === 'musicVolume') updateSettings({ [t.name]: +t.value });
     else if (t.name === 'muted') updateSettings({ muted: t.checked });
+    else if (t.name === 'voices') updateSettings({ voices: t.checked });
     render();
   });
   dlg.querySelector('.close')!.addEventListener('click', () => toggleSettings(false));

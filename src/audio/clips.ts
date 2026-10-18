@@ -1,9 +1,12 @@
-// Recorded unit voices (public/voices: clips cut from real recordings, labelled in the Voice Lab), on only with
-// ?voices=1. A unit type steps through its clips in turn, one line per action, never one per unit; a cooldown per
+// Recorded unit voices (public/voices: clips cut from real recordings, labelled in the Voice Lab), on with the
+// "Unit voices" setting (?voices=1 / ?voices=0 overrides it). A unit type steps through its clips in turn, one line per action, never one per unit; a cooldown per
 // type and a cap on voices at once keep it from getting noisy. Each clip plays through its treatment from the lab.
 
-/** Voices are on only when asked for: ?voices=1. */
-export const VOICES_ON = new URLSearchParams(location.search).get('voices') === '1';
+import { settings } from '../ui/settings';
+
+const URL_VOICES = new URLSearchParams(location.search).get('voices');
+/** Are unit voices on? The "Unit voices" setting, unless the URL says otherwise (?voices=1 or ?voices=0). */
+export const voicesOn = (): boolean => (URL_VOICES === '1' ? true : URL_VOICES === '0' ? false : settings().voices);
 
 export type VoiceLine = 'select' | 'order' | 'attack' | 'death';
 
@@ -22,7 +25,7 @@ let playing = 0, impulse: AudioBuffer | null = null;
 const load = (): Promise<Manifest | null> => (manifest ??= fetch(BASE + 'manifest.json').then((r) => (r.ok ? r.json() : null)).catch(() => null));
 
 /** Start fetching the clips list (call once audio is allowed). */
-export function preloadVoices(): void { if (VOICES_ON) void load(); }
+export function preloadVoices(): void { if (voicesOn()) void load(); }
 
 function clip(ctx: AudioContext, id: string): Promise<AudioBuffer> {
   let b = buffers.get(id);
@@ -57,7 +60,7 @@ function room(ctx: AudioContext): AudioBuffer {
  * (a double-click's group answering the single click it follows).
  */
 export async function sayLine(ctx: AudioContext, out: AudioNode, factionId: string, specId: string, line: VoiceLine, chorus = false, echo = false): Promise<boolean> {
-  if (!VOICES_ON) return false;
+  if (!voicesOn()) return false;
   const m = await load();
   const unit = `${factionId}:${specId}`, set = m?.lines[unit];
   if (!m || !set) return false;

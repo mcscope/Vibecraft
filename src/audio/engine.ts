@@ -9,7 +9,7 @@ import type { Camera } from '../render/camera';
 import type { ArtBank } from '../render/artbank';
 import type { World, WorldEvent } from '../sim/world';
 import { settings, onSettings } from '../ui/settings';
-import { preloadVoices, sayLine, VOICES_ON } from './clips';
+import { preloadVoices, sayLine, voicesOn } from './clips';
 
 const FORMANTS: Record<NonNullable<SynthRecipe['vowel']>, [number, number]> = {
   a: [800, 1200], e: [500, 1900], i: [320, 2300], o: [500, 900], u: [350, 700],
@@ -115,7 +115,7 @@ export class AudioEngine {
           const art = this.bank.unit(e.owner, e.specId);
           const at = this.where(cam, e.x, e.y);
           if (art?.sounds?.death) this.play(art.sounds.death, at);
-          else if (VOICES_ON) void sayLine(this.ctx!, this.out(at, 0.5), this.world.factionOf(e.owner).id, e.specId, 'death');
+          else if (voicesOn()) void sayLine(this.ctx!, this.out(at, 0.5), this.world.factionOf(e.owner).id, e.specId, 'death');
           break;
         }
         case 'trained':
@@ -146,7 +146,7 @@ export class AudioEngine {
     const art = this.bank.unit(owner, specId);
     const custom = line !== 'attack' ? art?.sounds?.[line] : undefined;
     if (custom) { this.play(custom, at); return; }
-    if (VOICES_ON) void sayLine(this.ctx, this.out(at, 0.55), this.world.factionOf(owner).id, specId, line === 'acknowledge' ? 'order' : line, chorus, echo);
+    if (voicesOn()) void sayLine(this.ctx, this.out(at, 0.55), this.world.factionOf(owner).id, specId, line === 'acknowledge' ? 'order' : line, chorus, echo);
   }
 
   ui(): void { if (this.ctx) this.synth({ kind: 'pluck', pitch: 660, timbre: 'triangle', length: 0.08 }, { pan: 0, gain: 0.5 }, 0.25); }
