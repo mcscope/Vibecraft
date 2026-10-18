@@ -168,9 +168,9 @@ async function run(g: GameSetup): Promise<void> {
     const first = 'units' in cmd ? cmd.units.map((id) => world.units.get(id)).find((u) => u && u.owner === HUMAN) : undefined;
     if (first) audio.unitLine(first.owner, first.specId, cmd.type === 'attack' || (cmd.type === 'attackMove') ? 'attack' : 'acknowledge');
   });
-  input.onSelect = (ids) => {
+  input.onSelect = (ids, group) => {
     const u = ids.map((id) => world.units.get(id)).find((x) => x && x.owner === HUMAN);
-    if (u) audio.unitLine(u.owner, u.specId, 'select');
+    if (u) audio.unitLine(u.owner, u.specId, 'select', undefined, group); // a double-click answers in chorus
   };
   const hud = new Hud(world, HUMAN, bank, {
     train: (building, specId) => local.issue({ type: 'train', building, specId }),

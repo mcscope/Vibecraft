@@ -52,7 +52,7 @@ function room(ctx: AudioContext): AudioBuffer {
  * `factionId:specId` says `line` (or one of its general clips), through `out`. False if voices are off, it has no
  * clip for it, it spoke too recently, or enough voices are already going.
  */
-export async function sayLine(ctx: AudioContext, out: AudioNode, factionId: string, specId: string, line: VoiceLine): Promise<boolean> {
+export async function sayLine(ctx: AudioContext, out: AudioNode, factionId: string, specId: string, line: VoiceLine, chorus = false): Promise<boolean> {
   if (!VOICES_ON) return false;
   const m = await load();
   const unit = `${factionId}:${specId}`, set = m?.lines[unit];
@@ -60,22 +60,32 @@ export async function sayLine(ctx: AudioContext, out: AudioNode, factionId: stri
   const pool = set[line]?.length ? set[line]! : set.any ?? [];
   if (!pool.length) return false;
   const now = performance.now();
-  if (now - (last.get(unit) ?? -Infinity) < COOLDOWN_MS || playing >= MAX_AT_ONCE) return false;
+  // (a chorus answers a double-click straight after the single click's line, so it skips the cooldown)
+  if ((!chorus && now - (last.get(unit) ?? -Infinity) < COOLDOWN_MS) || playing >= MAX_AT_ONCE) return false;
   last.set(unit, now);
   // round-robin through the type's clips for this line
-  const key = `${unit}/${line}`, i = (turn.get(key) ?? 0) % pool.length;
-  turn.set(key, i + 1);
+  // (a chorus echoes the clip the single click just played: the group repeats it)
+  const key = `${unit}/${line}`, n = turn.get(key) ?? 0, i = ((chorus && n > 0 ? n - 1 : n) % pool.length + pool.length) % pool.length;
+  if (!chorus || n === 0) turn.set(key, n + 1);
   const id = pool[i], t = fxFor(m, id, unit), buf = await clip(ctx, id);
-  const s = ctx.createBufferSource(); s.buffer = buf; s.playbackRate.value = Math.pow(2, t.pitch / 12);
+  // a chorus: the whole group answers, a few voices slightly detuned, a beat apart, spread across the stereo field
+  const voices = chorus ? [[0, 0, 0], [-14, 0.025, -0.6], [11, 0.045, 0.6], [-6, 0.07, -0.25]] : [[0, 0, 0]];
+  const g0 = ctx.createGain(); g0.gain.value = chorus ? 0.55 : 1;
+  const srcs = voices.map(([cents, delay, pan]) => {
+    const s = ctx.createBufferSource(); s.buffer = buf; s.playbackRate.value = Math.pow(2, t.pitch / 12 + cents / 1200);
+    const p = ctx.createStereoPanner(); p.pan.value = pan;
+    s.connect(p).connect(g0);
+    return [s, delay] as const;
+  });
   const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = t.lowcut;
   const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = t.highcut;
   const sh = ctx.createWaveShaper();
   if (t.drive) { const n = 1024, k = t.drive * 60, c = new Float32Array(n); for (let j = 0; j < n; j++) { const x = (j / (n - 1)) * 2 - 1; c[j] = ((1 + k) * x) / (1 + k * Math.abs(x)); } sh.curve = c; }
   const g = ctx.createGain(); g.gain.value = Math.pow(10, t.gain / 20) * (t.drive ? 1 / (1 + t.drive * 1.5) : 1);
-  s.connect(hp).connect(lp).connect(sh).connect(g).connect(out);
+  g0.connect(hp).connect(lp).connect(sh).connect(g).connect(out);
   if (t.reverb) { const rv = ctx.createConvolver(); rv.buffer = room(ctx); const wet = ctx.createGain(); wet.gain.value = t.reverb; g.connect(rv).connect(wet).connect(out); }
   playing++;
-  s.onended = () => { playing--; };
-  s.start();
+  srcs[0][0].onended = () => { playing--; };
+  for (const [s, delay] of srcs) s.start(ctx.currentTime + delay);
   return true;
 }

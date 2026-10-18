@@ -51,7 +51,7 @@ export async function runArena(params: URLSearchParams): Promise<void> {
     const first = 'units' in cmd ? cmd.units.map((id) => world.units.get(id)).find((u) => u && u.owner === input.player) : undefined;
     if (first) audio.unitLine(first.owner, first.specId, cmd.type === 'attack' || cmd.type === 'attackMove' ? 'attack' : 'acknowledge');
   });
-  input.onSelect = (ids) => { const u = ids.map((id) => world.units.get(id)).find(Boolean); if (u) audio.unitLine(u.owner, u.specId, 'select'); };
+  input.onSelect = (ids, group) => { const u = ids.map((id) => world.units.get(id)).find(Boolean); if (u) audio.unitLine(u.owner, u.specId, 'select', undefined, group); };
   let control = params.get('control') === '1';
   const resize = () => renderer.resize(window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
   window.addEventListener('resize', resize);

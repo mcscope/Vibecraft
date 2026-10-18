@@ -67,13 +67,13 @@ export class Input {
     return [...this.rs.selected].filter((id) => this.world.units.get(id)?.owner === this.player);
   }
 
-  /** Called when the player's own selection changes (for unit voice lines). */
-  onSelect?: (ids: number[]) => void;
+  /** Called when the player's own selection changes (for unit voice lines); `group`: a double-click took the whole type. */
+  onSelect?: (ids: number[], group?: boolean) => void;
 
-  setSelection(ids: number[]): void {
+  setSelection(ids: number[], group = false): void {
     const before = [...this.rs.selected].join(',');
     this.rs.selected = new Set(ids);
-    if (ids.length && ids.join(',') !== before) this.onSelect?.(ids);
+    if (ids.length && ids.join(',') !== before) this.onSelect?.(ids, group);
   }
 
   update(dt: number): void {
@@ -248,7 +248,7 @@ export class Input {
         const [sx, sy] = cam.toScreen(o.x, o.y);
         return sx >= 0 && sy >= 0 && sx <= cam.width && sy <= cam.height;
       });
-      this.setSelection(same.map((o) => o.id));
+      this.setSelection(same.map((o) => o.id), true);
     } else if (id && (this.world.units.has(id) || this.world.buildings.has(id))) {
       if (e.shiftKey && u?.owner === this.player) {
         if (this.rs.selected.has(id)) this.rs.selected.delete(id); else this.rs.selected.add(id);
