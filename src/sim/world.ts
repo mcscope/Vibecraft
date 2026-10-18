@@ -1467,7 +1467,9 @@ export class World {
     if (wpn.throws) {
       u.ammo -= u.crystalMass;
       const bomb = u.airborne && u.alt > 0.5;
-      const flight = bomb ? dropTime(u.alt) : Math.max(0.25, (Math.sqrt((tx - u.x) ** 2 + (ty - u.y) ** 2) * M_PER_TILE) / (u.stats.crystalVelocity * 0.7));
+      // thrown on the low arc that reaches it (sin 2θ = g·d / v²): flat and quick close in, lobbed at the limit of its range
+      const dm = Math.hypot(tx - u.x, ty - u.y) * M_PER_TILE, cv = u.stats.crystalVelocity;
+      const flight = bomb ? dropTime(u.alt) : Math.max(0.1, dm / (cv * Math.cos(0.5 * Math.asin(Math.min(1, (K.gravity * dm) / (cv * cv))))));
       let ax = tx, ay = ty;
       if (tu) [ax, ay] = leadPoint(u, tu, flight); // lead it by how it's been moving
       const p: Projectile = {
