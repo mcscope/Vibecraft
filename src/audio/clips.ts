@@ -22,6 +22,18 @@ const buffers = new Map<string, Promise<AudioBuffer>>();
 const turn = new Map<string, number>(), last = new Map<string, number>();
 let playing = 0, impulse: AudioBuffer | null = null;
 
+// clips struck out while listening (the sound debug panel's ✕, or the Voice Lab's): never played. Shared with the
+// Voice Lab through this browser's storage (same site), so a strike in the game shows up there as a skip.
+const STRUCK_KEY = 'voicelab-struck';
+const struck = new Set<string>((() => { try { return JSON.parse(localStorage.getItem(STRUCK_KEY) || '[]') as string[]; } catch { return []; } })());
+export function strike(id: string): void {
+  struck.add(id);
+  try { localStorage.setItem(STRUCK_KEY, JSON.stringify([...struck])); } catch { /* private mode */ }
+}
+/** Every clip played, newest last (for the sound debug panel). */
+export const played: Array<{ id: string; what: string; t: number }> = [];
+const log = (id: string, what: string) => { played.push({ id, what, t: performance.now() }); if (played.length > 30) played.shift(); };
+
 const load = (): Promise<Manifest | null> => (manifest ??= fetch(BASE + 'manifest.json').then((r) => (r.ok ? r.json() : null)).catch(() => null));
 
 /** Start fetching the clips list (call once audio is allowed). */
@@ -67,7 +79,7 @@ export async function sayLine(ctx: AudioContext, out: AudioNode, factionId: stri
   // a moment's own clips mixed with the unit's general ("any line") ones; death keeps to death clips, falling back
   // to the general ones only if it has none (a cheerful grunt is no death cry)
   const own = set[line] ?? [], any = set.any ?? [];
-  const pool = line === 'death' ? (own.length ? own : any) : [...own, ...any];
+  const pool = (line === 'death' ? (own.length ? own : any) : [...own, ...any]).filter((id) => !struck.has(id));
   if (!pool.length) return false;
   const now = performance.now();
   // (an echo comes straight after the line it repeats, so it skips the cooldown)
@@ -77,6 +89,7 @@ export async function sayLine(ctx: AudioContext, out: AudioNode, factionId: stri
   const key = `${unit}/${line}`, n = turn.get(key) ?? 0, i = ((echo && n > 0 ? n - 1 : n) % pool.length + pool.length) % pool.length;
   if (!echo || n === 0) turn.set(key, n + 1);
   const id = pool[i], t = fxFor(m, id, unit), buf = await clip(ctx, id);
+  log(id, `${unit} ${line}${chorus ? ' (chorus)' : ''}`);
   // a chorus: the whole group answers, a few voices slightly detuned, a beat apart, spread across the stereo field
   const voices = chorus ? [[0, 0, 0], [-14, 0.025, -0.6], [11, 0.045, 0.6], [-6, 0.07, -0.25]] : [[0, 0, 0]];
   const g0 = ctx.createGain(); g0.gain.value = chorus ? 0.55 : 1;
@@ -107,11 +120,12 @@ export async function sayLine(ctx: AudioContext, out: AudioNode, factionId: stri
 export async function playCombat(ctx: AudioContext, out: AudioNode, kind: string): Promise<boolean> {
   const m = await load();
   const set = m?.lines[`combat:${kind}`];
-  const pool = set ? Object.values(set).flat() : [];
+  const pool = (set ? Object.values(set).flat() : []).filter((id) => !struck.has(id));
   if (!m || !pool.length) return false;
   const key = `combat:${kind}`, n = turn.get(key) ?? 0, id = pool[n % pool.length];
   turn.set(key, n + 1);
   const t = fxFor(m, id, key), buf = await clip(ctx, id);
+  log(id, key);
   const s = ctx.createBufferSource(); s.buffer = buf;
   // a touch of random pitch so repeats don't sound stamped
   s.playbackRate.value = Math.pow(2, (t.pitch + (Math.random() - 0.5) * 1.5) / 12);

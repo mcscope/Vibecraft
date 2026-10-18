@@ -10,6 +10,7 @@ import { Renderer } from '../render/renderer';
 import { Input } from '../ui/input';
 import { Minimap } from '../ui/minimap';
 import { AudioEngine } from '../audio/engine';
+import { soundDebug } from '../ui/soundDebug';
 
 const BUDGETS = [600, 1200, 2400];
 /** The panel overlays the left of the (full-window) field. */
@@ -44,6 +45,7 @@ export async function runArena(params: URLSearchParams): Promise<void> {
   const minimap = new Minimap(document.createElement('canvas'), world, 200);
   // camera, selection, pause ([P]) and speed ([ ]); with 'you command blue' on, orders go to the left side
   const audio = new AudioEngine(world, bank, 0);
+  soundDebug();
   const input = new Input(canvas, world, renderer, minimap, 0, (cmd) => {
     if (!control) return;
     world.enqueue({ player: input.player, cmd });
