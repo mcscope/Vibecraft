@@ -27,7 +27,9 @@ From the main menu:
 
 Maps: Woodlands, Steppe (after AoE2's Arabia), Water Donut, Cliff Maze and Sunken Temple (after StarCraft's Lost Temple). Pick one in the menu; online, the host picks. They're generated in `src/sim/map.ts`, so adding one is a single function.
 
-URL shortcuts: `?mode=skirmish&you=fenfolk&foe=meadowfolk&map=cliff-maze&seed=5`.
+URL shortcuts: `?mode=skirmish&you=fenfolk&foe=meadowfolk&map=cliff-maze&seed=5&ai=easy`.
+
+The AI comes in **Easy** and **Hard** (the default; pick it in the menu or with `?ai=`). Neither cheats: both see only what their own units and buildings see, and play by the same rules and commands as you. Hard thinks faster, runs a tighter economy, scouts and counters what it has seen, waits for a stronger army before attacking, and micro-manages its fights. Easy thinks every few seconds, reacts late, and attacks in small waves. `npm run aimatch` plays them against each other.
 
 ## Make your own army
 
@@ -65,7 +67,7 @@ The game runs in deterministic lockstep: only commands go over the wire, and eve
 |---|---|
 | `src/factions/` | Factions: specs, models, homeworld, wildlife. `types.ts` documents every spec field. |
 | `src/sim/` | The deterministic simulation: `world.ts`, `physics.ts` (body → stats), `logistics.ts`, `abilities/` |
-| `src/ai/` | The skirmish AI (`skirmishAI.ts`) and how it uses abilities (`abilities.ts`) |
+| `src/ai/` | The skirmish AI (`skirmishAI.ts`, with its Easy/Hard profiles) and how it uses abilities (`abilities.ts`) |
 | `src/render/`, `src/ui/` | PixiJS renderer, HUD and input |
 | `src/kits/bake3d/` | three.js sprite baker for models |
 | `src/net/` | Lockstep, relay client, faction bundles and their checks |

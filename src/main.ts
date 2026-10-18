@@ -13,7 +13,7 @@ import { openLobby } from './ui/lobby';
 import { showScore } from './ui/scoreScreen';
 import { mountChat } from './ui/chat';
 import { TEAM_COLORS } from './render/artbank';
-import { SkirmishAI } from './ai/skirmishAI';
+import { DIFFICULTIES, SkirmishAI, parseDifficulty } from './ai/skirmishAI';
 import { CartDebug } from './ui/cartDebug';
 import { Renderer } from './render/renderer';
 import { ArtBank } from './render/artbank';
@@ -33,7 +33,7 @@ const menu = document.getElementById('menu')!;
 
 // who plays whom in skirmish / spectate (remembered between visits)
 const PICK_KEY = 'vibecraft.matchup';
-const picked = (() => { try { return JSON.parse(localStorage.getItem(PICK_KEY) ?? '{}') as { you?: string; foe?: string; map?: string }; } catch { return {}; } })();
+const picked = (() => { try { return JSON.parse(localStorage.getItem(PICK_KEY) ?? '{}') as { you?: string; foe?: string; map?: string; ai?: string }; } catch { return {}; } })();
 for (const sel of menu.querySelectorAll<HTMLSelectElement>('[data-pick]')) {
   const which = sel.dataset.pick as 'you' | 'foe';
   sel.innerHTML = PLAYABLE.map((f) => `<option value="${f.id}">${f.name}</option>`).join('');
@@ -45,6 +45,12 @@ mapSel.innerHTML = MAPS.map((m) => `<option value="${m.id}" title="${m.descripti
 mapSel.value = params.get('map') ?? picked.map ?? MAPS[0].id;
 if (!mapSel.value) mapSel.value = MAPS[0].id;
 mapSel.addEventListener('change', () => { picked.map = mapSel.value; try { localStorage.setItem(PICK_KEY, JSON.stringify(picked)); } catch { /* private mode */ } });
+// how well the computer plays (it never cheats: Easy just thinks less and worse)
+const aiSel = menu.querySelector<HTMLSelectElement>('[data-ai]')!;
+aiSel.innerHTML = DIFFICULTIES.map((d) => `<option value="${d}">${d[0].toUpperCase() + d.slice(1)}</option>`).join('');
+aiSel.value = parseDifficulty(params.get('ai') ?? picked.ai);
+aiSel.addEventListener('change', () => { picked.ai = aiSel.value; try { localStorage.setItem(PICK_KEY, JSON.stringify(picked)); } catch { /* private mode */ } });
+const difficulty = () => parseDifficulty(aiSel.value);
 const pick = (which: 'you' | 'foe'): FactionSpec => PLAYABLE.find((f) => f.id === menu.querySelector<HTMLSelectElement>(`[data-pick="${which}"]`)!.value) ?? meadowfolk;
 const loading = document.getElementById('loading')!;
 const mode = params.get('mode') as Mode | 'arena' | null;
@@ -65,7 +71,7 @@ else {
     const m = (e.target as HTMLElement).closest<HTMLElement>('[data-mode]')?.dataset.mode as Mode | 'arena' | undefined;
     if (!m) return;
     if (m === 'arena') { location.href = '?mode=arena'; return; }
-    history.replaceState(null, '', `?mode=${m}&you=${pick('you').id}&foe=${pick('foe').id}&map=${mapSel.value}`);
+    history.replaceState(null, '', `?mode=${m}&you=${pick('you').id}&foe=${pick('foe').id}&map=${mapSel.value}&ai=${difficulty()}`);
     start(m);
   });
 }
@@ -77,7 +83,8 @@ async function start(m: Mode): Promise<void> {
   await run({
     mode: m, world, me: 0, transport: new LoopbackTransport(), delay: 2,
     sources: (local) => {
-      const s: CommandSource[] = m === 'spectate' ? [new SkirmishAI(0), new SkirmishAI(1)] : m === 'skirmish' ? [local, new SkirmishAI(1)] : [local];
+      const d = difficulty();
+      const s: CommandSource[] = m === 'spectate' ? [new SkirmishAI(0, d), new SkirmishAI(1, d)] : m === 'skirmish' ? [local, new SkirmishAI(1, d)] : [local];
       if (m === 'demo') s.push({ player: 1, poll: () => [] }); // the dummies never act
       return s;
     },

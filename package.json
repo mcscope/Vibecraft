@@ -10,7 +10,8 @@
     "test": "vitest run",
     "stats": "vitest run tests/stats.test.ts --reporter=verbose",
     "relay": "node scripts/relay.mjs",
-    "arena": "vite-node scripts/arena.ts"
+    "arena": "vite-node scripts/arena.ts",
+    "aimatch": "vite-node scripts/aiMatch.ts"
   },
   "devDependencies": {
     "@types/three": "^0.169.0",
