@@ -310,7 +310,7 @@ const leadAlt = (u: Unit, t: number): number => Math.max(0.3, Math.min(u.stats.f
  * close at along the line between them (in m/s: tiles × M_PER_TILE) and μ = m₁m₂/(m₁+m₂) the reduced mass
  * (a building doesn't move: μ is the striker's mass). Zero when they're drawing apart.
  */
-function collisionEnergy(u: Unit, t: Unit | null, tx: number, ty: number): { delivered: number; mu: number } {
+function collisionEnergy(u: Unit, t: Unit | null, tx: number, ty: number, shaft = true): { delivered: number; mu: number } {
   const dx = tx - u.x, dy = ty - u.y, d = Math.hypot(dx, dy) || 1;
   const rvx = u.vx - (t?.vx ?? 0), rvy = u.vy - (t?.vy ?? 0);
   const closing = ((rvx * dx + rvy * dy) / d) * M_PER_TILE; // m/s
@@ -323,7 +323,7 @@ function collisionEnergy(u: Unit, t: Unit | null, tx: number, ty: number): { del
   const v = Math.hypot(u.vx, u.vy);
   const planted = v * M_PER_TILE < 0.5;
   const couched = v > u.stats.speed && (u.vx * dx + u.vy * dy) / (v * d) > 0.8;
-  const set = u.stats.minReach > 0 && ((planted && u.stats.canPlant) || couched);
+  const set = shaft && u.stats.minReach > 0 && ((planted && u.stats.canPlant) || couched);
   return { delivered: Math.min(energy, (set ? u.stats.shaftForce : u.stats.holdForce) * K.blowDepth), mu };
 }
 
@@ -1394,6 +1394,7 @@ export class World {
     // buildings: units stop near tile centres, so anyone on a tile touching it (≤ ~0.75 from a corner) can reach
     // a flier in the air bombs: it flies right over the target and drops (sim/abilities/flight.ts)
     const range = u.airborne && wpn.throws ? BOMB_REACH : tb ? Math.max(wpn.range, 1) : wpn.range;
+    this.cutWithSidearm(u, tu, edge, range); // (it strikes in passing; it goes on as it was)
     // closing on a target near enough, a body sprints; a striker runs on through it (a charge) rather
     // than pulling up, and a thrower brakes to stop at its range
     // sprint from far enough out to reach top speed by contact (v² = 2·a·d)
@@ -1441,13 +1442,20 @@ export class World {
       return true;
     }
     if (tu && !canReach(u, tu)) return false; // a flier in the air: only thrown crystals reach it
-    // too close for a long shaft: it backs off to bring the point to bear, but a body steps backwards slowly
-    // (K.backstep of its pace), still facing its enemy, so one that presses in can stay inside the point
-    if (tu && !wpn.throws && edge < u.stats.minReach) {
-      const d = Math.hypot(u.x - tu.x, u.y - tu.y) || 1;
-      this.face(u, tx - u.x, ty - u.y);
+    // too close for a long shaft: with any enemy body inside its point (its target or another, in the way of the
+    // shaft), it can't bring the point to bear on anyone; it backs off from that body, but a body steps backwards
+    // slowly (K.backstep of its pace), still facing it, so one that presses in can stay inside the point
+    const inside = tu && !wpn.throws && u.stats.minReach > 0 ? this.insidePoint(u) : undefined;
+    if (inside && u.stats.sidearm) { // it fights it with the blade (cutWithSidearm), closing to the blade's reach
+      if (Math.hypot(inside.x - u.x, inside.y - u.y) - inside.stats.radius > u.stats.sidearm.range) this.moveTo(u, inside.x, inside.y, u.stats.sidearm.range * 0.8);
+      else this.face(u, inside.x - u.x, inside.y - u.y);
+      return true;
+    }
+    if (inside) {
+      const d = Math.hypot(u.x - inside.x, u.y - inside.y) || 1;
+      this.face(u, inside.x - u.x, inside.y - u.y);
       const back = u.stats.speed * K.backstep;
-      this.steer(u, ((u.x - tu.x) / d) * back, ((u.y - tu.y) / d) * back, (K.traction * K.gravity) / M_PER_TILE);
+      this.steer(u, ((u.x - inside.x) / d) * back, ((u.y - inside.y) / d) * back, (K.traction * K.gravity) / M_PER_TILE);
       this.step1(u, u.vx * DT, u.vy * DT, Math.hypot(u.vx, u.vy) * DT, false);
       return true;
     }
@@ -1481,17 +1489,51 @@ export class World {
     } else {
       // the blow carries the collision too: ½·μ·v² of the two bodies' closing speed, whoever is moving
       // (a charge onto a set point, or a charger's own weapon, hits as hard as the bodies meet)
-      const hit = collisionEnergy(u, tu ?? null, tx, ty);
-      this.damage(targetId, wpn.damage + hit.delivered * K.damageScale, tx, ty);
-      if (tu && hit.delivered > 0) {
-        // the blow is an impulse, equal and opposite: each body changes speed by it over its own mass,
-        // so a heavy charger ploughs on while a light body is flung (and either may be knocked off its feet)
-        const d = Math.hypot(tx - u.x, ty - u.y) || 1, nx = (tx - u.x) / d, ny = (ty - u.y) / d;
-        const impulse = Math.sqrt(2 * hit.mu * hit.delivered); // kg·m/s
-        this.shove(tu, (nx * impulse) / tu.stats.mass, (ny * impulse) / tu.stats.mass);
-        this.shove(u, (-nx * impulse) / u.stats.mass, (-ny * impulse) / u.stats.mass);
+      this.land(u, targetId, tu ?? null, tx, ty, wpn.damage, true);
+    }
+    return true;
+  }
+
+  /** A blow of `damage` lands on `targetId` at (tx, ty), carrying the collision (`shaft`: struck with its shaft, which may be set). */
+  private land(u: Unit, targetId: number, tu: Unit | null, tx: number, ty: number, damage: number, shaft: boolean): void {
+    const hit = collisionEnergy(u, tu, tx, ty, shaft);
+    this.damage(targetId, damage + hit.delivered * K.damageScale, tx, ty);
+    if (tu && hit.delivered > 0) {
+      // the blow is an impulse, equal and opposite: each body changes speed by it over its own mass,
+      // so a heavy charger ploughs on while a light body is flung (and either may be knocked off its feet)
+      const d = Math.hypot(tx - u.x, ty - u.y) || 1, nx = (tx - u.x) / d, ny = (ty - u.y) / d;
+      const impulse = Math.sqrt(2 * hit.mu * hit.delivered); // kg·m/s
+      this.shove(tu, (nx * impulse) / tu.stats.mass, (ny * impulse) / tu.stats.mass);
+      this.shove(u, (-nx * impulse) / u.stats.mass, (-ny * impulse) / u.stats.mass);
+    }
+  }
+
+  /**
+   * A sidearm (sim/abilities/sidearm.ts): where u's point can't bear on its target, it cuts at whatever enemy body is in
+   * the blade's reach across its front and flanks (its target first), riding past or pressed close. True if it struck.
+   */
+  private cutWithSidearm(u: Unit, tu: Unit | undefined, edge: number, range: number): boolean {
+    const sa = u.stats.sidearm;
+    if (!sa || u.airborne || u.cooldown > 0 || u.exhausted || u.cal < sa.attackCalories) return false;
+    const bears = (t: Unit, e: number) => e >= u.stats.minReach && e <= range && this.facingWithin(u, t.x - u.x, t.y - u.y, Math.PI * 0.2);
+    if (tu && bears(tu, edge) && !this.insidePoint(u)) return false; // the point does
+    const inBlade = (e: Unit) => e.owner !== u.owner && !e.airborne && Math.hypot(e.x - u.x, e.y - u.y) - e.stats.radius <= sa.range && this.facingWithin(u, e.x - u.x, e.y - u.y, Math.PI / 2);
+    let cut = tu && inBlade(tu) ? tu : undefined;
+    if (!cut) {
+      let best = Infinity;
+      for (const e of this.units.values()) {
+        if (this.players[e.owner]?.neutral && e !== tu) continue;
+        const d = Math.hypot(e.x - u.x, e.y - u.y);
+        if (d < best && inBlade(e)) { best = d; cut = e; }
       }
     }
+    if (!cut) return false;
+    u.cal -= sa.attackCalories;
+    u.busy = true;
+    u.cooldown = sa.cooldown; // one body: its arm rests before a blow of either
+    u.swing = Math.min(0.45, sa.cooldown * 0.8);
+    this.events.push({ type: 'attack', x: u.x, y: u.y, owner: u.owner, specId: u.specId, style: 'strike', kg: sa.crystalMass });
+    this.land(u, cut.id, cut, cut.x, cut.y, sa.damage, false);
     return true;
   }
 
@@ -2069,6 +2111,20 @@ export class World {
   stagger(u: Unit, dv: number): void {
     if (dv <= u.stats.balance) return;
     u.staggered = Math.max(u.staggered, 0.3 + dv / (K.footBrake * K.gravity));
+  }
+
+  /**
+   * The nearest enemy body on the ground inside u's shaft's point (closer than its minReach, and in front, where a
+   * blow goes: between its hands and the point, not beside or behind it), if any.
+   */
+  private insidePoint(u: Unit): Unit | undefined {
+    let best: Unit | undefined, bestD = u.stats.minReach;
+    for (const e of this.units.values()) {
+      if (e.owner === u.owner || e.airborne || !this.facingWithin(u, e.x - u.x, e.y - u.y, Math.PI * 0.2)) continue; // (its own side's shafts pass between their own ranks)
+      const d = Math.hypot(e.x - u.x, e.y - u.y) - e.stats.radius;
+      if (d < bestD) { bestD = d; best = e; }
+    }
+    return best;
   }
 
   /** Change u's velocity toward (wvx, wvy), by at most `acc`·DT (what its feet can push). */

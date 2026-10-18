@@ -214,6 +214,8 @@ export interface DerivedStats {
    * physics as a strike with IMPROVISED_KG. Absent for units with a weapon (or that can't gather).
    */
   improvised?: { damage: number; cooldown: number; range: number; attackCalories: number; crystalMass: number };
+  /** A shaft-wielder's hand weapon (attack.sidearm): a plain strike, for where its point can't bear. */
+  sidearm?: { damage: number; cooldown: number; range: number; attackCalories: number; crystalMass: number };
 }
 
 /** kg of crystal a worker grabs to fight with. */
@@ -277,7 +279,8 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   const crystalMass = Math.min(carryCapacity, Math.max(LIMITS.minCrystal, atk?.crystalMass ?? LIMITS.minCrystal));
   const maxAmmo = Math.max(1, Math.floor(carryCapacity / crystalMass));
   const ammo = throwing ? Math.min(maxAmmo, LIMITS.maxAmmo, Math.max(1, Math.floor(atk?.ammo ?? 1))) : 1;
-  const loadoutCrystal = canAttack ? crystalMass * ammo : 0;
+  const side = !throwing && atk?.shaft && atk.sidearm ? Math.max(LIMITS.minCrystal, Math.min(10, atk.sidearm.crystalMass)) : 0; // a hand weapon worn beside a shaft
+  const loadoutCrystal = canAttack ? crystalMass * ammo + side : 0;
 
   const limbSpeed = K.limbSpeedBase * Math.pow(mass / 70, 0.1) * Math.sqrt(muscleRel);
   const maxAttackEnergy = K.energyPerMuscleKg * muscleMass;
@@ -326,8 +329,13 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
     ? (() => { const a = derive({ ...spec, attack: { style: 'strike', crystalMass: IMPROVISED_KG } }, techRefinement, techWork); return { damage: a.damage, cooldown: a.cooldown, range: a.range, attackCalories: a.attackCalories, crystalMass: IMPROVISED_KG }; })()
     : undefined;
 
+  // the sidearm: the same body striking a plain blade of its crystal
+  const sidearm = side
+    ? (() => { const a = derive({ ...spec, attack: { style: 'strike', crystalMass: side } }, techRefinement, techWork); return { damage: a.damage, cooldown: a.cooldown, range: a.range, attackCalories: a.attackCalories, crystalMass: side }; })()
+    : undefined;
+
   return {
-    improvised,
+    improvised, sidearm,
     mass, physique, muscleMass, frameMass, reserveMass,
     maxHp, armour, coverage, maxCalories, speed, sprint: sprintTiles, canAttack, wheeled, gait: deriveGait(spec), flight: !!spec.flight, flyHeight: !spec.flight ? 0 : spec.flight === true ? DEFAULT_FLY_HEIGHT : spec.flight.height, carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, sight,
     limbSpeed, maxAttackEnergy, crystalVelocity, attackEnergy, damage, attackCalories, cooldown, range,

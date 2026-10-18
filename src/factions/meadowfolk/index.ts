@@ -145,7 +145,7 @@ const lynx: MeadowUnit = {
   mass: 320,
   length: 2.6, // m nose to tail: a long body, it wheels
   physique: { muscle: 0.6, frame: 0.28, reserve: 0.12 },
-  attack: { style: 'strike', crystalMass: 5, shaft: 3 }, // the couched lance it's drawn with
+  attack: { style: 'strike', crystalMass: 5, shaft: 3, sidearm: { crystalMass: 1.5 } }, // the couched lance it's drawn with, and a sword for close in
   refinement: 1.83, // as refined as its building affords
   model(b, p) {
     const fur: Mat = { color: '#bf9a62', tex: 'fur' };
