@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Make Your Army</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Alegreya+Sans:wght@400;500;700&display=swap" rel="stylesheet" />
+    <style>
+      :root { --text: #e9dfc4; --dim: #a99f86; --gold: #d8b25a; --bronze: #8a6a34; --panel-a: #2d2620; --panel-b: #1c1814; --inset: #12100d; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; background: #0d0b09; color: var(--text); font: 18px/1.55 'Alegreya Sans', system-ui, sans-serif; }
+      main { max-width: 780px; margin: 0 auto; padding: 40px 16px 80px; }
+      h1, h2 { font-family: Cinzel, serif; color: var(--gold); font-weight: 700; }
+      h1 { font-size: 40px; margin: 0 0 4px; }
+      h2 { font-size: 24px; margin: 40px 0 10px; border-bottom: 1px solid rgba(216, 178, 90, 0.3); padding-bottom: 6px; }
+      .sub { color: var(--dim); margin: 0 0 24px; }
+      a { color: var(--gold); }
+      nav { display: flex; gap: 18px; margin-bottom: 28px; font-size: 16px; }
+      code, pre { font-family: ui-monospace, Menlo, monospace; font-size: 15px; }
+      code { background: var(--inset); padding: 1px 6px; border-radius: 3px; }
+      pre { background: var(--inset); border: 1px solid #000; box-shadow: inset 0 0 0 1px rgba(216, 178, 90, 0.25); padding: 12px 14px; overflow-x: auto; white-space: pre-wrap; }
+      ol li, ul li { margin: 6px 0; }
+      .box { background: linear-gradient(180deg, var(--panel-a), var(--panel-b)); border: 1px solid #000; box-shadow: inset 0 0 0 1px var(--bronze); padding: 14px 18px; margin: 16px 0; }
+      .box b { color: var(--gold); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <nav><a href="./">← Back to the game</a><a href="https://github.com/mcscope/Vibecraft">Source on GitHub</a><a href="./codex.html">Codex</a><a href="./lab.html">Unit Lab</a></nav>
+      <h1>Make Your Army</h1>
+      <p class="sub">In VibeCraft, every player brings an army they made. You describe your people in code, usually by talking to a coding AI. The engine works out what their bodies can do.</p>
+
+      <div class="box"><b>How it stays fair:</b> you never set HP, damage, speed or cost. You shape bodies: how heavy a unit is, how much of it is muscle, frame (bone, shell, plate) or reserve, and what crystal weapon it carries. The physics prices the rest. A giant hits hard, but it's also slow, hungry and expensive, so nobody can vibecode an army that's simply better.</div>
+
+      <h2>1. Get the game running</h2>
+      <p>You need <a href="https://nodejs.org">Node.js</a> and git. Then:</p>
+      <pre>git clone https://github.com/mcscope/Vibecraft.git
+cd Vibecraft
+npm install
+npm run dev</pre>
+      <p>Open the address it prints (usually <code>http://localhost:5173</code>). That's your own copy of the game, and every change you save shows up when you reload.</p>
+
+      <h2>2. Dream up your people</h2>
+      <p>Before any code, decide who they are. Where do they live, what do they eat, how do they fight, and what's strange about them? Frog-folk of the fens, clockwork monks, a hive that grows its buildings... One clear idea makes every later choice easier.</p>
+
+      <h2>3. Ask your AI to build it</h2>
+      <p>Open the project in a coding assistant (for example Claude Code) and describe your faction. For example:</p>
+      <pre>Make me a new VibeCraft faction: the Ashwalkers, salamander-folk from a volcanic badland.
+Copy src/factions/fenfolk as a starting point. I want small fast skirmishers who throw
+hot stones, heavy basalt-shelled guards with short spears, and a lumbering lava-tortoise
+siege beast. Give them a homeworld of black rock and ember trees, and some wildlife.
+Register it in PLAYABLE and the Codex, and follow the rules in CLAUDE.md.</pre>
+      <p>The project's <code>CLAUDE.md</code> and <code>README.md</code> tell the AI how factions work, so it can follow the rules without you explaining them.</p>
+
+      <h2>4. What a faction is made of</h2>
+      <ul>
+        <li><b>Units:</b> a <code>mass</code>, a <code>physique</code> (muscle, frame, reserve) and an <code>attack</code>: strike or throw, how much crystal, and optionally a spear <code>shaft</code>, a <code>sling</code> or a <code>sidearm</code>. Long bodies have a <code>length</code> and wheel round.</li>
+        <li><b>Buildings</b> train units, research techs and store resources. Techs and buildings raise <em>refinement</em>, which makes units cheaper, never stronger.</li>
+        <li><b>Art:</b> every unit and building has a small 3D model made from boxes, spheres and limbs. The game bakes it into lit sprites.</li>
+        <li><b>Land:</b> your homeworld's ground, trees and deposits, plus the animals that roam it.</li>
+        <li><b>New abilities</b> (flying, burrowing, healing...) are added to the engine as generic, data-driven abilities that any faction can switch on. The <a href="https://github.com/mcscope/Vibecraft/blob/master/DESIGN_SPACE.md">design space</a> lists ones nobody uses yet.</li>
+      </ul>
+
+      <h2>5. Test it</h2>
+      <ul>
+        <li><b>Codex</b> and <b>Unit Lab</b> show what physics made of each body.</li>
+        <li><b>Arena</b> fights any two units on an equal budget and scores every matchup, which is where you find out what your army beats.</li>
+        <li><b>Proving Grounds</b> lets you command your army against dummies, and <b>Skirmish</b> puts it against the AI.</li>
+        <li><code>npm test</code> checks your faction against the same rules an opponent's game will.</li>
+      </ul>
+
+      <h2>6. Bring it online</h2>
+      <p>Choose <b>Online game</b>, pick a relay and a room code, and share the code with a friend. When the match starts, your faction travels to them as data, and their game re-derives every stat with its own physics. You never need each other's code, and nobody can sneak in cheaper units.</p>
+
+      <p style="margin-top:40px">The full details are in the <a href="https://github.com/mcscope/Vibecraft#readme">README on GitHub</a>.</p>
+    </main>
+  </body>
+</html>

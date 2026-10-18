@@ -7,6 +7,13 @@ A browser RTS where every player vibecodes their own army, then brings it to an 
 ![A Meadowfolk town centre at the start of a game](docs/screenshots/spectate.png)
 ![The arena: lynx lancers charge a block of macemen, with the matchup matrix alongside](docs/screenshots/arena.png)
 
+The two shipped factions, every unit to scale:
+
+![The Meadowfolk: villager, slinger, crystal maceman, pikeman, lynx lancer, hurlhorn and mule cart](docs/screenshots/roster-meadowfolk.png)
+![The Fenfolk: fenling, reedguard, bog toad, pack tortoise and great siege heron](docs/screenshots/roster-fenfolk.png)
+
+New here? The in-game guide, **[Make your army](http://mcscope.com/game/vibecraft/make.html)**, walks through vibecoding your own faction.
+
 You describe your faction in code: its units, buildings and techs, how they look, the land they come from and the animals that live there. You don't set the stats. The engine works out HP, speed, damage, carry capacity, calories and cost from each unit's body (mass, how that mass splits between muscle, frame and reserve, and the crystal it swings or throws) and from each building's materials. A giant is strong and also hungry, slow and expensive. That keeps factions nobody has playtested against each other fair.
 
 ## Run it

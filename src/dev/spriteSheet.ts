@@ -43,7 +43,7 @@ async function roster(params: URLSearchParams): Promise<void> {
   const art = await faction.art(TEAM_COLORS[0], undefined, faction.units.map((u) => u.id));
   const units = faction.units.filter((u) => art.units[u.id]);
   const frames = units.map((u) => { const f = art.units[u.id].anims.idle.frames; return f[facing % f.length][0]; });
-  const w = frames.map((s) => (s.sw / s.q) * scale + 24), h = Math.max(...frames.map((s) => (s.sh / s.q) * scale)) + 56;
+  const w = frames.map((s) => Math.max(130, (s.sw / s.q) * scale + 24)), h = Math.max(...frames.map((s) => (s.sh / s.q) * scale)) + 56;
   const c = document.createElement('canvas');
   c.width = w.reduce((a, b) => a + b, 0) + 24; c.height = h;
   c.style.cssText = 'position:fixed;left:0;top:0;z-index:10';

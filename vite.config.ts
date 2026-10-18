@@ -11,7 +11,7 @@ export default defineConfig({
   worker: { format: 'es' },
   build: {
     rollupOptions: {
-      input: { main: resolve(__dirname, 'index.html'), lab: resolve(__dirname, 'lab.html'), codex: resolve(__dirname, 'codex.html') },
+      input: { main: resolve(__dirname, 'index.html'), lab: resolve(__dirname, 'lab.html'), codex: resolve(__dirname, 'codex.html'), make: resolve(__dirname, 'make.html') },
     },
   },
 });
