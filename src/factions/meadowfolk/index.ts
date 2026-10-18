@@ -205,14 +205,18 @@ const lynx: MeadowUnit = {
         };
         // the cut is at a body down beside the mount: the rider leans out from the saddle (its hips, 0.81 up) over the
         // left flank as the blade comes down
-        const leanOut = cut ? 0.5 * Math.sin(Math.PI * Math.min(1, p.phase * 0.85)) : 0;
+        const leanOut = cut ? 0.7 * Math.sin(Math.PI * Math.min(1, p.phase * 0.85)) : 0;
+        // the sword arm: up over the head, then down hard past the hip (the blade held along the forearm, so it ends
+        // pointing at the ground beside the flank), then back up a little
+        const t = p.phase;
+        const chop = t < 0.4 ? 0.3 + (t / 0.4) * 2.9 : t < 0.65 ? 3.2 - ((t - 0.4) / 0.25) * 3.1 : 0.1 + ((t - 0.65) / 0.35) * 0.3;
         r.joint([0, 0.81, 0], [leanOut, 0, 0], (rr) => rr.joint([0, -0.81, 0], [0, 0, 0], (rider) => {
           human(rider, { ...p, anim: p.anim === 'walk' ? 'idle' : cut ? 'attack' : p.anim }, look, cut ? 2.4 : armAngle(p, 'lance'), (h) => {
             const thrust = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) * 0.35 : 0;
             h.limb([-0.6 + thrust, 0, 0], [1.9 + thrust, 0, 0], 0.03, WOOD, 0.022);
             h.cone(0.06, 0.12, [-0.05 + thrust, 0, 0], IRON, [0, 0, -Math.PI / 2], 10);
             if (p.armed) h.crystal(0.36, [1.88 + thrust, 0, 0], [0, 0, -Math.PI / 2]);
-          }, cut ? (h) => h.joint([0, 0, 0], [0.5 * leanOut, 0, 0], sword) : undefined, cut ? armAngle({ ...p, anim: 'attack' }) : undefined);
+          }, cut ? (h) => h.joint([0, 0, 0], [-0.9, 0, -1.0], sword) : undefined, cut ? chop : undefined);
         }));
         // sheathed at the left hip when it isn't drawn
         if (!cut) {
