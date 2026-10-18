@@ -1,10 +1,11 @@
-// Dev page: ?mode=sprites&unit=<id>&anim=<anim>[&scale=2][&facing=<0-7>]. Bakes one unit and lays out every frame of an
+// Dev page: ?mode=sprites&unit=<id>&anim=<anim>[&scale=2][&facing=<0-7>], or ?mode=sprites&faction=<id> for its roster. Bakes one unit and lays out every frame of an
 // animation, a row per facing, so its art can be checked (or screenshotted headless) without a fight.
 import { PLAYABLE } from '../factions';
 import { TEAM_COLORS } from '../render/artbank';
 import type { ArtAnim } from '../art/contract';
 
 export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
+  if (params.get('faction')) return roster(params);
   const id = params.get('unit') ?? 'lynx', anim = (params.get('anim') ?? 'attack') as ArtAnim, scale = +(params.get('scale') ?? 2);
   const faction = PLAYABLE.find((f) => f.units.some((u) => u.id === id));
   const out = document.createElement('div');
@@ -30,5 +31,32 @@ export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
   out.textContent = `${id} · ${anim} · ${a.frames.length} facings × ${cols} frames`;
   out.appendChild(document.createElement('br'));
   out.appendChild(c);
+  document.title = 'sprites ready';
+}
+
+/** ?mode=sprites&faction=<id>[&facing=2][&scale=2]: every unit of a faction standing side by side, true to scale, named. */
+async function roster(params: URLSearchParams): Promise<void> {
+  const faction = PLAYABLE.find((f) => f.id === params.get('faction'));
+  const facing = +(params.get('facing') ?? 2), scale = +(params.get('scale') ?? 2);
+  document.body.style.background = '#5f7440';
+  if (!faction?.art) return;
+  const art = await faction.art(TEAM_COLORS[0], undefined, faction.units.map((u) => u.id));
+  const units = faction.units.filter((u) => art.units[u.id]);
+  const frames = units.map((u) => { const f = art.units[u.id].anims.idle.frames; return f[facing % f.length][0]; });
+  const w = frames.map((s) => (s.sw / s.q) * scale + 24), h = Math.max(...frames.map((s) => (s.sh / s.q) * scale)) + 56;
+  const c = document.createElement('canvas');
+  c.width = w.reduce((a, b) => a + b, 0) + 24; c.height = h;
+  c.style.cssText = 'position:fixed;left:0;top:0;z-index:10';
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#5f7440'; g.fillRect(0, 0, c.width, c.height);
+  g.font = '600 15px Georgia, serif'; g.textAlign = 'center';
+  let x = 24;
+  frames.forEach((s, i) => {
+    const k = scale / s.q, cx = x + (w[i] - 24) / 2, foot = h - 40;
+    g.drawImage(s.img, s.sx, s.sy, s.sw, s.sh, cx - s.ax * k, foot - s.ay * k, s.sw * k, s.sh * k);
+    g.fillStyle = '#f3e7c4'; g.fillText(units[i].name, cx, h - 14);
+    x += w[i];
+  });
+  document.body.appendChild(c);
   document.title = 'sprites ready';
 }

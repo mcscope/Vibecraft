@@ -50,6 +50,7 @@ const loading = document.getElementById('loading')!;
 const mode = params.get('mode') as Mode | 'arena' | null;
 if (mode === 'arena') { menu.style.display = 'none'; void import('./arena/arenaMode').then((m) => m.runArena(params)); }
 else if ((mode as string) === 'sprites') { menu.style.display = 'none'; void import('./dev/spriteSheet').then((m) => m.runSpriteSheet(params)); }
+else if ((mode as string) === 'prebake') { menu.style.display = 'none'; void import('./dev/prebake').then((m) => m.runPrebake()); }
 else if (mode) start(mode);
 else {
   menu.style.display = 'flex';

@@ -2,6 +2,13 @@
 // faction's own loader) and the map's BiomeArt. The engine draws only this.
 import type { BiomeArt, BiomeLoader, BuildingArt, FactionArt, Sprite, TeamColors, UnitArt } from '../art/contract';
 import type { World } from '../sim/world';
+import type { FactionSpec } from '../factions/types';
+import { PLAYABLE } from '../factions';
+import { biomeKey, loadPrebaked, teamKey } from '../art/prebaked';
+
+/** A shipped faction's art (or its land's) as pre-baked for a production build (scripts/prebake.mjs); null to bake it here. */
+const prebaked = <T>(f: FactionSpec | null, key: string): Promise<T | null> =>
+  import.meta.env.PROD && (!f || PLAYABLE.includes(f)) ? loadPrebaked<T>(key) : Promise.resolve(null);
 
 /** The Wilds' colours (selection rings, minimap dots). */
 export const WILD_COLORS: TeamColors = { primary: '#8a6a3a', secondary: '#d8c08a', dark: '#4a3a20' };
@@ -77,7 +84,12 @@ export class ArtBank {
     const sub = (f: number, label: string) => onProgress((base + Math.min(1, f)) / parts, label);
     // each distinct biome is baked once, even if several players share it
     const baked = new Map<BiomeLoader, BiomeArt>();
-    for (const l of loaders) { baked.set(l, await l(sub)); base++; }
+    for (const l of loaders) {
+      const owner = players.map((p) => world.factionOf(p.id)).find((f) => f.biome === l) ?? null; // whose land (null: the default)
+      sub(0, 'Growing the land');
+      baked.set(l, (await prebaked<BiomeArt>(owner, biomeKey(owner?.id ?? null))) ?? (await l(sub)));
+      base++;
+    }
     const biomes = players.map((p) => baked.get(world.factionOf(p.id).biome ?? biome)!);
     const factions: FactionArt[] = [], colours: TeamColors[] = [];
     for (const p of world.players) {
@@ -85,7 +97,7 @@ export class ArtBank {
       const team = p.neutral ? WILD_COLORS : teams?.[p.id] ?? TEAM_COLORS[p.id % TEAM_COLORS.length];
       colours.push(team);
       if (p.neutral) factions.push(wildsArt(world, p.id, team, biomes));
-      else factions.push(f.art ? await f.art(team, sub, only) : placeholderArt(world, p.id, team));
+      else factions.push(f.art ? ((await prebaked<FactionArt>(f, teamKey(f.id, team))) ?? (await f.art(team, sub, only))) : placeholderArt(world, p.id, team));
       base++;
     }
     onProgress(1, 'Ready');
