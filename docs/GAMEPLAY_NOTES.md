@@ -24,3 +24,8 @@ Things noticed while building the tutorial and the computer players that could i
 ## Units and abilities
 
 - **Herons took some damage from macemen** (94 HP in 30 s of bombing). That may be from landing or flying low, or maces reaching low fliers. Worth checking that it's intended.
+
+## Parked ideas
+
+- **Riders separate from mounts.** A generic `rider: { mass }` on any unit spec: a body riding another one. The rider's body swings hand weapons (sidearms), and its weight loads the mount's legs, while the mount's own body still drives charges, bites and couched lances. Right now a mount and its rider are one fused body, so a lynx lancer's sword swings with all 320 kg of lynx (96 damage, as much as the lance), and mounts run at unladen speeds (the lynx sprints at 20.6 m/s). Any faction's design would hit this, not just the lancer.
+- **Mounts are mobs.** A bigger direction built on that: mounts come from the wild. Wildlife is farmed (tamed, herded, bred) for better mounts, and a lot of the game is about that. It's a major change; parked 2026-10-18.
