@@ -16,7 +16,7 @@ export const PX_PER_UNIT = 32 * Math.SQRT2 / UNITS_PER_TILE;
 export type BakedAnim = ArtAnim;
 
 const FRAMES: Record<BakedAnim, number> = {
-  idle: 4, walk: 8, charge: 8, brace: 2, stagger: 4, fly: 8, leap: 6, climb: 8, soar: 4, glide: 4, land: 4, attack: 8, gather: 6, eat: 4, tired: 2, die: 6, carryFood: 8, carryWood: 8, carryCrystal: 8,
+  idle: 4, walk: 8, charge: 8, brace: 2, stagger: 4, fly: 8, leap: 6, climb: 8, soar: 4, glide: 4, land: 4, attack: 8, cut: 8, gather: 6, eat: 4, tired: 2, die: 6, carryFood: 8, carryWood: 8, carryCrystal: 8,
 };
 const FPS: Partial<Record<BakedAnim, number>> = { idle: 2.5, walk: 8, charge: 8, brace: 1.5, stagger: 6, fly: 6, leap: 10, climb: 6, soar: 2, glide: 2, land: 4, gather: 7, eat: 4, tired: 1.5, carryFood: 8, carryWood: 8, carryCrystal: 8 };
 
@@ -29,6 +29,8 @@ export interface UnitBakeOptions {
   fly?: boolean;
   /** Carries a shaft: also bake the braced stance (point set, waiting). */
   brace?: boolean;
+  /** Carries a sidearm beside its main weapon: also bake its blow ('cut'). */
+  sidearm?: boolean;
 }
 
 /**
@@ -300,6 +302,7 @@ export class Baker {
     const anims: BakedAnim[] = opts.dummy ? ['idle', 'die'] : ['idle', 'walk', 'attack', 'gather', 'eat', 'tired', 'die'];
     if (!opts.dummy) anims.push('charge', 'stagger');
     if (opts.brace && !opts.dummy) anims.push('brace');
+    if (opts.sidearm && !opts.dummy) anims.push('cut');
     if (withCarry && !opts.dummy) anims.push('carryFood', 'carryWood', 'carryCrystal');
     if (opts.fly && !opts.dummy) anims.push('fly', 'leap', 'climb', 'soar', 'glide', 'land');
     // the whole-body styles ride on poses every model already knows: a charge is the walk, a stagger
@@ -311,6 +314,7 @@ export class Baker {
       style: anim === 'charge' || anim === 'stagger' || anim === 'brace' ? anim : undefined,
     });
     const samples = [poseFor('idle', 0), poseFor('walk', 0.25), poseFor('attack', 0.3), poseFor('attack', 0.6), poseFor('gather', 0.5)];
+    if (opts.sidearm) samples.push(poseFor('cut', 0.3), poseFor('cut', 0.6));
     if (withCarry) samples.push(poseFor('carryFood', 0.25));
     if (opts.fly) samples.push(poseFor('fly', 0), poseFor('fly', 0.25), poseFor('fly', 0.5), poseFor('fly', 0.75), poseFor('leap', 0), poseFor('leap', 0.5), poseFor('land', 0.5)); // spread wings need room
     let { r, h } = this.measure(model, team, samples);
@@ -445,6 +449,7 @@ export class Baker {
     if (opts.dummy) return (FRAMES.idle + FRAMES.die) * BAKED_DIRS.length;
     let n = FRAMES.idle + FRAMES.walk + FRAMES.attack + FRAMES.gather + FRAMES.eat + FRAMES.tired + FRAMES.die;
     if (withCarry) n += FRAMES.carryFood + FRAMES.carryWood + FRAMES.carryCrystal;
+    if (opts.sidearm) n += FRAMES.cut;
     if (opts.fly) n += FRAMES.fly + FRAMES.leap + FRAMES.climb + FRAMES.soar + FRAMES.glide + FRAMES.land;
     return n * BAKED_DIRS.length;
   }

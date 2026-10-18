@@ -11,7 +11,7 @@
 
 import type { BuildingSpec, FactionSpec, TechSpec, UnitSpec } from '../types';
 import { meadowWildlife } from '../../biomes/meadow/wildlife';
-import type { BuildingModel, Mat, UnitModel } from '../../kits/bake3d/types';
+import type { BuildingModel, Mat, ModelBuilder, UnitModel } from '../../kits/bake3d/types';
 
 /** Meadowfolk specs carry their 3D models; the engine ignores the extra field. */
 export type MeadowUnit = UnitSpec & { model: UnitModel };
@@ -192,12 +192,26 @@ const lynx: MeadowUnit = {
           skin: '#c99a76', hair: '#3a2a1c', head: 'helmet', scale: 0.9, mounted: true, tabard: true, pads: true,
           tunic: IRON, trousers: { color: '#4a4038', tex: 'cloth' }, boots: LEATHER,
         };
-        human(r, { ...p, anim: p.anim === 'walk' ? 'idle' : p.anim }, look, armAngle(p, 'lance'), (h) => {
+        // cutting with the sword (attack.sidearm): the lance goes up out of the way and the left arm chops
+        const cut = p.anim === 'cut';
+        const sword = (h: ModelBuilder) => {
+          h.limb([-0.07, 0, 0], [0.07, 0, 0], 0.022, LEATHER); // grip
+          h.box([0.03, 0.03, 0.2], [0.08, 0, 0], IRON); // crossguard
+          h.box([0.62, 0.012, 0.05], [0.41, 0, 0], IRON); // blade
+          if (p.armed) h.crystal(0.08, [0.74, 0, 0], [0, 0, -Math.PI / 2]); // crystal point
+        };
+        human(r, { ...p, anim: p.anim === 'walk' ? 'idle' : cut ? 'attack' : p.anim }, look, cut ? 2.4 : armAngle(p, 'lance'), (h) => {
           const thrust = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) * 0.35 : 0;
           h.limb([-0.6 + thrust, 0, 0], [1.9 + thrust, 0, 0], 0.03, WOOD, 0.022);
           h.cone(0.06, 0.12, [-0.05 + thrust, 0, 0], IRON, [0, 0, -Math.PI / 2], 10);
           if (p.armed) h.crystal(0.36, [1.88 + thrust, 0, 0], [0, 0, -Math.PI / 2]);
-        });
+        }, cut ? sword : undefined, cut ? armAngle({ ...p, anim: 'attack' }) : undefined);
+        // sheathed at the left hip when it isn't drawn
+        if (!cut) {
+          r.limb([0.06, 0.86, 0.24], [-0.52, 0.5, 0.28], 0.03, LEATHER, 0.022); // scabbard
+          r.limb([0.06, 0.86, 0.24], [0.2, 0.95, 0.23], 0.022, LEATHER); // hilt
+          r.box([0.03, 0.2, 0.03], [0.06, 0.86, 0.24], IRON, [0, 0, 0.55]); // crossguard
+        }
       });
     });
   },

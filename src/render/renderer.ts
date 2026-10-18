@@ -53,6 +53,10 @@ export function unitFrame(u: Unit): { anim: ArtAnim; time?: number; progress?: n
       const dur = Math.min(0.45, u.stats.cooldown * 0.8);
       return { anim: 'attack', progress: 1 - u.swing / dur };
     }
+    case 'cut': { // its sidearm's blow (sim/abilities/sidearm.ts)
+      const dur = Math.min(0.45, (u.stats.sidearm?.cooldown ?? u.stats.cooldown) * 0.8);
+      return { anim: 'cut', progress: 1 - u.swing / dur };
+    }
     default: return { anim: u.anim, time: u.animT };
   }
 }

@@ -103,7 +103,7 @@ export type Order =
    */
   | { kind: 'cart'; base: number; home: number; from?: number; pinned: boolean; phase: 'load' | 'deliver'; res: ResourceKind };
 
-export type UnitAnim = 'idle' | 'walk' | 'charge' | 'brace' | 'stagger' | 'fly' | 'leap' | 'climb' | 'soar' | 'glide' | 'land' | 'attack' | 'gather' | 'eat' | 'tired';
+export type UnitAnim = 'idle' | 'walk' | 'charge' | 'brace' | 'stagger' | 'fly' | 'leap' | 'climb' | 'soar' | 'glide' | 'land' | 'attack' | 'cut' | 'gather' | 'eat' | 'tired';
 
 export interface Unit {
   id: number;
@@ -135,6 +135,8 @@ export interface Unit {
   repathIn: number;
   cooldown: number;
   swing: number; // seconds remaining in attack animation
+  /** The swing under way is its sidearm's (sim/abilities/sidearm.ts), not its main weapon's. */
+  cutting: boolean;
   anim: UnitAnim;
   animT: number;
   /** Facing octant 0..7 (0 = +x, counting toward +y). Render-only hint. */
@@ -937,7 +939,7 @@ export class World {
       food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
       order: { kind: 'idle' }, resume: null, queue: [], engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
-      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', facing: Math.PI / 4, turnTick: -1, turnLeft: 0,
+      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', cutting: false, facing: Math.PI / 4, turnTick: -1, turnLeft: 0,
       dummy: !!spec.dummy,
       carter: spec.role === 'carter',
       gatherAcc: 0,
@@ -1198,7 +1200,7 @@ export class World {
     const moved = reeling ? false : this.runOrder(u) || midStride(u, this.tick); // a hopper crouching between bounds is still on its way
     tickFlight(this, u, moved, DT, (fx, fy) => this.face(u, fx, fy));
     if (moved) anim = Math.hypot(u.vx, u.vy) > st.speed * 1.15 ? 'charge' : 'walk'; // flat out: a sprint, a charge
-    if (u.swing > 0) anim = 'attack';
+    if (u.swing > 0) anim = u.cutting ? 'cut' : 'attack';
     else if (!moved && st.canPlant && (u.engage || u.order.kind === 'attack' || u.order.kind === 'attackMove') && u.cooldown <= 0) anim = 'brace'; // point set, waiting
     if (reeling) anim = 'stagger';
     else if (((u.order.kind === 'gather' && u.order.phase === 'harvest') || (u.order.kind === 'build' && u.order.phase === 'chop')) && !moved && u.busy) anim = 'gather';
@@ -1471,6 +1473,7 @@ export class World {
     u.busy = true;
     u.cooldown = wpn.cooldown;
     u.swing = Math.min(0.45, wpn.cooldown * 0.8);
+    u.cutting = false;
     this.events.push({ type: 'attack', x: u.x, y: u.y, owner: u.owner, specId: u.specId, style: wpn.throws ? 'throw' : 'strike', kg: wpn.crystalMass });
     if (wpn.throws) {
       u.ammo -= u.crystalMass;
@@ -1532,6 +1535,7 @@ export class World {
     u.busy = true;
     u.cooldown = sa.cooldown; // one body: its arm rests before a blow of either
     u.swing = Math.min(0.45, sa.cooldown * 0.8);
+    u.cutting = true;
     this.events.push({ type: 'attack', x: u.x, y: u.y, owner: u.owner, specId: u.specId, style: 'strike', kg: sa.crystalMass });
     this.land(u, cut.id, cut, cut.x, cut.y, sa.damage, false);
     return true;

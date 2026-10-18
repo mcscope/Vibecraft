@@ -16,13 +16,13 @@ export async function bakeArt(team: TeamColors, onProgress?: (f: number, label: 
   const baker = new Baker();
   const units = only ? allUnits.filter((u) => only.includes(u.id)) : allUnits, buildings = only ? [] : allBuildings;
   const carry = (id: string) => id === 'fenling';
-  const total = units.reduce((n, u) => n + Baker.frameCount({ withCarry: carry(u.id), fly: !!u.flight, brace: !!u.attack?.shaft }), 0) + buildings.length * 6 + 1;
+  const total = units.reduce((n, u) => n + Baker.frameCount({ withCarry: carry(u.id), fly: !!u.flight, brace: !!u.attack?.shaft, sidearm: !!u.attack?.sidearm }), 0) + buildings.length * 6 + 1;
   let done = 0;
   // a hushed, pentatonic, slightly unsettling marsh song
   const art: FactionArt = { units: {}, buildings: {}, flag: baker.bakeStatic(fenBanner, team), wantFlag: baker.bakeStatic(fenWantFlag, team), music: { scale: [0, 3, 5, 7, 10], root: 174.6, tempo: 84, lead: 'sine', drone: 'triangle' } };
   for (const u of units) {
     onProgress?.(done / total, `Wading in the ${u.name}s`);
-    art.units[u.id] = await baker.bakeUnit(u.model, team, { withCarry: carry(u.id), fly: !!u.flight, brace: !!u.attack?.shaft }, () => {
+    art.units[u.id] = await baker.bakeUnit(u.model, team, { withCarry: carry(u.id), fly: !!u.flight, brace: !!u.attack?.shaft, sidearm: !!u.attack?.sidearm }, () => {
       if (++done % 24 === 0) onProgress?.(done / total, `Wading in the ${u.name}s`);
     });
     art.units[u.id].sounds = VOICES[u.id];
