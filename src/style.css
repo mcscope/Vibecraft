@@ -148,8 +148,14 @@ kbd {
   position: absolute; top: 46px; right: 10px; width: 330px; padding: 12px 14px 12px; border-radius: 4px;
   font-size: 14px; line-height: 1.45; display: none; color: var(--text);
 }
-#help b { display: block; font-family: 'Cinzel', serif; color: var(--gold); margin-bottom: 4px; }
+#help > b { display: block; font-family: 'Cinzel', serif; color: var(--gold); margin-bottom: 4px; }
+#help p b { color: var(--gold); }
 #help button { position: absolute; top: 6px; right: 6px; padding: 0 7px; }
+#help.lesson { width: 380px; font-size: 15px; }
+#help.lesson p { margin: 0 0 8px; }
+#help .lesson-nav { display: flex; justify-content: space-between; margin-top: 10px; }
+#help .lesson-nav a { color: var(--gold); font-family: 'Cinzel', serif; text-decoration: none; padding: 4px 10px; border: 1px solid var(--bronze); border-radius: 3px; }
+#help .lesson-nav a:hover { background: rgba(216, 178, 90, 0.15); }
 
 #bottom {
   position: absolute; left: 0; right: 0; bottom: 0;

@@ -5,6 +5,7 @@ import type { FactionSpec } from './factions/types';
 import { training } from './factions/training';
 import { World, DT } from './sim/world';
 import { faceoff, provingGrounds, skirmish } from './sim/scenarios';
+import { LESSONS, tutorialScenario } from './tutorial';
 import { MAPS } from './sim/map';
 import { Lockstep, LocalInput, LoopbackTransport, type CommandSource, type Transport } from './net/lockstep';
 import { NetTransport } from './net/relayClient';
@@ -23,7 +24,7 @@ import { Minimap } from './ui/minimap';
 import { AudioEngine } from './audio/engine';
 import { mountSettingsDialog, onSettings, settings } from './ui/settings';
 
-type Mode = 'demo' | 'skirmish' | 'spectate' | 'online' | 'faceoff';
+type Mode = 'demo' | 'skirmish' | 'spectate' | 'online' | 'faceoff' | 'tutorial';
 const params = new URLSearchParams(location.search);
 // Seed choice happens outside the sim, so Math.random is fine here.
 const seed = Number(params.get('seed') ?? Math.floor(Math.random() * 1e9));
@@ -78,7 +79,10 @@ else {
 }
 
 async function start(m: Mode): Promise<void> {
-  const world = m === 'faceoff'
+  const lessonIx = Math.max(0, Math.min(LESSONS.length - 1, +(params.get('lesson') ?? 0) || 0)), lesson = LESSONS[lessonIx];
+  const world = m === 'tutorial'
+    ? new World({ seed, scenario: tutorialScenario(lesson), players: [{ name: 'You', faction: lesson.you }, { name: lesson.foe.name, faction: lesson.foe }] })
+    : m === 'faceoff'
     ? new World({ seed, scenario: faceoff(), players: [{ name: pick('you').name, faction: pick('you') }, { name: pick('foe').name, faction: pick('foe') }] })
     : m === 'demo'
     ? new World({ seed, scenario: provingGrounds(), players: [{ name: 'You', faction: pick('you') }, { name: 'Training Grounds', faction: training }] })
@@ -88,7 +92,7 @@ async function start(m: Mode): Promise<void> {
     sources: (local) => {
       const d = difficulty();
       const s: CommandSource[] = m === 'spectate' ? [new SkirmishAI(0, d), new SkirmishAI(1, d)] : m === 'skirmish' ? [local, new SkirmishAI(1, d)] : [local];
-      if (m === 'demo' || m === 'faceoff') s.push({ player: 1, poll: () => [] }); // the dummies never act (a faceoff just stands)
+      if (m === 'demo' || m === 'faceoff' || m === 'tutorial') s.push({ player: 1, poll: () => [] }); // the dummies never act (a faceoff just stands; a lesson's foes do only what it set up)
       return s;
     },
   });
@@ -152,11 +156,11 @@ async function run(g: GameSetup): Promise<void> {
   };
 
   const canvas = document.getElementById('game') as HTMLCanvasElement;
-  const renderer = new Renderer(canvas, world, bank, { damageNumbers: m === 'demo' }, m === 'demo' ? [[18, 26, 4], [31, 26, 5]] : []);
+  const renderer = new Renderer(canvas, world, bank, { damageNumbers: m === 'demo' || m === 'tutorial' }, m === 'demo' ? [[18, 26, 4], [31, 26, 5]] : []);
   await renderer.init();
   const minimap = new Minimap(document.getElementById('minimap') as HTMLCanvasElement, world, 200, (x, y) => bank.biomeAt(x, y).ground);
   // fog of war for whoever's playing (spectators and the proving grounds see everything)
-  renderer.viewer = minimap.viewer = m === 'spectate' || m === 'demo' || m === 'faceoff' ? -1 : HUMAN;
+  renderer.viewer = minimap.viewer = m === 'spectate' || m === 'demo' || m === 'faceoff' || m === 'tutorial' ? -1 : HUMAN;
   const audio = new AudioEngine(world, bank, HUMAN);
   const input = new Input(canvas, world, renderer, minimap, HUMAN, (cmd) => {
     local.issue(cmd);
@@ -186,6 +190,17 @@ async function run(g: GameSetup): Promise<void> {
   resize();
 
   if (m === 'faceoff') renderer.cam.centerOn(25, 25);
+  else if (m === 'tutorial') {
+    const ix = Math.max(0, Math.min(LESSONS.length - 1, +(params.get('lesson') ?? 0) || 0)), lesson = LESSONS[ix];
+    renderer.cam.centerOn(lesson.look[0], lesson.look[1]);
+    input.setSelection(world.unitsOf(HUMAN).filter((u) => u.specId !== world.factionOf(HUMAN).carterId).map((u) => u.id));
+    // the lesson's caption, in the help panel: what to try, and Back / Restart / Next (nothing is checked)
+    const help = document.getElementById('help')!;
+    const go = (i: number) => `?mode=tutorial&lesson=${i}`;
+    help.classList.add('lesson');
+    help.innerHTML = `<b>Lesson ${ix + 1} of ${LESSONS.length}: ${lesson.title}</b>${lesson.text}
+      <div class="lesson-nav">${ix > 0 ? `<a href="${go(ix - 1)}">◀ Back</a>` : '<span></span>'}<a href="${go(ix)}">Restart</a>${ix < LESSONS.length - 1 ? `<a href="${go(ix + 1)}">Next ▶</a>` : '<a href="./">Finish</a>'}</div>`;
+  }
   else if (m === 'demo') {
     renderer.cam.centerOn(22, 26);
     input.setSelection(world.unitsOf(HUMAN).filter((u) => u.specId !== world.factionOf(HUMAN).workerId).map((u) => u.id));
@@ -196,7 +211,7 @@ async function run(g: GameSetup): Promise<void> {
   }
   loading.style.display = 'none';
   document.getElementById('hud')!.style.display = 'block';
-  if (m === 'demo') document.getElementById('help')!.style.display = 'block';
+  if (m === 'demo' || m === 'tutorial') document.getElementById('help')!.style.display = 'block';
 
   let acc = 0;
   let last = performance.now();
