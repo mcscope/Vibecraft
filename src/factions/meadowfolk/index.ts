@@ -22,6 +22,8 @@ import * as models from './buildings';
 const WOOD: Mat = { color: '#6b4a2e', tex: 'wood' };
 const LEATHER: Mat = { color: '#5a3f28', tex: 'leather' };
 const IRON: Mat = { color: '#8d939a', tex: 'metal' };
+/** Worked crystal (the stuff of every weapon's business end), for blades shaped longer than a raw crystal. */
+const GEM: Mat = { color: '#8fe6ff', rough: 0.12, metal: 0.15, emissive: '#2a8fc0' };
 
 const villagerLook: HumanLook = {
   skin: '#c99a76', hair: '#4a3020', head: 'hood', scale: 0.95, beard: true,
@@ -197,14 +199,21 @@ const lynx: MeadowUnit = {
         const sword = (h: ModelBuilder) => {
           h.limb([-0.07, 0, 0], [0.07, 0, 0], 0.022, LEATHER); // grip
           h.box([0.03, 0.03, 0.2], [0.08, 0, 0], IRON); // crossguard
-          h.crystal(0.7, [0.1, 0, 0], [0, 0, -Math.PI / 2]); // the blade: a long crystal
+          // the blade: a crystal drawn out long and thin, six-faced, to a point
+          h.cylinder(0.026, 0.03, 0.56, [0.38, 0, 0], GEM, [0, 0, -Math.PI / 2], 6);
+          h.cone(0.026, 0.14, [0.73, 0, 0], GEM, [0, 0, -Math.PI / 2], 6);
         };
-        human(r, { ...p, anim: p.anim === 'walk' ? 'idle' : cut ? 'attack' : p.anim }, look, cut ? 2.4 : armAngle(p, 'lance'), (h) => {
-          const thrust = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) * 0.35 : 0;
-          h.limb([-0.6 + thrust, 0, 0], [1.9 + thrust, 0, 0], 0.03, WOOD, 0.022);
-          h.cone(0.06, 0.12, [-0.05 + thrust, 0, 0], IRON, [0, 0, -Math.PI / 2], 10);
-          if (p.armed) h.crystal(0.36, [1.88 + thrust, 0, 0], [0, 0, -Math.PI / 2]);
-        }, cut ? sword : undefined, cut ? armAngle({ ...p, anim: 'attack' }) : undefined);
+        // the cut is at a body down beside the mount: the rider leans out from the saddle (its hips, 0.81 up) over the
+        // left flank as the blade comes down
+        const leanOut = cut ? 0.5 * Math.sin(Math.PI * Math.min(1, p.phase * 0.85)) : 0;
+        r.joint([0, 0.81, 0], [leanOut, 0, 0], (rr) => rr.joint([0, -0.81, 0], [0, 0, 0], (rider) => {
+          human(rider, { ...p, anim: p.anim === 'walk' ? 'idle' : cut ? 'attack' : p.anim }, look, cut ? 2.4 : armAngle(p, 'lance'), (h) => {
+            const thrust = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) * 0.35 : 0;
+            h.limb([-0.6 + thrust, 0, 0], [1.9 + thrust, 0, 0], 0.03, WOOD, 0.022);
+            h.cone(0.06, 0.12, [-0.05 + thrust, 0, 0], IRON, [0, 0, -Math.PI / 2], 10);
+            if (p.armed) h.crystal(0.36, [1.88 + thrust, 0, 0], [0, 0, -Math.PI / 2]);
+          }, cut ? (h) => h.joint([0, 0, 0], [0.5 * leanOut, 0, 0], sword) : undefined, cut ? armAngle({ ...p, anim: 'attack' }) : undefined);
+        }));
         // sheathed at the left hip when it isn't drawn
         if (!cut) {
           r.limb([0.06, 0.86, 0.24], [-0.52, 0.5, 0.28], 0.03, LEATHER, 0.022); // scabbard
