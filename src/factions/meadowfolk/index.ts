@@ -197,8 +197,7 @@ const lynx: MeadowUnit = {
         const sword = (h: ModelBuilder) => {
           h.limb([-0.07, 0, 0], [0.07, 0, 0], 0.022, LEATHER); // grip
           h.box([0.03, 0.03, 0.2], [0.08, 0, 0], IRON); // crossguard
-          h.box([0.62, 0.012, 0.05], [0.41, 0, 0], IRON); // blade
-          if (p.armed) h.crystal(0.08, [0.74, 0, 0], [0, 0, -Math.PI / 2]); // crystal point
+          h.crystal(0.7, [0.1, 0, 0], [0, 0, -Math.PI / 2]); // the blade: a long crystal
         };
         human(r, { ...p, anim: p.anim === 'walk' ? 'idle' : cut ? 'attack' : p.anim }, look, cut ? 2.4 : armAngle(p, 'lance'), (h) => {
           const thrust = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) * 0.35 : 0;
