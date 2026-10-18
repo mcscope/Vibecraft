@@ -16,6 +16,22 @@ New here? The in-game guide, **[Make your army](http://mcscope.com/game/vibecraf
 
 You describe your faction in code: its units, buildings and techs, how they look, the land they come from and the animals that live there. You don't set the stats. The engine works out HP, speed, damage, carry capacity, calories and cost from each unit's body (mass, how that mass splits between muscle, frame and reserve, and the crystal it swings or throws) and from each building's materials. A giant is strong and also hungry, slow and expensive. That keeps factions nobody has playtested against each other fair.
 
+## What makes it different
+
+**Bring your own army.** There are no fixed races to choose from: each player makes their own faction, with its units, buildings, techs, art, homeworld and wildlife, usually by vibecoding with an AI. In an online match your faction travels to your opponent as data, and their game checks it against the rules. Two factions nobody has ever playtested against each other still get a fair fight. ([How to make one](http://mcscope.com/game/vibecraft/make.html).)
+
+**Physics keeps it fair.** You never set HP, damage, speed or cost. You shape bodies: mass, how that mass splits between muscle, frame (bone, shell, plate) and reserve, and the crystal weapon a body swings or throws. The engine derives everything else from real physics, applying the same rules to every body:
+- **Speed and stride:** these come from leg and body length, so long four-legged bodies gallop and turn wide.
+- **Blows:** a blow carries the energy of the swing plus the collision of the bodies closing. A couched lance or a planted pike takes the whole impact, up to the force at which its pole would buckle.
+- **Armour:** plate is frame beyond the skeleton, spread over the body's surface.
+- **Throws:** stones fly real ballistic arcs.
+- **Costs:** these follow the body too, so a giant hits hard but is slow, hungry and expensive. Rock-paper-scissors falls out of the dynamics (spears beat cavalry, cavalry runs down infantry and throwers) rather than out of a bonus table. Run the **Arena** to see every matchup scored.
+
+**Resources are physical: calories, crystals and carts.**
+- **Calories.** Every body has a calorie tank sized by its mass and reserve. Walking, sprinting and every blow burn it, and a big body moves each kilo more cheaply. An empty unit is exhausted: slow, and unable to fight until it eats. Units eat from their buildings' food stores, from packs or from food bearers. So an army's reach depends on its supply, and a sprint or a charge has a real cost.
+- **Crystals.** Every weapon's business end is crystal. A striker keeps its crystal, but a thrower spends one with every throw, and the spent stones lie where they land as shards anyone can pick back up. Towers and garrisons throw from their building's own crystal stock, and ammo bearers carry crystal into the field.
+- **Carts.** There's no global stockpile: food, wood and crystal sit in the building that gathered or received them. Carts (and hauling workers) move the spare from where it is to where it's needed, most urgent first, with your waiting build and train orders first in line. Where you put buildings, and keeping their supply lines open, is part of the strategy.
+
 ## Run it
 
 ```sh
