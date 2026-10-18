@@ -99,6 +99,8 @@ export const K = {
   footBrake: 1.5,
   /** Sprint speed as a multiple of cruising speed (a gallop over a trot, a run over a jog). */
   sprintPerCruise: 2.2,
+  /** Leg length as a share of body height. */
+  legPerHeight: 0.53,
   /** A body closing on a weapon that outreaches its own comes on at this share of its walking pace (not running onto the point). */
   closeInPace: 0.5,
   /** A body steps backwards (still facing its enemy) at this share of its walking pace. */
@@ -295,7 +297,12 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
     ? Math.min(K.maxThrowRange, (crystalVelocity * crystalVelocity) / K.gravity / M_PER_TILE) // v²/g metres, in tiles
     : reach;
   // it sees 10 tiles, past its reach, and at least as far as it rides out to charge (the run-up to its sprint, plus reach)
-  const sprintTiles = speed * K.sprintPerCruise, runUpTiles = ((sprintTiles * M_PER_TILE) ** 2 / (2 * K.traction * K.gravity)) / M_PER_TILE;
+  // a bound flexes the spine: a stride is the leg plus the body's run-length beyond an upright body's depth, so
+  // long bodies gallop faster (v ∝ √(g·stride)); wheels and wings don't stride
+  const height = bodyHeight(mass), leg = K.legPerHeight * height, upright = 0.18 * height;
+  const length = spec.length ? Math.max(0.2, Math.min(12, spec.length)) : upright; // an upright body: its depth, ~0.18 of its height
+  const gallop = spec.wheeled || spec.flight ? 1 : Math.sqrt((leg + Math.max(upright, length)) / (leg + upright));
+  const sprintTiles = speed * K.sprintPerCruise * gallop, runUpTiles = ((sprintTiles * M_PER_TILE) ** 2 / (2 * K.traction * K.gravity)) / M_PER_TILE;
   const sight = Math.max(10, range + 3, runUpTiles + range + 1);
 
   const gatherRate = (spec.canGather ?? true) ? K.gatherKgPerSec * Math.sqrt(muscleMass / 18) * workRefinement : 0;
@@ -312,7 +319,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   return {
     improvised,
     mass, physique, muscleMass, frameMass, reserveMass,
-    maxHp, armour, coverage, maxCalories, speed, sprint: speed * K.sprintPerCruise /* sprinting, like cruising, scales with leg length */, canAttack, wheeled, gait: deriveGait(spec), flight: !!spec.flight, flyHeight: !spec.flight ? 0 : spec.flight === true ? DEFAULT_FLY_HEIGHT : spec.flight.height, carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, sight,
+    maxHp, armour, coverage, maxCalories, speed, sprint: sprintTiles, canAttack, wheeled, gait: deriveGait(spec), flight: !!spec.flight, flyHeight: !spec.flight ? 0 : spec.flight === true ? DEFAULT_FLY_HEIGHT : spec.flight.height, carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, sight,
     limbSpeed, maxAttackEnergy, crystalVelocity, attackEnergy, damage, attackCalories, cooldown, range,
     dps: damage / cooldown,
     holdForce: K.holdForcePerMuscleKg * muscleMass,
@@ -328,7 +335,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
     // a shaft can be planted (butt on the ground behind, point at the enemy) only if it's well longer than the body is tall:
     // a pike in a man's hands, not a lance on a mount
     canPlant: shaft > 1.5 * 1.7 * Math.cbrt(mass / 70),
-    length: spec.length ? Math.max(0.2, Math.min(12, spec.length)) : 0.18 * bodyHeight(mass), // an upright body: its depth, ~0.18 of its height
+    length,
     gatherRate,
     moveCalPerTile: K.moveCalPerKgTile * mass,
     restRegen: K.restRegenFraction * maxCalories,
