@@ -1,6 +1,6 @@
 <h1 align="center">VibeCraft</h1>
 
-<p align="center"><b>A browser RTS where every player vibecodes their own army, and physics keeps the fight fair.</b></p>
+<p align="center"><b>A browser RTS with ready-made factions, where you can also vibecode your own army, and physics keeps every fight fair.</b></p>
 
 <p align="center">
   <a href="http://mcscope.com/game/vibecraft/"><b>▶ Play it now</b></a> ·
@@ -17,7 +17,7 @@
 ## What makes it different
 
 ### 🛡️ Bring your own army
-There are no fixed races. Each player makes their own faction: its units, buildings, techs, art, homeworld and wildlife, usually by vibecoding with an AI. In an online match your faction travels to your opponent as data, and their game checks it against the rules. Two factions nobody has ever playtested against each other still get a fair fight.
+Play one of the shipped factions, or make your own: its units, buildings, techs, art, homeworld and wildlife, usually by vibecoding with an AI. In an online match your faction travels to your opponent as data, and their game checks it against the rules. Two factions nobody has ever playtested against each other still get a fair fight.
 
 ### ⚖️ Physics keeps it fair
 You never set HP, damage, speed or cost. You shape **bodies**: mass, how that mass splits between muscle, frame (bone, shell, plate) and reserve, and the crystal weapon the body swings or throws. The engine derives everything else, applying the same rules to every body:
