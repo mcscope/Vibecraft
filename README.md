@@ -17,10 +17,10 @@
 ## What makes it different
 
 ### 🛡️ Bring your own army
-Play one of the shipped factions, or make your own: its units, buildings, techs, art, homeworld and wildlife, usually by vibecoding with an AI. In an online match your faction travels to your opponent as data, and their game checks it against the rules. Two factions nobody has ever playtested against each other still get a fair fight.
+Play one of the shipped factions, or make your own: its units, buildings, techs, art, homeworld and wildlife, usually by vibecoding with an AI. In an online match your faction travels to your opponent as data, and their game checks it against the rules. Any two factions get a fair fight, even ones that have never met.
 
 ### ⚖️ Physics keeps it fair
-You never set HP, damage, speed or cost. You shape **bodies**: mass, how that mass splits between muscle, frame (bone, shell, plate) and reserve, and the crystal weapon the body swings or throws. The engine derives everything else, applying the same rules to every body:
+You shape **bodies**, and the engine works out HP, damage, speed and cost. A body is mass, how that mass splits between muscle, frame (bone, shell, plate) and reserve, and the crystal weapon the body swings or throws. The same rules apply to every body:
 
 | | What physics decides |
 |---|---|
@@ -30,14 +30,14 @@ You never set HP, damage, speed or cost. You shape **bodies**: mass, how that ma
 | **Throws** | Stones fly real ballistic arcs. |
 | **Cost** | Follows the body: a giant hits hard, but it's slow, hungry and expensive. |
 
-Rock-paper-scissors falls out of the dynamics (spears beat cavalry, and cavalry runs down infantry and throwers), not out of a bonus table. The **Arena** scores every matchup.
+Rock-paper-scissors comes straight out of the dynamics: spears beat cavalry, and cavalry runs down infantry and throwers. The **Arena** scores every matchup.
 
 ![The arena: lynx lancers charge a block of macemen, with the matchup matrix alongside](docs/screenshots/arena.png)
 
 ### 🍖 Resources are physical: calories, crystals, carts
 - **Calories.** Every body has a calorie tank sized by its mass and reserve. Walking, sprinting and every blow burn it, and a big body moves each kilo more cheaply. An empty unit is exhausted: slow, and unable to fight until it eats. Units eat from their buildings' food stores, packs or food bearers. An army's reach depends on its supply, and a charge has a real cost.
 - **Crystals.** Every weapon's business end is crystal. A striker keeps its crystal, but a thrower spends one with every throw, and the spent stones lie where they land as shards anyone can pick up. Towers and garrisons throw from their building's own stock, and ammo bearers carry crystal into the field.
-- **Carts.** There's no global stockpile: resources sit in the building that gathered or received them. Carts and hauling workers move the spare to where it's needed, most urgent first, with your waiting orders first in line. Where you put buildings, and keeping their supply lines open, is part of the strategy.
+- **Carts.** Resources sit in the building that gathered or received them. Carts and hauling workers move the spare to where it's needed, most urgent first, with your waiting orders first in line. Where you put buildings, and keeping their supply lines open, is part of the strategy.
 
 ---
 
@@ -76,7 +76,7 @@ Play in the browser at **[mcscope.com/game/vibecraft](http://mcscope.com/game/vi
 
 The in-game guide, **[Make your army](http://mcscope.com/game/vibecraft/make.html)**, walks through it for players. In short:
 
-1. **Dream up your people.** Decide where they live, what they eat, how they fight and what makes them strange. Pick a theme, a playstyle and one or two signature ideas, and skim [DESIGN_SPACE.md](DESIGN_SPACE.md) for abilities nobody has used yet.
+1. **Dream up your people.** Decide where they live, what they eat, how they fight and what makes them strange. Pick a theme, a playstyle and one or two signature ideas, and skim [DESIGN_SPACE.md](DESIGN_SPACE.md) for abilities waiting for a first faction to use them.
 2. **Copy a faction.** Copy `src/factions/fenfolk/` (or `meadowfolk/`) to `src/factions/<yours>/`, then give it a new `id` and `name`.
 3. **Register it.** Add it to `PLAYABLE` in `src/factions/index.ts` and to the Codex in `src/codex.ts`.
 4. **Shape the bodies** (the table below). Watch the Codex or Unit Lab update as you change them.
@@ -92,23 +92,23 @@ The in-game guide, **[Make your army](http://mcscope.com/game/vibecraft/make.htm
 | `physique: { muscle, frame, reserve }` | How the mass splits. Muscle drives speed and blows, frame is health and plate, and reserve is calories. |
 | `attack: { style, crystalMass }` | `'strike'` or `'throw'`, and the kg of crystal it swings or throws. Throwers also carry `ammo`. |
 | `attack.shaft` | Metres of spear (strikers): adds reach, and impales chargers. |
-| `attack.sidearm` | A hand weapon worn beside a shaft, for when the point can't bear. |
+| `attack.sidearm` | A hand weapon worn beside a shaft, for close in and to the sides. |
 | `attack.sling` | Metres of cord (throwers): a lever that speeds light stones up to what the muscle allows. |
 | `length` | Metres nose to tail, for a long body that gallops and wheels round. |
-| `refinement` | Makes the unit cheaper to train, never stronger. Buildings and techs raise it. |
+| `refinement` | Makes the unit cheaper to train. Buildings and techs raise it. |
 
 `src/factions/types.ts` documents every field.
 
 ### Rules of the road
-- **A faction is self-contained.** Never import another faction's files. Shared helpers live in `src/kits/` and `src/biomes/`.
-- **Don't add stats by hand.** If something should be stronger, give it a bigger body or better refinement, and the physics prices it.
+- **A faction is self-contained.** It imports only its own files, and shared helpers from `src/kits/` and `src/biomes/`.
+- **Strength comes from the body.** To make something stronger, give it a bigger body or better refinement, and the physics prices it.
 - **New behaviour is an engine ability.** Flying, burrowing, healing... add it as a generic, data-defined ability in `src/sim/abilities/` that any faction can switch on, with a validation check and a Codex line.
 
 ---
 
 ## Playing online
 
-Online games are 1v1. Each player runs their own copy with their own faction. When the match starts, your faction (specs and baked art) travels to your opponent as data, so you never need each other's code.
+Online games are 1v1. Each player runs their own copy with their own faction. When the match starts, your faction (specs and baked art) travels to your opponent as data, so each player needs only their own code.
 
 1. **Start a relay.** The hosted game's lobby uses `ws://mcscope.com:5190`. To run your own, `npm run relay` starts a tiny WebSocket relay on port 5190. Over the internet, run it somewhere public and use `ws://<host>:5190`, or `wss://` behind TLS if the game is served over https.
 2. **Join.** Each player opens **Online game** and enters the relay address, the same room code, a name and a faction. On a LAN, `npm run dev -- --host` lets others reach your copy.
@@ -116,7 +116,7 @@ Online games are 1v1. Each player runs their own copy with their own faction. Wh
 
 Both players need the same engine version, because lockstep needs identical rules on both sides.
 
-**Fairness.** Your opponent's client never trusts your numbers. It derives every stat and cost from your specs with its own physics, so a bundle can't claim cheaper units. Everyone starts from the same pool (`START_POOL`). Your starting base and workers are paid out of it, so a grand base means a lean start. The client also bounds the few things physics doesn't price, like how much wildlife roams your half. The rules are in `src/sim/fairness.ts`.
+**Fairness.** Your opponent's client derives every stat and cost from your specs with its own physics, so every unit costs what its body is worth. Everyone starts from the same pool (`START_POOL`). Your starting base and workers are paid out of it, so a grand base means a lean start. The client also sets limits on the few things outside physics, like how much wildlife roams your half. The rules are in `src/sim/fairness.ts`.
 
 **Determinism.** Only commands cross the wire, and every client simulates the same world. Anything nondeterministic in the sim (`Math.random`, wall-clock time, unordered iteration) desyncs a match, so use `world.rng`. `tests/determinism.test.ts` guards this.
 
