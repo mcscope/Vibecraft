@@ -24,7 +24,8 @@
     "fenfolk_voices_09",
     "fenfolk_voices_10",
     "fenfolk_voices_11",
-    "fenfolk_voices_13"
+    "fenfolk_voices_13",
+    "supplement2_21"
    ],
    "order": [
     "fenfolk_voices_28"
@@ -42,6 +43,9 @@
     "fenfolk_voices_17",
     "fenfolk_voices_18",
     "fenfolk_voices_19"
+   ],
+   "death": [
+    "supplement2_07"
    ]
   },
   "fenfolk:reedguard": {
@@ -50,14 +54,26 @@
     "fenfolk_voices_05",
     "fenfolk_voices_06",
     "fenfolk_voices_12"
+   ],
+   "death": [
+    "supplement2_08"
    ]
   },
   "fenfolk:great-siege-heron": {
    "select": [
-    "fenfolk_voices_30"
+    "fenfolk_voices_30",
+    "supplement2_36"
    ],
    "order": [
-    "fenfolk_voices_31"
+    "fenfolk_voices_31",
+    "supplement2_34"
+   ],
+   "any": [
+    "supplement2_31"
+   ],
+   "death": [
+    "supplement2_41",
+    "supplement2_43"
    ]
   },
   "fenfolk:pack-tortoise": {
@@ -69,7 +85,9 @@
    "select": [
     "meadowfolk_voices_01",
     "meadowfolk_voices_15",
-    "meadowfolk_voices_17"
+    "meadowfolk_voices_17",
+    "supplement2_12",
+    "supplement2_17"
    ],
    "any": [
     "meadowfolk_voices_02",
@@ -84,10 +102,14 @@
    ],
    "order": [
     "meadowfolk_voices_14",
-    "meadowfolk_voices_16"
+    "meadowfolk_voices_16",
+    "supplement2_04",
+    "supplement2_19"
    ],
    "death": [
-    "meadowfolk_voices_20"
+    "meadowfolk_voices_20",
+    "supplement2_05",
+    "supplement2_06"
    ]
   },
   "meadowfolk:slinger": {
@@ -100,14 +122,20 @@
    ],
    "select": [
     "meadowfolk_voices_18",
-    "meadowfolk_voices_46"
+    "meadowfolk_voices_46",
+    "supplement2_12",
+    "supplement2_17"
    ],
    "death": [
     "meadowfolk_voices_20",
-    "meadowfolk_voices_21"
+    "meadowfolk_voices_21",
+    "supplement2_05",
+    "supplement2_06"
    ],
    "order": [
-    "meadowfolk_voices_93"
+    "meadowfolk_voices_93",
+    "supplement2_04",
+    "supplement2_19"
    ]
   },
   "meadowfolk:pikeman": {
@@ -122,13 +150,19 @@
    ],
    "order": [
     "meadowfolk_voices_12",
-    "meadowfolk_voices_58"
+    "meadowfolk_voices_58",
+    "supplement2_04",
+    "supplement2_19"
    ],
    "death": [
-    "meadowfolk_voices_20"
+    "meadowfolk_voices_20",
+    "supplement2_05",
+    "supplement2_06"
    ],
    "select": [
-    "meadowfolk_voices_47"
+    "meadowfolk_voices_47",
+    "supplement2_12",
+    "supplement2_17"
    ]
   },
   "meadowfolk:maceman": {
@@ -137,17 +171,23 @@
     "meadowfolk_voices_10",
     "meadowfolk_voices_22",
     "meadowfolk_voices_23",
-    "meadowfolk_voices_24"
+    "meadowfolk_voices_24",
+    "supplement2_12",
+    "supplement2_17"
    ],
    "order": [
     "meadowfolk_voices_11",
     "meadowfolk_voices_26",
     "meadowfolk_voices_28",
-    "meadowfolk_voices_52"
+    "meadowfolk_voices_52",
+    "supplement2_04",
+    "supplement2_19"
    ],
    "death": [
     "meadowfolk_voices_20",
-    "meadowfolk_voices_87"
+    "meadowfolk_voices_87",
+    "supplement2_05",
+    "supplement2_06"
    ],
    "any": [
     "meadowfolk_voices_34",
@@ -161,7 +201,9 @@
    "any": [
     "meadowfolk_voices_36",
     "meadowfolk_voices_43",
-    "meadowfolk_voices_68"
+    "meadowfolk_voices_68",
+    "supplement2_23",
+    "supplement2_26"
    ]
   },
   "meadowfolk:lynx": {
@@ -190,7 +232,8 @@
    ],
    "any": [
     "meadowfolk_voices_79",
-    "meadowfolk_voices_90"
+    "meadowfolk_voices_90",
+    "supplement2_11"
    ],
    "order": [
     "meadowfolk_voices_82"
@@ -198,6 +241,126 @@
    "attack": [
     "meadowfolk_voices_84",
     "meadowfolk_voices_85"
+   ]
+  },
+  "combat:swing": {
+   "any": [
+    "combat_01",
+    "combat_02",
+    "combat_03",
+    "combat_06",
+    "combat_09",
+    "combat_12",
+    "combat_14",
+    "combat_25",
+    "combat_27",
+    "combat_28",
+    "combat_30",
+    "combat_31",
+    "combat_33",
+    "combat_35",
+    "combat_38",
+    "combat_39",
+    "combat_40",
+    "combat_42",
+    "combat_49",
+    "combat_51",
+    "combat_53",
+    "combat_55",
+    "combat_56",
+    "combat_57",
+    "combat_58",
+    "combat_67",
+    "combat_79",
+    "combat_84",
+    "combat_89",
+    "combat_90",
+    "combat_92",
+    "combat_93",
+    "combat_96",
+    "combat_98",
+    "combat_99",
+    "combat_100",
+    "combat_101"
+   ]
+  },
+  "combat:light": {
+   "any": [
+    "combat_04",
+    "combat_05",
+    "combat_10",
+    "combat_11",
+    "combat_13",
+    "combat_20",
+    "combat_21",
+    "combat_22",
+    "combat_23",
+    "combat_24",
+    "combat_26",
+    "combat_29",
+    "combat_34",
+    "combat_36",
+    "combat_37",
+    "combat_43",
+    "combat_44",
+    "combat_45",
+    "combat_46",
+    "combat_47",
+    "combat_48",
+    "combat_50",
+    "combat_52",
+    "combat_54",
+    "combat_63",
+    "combat_77",
+    "combat_88",
+    "combat_91",
+    "combat_94",
+    "combat_95",
+    "combat_97"
+   ]
+  },
+  "combat:solid": {
+   "any": [
+    "combat_07",
+    "combat_08",
+    "combat_15",
+    "combat_17",
+    "combat_18",
+    "combat_19",
+    "combat_32",
+    "combat_41",
+    "combat_59",
+    "combat_60",
+    "combat_61",
+    "combat_62",
+    "combat_64",
+    "combat_65",
+    "combat_66",
+    "combat_68",
+    "combat_69",
+    "combat_71",
+    "combat_72",
+    "combat_73",
+    "combat_75",
+    "combat_76",
+    "combat_78",
+    "combat_80",
+    "combat_85",
+    "combat_86",
+    "combat_87",
+    "combat_102",
+    "combat_103",
+    "combat_104"
+   ]
+  },
+  "combat:heavy": {
+   "any": [
+    "combat_16",
+    "combat_70",
+    "combat_74",
+    "combat_81",
+    "combat_82",
+    "combat_83"
    ]
   }
  },
@@ -307,6 +470,43 @@
    "highcut": 6400,
    "gain": -3,
    "pitch": -1.5
+  },
+  "supplement2_05": {
+   "drive": 0.05,
+   "highcut": 9000
+  },
+  "supplement2_06": {
+   "drive": 0,
+   "lowcut": 380,
+   "highcut": 10200
+  },
+  "supplement2_07": {
+   "pitch": -3
+  },
+  "supplement2_11": {
+   "drive": 0.05
+  },
+  "supplement2_21": {
+   "drive": 0.05
+  },
+  "supplement2_26": {
+   "highcut": 11000
+  },
+  "supplement2_31": {
+   "drive": 0.05,
+   "highcut": 3700,
+   "pitch": -1.5
+  },
+  "supplement2_34": {
+   "drive": 0.1
+  },
+  "supplement2_36": {
+   "drive": 0.1,
+   "pitch": 1
+  },
+  "supplement2_41": {
+   "drive": 0.05,
+   "highcut": 20000
   }
  },
  "unitFx": {}

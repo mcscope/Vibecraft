@@ -9,7 +9,7 @@ import type { Camera } from '../render/camera';
 import type { ArtBank } from '../render/artbank';
 import type { World, WorldEvent } from '../sim/world';
 import { settings, onSettings } from '../ui/settings';
-import { preloadVoices, sayLine, voicesOn } from './clips';
+import { playCombat, preloadVoices, sayLine, voicesOn } from './clips';
 
 const FORMANTS: Record<NonNullable<SynthRecipe['vowel']>, [number, number]> = {
   a: [800, 1200], e: [500, 1900], i: [320, 2300], o: [500, 900], u: [350, 700],
@@ -96,7 +96,13 @@ export class AudioEngine {
           const at = this.where(cam, e.x, e.y);
           const custom = e.specId ? this.bank.unit(e.owner, e.specId)?.sounds?.attack : undefined;
           if (custom) this.play(custom, at);
-          else this.synth({ kind: 'whoosh', pitch: 900 / Math.cbrt(Math.max(0.2, e.kg)), length: e.style === 'throw' ? 0.32 : 0.18 }, at, 0.35);
+          else {
+            // a recorded swing or throw (Voice Lab "Combat" clips), else a synthesized whoosh
+            const kg = e.kg, style = e.style;
+            void playCombat(this.ctx!, this.out(at, 0.35), style === 'throw' ? 'throw' : 'swing').then((ok) => {
+              if (!ok) this.synth({ kind: 'whoosh', pitch: 900 / Math.cbrt(Math.max(0.2, kg)), length: style === 'throw' ? 0.32 : 0.18 }, at, 0.35);
+            });
+          }
           break;
         }
         case 'hit': {
@@ -104,10 +110,15 @@ export class AudioEngine {
           if (!this.allow('hit', 6, 120)) break;
           this.intensity = Math.min(1, this.intensity + 0.05);
           const at = this.where(cam, e.x, e.y);
-          // heavier blows: lower, louder thump; plus the crystal's ring
-          const energy = Math.max(1, e.damage);
-          this.synth({ kind: 'hit', pitch: 160 / Math.pow(energy / 30, 0.18), length: 0.18 + Math.min(0.4, energy / 1500) }, at, Math.min(1, 0.25 + Math.log10(energy) * 0.18));
-          this.synth({ kind: 'chime', pitch: 1900 + (e.target % 7) * 140, length: 0.35 }, at, 0.12);
+          // the physics picks the sound: how hard it landed (a recorded crack / thump / boom, else a synthesized one)
+          const energy = Math.max(1, e.damage), target = e.target;
+          const loud = Math.min(1, 0.25 + Math.log10(energy) * 0.18);
+          void playCombat(this.ctx!, this.out(at, loud), energy < 15 ? 'light' : energy < 70 ? 'solid' : 'heavy').then((ok) => {
+            if (ok) return;
+            // heavier blows: lower, louder thump; plus the crystal's ring
+            this.synth({ kind: 'hit', pitch: 160 / Math.pow(energy / 30, 0.18), length: 0.18 + Math.min(0.4, energy / 1500) }, at, loud);
+            this.synth({ kind: 'chime', pitch: 1900 + (target % 7) * 140, length: 0.35 }, at, 0.12);
+          });
           break;
         }
         case 'death': {

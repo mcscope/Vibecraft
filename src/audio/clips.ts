@@ -25,7 +25,7 @@ let playing = 0, impulse: AudioBuffer | null = null;
 const load = (): Promise<Manifest | null> => (manifest ??= fetch(BASE + 'manifest.json').then((r) => (r.ok ? r.json() : null)).catch(() => null));
 
 /** Start fetching the clips list (call once audio is allowed). */
-export function preloadVoices(): void { if (voicesOn()) void load(); }
+export function preloadVoices(): void { void load(); } // (combat sounds use the same clips list)
 
 function clip(ctx: AudioContext, id: string): Promise<AudioBuffer> {
   let b = buffers.get(id);
@@ -96,5 +96,29 @@ export async function sayLine(ctx: AudioContext, out: AudioNode, factionId: stri
   playing++;
   srcs[0][0].onended = () => { playing--; };
   for (const [s, delay] of srcs) s.start(ctx.currentTime + delay);
+  return true;
+}
+
+/**
+ * A combat sound (Voice Lab "Combat" clips: combat:swing, combat:throw, combat:light, combat:solid, combat:heavy),
+ * through `out`; false if there's no clip for it (the engine synthesizes one instead). Not a voice: no voice
+ * setting, no voice cap (the engine already limits how many swings and hits sound at once).
+ */
+export async function playCombat(ctx: AudioContext, out: AudioNode, kind: string): Promise<boolean> {
+  const m = await load();
+  const set = m?.lines[`combat:${kind}`];
+  const pool = set ? Object.values(set).flat() : [];
+  if (!m || !pool.length) return false;
+  const key = `combat:${kind}`, n = turn.get(key) ?? 0, id = pool[n % pool.length];
+  turn.set(key, n + 1);
+  const t = fxFor(m, id, key), buf = await clip(ctx, id);
+  const s = ctx.createBufferSource(); s.buffer = buf;
+  // a touch of random pitch so repeats don't sound stamped
+  s.playbackRate.value = Math.pow(2, (t.pitch + (Math.random() - 0.5) * 1.5) / 12);
+  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = t.lowcut;
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = t.highcut;
+  const g = ctx.createGain(); g.gain.value = Math.pow(10, t.gain / 20);
+  s.connect(hp).connect(lp).connect(g).connect(out);
+  s.start();
   return true;
 }

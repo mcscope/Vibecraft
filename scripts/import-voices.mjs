@@ -15,7 +15,11 @@ const newest = () => [process.cwd(), join(homedir(), 'Downloads')]
 const file = process.argv[2] ?? newest();
 if (!file) throw new Error('no voicelab_labels*.json found');
 const labels = JSON.parse(readFileSync(file, 'utf8'));
-const clips = (labels.clips ?? labels).filter((c) => c.unit !== 'skip');
+const labelled = labels.clips ?? labels;
+// combat clips not labelled yet keep the Voice Lab's measured guess (public/voicelab/combat.json)
+const seen = new Set(labelled.map((c) => c.id));
+const combat = existsSync('public/voicelab/combat.json') ? JSON.parse(readFileSync('public/voicelab/combat.json', 'utf8')) : [];
+const clips = [...labelled, ...combat.filter((c) => !seen.has(c.id)).map((c) => ({ id: c.id, unit: c.guess, line: 'any' }))].filter((c) => c.unit !== 'skip');
 
 const out = 'public/voices';
 rmSync(out, { recursive: true, force: true });
