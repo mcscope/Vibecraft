@@ -28,6 +28,10 @@ export class AudioEngine {
   private musicTimer = 0;
   private intensity = 0; // rises with combat, falls in peace
 
+  /** Sound the horn when the player's units or buildings are newly attacked (games, not showcases). */
+  alerts = false;
+  private lastAlert = { t: -Infinity, x: 0, y: 0 };
+
   constructor(private world: World, private bank: ArtBank, private player: number) {
     // browsers only allow audio after a user gesture
     const start = () => { this.start(); window.removeEventListener('pointerdown', start); window.removeEventListener('keydown', start); };
@@ -96,6 +100,7 @@ export class AudioEngine {
           break;
         }
         case 'hit': {
+          if (this.alerts) this.underAttack(e);
           if (!this.allow('hit', 6, 120)) break;
           this.intensity = Math.min(1, this.intensity + 0.05);
           const at = this.where(cam, e.x, e.y);
@@ -283,6 +288,40 @@ export class AudioEngine {
           o.start(t0); o.stop(t0 + len + 0.1);
         }
         break;
+      }
+    }
+  }
+
+  /** One of ours was hit: sound the horn, unless we already did lately for a fight near here. */
+  private underAttack(e: { x: number; y: number; target: number }): void {
+    const ours = this.world.units.get(e.target)?.owner ?? this.world.buildings.get(e.target)?.owner;
+    if (ours !== this.player) return;
+    const now = performance.now(), a = this.lastAlert;
+    const elsewhere = Math.hypot(e.x - a.x, e.y - a.y) > 12; // a new fight somewhere else
+    if (now - a.t < (elsewhere ? 4000 : 15000)) return;
+    this.lastAlert = { t: now, x: e.x, y: e.y };
+    this.horn();
+  }
+
+  /** A short war-horn call: two brassy notes, the second a fifth below. */
+  private horn(): void {
+    const ctx = this.ctx!, out = this.out({ pan: 0, gain: 1 }, 0.5, this.sfx, 0.35);
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 2; lp.connect(out);
+    const notes: Array<[number, number, number]> = [[220, 0, 0.42], [146.8, 0.46, 0.75]]; // A3, then D3
+    for (const [f, start, len] of notes) {
+      const t0 = ctx.currentTime + start;
+      const g = ctx.createGain(); g.connect(lp);
+      g.gain.setValueAtTime(0, t0);
+      g.gain.linearRampToValueAtTime(0.5, t0 + 0.08);
+      g.gain.setValueAtTime(0.45, t0 + len - 0.12);
+      g.gain.linearRampToValueAtTime(0, t0 + len);
+      // the brass opens up as it's blown: the filter sweeps up with each note
+      lp.frequency.setValueAtTime(500, t0);
+      lp.frequency.linearRampToValueAtTime(2200, t0 + 0.12);
+      for (const [det, type] of [[0, 'sawtooth'], [7, 'sawtooth'], [-1200, 'square']] as const) {
+        const o = ctx.createOscillator(); o.type = type; o.frequency.value = f; o.detune.value = det;
+        o.frequency.setValueAtTime(f * 0.97, t0); o.frequency.linearRampToValueAtTime(f, t0 + 0.06); // lips find the note
+        o.connect(g); o.start(t0); o.stop(t0 + len + 0.05);
       }
     }
   }

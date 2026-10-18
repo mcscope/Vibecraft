@@ -162,6 +162,7 @@ async function run(g: GameSetup): Promise<void> {
   // fog of war for whoever's playing (spectators and the proving grounds see everything)
   renderer.viewer = minimap.viewer = m === 'spectate' || m === 'demo' || m === 'faceoff' || m === 'tutorial' ? -1 : HUMAN;
   const audio = new AudioEngine(world, bank, HUMAN);
+  audio.alerts = m === 'skirmish' || m === 'online'; // a horn when your side is newly attacked
   const input = new Input(canvas, world, renderer, minimap, HUMAN, (cmd) => {
     local.issue(cmd);
     // the first unit given an order answers it
