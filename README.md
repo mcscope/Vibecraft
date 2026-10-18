@@ -22,13 +22,7 @@ Play one of the shipped factions, or make your own: its units, buildings, techs,
 ### ⚖️ Physics keeps it fair
 You shape **bodies**, and the engine works out HP, damage, speed and cost. A body is mass, how that mass splits between muscle, frame (bone, shell, plate) and reserve, and the crystal weapon the body swings or throws. The same rules apply to every body:
 
-| | What physics decides |
-|---|---|
-| **Speed** | Stride comes from leg and body length, so long four-legged bodies gallop, and turn wide. |
-| **Blows** | The swing's energy plus the collision of the bodies closing. A couched lance or a set pike takes the whole impact, up to the force at which its pole would buckle. |
-| **Armour** | Plate is frame beyond the skeleton, spread over the body's surface. |
-| **Throws** | Stones fly real ballistic arcs. |
-| **Cost** | Follows the body: a giant hits hard, but it's slow, hungry and expensive. |
+![What physics decides: muscle drives speed and blows, frame health and plate, reserve calories, length stride and turns; a blow adds the bodies' collision, throws fly ballistic arcs, and cost follows the kilos](docs/diagrams/physics.svg)
 
 Rock-paper-scissors comes straight out of the dynamics: spears beat cavalry, and cavalry runs down infantry and throwers. The **Arena** scores every matchup.
 

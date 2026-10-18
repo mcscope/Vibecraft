@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="500" viewBox="0 0 900 500" role="img" aria-labelledby="t d">
+  <title id="t">What physics decides</title>
+  <desc id="d">A body's mass splits into muscle, frame and reserve, and it carries a crystal weapon. Muscle drives speed and blows, frame drives health and plate, reserve drives calories, length drives stride and turning, the weapon's blow adds the collision of the bodies, throws fly ballistic arcs, and cost follows the body's kilos.</desc>
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#d8b25a"/>
+    </marker>
+    <linearGradient id="cr" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#bfeaf2"/><stop offset="1" stop-color="#4f9fb4"/>
+    </linearGradient>
+  </defs>
+  <style>
+    .h { font: 700 17px Georgia, 'Times New Roman', serif; fill: #d8b25a; }
+    .t { font: 14px system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; fill: #e9dfc4; }
+    .f { font: italic 14px Georgia, 'Times New Roman', serif; fill: #f0d78e; }
+    .s { font: 600 14px system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; fill: #1c1814; }
+    .l { font: 14px system-ui, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; fill: #e9dfc4; }
+    .card { fill: #1c1814; stroke-width: 1.5; }
+    .wire { fill: none; stroke: #d8b25a; stroke-width: 1.6; stroke-opacity: 0.85; }
+  </style>
+
+  <rect x="0" y="0" width="900" height="500" rx="18" fill="#2d2620"/>
+  <rect x="6" y="6" width="888" height="488" rx="14" fill="none" stroke="#8a6a34" stroke-width="1.5"/>
+  <text x="450" y="44" text-anchor="middle" style="font: 700 23px Georgia, 'Times New Roman', serif; fill: #d8b25a;">What physics decides</text>
+
+  <!-- left cards -->
+  <rect class="card" x="24" y="70" width="282" height="104" rx="10" stroke="#b5523b"/>
+  <text class="h" x="40" y="96">Muscle: speed and blows</text>
+  <text class="t" x="40" y="120">Limbs move faster, <tspan class="f">v ∝ √muscle</tspan></text>
+  <text class="t" x="40" y="141">Swing <tspan class="f">E = ½·m·v²</tspan>, up to what</text>
+  <text class="t" x="40" y="162">the muscle holds. Sprint 2.2× cruise.</text>
+
+  <rect class="card" x="24" y="190" width="282" height="104" rx="10" stroke="#cfc3a0"/>
+  <text class="h" x="40" y="216">Frame: health and plate</text>
+  <text class="t" x="40" y="240">HP grows with frame kg.</text>
+  <text class="t" x="40" y="261">Plate is frame beyond the skeleton,</text>
+  <text class="t" x="40" y="282">over the skin: <tspan class="f">thick ∝ kg ⁄ m<tspan dy="-6" style="font-size:11px">2/3</tspan></tspan></text>
+
+  <rect class="card" x="24" y="310" width="282" height="94" rx="10" stroke="#d89a3a"/>
+  <text class="h" x="40" y="336">Reserve: calories</text>
+  <text class="t" x="40" y="360">The tank grows with reserve kg.</text>
+  <text class="t" x="40" y="381">Walking, sprinting and blows burn it.</text>
+
+  <!-- right cards -->
+  <rect class="card" x="594" y="70" width="282" height="104" rx="10" stroke="#7fc8d8"/>
+  <text class="h" x="610" y="96">Weapon: the blow</text>
+  <text class="t" x="610" y="120">Swing + the bodies' collision <tspan class="f">½·μ·v²</tspan></text>
+  <text class="t" x="610" y="141">A set shaft takes the whole impact,</text>
+  <text class="t" x="610" y="162">up to buckling: <tspan class="f">F = π²EI ⁄ L²</tspan></text>
+
+  <rect class="card" x="594" y="190" width="282" height="104" rx="10" stroke="#7fc8d8"/>
+  <text class="h" x="610" y="216">Throw: a ballistic arc</text>
+  <text class="t" x="610" y="240">The stone leaves at limb speed,</text>
+  <text class="t" x="610" y="261">longer with a sling: <tspan class="f">range ≈ v² ⁄ g</tspan></text>
+  <text class="t" x="610" y="282">Every throw spends a crystal.</text>
+
+  <rect class="card" x="594" y="310" width="282" height="94" rx="10" stroke="#8a6a34"/>
+  <text class="h" x="610" y="336">Length: stride and turns</text>
+  <text class="t" x="610" y="360">Long bodies gallop, <tspan class="f">v ∝ √(g·stride)</tspan></text>
+  <text class="t" x="610" y="381">and turn wide: <tspan class="f">ω ≤ speed ⁄ length</tspan></text>
+
+  <!-- the body -->
+  <text class="l" x="450" y="78" text-anchor="middle" style="fill:#cfc3a0">a body of m kg</text>
+  <!-- weapon: shaft and crystal -->
+  <line x1="436" y1="190" x2="500" y2="104" stroke="#a07a45" stroke-width="6" stroke-linecap="round"/>
+  <path d="M500,104 L522,86 L514,112 L496,118 z" fill="url(#cr)" stroke="#e8fbff" stroke-width="1"/>
+  <text class="l" x="388" y="132" text-anchor="middle" style="fill:#bfeaf2">crystal</text>
+  <text class="l" x="388" y="150" text-anchor="middle" style="fill:#bfeaf2">weapon</text>
+
+  <rect x="360" y="190" width="180" height="56" rx="8" fill="#b5523b"/>
+  <rect x="360" y="246" width="180" height="40" fill="#cfc3a0"/>
+  <rect x="360" y="286" width="180" height="30" rx="0" fill="#d89a3a"/>
+  <path d="M360,300 v8 a8,8 0 0 0 8,8 h164 a8,8 0 0 0 8,-8 v-8" fill="#d89a3a"/>
+  <rect x="360" y="190" width="180" height="126" rx="8" fill="none" stroke="#1c1814" stroke-width="2"/>
+  <line x1="360" y1="246" x2="540" y2="246" stroke="#1c1814" stroke-width="2"/>
+  <line x1="360" y1="286" x2="540" y2="286" stroke="#1c1814" stroke-width="2"/>
+  <text class="s" x="450" y="223" text-anchor="middle">muscle</text>
+  <text class="s" x="450" y="271" text-anchor="middle">frame</text>
+  <text class="s" x="450" y="306" text-anchor="middle">reserve</text>
+
+  <!-- length dimension -->
+  <line x1="362" y1="342" x2="538" y2="342" stroke="#d8b25a" stroke-width="1.6" marker-start="url(#a)" marker-end="url(#a)"/>
+  <line x1="360" y1="332" x2="360" y2="352" stroke="#d8b25a" stroke-width="1.2"/>
+  <line x1="540" y1="332" x2="540" y2="352" stroke="#d8b25a" stroke-width="1.2"/>
+  <text class="l" x="450" y="368" text-anchor="middle">length, nose to tail</text>
+
+  <!-- wires -->
+  <path class="wire" d="M360,218 C335,218 335,122 310,122" marker-end="url(#a)"/>
+  <path class="wire" d="M360,266 C335,266 335,242 310,242" marker-end="url(#a)"/>
+  <path class="wire" d="M360,301 C335,301 335,357 310,357" marker-end="url(#a)"/>
+  <path class="wire" d="M526,96 C560,96 560,122 590,122" marker-end="url(#a)"/>
+  <path class="wire" d="M520,116 Q565,140 590,236" stroke-dasharray="5 4" marker-end="url(#a)"/>
+  <path class="wire" d="M540,342 C565,342 565,357 590,357" marker-end="url(#a)"/>
+  <path class="wire" d="M450,376 L450,420" marker-end="url(#a)"/>
+
+  <!-- cost -->
+  <rect class="card" x="170" y="424" width="560" height="52" rx="10" stroke="#d8b25a"/>
+  <text x="450" y="447" text-anchor="middle"><tspan class="h">Cost follows the kilos. </tspan><tspan class="t">Food is body kg, plus extra for</tspan></text>
+  <text class="t" x="450" y="467" text-anchor="middle">muscle and frame, ÷ refinement: a giant hits hard but is slow, hungry, dear.</text>
+</svg>
