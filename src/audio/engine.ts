@@ -113,7 +113,14 @@ export class AudioEngine {
           // the physics picks the sound: how hard it landed (a recorded crack / thump / boom, else a synthesized one)
           const energy = Math.max(1, e.damage), target = e.target;
           const loud = Math.min(1, 0.25 + Math.log10(energy) * 0.18);
-          void playCombat(this.ctx!, this.out(at, loud), energy < 15 ? 'light' : energy < 70 ? 'solid' : 'heavy').then((ok) => {
+          // heavy hits drop in pitch with their energy (a 290 charge sits well below a 70 blow) and get a body thud
+          // under them; the biggest try the Charge clips first
+          const heavy = energy >= 70, semis = heavy ? -Math.min(9, 5 * Math.log2(energy / 70)) : 0;
+          if (heavy) this.synth({ kind: 'hit', pitch: 70 / Math.pow(energy / 70, 0.25), length: 0.35 + Math.min(0.5, energy / 800) }, at, loud * 0.7);
+          const kind = energy < 15 ? 'light' : !heavy ? 'solid' : 'heavy';
+          void (energy >= 150 ? playCombat(this.ctx!, this.out(at, loud), 'charge', semis + 3) : Promise.resolve(false))
+            .then((ok) => ok || playCombat(this.ctx!, this.out(at, loud), kind, semis))
+            .then((ok) => {
             if (ok) return;
             // heavier blows: lower, louder thump; plus the crystal's ring
             this.synth({ kind: 'hit', pitch: 160 / Math.pow(energy / 30, 0.18), length: 0.18 + Math.min(0.4, energy / 1500) }, at, loud);
@@ -139,9 +146,16 @@ export class AudioEngine {
           if (e.owner === this.player) this.chord([0, 7, 12, 16, 19], 392, 0.45, 0.12);
           break;
         case 'buildingDestroyed': {
-          const at = { pan: 0, gain: 0.9 };
-          this.synth({ kind: 'hit', pitch: 55, length: 1.2 }, at, 1);
-          this.synth({ kind: 'whoosh', pitch: 300, length: 1.4 }, at, 0.5);
+          const at = this.where(cam, e.x, e.y), big = Math.min(1.6, 0.8 + e.size * 0.25);
+          // the low rumble of it coming down
+          this.synth({ kind: 'hit', pitch: 55 / big, length: 1.2 * big }, at, 1);
+          this.synth({ kind: 'whoosh', pitch: 300, length: 1.4 * big }, at, 0.5);
+          // a recorded collapse, else timber and stone falling: heavy and solid clips pitched way down, staggered
+          void playCombat(this.ctx!, this.out(at, 0.9), 'collapse').then((ok) => {
+            if (ok) return;
+            [[0, 'heavy', -12], [0.12, 'solid', -10], [0.3, 'heavy', -14], [0.55, 'solid', -11], [0.85, 'solid', -13]].forEach(([d, k, st]) =>
+              void playCombat(this.ctx!, this.out(at, 0.7), k as string, (st as number) - e.size, d as number));
+          });
           break;
         }
       }

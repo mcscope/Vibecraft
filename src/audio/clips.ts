@@ -117,7 +117,8 @@ export async function sayLine(ctx: AudioContext, out: AudioNode, factionId: stri
  * through `out`; false if there's no clip for it (the engine synthesizes one instead). Not a voice: no voice
  * setting, no voice cap (the engine already limits how many swings and hits sound at once).
  */
-export async function playCombat(ctx: AudioContext, out: AudioNode, kind: string): Promise<boolean> {
+/** `semis`: shift its pitch (heavier, lower); `delay`: seconds from now. */
+export async function playCombat(ctx: AudioContext, out: AudioNode, kind: string, semis = 0, delay = 0): Promise<boolean> {
   const m = await load();
   const set = m?.lines[`combat:${kind}`];
   const pool = (set ? Object.values(set).flat() : []).filter((id) => !struck.has(id));
@@ -128,11 +129,11 @@ export async function playCombat(ctx: AudioContext, out: AudioNode, kind: string
   log(id, key);
   const s = ctx.createBufferSource(); s.buffer = buf;
   // a touch of random pitch so repeats don't sound stamped
-  s.playbackRate.value = Math.pow(2, (t.pitch + (Math.random() - 0.5) * 1.5) / 12);
+  s.playbackRate.value = Math.pow(2, (t.pitch + semis + (Math.random() - 0.5) * 1.5) / 12);
   const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = t.lowcut;
   const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = t.highcut;
   const g = ctx.createGain(); g.gain.value = Math.pow(10, t.gain / 20);
   s.connect(hp).connect(lp).connect(g).connect(out);
-  s.start();
+  s.start(ctx.currentTime + delay);
   return true;
 }

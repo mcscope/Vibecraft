@@ -353,7 +353,7 @@ export type WorldEvent =
   | { type: 'trained'; id: number; owner: number }
   | { type: 'built'; id: number; owner: number }
   | { type: 'researched'; owner: number; techId: string }
-  | { type: 'buildingDestroyed'; id: number; owner: number }
+  | { type: 'buildingDestroyed'; id: number; owner: number; x: number; y: number; size: number }
   | { type: 'gameOver'; winner: number };
 
 export interface WorldOptions {
@@ -2275,7 +2275,7 @@ export class World {
       this.beltRoutes = null;
       if (isUnderfoot(b.spec)) this.underfootTiles.delete(b.oy * this.grid.width + b.ox);
       else for (let y = b.oy; y < b.oy + b.size; y++) for (let x = b.ox; x < b.ox + b.size; x++) this.grid.block(x, y, -1);
-      this.events.push({ type: 'buildingDestroyed', id: b.id, owner: b.owner });
+      this.events.push({ type: 'buildingDestroyed', id: b.id, owner: b.owner, x: b.ox + b.size / 2, y: b.oy + b.size / 2, size: b.size });
     }
     if (this.tick % TICK_RATE !== 0 || !this.scenario.victory) return;
     for (const p of this.players) {
