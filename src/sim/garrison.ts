@@ -58,7 +58,7 @@ export function tickGarrison(w: World, b: Building): void {
     if (!target) continue;
     u.cooldown = u.stats.cooldown;
     u.ammo -= u.crystalMass;
-    const damage = u.stats.damage + u.crystalMass * K.gravity * h * K.throwEfficiency * K.damageScale;
+    const damage = u.stats.damage + u.crystalMass * K.gravity * h * K.damageScale;
     w.launch(b.owner, cx, cy, h, target.x, target.y, damage, u.crystalMass, target.id);
   }
 }

@@ -9,7 +9,7 @@
 //
 // Core identities:
 //   attack energy  E = ½ · m_crystal · v²      (kinetic energy of the crystal)
-//   damage         = E · efficiency · scale    (strike 1.0, throw 0.75; scale sets fight pace)
+//   damage         = E · scale                (a blow or a stone hands over its energy; scale sets fight pace)
 //   calories spent = E / MUSCLE_EFFICIENCY     (muscles are ~50% efficient)
 //   v              = min(limbSpeed, √(2·maxEnergy / m_crystal))
 //
@@ -58,8 +58,6 @@ export const K = {
   energyPerMuscleKg: 3, // max cal per single attack
   powerPerMuscleKg: 2, // sustained cal/s into attacks
   muscleEfficiency: 0.5,
-  strikeEfficiency: 1.0,
-  throwEfficiency: 0.75,
   /**
    * Fight pace: the share of attack energy that becomes damage, for every
    * faction alike. 1/6 puts time-to-kill near Age of Empires II (a duel of
@@ -297,7 +295,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   const attackEnergy = 0.5 * strikeMass * crystalVelocity * crystalVelocity;
   // and it has to be spun up first: about a turn of the arm and cord before release
   const windUp = sling ? (2 * Math.PI * (arm + sling)) / crystalVelocity : 0;
-  const damage = canAttack ? attackEnergy * (throwing ? K.throwEfficiency : K.strikeEfficiency) * K.damageScale : 0;
+  const damage = canAttack ? attackEnergy * K.damageScale : 0;
   const attackCalories = attackEnergy / K.muscleEfficiency;
   const power = K.powerPerMuscleKg * muscleMass;
   const cooldown = Math.max(K.minCooldown, attackEnergy / power) + (throwing ? K.throwReload : 0) + windUp; // a heavier weapon takes longer to bring round
@@ -497,7 +495,7 @@ export function towerStats(t: BuildingSpec['attack']): TowerStats | null {
   const v = Math.min(limb, Math.sqrt((2 * maxE) / mc));
   const energy = 0.5 * mc * v * v;
   const h = Math.max(0, t.height);
-  const damage = (energy + mc * K.gravity * h) * K.throwEfficiency * K.damageScale;
+  const damage = (energy + mc * K.gravity * h) * K.damageScale;
   const vy = v * Math.SQRT1_2;
   const range = Math.min(K.maxThrowRange + h / M_PER_TILE, (vy * ((vy + Math.sqrt(vy * vy + 2 * K.gravity * h)) / K.gravity)) / M_PER_TILE);
   const cooldown = Math.max(K.minCooldown, energy / (K.powerPerMuscleKg * m)) + K.throwReload;

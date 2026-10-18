@@ -157,7 +157,7 @@ export const canReach = (attacker: Unit, target: Unit): boolean =>
 export const verticalReach = (u: Unit): number => 0.8 * bodyHeight(u.stats.mass) + Math.max(0, u.stats.range - u.stats.radius) * M_PER_TILE;
 
 /** Extra damage a crystal gains falling from flying height. */
-export const heightBonus = (u: Unit): number => (u.airborne ? u.crystalMass * K.gravity * u.alt * K.throwEfficiency * K.damageScale : 0);
+export const heightBonus = (u: Unit): number => (u.airborne ? u.crystalMass * K.gravity * u.alt * K.damageScale : 0);
 
 export const flight: Ability = {
   id: 'flight',

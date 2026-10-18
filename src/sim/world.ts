@@ -287,7 +287,7 @@ function chargePays(u: Unit, t: Unit): boolean {
   const delivered = Math.min(energy, (st.minReach > 0 ? st.shaftForce : st.holdForce) * K.blowDepth);
   const runUp = (v * v) / (2 * K.traction * K.gravity); // m
   const cycle = (4 * runUp) / v + Math.PI / st.turnRate; // out and back at half speed on average, plus turning round
-  return (st.damage + delivered * K.strikeEfficiency * K.damageScale) / cycle > 1.5 * (st.damage / st.cooldown);
+  return (st.damage + delivered * K.damageScale) / cycle > 1.5 * (st.damage / st.cooldown);
 }
 
 /**
@@ -1482,7 +1482,7 @@ export class World {
       // the blow carries the collision too: ½·μ·v² of the two bodies' closing speed, whoever is moving
       // (a charge onto a set point, or a charger's own weapon, hits as hard as the bodies meet)
       const hit = collisionEnergy(u, tu ?? null, tx, ty);
-      this.damage(targetId, wpn.damage + hit.delivered * K.strikeEfficiency * K.damageScale, tx, ty);
+      this.damage(targetId, wpn.damage + hit.delivered * K.damageScale, tx, ty);
       if (tu && hit.delivered > 0) {
         // the blow is an impulse, equal and opposite: each body changes speed by it over its own mass,
         // so a heavy charger ploughs on while a light body is flung (and either may be knocked off its feet)
