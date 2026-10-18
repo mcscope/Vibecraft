@@ -64,7 +64,10 @@ export async function sayLine(ctx: AudioContext, out: AudioNode, factionId: stri
   const m = await load();
   const unit = `${factionId}:${specId}`, set = m?.lines[unit];
   if (!m || !set) return false;
-  const pool = set[line]?.length ? set[line]! : set.any ?? [];
+  // a moment's own clips mixed with the unit's general ("any line") ones; death keeps to death clips, falling back
+  // to the general ones only if it has none (a cheerful grunt is no death cry)
+  const own = set[line] ?? [], any = set.any ?? [];
+  const pool = line === 'death' ? (own.length ? own : any) : [...own, ...any];
   if (!pool.length) return false;
   const now = performance.now();
   // (an echo comes straight after the line it repeats, so it skips the cooldown)
