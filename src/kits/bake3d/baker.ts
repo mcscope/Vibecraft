@@ -161,8 +161,10 @@ export class Baker {
     this.camera.lookAt(0, 0, 0);
   }
 
+  /** Free the GPU: its WebGL context too, not just when it's garbage-collected (browsers cap live contexts per page). */
   dispose(): void {
     this.renderer.dispose();
+    this.renderer.forceContextLoss();
   }
 
   /** Measure a model's bounding cylinder (radius, height) across a few poses. */

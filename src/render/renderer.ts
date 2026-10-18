@@ -189,12 +189,21 @@ export class Renderer {
   }
 
   async init(): Promise<void> {
-    await this.app.init({
-      canvas: this.canvas, preference: 'webgl', background: '#000000', antialias: false,
-      // sprites are baked at ≤2× so rendering finer than that only costs fill rate
-      autoStart: false, autoDensity: true, resolution: Math.min(2, window.devicePixelRatio || 1),
-      width: window.innerWidth, height: window.innerHeight,
-    });
+    try {
+      await this.app.init({
+        canvas: this.canvas, preference: 'webgl', background: '#000000', antialias: false,
+        failIfMajorPerformanceCaveat: false, // a software-rendered WebGL still plays
+        // sprites are baked at ≤2× so rendering finer than that only costs fill rate
+        autoStart: false, autoDensity: true, resolution: Math.min(2, window.devicePixelRatio || 1),
+        width: window.innerWidth, height: window.innerHeight,
+      });
+    } catch (e) {
+      // no WebGL (or WebGPU) for this page: say so, rather than sit on the loading screen
+      const loading = document.getElementById('loading');
+      const label = loading?.querySelector<HTMLElement>('.label');
+      if (label) label.textContent = 'Your browser gave the game no WebGL. Reload the page; if that fails, restart the browser, or turn on hardware acceleration in its settings.';
+      throw e;
+    }
     this.app.stage.addChild(this.worldLayer, this.screenLayer, this.texts);
     this.objects.sortableChildren = true;
     this.trees.sortableChildren = true;
