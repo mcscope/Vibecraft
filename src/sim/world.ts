@@ -164,7 +164,6 @@ export interface Unit {
   /** How it meets the enemy: 'hold' stands its ground (strikes what comes to it, shafts set), 'charge' sprints in from any distance and runs through, 'auto' decides. */
   stance: 'auto' | 'hold' | 'charge';
   /** Riding out to come round for another charge: where it's heading before it wheels (null: not). */
-  runOut: [number, number] | null;
   /** Where it faces (radians, map space; `heading` is this as an octant) and what turning it has left this tick. */
   facing: number; turnTick: number; turnLeft: number;
   /** How it's actually been moving lately (tiles/s, smoothed over ~½ s): what an onlooker can see, and leads a throw by. */
@@ -938,7 +937,7 @@ export class World {
       food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
       order: { kind: 'idle' }, resume: null, queue: [], engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
-      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', runOut: null, facing: Math.PI / 4, turnTick: -1, turnLeft: 0,
+      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', facing: Math.PI / 4, turnTick: -1, turnLeft: 0,
       dummy: !!spec.dummy,
       carter: spec.role === 'carter',
       gatherAcc: 0,
@@ -1403,12 +1402,6 @@ export class World {
     const charging = u.stance === 'charge' || ((u.order.kind === 'attack' || u.order.kind === 'attackMove') && !!u.order.charge);
     // (a striker that charges to fight, its own order or because the run-up pays, comes back in at a sprint too)
     const sprint = !u.airborne && (edge < Math.max(K.sprintRange, runUp + range) || charging || (!wpn.throws && !!tu && u.stance !== 'hold' && chargePays(u, tu)));
-    // riding out to come round for another charge: get clear, then wheel and come again
-    if (u.runOut && tu) {
-      const [ox, oy] = u.runOut;
-      if (Math.hypot(u.x - tx, u.y - ty) >= runUp || Math.hypot(ox - u.x, oy - u.y) < 0.8) u.runOut = null;
-      else { this.moveTo(u, ox, oy, 0.5, true, true); return true; }
-    }
     // a thrower with an enemy close rams it with its body if it pays: the speed it can reach over the gap would knock
     // the target off its feet without jolting itself hurt (a great beast tramples a man; a slinger can't)
     // (it rams while it's reloading, or out of crystals: a throw is worth more when it has one ready)
@@ -1459,17 +1452,9 @@ export class World {
       return true;
     }
     if (u.airborne && !wpn.throws) u.airborne = false; // a melee flier lands to strike
-    // in reach at a run: a striker doesn't stop on a dime, it keeps its line and strikes in passing
-    // (then turns and comes again); at a walk it just pulls up (coasts to a stop)
-    const v = Math.hypot(u.vx, u.vy);
-    const rides = !u.airborne && !wpn.throws && !!tu && u.stance !== 'hold' && (charging || chargePays(u, tu)) && u.cal > u.stats.maxCalories * K.sprintMinCalories;
-    // its blow landed at a run: it doesn't push on into the press, it rides out away from the enemy mass to come round again
-    if (rides && v > u.stats.speed * 1.1 && u.cooldown > 0) u.runOut = this.rideOut(u, runUp + 1);
-    else if (!u.airborne && !wpn.throws && tu && v > u.stats.speed * 1.1) { const [px, py] = passBeside(u, tu, 4); this.moveTo(u, px, py, 0, true, true); } // not yet struck: keeps its line, alongside
-    // bogged down at a walk, but a run-up blow beats standing and swinging: ride out to come round again
-    else if (rides) {
-      u.runOut = this.rideOut(u, runUp + 1);
-    }
+    // in reach at a run: a striker doesn't stop on a dime, it keeps its line and strikes in passing, carried on past
+    // alongside; at a walk it just pulls up (coasts to a stop). Riding out to come round again is the player's call
+    if (!u.airborne && !wpn.throws && tu && Math.hypot(u.vx, u.vy) > u.stats.speed * 1.1) { const [px, py] = passBeside(u, tu, 4); this.moveTo(u, px, py, 0, true, true); }
     this.face(u, tx - u.x, ty - u.y);
     if (u.cooldown > 0 || u.exhausted) return true;
     if (!u.airborne && !this.facingWithin(u, tx - u.x, ty - u.y, Math.PI * 0.2)) return true; // still swinging round to bear on it
@@ -2082,21 +2067,6 @@ export class World {
   stagger(u: Unit, dv: number): void {
     if (dv <= u.stats.balance) return;
     u.staggered = Math.max(u.staggered, 0.3 + dv / (K.footBrake * K.gravity));
-  }
-
-  /** Where u rides out to, `out` tiles away from the enemy bodies close around it (or on along its run if none). */
-  private rideOut(u: Unit, out: number): [number, number] {
-    let cx = 0, cy = 0, n = 0;
-    for (const e of this.units.values()) {
-      if (e.owner === u.owner || this.players[e.owner]?.neutral || e.airborne || (e.x - u.x) ** 2 + (e.y - u.y) ** 2 > 16) continue;
-      cx += e.x; cy += e.y; n++;
-    }
-    const v = Math.hypot(u.vx, u.vy);
-    let dx = n ? u.x - cx / n : u.vx, dy = n ? u.y - cy / n : u.vy;
-    const d = Math.hypot(dx, dy);
-    if (d < 1e-3) { dx = v > 0.1 ? u.vx : 1; dy = v > 0.1 ? u.vy : 0; }
-    const k = out / (Math.hypot(dx, dy) || 1);
-    return [u.x + dx * k, u.y + dy * k];
   }
 
   /** Change u's velocity toward (wvx, wvy), by at most `acc`·DT (what its feet can push). */
