@@ -85,7 +85,8 @@ export interface BiomeArt {
 /** Loads a biome's art (lazily, like a faction's). */
 export type BiomeLoader = (onProgress?: (fraction: number, label: string) => void) => Promise<BiomeArt>;
 
-export type ArtLoader = (team: TeamColors, onProgress?: (fraction: number, label: string) => void) => Promise<FactionArt>;
+/** `only`: bake just these units, and no buildings (the arena bakes the units it's showing). */
+export type ArtLoader = (team: TeamColors, onProgress?: (fraction: number, label: string) => void, only?: string[]) => Promise<FactionArt>;
 
 // ───────────────────────────── sound ─────────────────────────────
 // Sounds are data so a faction can be sent over the network safely: a small

@@ -27,7 +27,7 @@ export async function runArena(params: URLSearchParams): Promise<void> {
   for (const b of [...world.buildings.values()]) world.buildings.delete(b.id);
   const seat = (e: ArenaEntry, side: 0 | 1) => PLAYABLE.indexOf(e.faction) + side * n;
 
-  // ── loading: bake the art (every faction twice: once per side's colour)
+  // ── loading: bake the art (each faction's units once per side's colour, only those a fight shows: see stage)
   const loading = document.getElementById('loading')!;
   loading.style.display = 'flex';
   const bar = loading.querySelector<HTMLElement>('.fill')!, label = loading.querySelector<HTMLElement>('.label')!;
@@ -35,7 +35,7 @@ export async function runArena(params: URLSearchParams): Promise<void> {
   const bank = await ArtBank.build(world, (p) => import('../biomes/meadow').then((m) => m.bakeMeadow(p)), (f, text) => {
     bar.style.width = `${Math.round(f * 100)}%`;
     label.textContent = text;
-  }, teams);
+  }, teams, []);
   const canvas = document.getElementById('game') as HTMLCanvasElement;
   const renderer = new Renderer(canvas, world, bank, { damageNumbers: true });
   await renderer.init();
@@ -116,8 +116,15 @@ export async function runArena(params: URLSearchParams): Promise<void> {
   // ── the live fight
   interface Fight { i: number; j: number; A: ArenaSide; B: ArenaSide; ticks: number; over: boolean; result: number; startHp: [number, number] }
   let fight: Fight | null = null;
-  const stage = (i: number, j: number) => {
-    const a = roster[i], b = roster[j];
+  let staging = 0;
+  const stage = async (i: number, j: number) => {
+    const a = roster[i], b = roster[j], my = ++staging;
+    // bake the two (once each; a quick look at the loading bar the first time)
+    const fresh = !bank.unit(seat(a, 0), a.id) || !bank.unit(seat(b, 1), b.id);
+    if (fresh) { loading.style.display = 'flex'; bar.style.width = '50%'; label.textContent = `Mustering ${name(a)} and ${name(b)}`; }
+    await Promise.all([bank.ensureUnits(seat(a, 0), [a.id]), bank.ensureUnits(seat(b, 1), [b.id])]);
+    if (fresh) loading.style.display = 'none';
+    if (my !== staging) return; // another fight was picked meanwhile
     const [A, B] = stageFight(world, { owner: seat(a, 0), specId: a.id }, { owner: seat(b, 1), specId: b.id }, budget);
     input.player = A.owner;
     if (control) { world.enqueue({ player: A.owner, cmd: { type: 'stop', units: A.ids } }); input.setSelection(A.ids); } // yours: they wait for orders

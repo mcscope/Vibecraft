@@ -406,7 +406,7 @@ export const meadowfolk: FactionSpec = {
   techs,
   resourceNames: { food: 'Berries', wood: 'Wood', crystal: 'Crystal' },
   // loaded lazily so the 3D tooling only arrives when art is needed
-  art: (team, onProgress) => import('./art').then((m) => m.bakeArt(team, onProgress)),
+  art: (team, onProgress, only) => import('./art').then((m) => m.bakeArt(team, onProgress, only)),
   // our half of the map: the spring meadow, with its deer and wolves
   biome: (onProgress) => import('../../biomes/meadow').then((m) => m.bakeMeadow(onProgress, 'spring')),
   wildlife: meadowWildlife,

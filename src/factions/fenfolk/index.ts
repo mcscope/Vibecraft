@@ -461,7 +461,7 @@ export const fenfolk: FactionSpec = {
   buildings,
   techs,
   resourceNames: { food: 'Roots', wood: 'Reeds', crystal: 'Crystal' },
-  art: (team, onProgress) => import('./art').then((m) => m.bakeArt(team, onProgress)),
+  art: (team, onProgress, only) => import('./art').then((m) => m.bakeArt(team, onProgress, only)),
   // our half of the map: a murky fen, with herons and bog lurkers
   biome: (onProgress) => import('./homeworld').then((m) => m.bakeHomeworld(onProgress)),
   wildlife: fenWildlife,

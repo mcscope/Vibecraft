@@ -25,7 +25,14 @@ export class ArtBank {
    * @param biomes each player's biome (their half of the map); `biome` is the
    *   map default (shards, projectiles, and any player without its own).
    */
-  private constructor(readonly factions: FactionArt[], readonly biome: BiomeArt, readonly biomes: BiomeArt[], private readonly world: World) {}
+  private constructor(readonly factions: FactionArt[], readonly biome: BiomeArt, readonly biomes: BiomeArt[], private readonly world: World, private readonly teams: TeamColors[]) {}
+
+  /** Bake any of these units the player's art doesn't have yet (a bank built with `only` fills in as it goes). */
+  async ensureUnits(owner: number, ids: string[]): Promise<void> {
+    const f = this.world.factionOf(owner), missing = ids.filter((id) => !this.factions[owner].units[id]);
+    if (!missing.length || !f.art) return;
+    Object.assign(this.factions[owner].units, (await f.art(this.teams[owner], undefined, missing)).units);
+  }
 
   /** The biome whose half of the map a point is in. */
   biomeAt(x: number, y: number): BiomeArt {
@@ -57,8 +64,11 @@ export class ArtBank {
     return [...out];
   }
 
-  /** `teams` overrides the seat colours (the arena paints every left side blue, every right side red). */
-  static async build(world: World, biome: BiomeLoader, onProgress: (f: number, label: string) => void, teams?: TeamColors[]): Promise<ArtBank> {
+  /**
+   * `teams` overrides the seat colours (the arena paints every left side blue, every right side red). `only`: bake
+   * just these units for every player, and no buildings (more come with ensureUnits).
+   */
+  static async build(world: World, biome: BiomeLoader, onProgress: (f: number, label: string) => void, teams?: TeamColors[], only?: string[]): Promise<ArtBank> {
     const players = world.players.filter((p) => !p.neutral);
     // the default biome is only baked if some player brings none of their own
     const loaders = [...new Set(players.map((p) => world.factionOf(p.id).biome ?? biome))];
@@ -69,16 +79,17 @@ export class ArtBank {
     const baked = new Map<BiomeLoader, BiomeArt>();
     for (const l of loaders) { baked.set(l, await l(sub)); base++; }
     const biomes = players.map((p) => baked.get(world.factionOf(p.id).biome ?? biome)!);
-    const factions: FactionArt[] = [];
+    const factions: FactionArt[] = [], colours: TeamColors[] = [];
     for (const p of world.players) {
       const f = world.factionOf(p.id);
       const team = p.neutral ? WILD_COLORS : teams?.[p.id] ?? TEAM_COLORS[p.id % TEAM_COLORS.length];
+      colours.push(team);
       if (p.neutral) factions.push(wildsArt(world, p.id, team, biomes));
-      else factions.push(f.art ? await f.art(team, sub) : placeholderArt(world, p.id, team));
+      else factions.push(f.art ? await f.art(team, sub, only) : placeholderArt(world, p.id, team));
       base++;
     }
     onProgress(1, 'Ready');
-    return new ArtBank(factions, baked.get(biome) ?? biomes[0], biomes, world);
+    return new ArtBank(factions, baked.get(biome) ?? biomes[0], biomes, world, colours);
   }
 }
 

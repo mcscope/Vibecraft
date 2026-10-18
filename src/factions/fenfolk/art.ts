@@ -2,7 +2,7 @@
 import type { FactionArt, TeamColors, UnitArt } from '../../art/contract';
 import { Baker } from '../../kits/bake3d/baker';
 import { toBitmaps } from '../../kits/bake3d/bitmaps';
-import { buildings, units } from './index';
+import { buildings as allBuildings, units as allUnits } from './index';
 import { fenBanner, fenWantFlag } from './buildings';
 
 /** High, chirping voices; the toad croaks. */
@@ -12,8 +12,9 @@ const VOICES: Record<string, UnitArt['sounds']> = {
   'bog-toad': { voice: { vowel: 'o', timbre: 'square', pitch: 60 } },
 };
 
-export async function bakeArt(team: TeamColors, onProgress?: (f: number, label: string) => void): Promise<FactionArt> {
+export async function bakeArt(team: TeamColors, onProgress?: (f: number, label: string) => void, only?: string[]): Promise<FactionArt> {
   const baker = new Baker();
+  const units = only ? allUnits.filter((u) => only.includes(u.id)) : allUnits, buildings = only ? [] : allBuildings;
   const carry = (id: string) => id === 'fenling';
   const total = units.reduce((n, u) => n + Baker.frameCount({ withCarry: carry(u.id), fly: !!u.flight, brace: !!u.attack?.shaft }), 0) + buildings.length * 6 + 1;
   let done = 0;

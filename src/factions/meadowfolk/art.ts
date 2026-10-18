@@ -2,7 +2,7 @@
 import type { FactionArt, TeamColors, UnitArt } from '../../art/contract';
 import { Baker } from '../../kits/bake3d/baker';
 import { toBitmaps } from '../../kits/bake3d/bitmaps';
-import { buildings, units } from './index';
+import { buildings as allBuildings, units as allUnits } from './index';
 import { rallyFlag, wantFlag } from './buildings';
 
 /** Voices for the default sound design (pitch drops with size anyway; these add character). */
@@ -15,8 +15,9 @@ const VOICES: Record<string, UnitArt['sounds']> = {
   mule: { voice: { vowel: 'i', timbre: 'square', pitch: 260 } },
 };
 
-export async function bakeArt(team: TeamColors, onProgress?: (f: number, label: string) => void): Promise<FactionArt> {
+export async function bakeArt(team: TeamColors, onProgress?: (f: number, label: string) => void, only?: string[]): Promise<FactionArt> {
   const baker = new Baker();
+  const units = only ? allUnits.filter((u) => only.includes(u.id)) : allUnits, buildings = only ? [] : allBuildings;
   const carry = (id: string) => id === 'villager' || id === 'mule';
   const total = units.reduce((n, u) => n + Baker.frameCount({ withCarry: carry(u.id), brace: !!u.attack?.shaft }), 0) + buildings.length * 6 + 1;
   let done = 0;
