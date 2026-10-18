@@ -261,14 +261,14 @@ function passBeside(u: Unit, t: Unit, beyond: number): [number, number] {
 /**
  * Would `u` ramming `t` from `gap` tiles away pay? Not onto a shaft's point. Otherwise, the speed it reaches over the
  * gap (from its current speed, pushing off at foot grip, up to its sprint) knocks `t` off its feet (its jolt, μ·v / its
- * mass, over K.staggerDv) while `u`'s own jolt stays under what injures it (K.injuryDv).
+ * mass, over its balance) while `u`'s own jolt stays under what injures it (K.injuryDv).
  */
 function ramPays(u: Unit, t: Unit, gap: number): boolean {
   if (t.stats.minReach > 0) return false; // it would run onto the point: the whole collision comes back through the shaft
   const a = K.traction * K.gravity, v0 = Math.hypot(u.vx, u.vy) * M_PER_TILE;
   const v = Math.min(u.stats.sprint * M_PER_TILE, Math.sqrt(v0 * v0 + 2 * a * gap * M_PER_TILE));
   const mu = (u.stats.mass * t.stats.mass) / (u.stats.mass + t.stats.mass);
-  return (mu * v) / t.stats.mass > K.staggerDv && (mu * v) / u.stats.mass < K.injuryDv;
+  return (mu * v) / t.stats.mass > t.stats.balance && (mu * v) / u.stats.mass < K.injuryDv;
 }
 
 /** Tiles a body needs to reach its sprint speed from rest, pushing off as hard as its feet grip (v² = 2·a·d). */
@@ -2036,6 +2036,11 @@ export class World {
       // lined up. So it slows to turn, and slower turns tighter; fast bodies sweep wide arcs. Nothing else.
       this.turnToward(u, Math.atan2(ddy, ddx));
       const fx = Math.cos(u.facing), fy = Math.sin(u.facing);
+      // but no faster than a turn its grip holds will bring it round to the waypoint: an arc of radius r = v²/grip
+      // reaches a point d off, θ off its line, if d ≥ 2·r·sin θ (one behind it needs the whole circle: d ≥ 2·r)
+      const off = Math.acos(Math.max(-1, Math.min(1, (fx * ddx + fy * ddy) / d)));
+      const s = off > Math.PI / 2 ? 1 : Math.sin(off);
+      if (s > 1e-3) want = Math.min(want, Math.sqrt((K.traction * K.gravity * d * M_PER_TILE) / (2 * s)) / M_PER_TILE);
       // not lined up, its legs stop pushing, but they don't brake: it keeps its pace while it swings round (it only
       // slows to stop, arriving or pulling up)
       const drive = Math.max(want * Math.max(0, (fx * ddx + fy * ddy) / d), Math.min(want, Math.hypot(u.vx, u.vy)));
@@ -2073,9 +2078,9 @@ export class World {
     this.stagger(u, Math.hypot(dvx, dvy));
   }
 
-  /** A jolt of `dv` m/s: past what a step can catch (K.staggerDv), it's off balance, the bigger the jolt the longer. */
+  /** A jolt of `dv` m/s: past what its stance can catch (its balance), it's off balance, the bigger the jolt the longer. */
   stagger(u: Unit, dv: number): void {
-    if (dv <= K.staggerDv) return;
+    if (dv <= u.stats.balance) return;
     u.staggered = Math.max(u.staggered, 0.3 + dv / (K.footBrake * K.gravity));
   }
 

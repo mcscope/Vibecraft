@@ -71,6 +71,7 @@ export const K = {
   minCooldown: 0.5,
   throwReload: 0.4,
   // Metabolism
+  /** A 70 kg body's cost of moving a kg a tile; per kg it falls with size as m^-0.3 (cost of transport, Taylor & Heglund). */
   moveCalPerKgTile: 0.15,
   gatherCalPerKg: 4,
   restRegenFraction: 0.004, // of tank per second when idle
@@ -121,7 +122,7 @@ export const K = {
   blowDepth: 0.15,
   /** A thrower considers ramming an enemy this close (tiles): see ramPays (sim/world.ts). */
   ramRange: 3,
-  /** A change of velocity (m/s) bigger than this in one hit or collision knocks a body off its feet for a moment: staggered. */
+  /** A change of velocity (m/s) bigger than this in one hit or collision knocks a 70 kg upright body off balance for a moment (staggered); see DerivedStats.balance. */
   staggerDv: 1.5,
   /** Bodies colliding: a jolt (change of velocity, m/s) under this is just jostling; it's how hard a body is jolted that injures it, like a fall... */
   injuryDv: 3,
@@ -188,6 +189,8 @@ export interface DerivedStats {
   canPlant: boolean;
   /** Metres nose to tail: given for a long body, else an upright body's depth from its mass. Every body's line turns no faster than speed ÷ this. */
   length: number;
+  /** The jolt (m/s) it takes without stumbling: a body stays balanced while its centre stays over its stance (the capture point), so it scales with stance length × √(g / hip height); K.staggerDv for a 70 kg upright body. */
+  balance: number;
 
   gatherRate: number;
   moveCalPerTile: number;
@@ -336,8 +339,9 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
     // a pike in a man's hands, not a lance on a mount
     canPlant: shaft > 1.5 * 1.7 * Math.cbrt(mass / 70),
     length,
+    balance: K.staggerDv * (length / (0.18 * bodyHeight(70))) * Math.sqrt(bodyHeight(70) / height),
     gatherRate,
-    moveCalPerTile: K.moveCalPerKgTile * mass,
+    moveCalPerTile: K.moveCalPerKgTile * mass * Math.pow(mass / 70, -0.3), // big bodies move a kg more cheaply
     restRegen: K.restRegenFraction * maxCalories,
     eatRate: K.eatRateFraction * maxCalories,
     foodCost, crystalCost, trainTime, refinement, workRefinement,
