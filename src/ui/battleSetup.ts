@@ -3,7 +3,7 @@
 import { PLAYABLE } from '../factions';
 import type { FactionSpec } from '../factions/types';
 import { BATTLE_MAPS } from '../sim/battleMaps';
-import { armyCost, draftable, unitCost, type Army } from '../sim/battle';
+import { armyCost, campCost, CAMP_STOCK, draftable, supplyCamp, unitCost, type Army } from '../sim/battle';
 import { esc } from './format';
 
 export interface BattleChoice { you: FactionSpec; foe: FactionSpec; mapId: string; budget: number; army: Army }
@@ -24,15 +24,18 @@ export function draftBattle(params: URLSearchParams): Promise<BattleChoice> {
     const panel = box.firstElementChild as HTMLElement;
     const opt = (list: { id: string; name: string }[], sel: string) => list.map((x) => `<option value="${x.id}" ${x.id === sel ? 'selected' : ''}>${esc(x.name)}</option>`).join('');
     const render = () => {
-      const spent = armyCost(you, army), units = draftable(you);
+      const spent = armyCost(you, army), camp = supplyCamp(you);
+      // each row: a unit, or the supply camp (its stock is what your throwers restock from and the hungry eat)
+      const rows = [...draftable(you).map((u) => ({ id: u.id, name: u.name, cost: unitCost(u), note: '' })),
+        ...(camp ? [{ id: camp.id, name: camp.name, cost: campCost(camp), note: `supply camp: ${CAMP_STOCK.food} kg food, ${CAMP_STOCK.crystal} kg crystal` }] : [])];
       const map = BATTLE_MAPS.find((m) => m.id === mapId)!;
       panel.innerHTML = `<h1>Pitched Battle</h1>
         <p class="sub">Draft an army, deploy it on the field, and fight. No economy, no reinforcements: what you bring is what you have.</p>
         <div class="draft-row">You <select data-k="you">${opt(PLAYABLE, you.id)}</select> vs <select data-k="foe">${opt(PLAYABLE, foe.id)}</select></div>
         <div class="draft-row">Field <select data-k="map">${opt(BATTLE_MAPS, mapId)}</select> Budget <select data-k="budget">${BUDGETS.map((b) => `<option value="${b}" ${b === budget ? 'selected' : ''}>${b} food</option>`).join('')}</select></div>
         <p class="draft-map">${esc(map.description)}</p>
-        <table class="draft-units">${units.map((u) => `<tr><td><b>${esc(u.name)}</b></td><td class="dim">${unitCost(u)} food</td>
-          <td><button data-add="${u.id}" data-d="-1">−</button> <span class="n">${army[u.id] ?? 0}</span> <button data-add="${u.id}" data-d="1" ${spent + unitCost(u) > budget ? 'disabled' : ''}>+</button></td></tr>`).join('')}</table>
+        <table class="draft-units">${rows.map((u) => `<tr><td><b>${esc(u.name)}</b>${u.note ? `<br><span class="dim">${u.note}</span>` : ''}</td><td class="dim">${u.cost} food</td>
+          <td><button data-add="${u.id}" data-d="-1">−</button> <span class="n">${army[u.id] ?? 0}</span> <button data-add="${u.id}" data-d="1" ${spent + u.cost > budget ? 'disabled' : ''}>+</button></td></tr>`).join('')}</table>
         <div class="draft-total ${spent > budget ? 'over' : ''}">Spent <b>${spent}</b> of ${budget} food</div>
         <div class="draft-go"><a href="./" class="back">← Menu</a><button data-go ${spent === 0 ? 'disabled' : ''}><b>Deploy</b></button></div>`;
     };

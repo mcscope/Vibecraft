@@ -448,6 +448,7 @@ export class World {
       this.homes.push([sx + 1.5, sy + 1.5]);
     }
     if (this.scenario.wildlife !== false) this.addWilds(opts.players.map((p) => p.faction));
+    this.updateVision(); // (so the first frame, before any step, shows what each side sees)
   }
 
   /** Whose half of the map a point is in: the player with the nearest home. */
@@ -723,6 +724,7 @@ export class World {
       }
       case 'stop': return set(mineAll(cmd.units), { kind: 'idle' });
       case 'train': {
+        if (this.scenario.noProduction) return;
         const b = ownBuilding(cmd.building);
         const s = this.specOf(player, cmd.specId);
         if (!b || !b.complete || !s || b.queue.length >= MAX_QUEUE || !b.spec.trains?.includes(cmd.specId)) return;
@@ -737,12 +739,14 @@ export class World {
         return;
       }
       case 'autoTrain': {
+        if (this.scenario.noProduction) return;
         const b = ownBuilding(cmd.building);
         if (!b || (cmd.specId && !b.spec.trains?.includes(cmd.specId))) return;
         b.autoTrain = cmd.specId;
         return;
       }
       case 'research': {
+        if (this.scenario.noProduction) return;
         const b = ownBuilding(cmd.building);
         if (!b || !b.complete || b.queue.length >= MAX_QUEUE || !b.spec.researches?.includes(cmd.techId)) return;
         const st = this.techStatus(player, cmd.techId, b);
@@ -771,6 +775,7 @@ export class World {
         return;
       }
       case 'build': {
+        if (this.scenario.noProduction) return;
         if (this.buildBlocker(player, cmd.specId)) return;
         const spec = this.buildingSpecOf(player, cmd.specId)!;
         const ox = Math.floor(cmd.ox), oy = Math.floor(cmd.oy);
@@ -1015,7 +1020,7 @@ export class World {
   }
 
   /** Each side sees what its units and buildings can see (their sight stat; a building sees around itself, a tower out to its range). */
-  private updateVision(): void {
+  updateVision(): void {
     const W = this.grid.width, H = this.grid.height;
     for (const p of this.players) {
       if (p.neutral) continue;

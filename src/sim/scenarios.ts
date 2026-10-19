@@ -17,6 +17,8 @@ export interface Scenario {
   inertPlayers?: number[];
   /** Spawn the factions' wildlife (default true). */
   wildlife?: boolean;
+  /** No training, research or building: the armies on the field are all there is. */
+  noProduction?: boolean;
 }
 
 export function skirmish(mapId = 'woodlands'): Scenario {

@@ -177,8 +177,7 @@ async function run(g: GameSetup): Promise<void> {
   await renderer.init();
   const minimap = new Minimap(document.getElementById('minimap') as HTMLCanvasElement, world, 200, (x, y) => bank.biomeAt(x, y).ground);
   // fog of war for whoever's playing (spectators and the proving grounds see everything)
-  // (a pitched battle is fought on open ground in full view of both armies)
-  renderer.viewer = minimap.viewer = m === 'spectate' || m === 'demo' || m === 'faceoff' || m === 'tutorial' || m === 'battle' ? -1 : HUMAN;
+  renderer.viewer = minimap.viewer = m === 'spectate' || m === 'demo' || m === 'faceoff' || m === 'tutorial' ? -1 : HUMAN;
   const audio = new AudioEngine(world, bank, HUMAN);
   soundDebug();
   audio.alerts = m === 'skirmish' || m === 'online' || m === 'battle'; // a horn when your side is newly attacked

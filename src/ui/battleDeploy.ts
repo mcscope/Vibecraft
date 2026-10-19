@@ -22,14 +22,15 @@ export class BattleDeploy {
       e.stopImmediatePropagation(); e.preventDefault();
       if (!inZone(0, x, y)) { this.say('Place it in your zone: the west end of the field.'); return; }
       const ids = this.ids(this.chosen);
-      placeBlock(this.world, 0, { specId: this.chosen, n: ids.length, x, y }, ids);
-      this.select(ids);
+      this.select(placeBlock(this.world, 0, { specId: this.chosen, n: ids.length, x, y }, ids));
+      this.world.updateVision(); // (what you can see from the new spot)
     }, true);
     this.draw();
   }
 
+  /** The units (or supply camps) in a block. */
   private ids(specId: string): number[] {
-    return this.world.unitsOf(0).filter((u) => u.specId === specId).map((u) => u.id);
+    return [...this.world.unitsOf(0), ...this.world.buildingsOf(0)].filter((u) => u.specId === specId).map((u) => u.id);
   }
 
   private say(text: string): void {
@@ -39,12 +40,12 @@ export class BattleDeploy {
 
   private draw(): void {
     const help = document.getElementById('help')!;
-    const types = [...new Set(this.world.unitsOf(0).map((u) => u.specId))];
+    const types = [...new Set([...this.world.unitsOf(0), ...this.world.buildingsOf(0)].map((u) => u.specId))];
     help.classList.add('lesson');
     help.style.display = 'block';
     help.innerHTML = `<b>Deploy your army</b>
-      <p>Pick a block, then click in your zone (the west end of the field) to set it there. The enemy is deployed at the far end.</p>
-      <div class="deploy-blocks">${types.map((id) => `<button data-block="${id}" class="${this.chosen === id ? 'on' : ''}">${esc(this.world.specOf(0, id)?.spec.name ?? id)} ×${this.ids(id).length}</button>`).join('')}</div>
+      <p>Pick a block, then click in your zone (the west end of the field) to set it there. The enemy is deployed somewhere at the far end, out of sight.</p>
+      <div class="deploy-blocks">${types.map((id) => `<button data-block="${id}" class="${this.chosen === id ? 'on' : ''}">${esc((this.world.specOf(0, id)?.spec ?? this.world.buildingSpecOf(0, id))?.name ?? id)} ×${this.ids(id).length}</button>`).join('')}</div>
       <p class="deploy-note"></p>
       <div class="lesson-nav"><span></span><a href="#" data-ready>Ready: to battle! ▶</a></div>`;
     help.onclick = (e) => {
