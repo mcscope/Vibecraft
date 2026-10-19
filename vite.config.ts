@@ -9,6 +9,8 @@ export default defineConfig({
   cacheDir: resolve(__dirname, '.vite'),
   // the arena's module worker imports shared chunks, which the default iife format can't do
   worker: { format: 'es' },
+  // tests play on smaller maps: the same rules, faster games (tests/setup.ts)
+  test: { setupFiles: ['tests/setup.ts'] },
   build: {
     rollupOptions: {
       input: { main: resolve(__dirname, 'index.html'), lab: resolve(__dirname, 'lab.html'), codex: resolve(__dirname, 'codex.html'), make: resolve(__dirname, 'make.html') },

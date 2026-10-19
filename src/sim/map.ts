@@ -355,7 +355,11 @@ export const MAPS: MapInfo[] = [
 
 /** Map side in tiles (2 m each). */
 export const MAP_SIZE = 96;
+let defaultSize = MAP_SIZE;
+/** The size skirmish maps are made at (the tests use smaller maps: the same rules, faster games). */
+export const mapSize = (): number => defaultSize;
+export function setMapSize(n: number): void { defaultSize = n; }
 
-export function generateMap(seed: number, size = MAP_SIZE, mapId = 'woodlands'): GeneratedMap {
+export function generateMap(seed: number, size = mapSize(), mapId = 'woodlands'): GeneratedMap {
   return (MAPS.find((m) => m.id === mapId) ?? MAPS[0]).generate(seed, size);
 }
