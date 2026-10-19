@@ -18,7 +18,8 @@
 // Spawning: `spawns: [unit ids]`. The parent trains them in its own body, like a building: a queue of up to MAX_QUEUE,
 // each paid up front (its whole price, once that much is on hand) and grown over METAMORPH_SEC × its refinement plus
 // its whole body's growing time, then laid beside it. It goes on moving, gathering and fighting meanwhile. A parent
-// can't spawn anything more refined than itself (refinement climbs only by changing).
+// can't spawn anything more refined than itself (refinement climbs only by changing). A unit laid with exactly one
+// form it `becomes` (an egg) starts changing into it at once.
 import type { UnitSpec } from '../../factions/types';
 import { derive, K, type DerivedStats } from '../physics';
 import { MAX_QUEUE, type Unit, type World } from '../world';
@@ -159,7 +160,11 @@ export function tickBrood(w: World, u: Unit, dt: number): void {
   // laid beside it, in front
   const spot = w.grid.nearestOpen(u.x + Math.cos(u.facing) * (u.stats.radius + 0.6), u.y + Math.sin(u.facing) * (u.stats.radius + 0.6), 3) ?? [u.x, u.y];
   const n = w.spawnAt(u.owner, b.into, spot[0], spot[1], u.heading);
-  if (n) w.events.push({ type: 'trained', id: n.id, owner: u.owner });
+  if (!n) return;
+  w.events.push({ type: 'trained', id: n.id, owner: u.owner });
+  // laid with one form to become (an egg): it starts changing into it at once
+  const next = w.specOf(n.owner, n.specId)?.spec.becomes;
+  if (next?.length === 1) beginMetamorph(w, n, next[0]);
 }
 
 export const metamorph: Ability = {

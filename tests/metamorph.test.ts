@@ -62,6 +62,14 @@ describe('metamorphosis', () => {
     w.enqueue({ player: 0, cmd: { type: 'cancelSpawn', units: [t.id] } });
     w.step();
     expect(t.brood.length).toBe(0);
+    // laid with one form to become (an egg), it starts changing into it at once
+    const eggs = withExtras(fenfolk, { units: [knight], patch: { 'bog-toad': { spawns: ['fenling'] }, fenling: { becomes: ['frog-knight'] } } });
+    const w2 = new World({ seed: 3, players: [{ name: 'Fen', faction: eggs }, { name: 'Meadow', faction: meadowfolk }] });
+    const m = w2.spawnAt(0, 'bog-toad', 30.5, 30.5)!;
+    m.food = 200;
+    w2.enqueue({ player: 0, cmd: { type: 'metamorph', units: [m.id], into: 'fenling', spawn: true } });
+    for (let i = 0; i < Math.ceil(cost.sec * 20) + 10; i++) w2.step();
+    expect(w2.unitsOf(0).some((u) => u.specId === 'fenling' && u.order.kind === 'metamorph')).toBe(true);
     // nothing more refined than itself
     const up = withExtras(fenfolk, { patch: { fenling: { spawns: ['bog-toad'] } } });
     expect(validateFaction(up).some((e) => e.includes('spawns bog-toad'))).toBe(true);

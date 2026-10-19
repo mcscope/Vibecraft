@@ -5,7 +5,7 @@ The user's decisions so far, as given. Nothing here is designed beyond what they
 ## How it works
 - **A mother unit lays eggs.** There are eggs of different sizes. She trains them in her own body, like a building: a queue, each paid up front. She keeps moving while they grow.
 - **Eggs and cocoons are shells.** A shell is a unit with its own statblock: its own body makeup, but the mass of what went in. It costs the same as the unit that went into it.
-- **A laid egg** is born and starts changing into a larva straight away.
+- **A laid egg** is born and starts changing into a larva straight away. It pays the larva's price less its own, once it has been Given enough.
 - **Changing, step by step:** you have a larva and click its next form. The larva becomes a shell (an egg) at the same mass, instantly. The shell brews the next form, possibly growing, eating from its pack. When it's done, the new form emerges from it.
 - **Food:** eggs sit, and change once they're Given enough food. Larvae eat food, and when they have enough, they can change.
 - **Food modes:** both up front and eaten-as-it-goes are kept available.
@@ -20,7 +20,6 @@ The user's decisions so far, as given. Nothing here is designed beyond what they
   - big, purple/pink.
 
 ## Still open
-- How the mother's eggs fit the shell flow: is a laid egg her shell, at what mass, brewing which larva?
-- Does a shell start changing on its own once it has enough food? What can feed it (Give, food bearers, a building beside it)?
-- Can a shell have more than one possible next form, and who picks?
 - The roster, buildings, names.
+- Which larva each egg size becomes (set in each egg's spec).
+- Feeding a shell: you said Give. Food bearers in reach and a building beside it also count, which was Claude's addition, not yours. Keep or drop?
