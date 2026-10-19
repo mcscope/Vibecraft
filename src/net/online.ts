@@ -4,7 +4,7 @@
 import type { FactionArt, BiomeArt } from '../art/contract';
 import type { FactionSpec } from '../factions/types';
 import { TEAM_COLORS } from '../render/artbank';
-import { checkBundle, fromBundle, makeBundle, packArt, packBiome, specData, type FactionBundle } from './bundle';
+import { checkBundle, fromBundle, packArt, packBiome, specData, type FactionBundle } from './bundle';
 import type { RelayClient } from './relayClient';
 
 /** Online games are 1v1 (the skirmish map has two starts). */
@@ -100,5 +100,3 @@ export class Handshake {
   }
 }
 
-/** For tests and tools: a bundle of a faction baked in seat 0's colours. */
-export const bundleFor = (f: FactionSpec) => makeBundle(f, TEAM_COLORS[0]);

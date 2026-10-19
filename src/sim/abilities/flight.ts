@@ -11,12 +11,10 @@
 // crystals fall further and hit harder, and they see further.
 import type { UnitSpec } from '../../factions/types';
 import { f1, n0 } from '../../ui/format';
-import { bodyHeight, DEFAULT_FLY_HEIGHT, K, M_PER_TILE, type DerivedStats } from '../physics';
+import { bodyHeight, K, M_PER_TILE, type DerivedStats } from '../physics';
 import type { Unit, World } from '../world';
 import type { Ability } from './index';
 
-/** How high fliers fly (m): their height bonus to thrown crystals. */
-export const FLY_HEIGHT = DEFAULT_FLY_HEIGHT;
 /** Extra sight in the air (tiles). */
 export const FLY_SIGHT = 3;
 /** Flying is faster than walking (no ground to push off, nothing in the way). */
@@ -50,8 +48,6 @@ export const flightBurn = (d: DerivedStats): number => d.mass * FLY_BURN_PER_KG;
 export const soarBurn = (d: DerivedStats): number => d.mass * SOAR_BURN_PER_KG;
 /** Calories to climb all the way to its ceiling. */
 export const climbCost = (d: DerivedStats): number => d.mass * d.flyHeight * CLIMB_CAL_PER_KG_M;
-/** Seconds it can stay up on full calories. */
-export const airtime = (d: DerivedStats): number => d.maxCalories / flightBurn(d);
 
 /** Turn rate in the air (radians/s) for a 22 kg bird; heavier birds turn slower (∝ 1/∛mass). */
 export const FLY_TURN = 2.5;
