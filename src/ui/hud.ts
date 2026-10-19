@@ -510,7 +510,7 @@ export class Hud {
       if (!to || !from) return '';
       const c = metamorphCost(from.stats, to.stats, spawn), food = this.names().food.toLowerCase();
       const what = spawn ? `Grow a ${to.spec.name} beside them` : `Change into ${to.spec.name} where they stand`;
-      return `<button data-morph="${id}" data-spawn="${spawn ? 1 : 0}" title="${what}: ${c.food} ${food} (eaten as they go, from their packs, a food bearer or a building beside them), ${c.sec.toFixed(0)} s. They can't move or fight meanwhile.">${ICONS.morph}<span>${spawn ? '+' : '→'} ${to.spec.name}</span><small>${c.food} · ${c.sec.toFixed(0)} s</small></button>`;
+      return `<button data-morph="${id}" data-spawn="${spawn ? 1 : 0}" title="${what}: ${c.food} ${food} (from their packs, a food bearer in reach or a building beside them), ${c.sec.toFixed(0)} s. They can't move or fight meanwhile.">${ICONS.morph}<span>${spawn ? '+' : '→'} ${to.spec.name}</span><small>${c.food} · ${c.sec.toFixed(0)} s</small></button>`;
     }).join('');
   }
 
@@ -628,7 +628,10 @@ export function describeOrder(w: World, u: Unit): string {
     case 'move': return 'Moving';
     case 'attackMove': return u.engage ? 'Fighting' : 'Attack-moving';
     case 'patrol': return u.engage ? 'Fighting' : 'Patrolling';
-    case 'metamorph': return `${o.spawn ? 'Growing a' : 'Changing into'} ${w.specOf(u.owner, o.into)?.spec.name ?? o.into}`;
+    case 'metamorph': {
+      const name = w.specOf(u.owner, o.into)?.spec.name ?? o.into;
+      return o.t > 0 ? `${o.spawn ? 'Growing a' : 'Changing into'} ${name}` : `Waiting for food to ${o.spawn ? 'grow a' : 'change into'} ${name}`;
+    }
     case 'attack': return 'Attacking';
     case 'gather': {
       const r = resourceName(w.factionOf(u.owner), o.nodeType);

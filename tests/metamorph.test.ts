@@ -31,14 +31,15 @@ describe('metamorphosis', () => {
     expect(1000 - hall.stock.food).toBeCloseTo(cost.food, 0);
   });
 
-  test('with nothing to eat it waits', () => {
+  test('without the food on hand it waits to start', () => {
     const w = new World({ seed: 3, players: [{ name: 'Fen', faction: fen }, { name: 'Meadow', faction: meadowfolk }] });
     const f = w.spawnAt(0, 'fenling', 40, 40)!;
     f.food = 0;
     w.enqueue({ player: 0, cmd: { type: 'metamorph', units: [f.id], into: 'frog-knight' } });
     for (let i = 0; i < 20 * 20; i++) w.step();
     expect(w.units.has(f.id)).toBe(true);
-    expect(f.order.kind === 'metamorph' && f.order.t).toBeLessThan(1);
+    expect(f.order.kind === 'metamorph' && f.order.paid).toBe(0);
+    expect(f.order.kind === 'metamorph' && f.order.t).toBe(0);
   });
 
   test('a parent grows a new unit beside it, paying its whole price, and carries on', () => {
@@ -58,6 +59,23 @@ describe('metamorphosis', () => {
     // nothing more refined than itself
     const up = withExtras(fenfolk, { patch: { fenling: { spawns: ['bog-toad'] } } });
     expect(validateFaction(up).some((e) => e.includes('spawns bog-toad'))).toBe(true);
+  });
+
+  test('eaten as it goes: it starts on what it has, and pauses when the food runs out', () => {
+    const eats = withExtras(fenfolk, { units: [knight], patch: { fenling: { becomes: ['frog-knight'], growthFood: 'eaten' } } });
+    const w = new World({ seed: 3, players: [{ name: 'Fen', faction: eats }, { name: 'Meadow', faction: meadowfolk }] });
+    const f = w.spawnAt(0, 'fenling', 40, 40)!;
+    f.food = 5; // a little in its pack, far less than the cost
+    w.enqueue({ player: 0, cmd: { type: 'metamorph', units: [f.id], into: 'frog-knight' } });
+    for (let i = 0; i < 20 * 10; i++) w.step();
+    const o = f.order;
+    expect(o.kind).toBe('metamorph');
+    if (o.kind !== 'metamorph') return;
+    expect(o.paid).toBeCloseTo(5, 3); // it ate what it had
+    expect(o.t).toBeGreaterThan(0); // and got that far
+    const stuck = o.t;
+    for (let i = 0; i < 20 * 5; i++) w.step();
+    expect(o.t).toBeCloseTo(stuck, 3); // then waited
   });
 
   test('a form more than one refinement up is refused', () => {

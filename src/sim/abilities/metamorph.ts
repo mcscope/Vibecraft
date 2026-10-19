@@ -1,8 +1,10 @@
 // Metamorphosis: `becomes: [unit ids]` on a unit spec. The unit changes, where it stands, into one of those forms of
 // its own side: a tadpole into a frog, a squire into a knight. It's a trade, not a training: the old body goes into
 // the new one, so it pays only the difference.
-//  • Food: the new form's price less the old one's (each at its own refinement), eaten as it changes: from its own
-//    pack, a friendly food bearer in reach, or a building of its side it stands beside. With nothing to eat it waits.
+//  • Food: the new form's price less the old one's (each at its own refinement), drawn from its own pack, friendly
+//    food bearers in reach and buildings of its side it stands beside. The spec's `growthFood` says how:
+//    'upfront' (the default), like a building's training: it starts once the whole cost is on hand and takes it at
+//    once; 'eaten': it eats the cost as it goes, spread over its time, and pauses whenever the food runs out.
 //  • Time: METAMORPH_SEC × the new form's refinement, plus growing the extra body at training's rate (K.trainSecPerKg
 //    per kg gained). A refined form takes longer to grow into, and no building's capital is needed: time pays for
 //    the refinement.
@@ -33,34 +35,42 @@ export function canBecome(w: World, u: Unit, into: string, spawn = false): boole
   return !!(spawn ? spec?.spawns : spec?.becomes)?.includes(into) && !!w.specOf(u.owner, into);
 }
 
+/** Food `u` can draw on where it stands: its own pack, friendly food bearers in reach, buildings of its side beside it. */
+function larders(w: World, u: Unit): Array<{ have: number; take: (kg: number) => void }> {
+  const out: Array<{ have: number; take: (kg: number) => void }> = [{ have: u.food, take: (k) => { u.food -= k; } }];
+  for (const b of w.units.values()) {
+    const r = b.owner === u.owner && b !== u ? w.specOf(b.owner, b.specId)?.spec.bearer : undefined;
+    if (r?.resource === 'food' && Math.hypot(b.x - u.x, b.y - u.y) <= r.radius) out.push({ have: b.food, take: (k) => { b.food -= k; } });
+  }
+  for (const b of w.buildingsOf(u.owner)) {
+    const ex = Math.max(b.ox, Math.min(u.x, b.ox + b.size)) - u.x, ey = Math.max(b.oy, Math.min(u.y, b.oy + b.size)) - u.y;
+    if (b.complete && Math.hypot(ex, ey) <= u.stats.radius + 1.5) out.push({ have: b.stock.food, take: (k) => { b.stock.food -= k; } }); // (beside it: within a tile and a half)
+  }
+  return out;
+}
+
 /**
- * Order kind 'metamorph': stand and change. Time runs while the food it's eaten keeps up with it (`fed` kg of the
- * cost so far, `t` seconds). Done, the unit is replaced by its new form: same place, heading, pack, and share of
- * health and calories. Returns whether it moved (never).
+ * Order kind 'metamorph': stand and change (`paid` kg of the food cost taken so far, `t` seconds in). Up front, it
+ * starts once the whole cost is on hand; eaten, the time runs while what it has eaten keeps up with it. Done, the
+ * unit is replaced by its new form (same place, heading, pack, and share of health and calories), or grows a new one
+ * beside it. Returns whether it moved (never).
  */
-export function runMetamorph(w: World, u: Unit, o: { into: string; fed: number; t: number; spawn?: boolean }, dt: number): boolean {
+export function runMetamorph(w: World, u: Unit, o: { into: string; paid: number; t: number; spawn?: boolean }, dt: number): boolean {
   const from = w.specOf(u.owner, u.specId), to = w.specOf(u.owner, o.into);
   if (!from || !to) { w.finish(u); return false; }
   const cost = metamorphCost(from.stats, to.stats, o.spawn);
-  // eat what this stretch of the change needs (the cost spread evenly over its time)
-  const due = cost.sec > 0 ? Math.min(cost.food, (cost.food * (o.t + dt)) / cost.sec) : cost.food;
-  let want = due - o.fed;
-  if (want > 1e-9) {
-    const take = (have: number) => { const k = Math.min(have, want); want -= k; o.fed += k; return k; };
-    u.food -= take(u.food);
-    for (const b of w.units.values()) {
-      if (want <= 1e-9) break;
-      const r = b.owner === u.owner && b !== u ? w.specOf(b.owner, b.specId)?.spec.bearer : undefined;
-      if (r?.resource === 'food' && Math.hypot(b.x - u.x, b.y - u.y) <= r.radius) b.food -= take(b.food);
-    }
-    for (const b of w.buildingsOf(u.owner)) {
-      if (want <= 1e-9) break;
-      const ex = Math.max(b.ox, Math.min(u.x, b.ox + b.size)) - u.x, ey = Math.max(b.oy, Math.min(u.y, b.oy + b.size)) - u.y;
-      if (b.complete && Math.hypot(ex, ey) <= u.stats.radius + 1.5) b.stock.food -= take(b.stock.food); // (beside it: within a tile and a half)
-    }
+  const eaten = from.spec.growthFood === 'eaten';
+  // what must be paid by the end of this tick: all of it before starting, or (eaten) its share of the time so far
+  const due = !eaten || cost.sec <= 0 ? cost.food : Math.min(cost.food, (cost.food * (o.t + dt)) / cost.sec);
+  if (o.paid + 1e-6 < due) {
+    const ls = larders(w, u), have = ls.reduce((t, l) => t + l.have, 0);
+    if (!eaten && have + 1e-6 < due - o.paid) return false; // up front: waiting for the whole cost to be on hand
+    let want = Math.min(have, due - o.paid);
+    o.paid += want;
+    for (const l of ls) { const k = Math.min(l.have, want); l.take(k); want -= k; }
   }
-  if (o.fed + 1e-6 >= due) o.t += dt; // fed: the change goes on (else it waits for food)
-  if (o.t < cost.sec || o.fed + 1e-6 < cost.food) return false;
+  if (o.paid + 1e-6 >= due) o.t += dt; // fed: the change goes on (eaten, it pauses when the food runs out)
+  if (o.t < cost.sec || o.paid + 1e-6 < cost.food) return false;
   if (o.spawn) {
     // done: the young one steps out beside its parent, which carries on
     const spot = w.grid.nearestOpen(u.x + Math.cos(u.facing) * (u.stats.radius + 0.6), u.y + Math.sin(u.facing) * (u.stats.radius + 0.6), 3) ?? [u.x, u.y];
@@ -87,12 +97,13 @@ export const metamorph: Ability = {
     const errs: string[] = [];
     if (u.becomes !== undefined && (!Array.isArray(u.becomes) || u.becomes.some((id) => typeof id !== 'string' || id === u.id))) errs.push(`${where}: becomes must list other unit ids`);
     if (u.spawns !== undefined && (!Array.isArray(u.spawns) || u.spawns.some((id) => typeof id !== 'string'))) errs.push(`${where}: spawns must list unit ids`);
+    if (u.growthFood !== undefined && u.growthFood !== 'upfront' && u.growthFood !== 'eaten') errs.push(`${where}: growthFood must be 'upfront' or 'eaten'`);
     return errs;
   },
   unitCodex(u: UnitSpec): string | null {
     const lines: string[] = [];
-    if (u.becomes?.length) lines.push(`Metamorphosis: changes where it stands into ${u.becomes.join(' or ')}, paying only the difference in food (eaten as it changes, from its pack, a food bearer or a building beside it) over ${METAMORPH_SEC} s × the new form's refinement, plus the time to grow any extra body.`);
-    if (u.spawns?.length) lines.push(`Spawns: grows a ${u.spawns.join(' or ')} beside it, paying its whole price in food (eaten the same way) over ${METAMORPH_SEC} s × its refinement plus the time to grow its body.`);
+    if (u.becomes?.length) lines.push(`Metamorphosis: changes where it stands into ${u.becomes.join(' or ')}, paying only the difference in food (${u.growthFood === 'eaten' ? 'eaten as it changes' : 'up front'}, from its pack, food bearers in reach or a building beside it) over ${METAMORPH_SEC} s × the new form's refinement, plus the time to grow any extra body.`);
+    if (u.spawns?.length) lines.push(`Spawns: grows a ${u.spawns.join(' or ')} beside it, paying its whole price in food (${u.growthFood === 'eaten' ? 'eaten as it grows' : 'up front'}, the same way) over ${METAMORPH_SEC} s × its refinement plus the time to grow its body.`);
     return lines.length ? `${lines.join(' ')} It can't move or fight meanwhile.` : null;
   },
 };
