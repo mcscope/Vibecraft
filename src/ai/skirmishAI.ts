@@ -31,8 +31,10 @@ interface Profile {
   /** Most workers, and how many more it wants each minute. */
   workerCap: number;
   workersPerMin: number;
-  /** Extra workers between steps of the build order. */
+  /** Extra workers between steps of the build order, or failing that minutes between them
+   *  (so losing workers never stops the build order for good). */
   buildGap: number;
+  buildEvery: number;
   /** First attack size, how much each wave grows, and the biggest wave. */
   firstWave: number;
   waveStep: number;
@@ -57,11 +59,11 @@ interface Profile {
 
 export const PROFILES: Record<Difficulty, Profile> = {
   easy: {
-    thinkEvery: TICK_RATE * 3, react: TICK_RATE * 9, workerCap: 16, workersPerMin: 1.2, buildGap: 4,
+    thinkEvery: TICK_RATE * 3, react: TICK_RATE * 9, workerCap: 16, workersPerMin: 1.2, buildGap: 4, buildEvery: 2.5,
     firstWave: 4, waveStep: 1, maxWave: 8, edge: 0, expand: false, tight: false, guard: false, scout: false, counters: false, micro: false, retreat: false,
   },
   hard: {
-    thinkEvery: TICK_RATE / 2, react: 0, workerCap: 34, workersPerMin: 3, buildGap: 2,
+    thinkEvery: TICK_RATE / 2, react: 0, workerCap: 34, workersPerMin: 3, buildGap: 2, buildEvery: 1.5,
     firstWave: 8, waveStep: 3, maxWave: 24, edge: 1.3, expand: true, tight: true, guard: true, scout: true, counters: true, micro: true, retreat: true,
   },
 };
@@ -70,6 +72,10 @@ export const PROFILES: Record<Difficulty, Profile> = {
 interface Sighting { x: number; y: number; tick: number; kg: number; power: number; flier: boolean; charger: boolean; melee: boolean }
 /** What we remember of an enemy building. */
 interface KnownBuilding { x: number; y: number; tower: boolean }
+/** What we remember of a wild animal that attacks whoever comes close (it keeps near its lair). */
+interface Danger { x: number; y: number; hp: number; dps: number }
+/** How close to a dangerous animal a worker can safely gather (its leash plus its reach for prey). */
+const DANGER_R = 9;
 
 /** A soldier's fighting strength: health × damage per second. */
 const power = (u: Unit) => u.hp * (u.stats.damage / u.stats.cooldown);
@@ -91,6 +97,10 @@ export class SkirmishAI {
   private seenFoes = new Map<number, Sighting>();
   /** Enemy buildings we've found. */
   private knownBuildings = new Map<number, KnownBuilding>();
+  /** Dangerous wildlife we've seen, and the soldiers sent to clear it (until when). */
+  private dangers = new Map<number, Danger>();
+  private hunters = new Set<number>();
+  private huntUntil = 0;
   /** Since when an enemy has been in sight near home (-1: none). */
   private threatSince = -1;
   private calmSince = -1;
@@ -150,6 +160,12 @@ export class SkirmishAI {
       if (this.sees(w, x, y)) this.knownBuildings.set(b.id, { x, y, tower: !!b.spec.attack });
     }
     for (const [id, k] of this.knownBuildings) if (this.sees(w, k.x, k.y) && !w.buildings.has(id)) this.knownBuildings.delete(id);
+    for (const e of hostiles) if (e.wild === 'aggressive') this.dangers.set(e.id, { x: e.x, y: e.y, hp: e.hp, dps: e.stats.damage / e.stats.cooldown });
+    // forget one once we look where it prowls and it isn't there
+    for (const [id, d] of this.dangers) {
+      if (!this.sees(w, d.x, d.y)) continue;
+      if (!hostiles.some((e) => e.id === id && (e.x - d.x) ** 2 + (e.y - d.y) ** 2 < DANGER_R * DANGER_R)) this.dangers.delete(id);
+    }
   }
 
   think(w: World): Command[] {
@@ -181,8 +197,8 @@ export class SkirmishAI {
       if (foe) { const d = Math.hypot(foe[0] - ax, foe[1] - ay) || 1; ax += ((foe[0] - ax) / d) * 6; ay += ((foe[1] - ay) / d) * 6; }
       return w.findBuildSpot(size, ax, ay);
     };
-    for (const [id, atWorkers] of plan) {
-      if (!tc || workers.length < atWorkers || !w.buildingSpecOf(this.player, id)) continue;
+    for (const [step, [id, atWorkers]] of plan.entries()) {
+      if (!tc || (workers.length < atWorkers && minutes < 1 + step * P.buildEvery) || !w.buildingSpecOf(this.player, id)) continue;
       const existing = buildings.filter((b) => b.specId === id);
       if (existing.length) {
         for (const site of existing) {
@@ -241,15 +257,18 @@ export class SkirmishAI {
 
     // ── Hauling without carts: a building whose order waits on supplies gets a worker
     //    to fetch them from wherever they piled up; it goes back to gathering after.
-    if (!units.some((u) => u.carter)) {
+    //    (Once we have carts, they do it and the workers go back to work.)
+    {
+      const most = units.some((u) => u.carter) ? 0 : Math.max(1, Math.floor(workers.length / 6));
       const waiting = (b: Building) => b.complete && b.queue.some((q) => !q.paid);
       const haulers = workers.filter((u) => u.order.kind === 'cart');
-      const free = haulers.filter((u) => { const h = u.order.kind === 'cart' ? w.buildings.get(u.order.home) : undefined; return !h || !waiting(h); });
+      const busy = haulers.filter((u) => { const h = u.order.kind === 'cart' ? w.buildings.get(u.order.home) : undefined; return !!h && waiting(h); }).slice(0, most);
+      const free = haulers.filter((u) => !busy.includes(u));
       if (free.length) out.push({ type: 'stop', units: free.map((u) => u.id) });
-      let n = haulers.length - free.length;
+      let n = busy.length;
       for (const b of buildings) {
-        if (n >= Math.max(1, Math.floor(workers.length / 6))) break;
-        if (!waiting(b) || haulers.some((u) => u.order.kind === 'cart' && u.order.home === b.id)) continue;
+        if (n >= most) break;
+        if (!waiting(b) || busy.some((u) => u.order.kind === 'cart' && u.order.home === b.id)) continue;
         const pick = this.closestFree(workers, builders, b.ox, b.oy, 1);
         if (pick.length) { out.push({ type: 'haul', units: pick, building: b.id }); n++; }
       }
@@ -268,11 +287,19 @@ export class SkirmishAI {
     else if (P.tight && stock.wood < this.woodWanted(w, plan, buildings)) { share.wood = 0.4; share.food = 0.45; } // hard: saving for the next building
     // rebalance a few busy gatherers too, not just idle ones
     for (const r of ['wood', 'crystal'] as ResourceKind[]) {
-      const over = counts[r] - Math.ceil(share[r] * workers.length) - 1;
+      const over = counts[r] - Math.ceil(share[r] * workers.length) - (stock[r] > 700 ? 0 : 1); // (a pile we can't spend: no slack)
       if (over <= 0) continue;
       const movers = workers.filter((u) => u.order.kind === 'gather' && u.order.nodeType === r).slice(0, over);
       const node = movers[0] && this.nearestNode(w, movers[0], 'food');
       if (node) { out.push({ type: 'gather', units: movers.map((u) => u.id), node }); counts[r] -= movers.length; counts.food += movers.length; }
+    }
+    // gatherers working beside dangerous wildlife move to a safer patch of the same thing
+    for (const u of workers) {
+      if (u.order.kind !== 'gather') continue;
+      const n = w.nodes.get(u.order.node);
+      if (!n || !this.dangerous(n.x, n.y)) continue;
+      const safe = this.nearestNode(w, u, u.order.nodeType) ?? this.nearestNode(w, u, 'food') ?? this.nearestNode(w, u, 'wood');
+      if (safe) out.push({ type: 'gather', units: [u.id], node: safe });
     }
     for (const u of workers.filter((x) => x.order.kind === 'idle' && !builders.has(x.id))) {
       const n = workers.length;
@@ -335,10 +362,10 @@ export class SkirmishAI {
 
     // a worker waiting on food comes first until the economy has a base (cheap soldiers would eat it all)
     const workerFirst = workers.length < Math.min(workerTarget, 14) && buildings.some((b) => b.queue.some((q) => q.kind === 'unit' && q.specId === faction.workerId && !q.paid));
-    // hard queues where the supplies already are, and lets only one worker order and two soldier
+    // queue where the supplies already are, and let only one worker order and a few soldier
     // orders wait on hauling (orders waiting everywhere strand the stock in scattered piles)
     const unpaid = (worker: boolean) => buildings.reduce((n, b) => n + b.queue.filter((q) => q.kind === 'unit' && !q.paid && (q.specId === faction.workerId) === worker).length, 0);
-    const waitBudget = { worker: P.tight ? 1 - unpaid(true) : Infinity, soldier: P.tight ? 2 - unpaid(false) : Infinity };
+    const waitBudget = { worker: 1 - unpaid(true), soldier: (P.tight ? 2 : 3) - unpaid(false) };
     const train = (b: Building, id: string): boolean => {
       const st = w.specOf(this.player, id)?.stats;
       const kind = id === faction.workerId ? 'worker' : 'soldier';
@@ -433,6 +460,24 @@ export class SkirmishAI {
       }
     }
 
+    // ── Clearing wildlife: dangerous animals we've seen near home (where our workers want to gather)
+    //    get hunted by the soldiers at home, once there are enough of them to win.
+    for (const id of this.hunters) if (!w.units.has(id)) this.hunters.delete(id);
+    if (home && w.tick >= this.huntUntil) this.hunters.clear();
+    if (home && !this.hunters.size && this.threatSince < 0) {
+      let prey: Danger | null = null, preyD = 45 * 45;
+      for (const d of this.dangers.values()) { const dd = (d.x - home[0]) ** 2 + (d.y - home[1]) ** 2; if (dd < preyD) { preyD = dd; prey = d; } }
+      const pool = army.filter((u) => u.id !== this.scout && !this.attacking.has(u.id) && w.armed(u) && u.hp > u.stats.maxHp * 0.5);
+      // Lanchester: the group's total health × total damage per second against the animal's
+      const hp = pool.reduce((n, u) => n + u.hp, 0), dps = pool.reduce((n, u) => n + u.stats.damage / u.stats.cooldown, 0);
+      if (prey && hp * dps >= 2 * prey.hp * prey.dps) {
+        out.push({ type: 'attackMove', units: pool.map((u) => u.id), x: prey.x, y: prey.y });
+        for (const u of pool) this.hunters.add(u.id);
+        this.huntUntil = w.tick + TICK_RATE * 45;
+      }
+    }
+    if (this.hunters.size && ![...this.dangers.values()].some((d) => home && (d.x - home[0]) ** 2 + (d.y - home[1]) ** 2 < 45 * 45)) this.hunters.clear(); // cleared
+
     // ── An enemy tower near home before we have an army: ring the bell and tear it down
     //    from under its arc (towers can't hit right below themselves).
     if (home) {
@@ -450,7 +495,7 @@ export class SkirmishAI {
 
     // ── Offense: attack in growing waves (hard: once we're stronger than what we've seen of them).
     for (const id of this.attacking) if (!w.units.has(id)) this.attacking.delete(id);
-    const homeArmy = army.filter((u) => !this.attacking.has(u.id) && u.id !== this.scout);
+    const homeArmy = army.filter((u) => !this.attacking.has(u.id) && u.id !== this.scout && !this.hunters.has(u.id));
     const fit = homeArmy.filter((u) => u.cal > u.stats.maxCalories * 0.6 && w.armed(u) && u.hp > u.stats.maxHp * 0.5);
     const target = this.enemyTarget(w);
     const wave = army.filter((u) => this.attacking.has(u.id));
@@ -459,7 +504,9 @@ export class SkirmishAI {
       let theirs = 0;
       for (const f of this.seenFoes.values()) theirs += f.power;
       const strong = P.edge <= 0 || ours >= theirs * P.edge;
-      if ((fit.length >= this.waveSize && strong) || fit.length >= P.maxWave) {
+      // the enemy's army is (as far as we've seen) beaten: finish the buildings rather than wait for a full wave
+      const finish = minutes >= 10 && fit.length >= 3 && ours >= theirs * 3;
+      if ((fit.length >= this.waveSize && strong) || fit.length >= P.maxWave || finish) {
         out.push({ type: 'attackMove', units: fit.map((u) => u.id), x: target[0], y: target[1] });
         for (const u of fit) this.attacking.add(u.id);
         this.waveSize = Math.min(P.maxWave, this.waveSize + P.waveStep);
@@ -597,14 +644,20 @@ export class SkirmishAI {
     return best;
   }
 
-  /** The nearest resource of a kind we've found (explored ground), within 40 tiles. */
+  /** The nearest resource of a kind we've found (explored ground), within 40 tiles, away from dangerous wildlife. */
   private nearestNode(w: World, u: Unit, type: ResourceKind): number | null {
     let best: number | null = null, bestD = 40 * 40;
     for (const n of w.nodes.values()) {
-      if (n.shard || n.type !== type || n.amount <= 0 || w.vision(this.player, n.x, n.y) === 0) continue;
+      if (n.shard || n.type !== type || n.amount <= 0 || w.vision(this.player, n.x, n.y) === 0 || this.dangerous(n.x, n.y)) continue;
       const d = (n.x - u.x) ** 2 + (n.y - u.y) ** 2;
       if (d < bestD) { bestD = d; best = n.id; }
     }
     return best;
+  }
+
+  /** Is this spot near wildlife we've seen attack? */
+  private dangerous(x: number, y: number): boolean {
+    for (const d of this.dangers.values()) if ((d.x - x) ** 2 + (d.y - y) ** 2 < DANGER_R * DANGER_R) return true;
+    return false;
   }
 }

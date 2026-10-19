@@ -20,6 +20,10 @@ Things noticed while building the tutorial and the computer players that could i
 
 ## Computer players
 
+- **Games don't always end.** On woodlands, seeds 1000 and 1017, both seats, both factions, games capped at 35 min. The 2026-10-19 AI fixes made Easy keep building rather than stall: it now steers its workers clear of wild bog-lurkers and clears them, the build order also unlocks over time, and it trains in fewer places at once so food isn't spread thin. It also pushes to finish a beaten enemy.
+  - **Games won within 35 min, before and after:** Easy–Easy 4/8 → 7/8; Hard–Easy 3/16 → 9/16 (Hard won 7, Easy Fenfolk beat Hard Meadowfolk twice); Hard–Hard 3/8 → 3/8.
+  - **Still open:** a winner often razes everything but a few buildings and stalls (one game ended with the loser on 7 buildings and no units); Hard Fenfolk never won from seat 0; Hard–Hard rarely ends.
+
 - **Hard is slow to finish a game on 96-tile maps.** In one Hard-vs-Easy game, Easy was down to 5 units by minute 20, but Hard only destroyed the last buildings at minute 34. It could push to finish once the enemy army is gone.
 
 ## Units and abilities
