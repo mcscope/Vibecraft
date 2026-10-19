@@ -17,10 +17,10 @@ The user's decisions so far, as given. Nothing here is designed beyond what they
 ## Tiers
 - **Three tiers of egg and larva:** refinement 1, 2 and 3, each an egg and a larva.
 
-## What each tier's larva can become (offshoots, one refinement up)
-- **T1:** a fast charging body, and the tree-digesting worm. Maybe also micropikes.
-- **T2:** flier bodies and ground-attack bodies, plus a slinger. Maybe also the mother (but that might leave T1 anemic).
-- **T3:** a flier, the Dragon Fly, and ground-attack bodies (to confirm: the user wrote "T2 and T2").
+## What each tier's larva can become (offshoots, one refinement up). All confirmed.
+- **T1:** a fast charging body, the tree-digesting worm, micropikes; and the T2 larva.
+- **T2:** flier bodies, ground-attack bodies, a slinger, the mother; and the T3 larva.
+- **T3:** the Dragon Fly (flier) and ground-attack bodies.
 
 ## Dragon Fly (T3 flier)
 - A fire-breathing dragon with butterfly wings, with insectoid and reptilian features.
