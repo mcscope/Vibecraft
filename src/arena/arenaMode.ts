@@ -49,11 +49,9 @@ export async function runArena(params: URLSearchParams): Promise<void> {
   const input = new Input(canvas, world, renderer, minimap, 0, (cmd) => {
     if (!control) return;
     world.enqueue({ player: input.player, cmd });
-    // the order is answered once, by the first unit given it (voices only with ?voices=1)
-    const first = 'units' in cmd ? cmd.units.map((id) => world.units.get(id)).find((u) => u && u.owner === input.player) : undefined;
-    if (first) audio.unitLine(first.owner, first.specId, cmd.type === 'attack' || cmd.type === 'attackMove' ? 'attack' : 'acknowledge', undefined, 'units' in cmd && cmd.units.length > 1);
+    audio.answerOrder(cmd, input.player);
   });
-  input.onSelect = (ids, group) => { const u = ids.map((id) => world.units.get(id)).find(Boolean); if (u) audio.unitLine(u.owner, u.specId, 'select', undefined, group, group); };
+  input.onSelect = (ids, group) => audio.answerSelect(ids, group, input.player);
   let control = params.get('control') === '1';
   const resize = () => renderer.resize(window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
   window.addEventListener('resize', resize);

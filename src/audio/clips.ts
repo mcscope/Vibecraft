@@ -64,6 +64,24 @@ function room(ctx: AudioContext): AudioBuffer {
 }
 
 /**
+ * Play `buf` through its Voice Lab treatment `t` (pitch, cuts, drive, volume, reverb) into `out`: shifted `semis`
+ * more, scaled by `gain`, panned to `pan`, starting `delay` seconds from now. Returns the source.
+ */
+function treated(ctx: AudioContext, out: AudioNode, buf: AudioBuffer, t: ReturnType<typeof fxFor>, o: { semis?: number; gain?: number; pan?: number; delay?: number } = {}): AudioBufferSourceNode {
+  const s = ctx.createBufferSource(); s.buffer = buf; s.playbackRate.value = Math.pow(2, (t.pitch + (o.semis ?? 0)) / 12);
+  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = t.lowcut;
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = t.highcut;
+  const sh = ctx.createWaveShaper();
+  if (t.drive) { const n = 1024, k = t.drive * 60, c = new Float32Array(n); for (let j = 0; j < n; j++) { const x = (j / (n - 1)) * 2 - 1; c[j] = ((1 + k) * x) / (1 + k * Math.abs(x)); } sh.curve = c; }
+  const g = ctx.createGain(); g.gain.value = Math.pow(10, t.gain / 20) * (t.drive ? 1 / (1 + t.drive * 1.5) : 1) * (o.gain ?? 1);
+  const p = ctx.createStereoPanner(); p.pan.value = o.pan ?? 0;
+  s.connect(hp).connect(lp).connect(sh).connect(g).connect(p).connect(out);
+  if (t.reverb) { const rv = ctx.createConvolver(); rv.buffer = room(ctx); const wet = ctx.createGain(); wet.gain.value = t.reverb; g.connect(rv).connect(wet).connect(out); }
+  s.start(ctx.currentTime + (o.delay ?? 0));
+  return s;
+}
+
+/**
  * `factionId:specId` says `line` (or one of its general clips), through `out`. False if voices are off, it has no
  * clip for it, it spoke too recently, or enough voices are already going.
  */
@@ -98,20 +116,12 @@ export async function sayLine(ctx: AudioContext, out: AudioNode, factionId: stri
   const pans = [0, -0.55, 0.5, -0.2];
   playing++;
   ids.forEach((id, k) => {
-    const t = fxFor(m, id, unit);
-    const semis = k === 0 ? 0 : (Math.random() - 0.5) * 3; // ±1.5 semitones: different throats
     if (k > 0) at += 0.04 + Math.random() * 0.09; // ragged, not in step
-    const s = ctx.createBufferSource(); s.buffer = bufs[k]; s.playbackRate.value = Math.pow(2, (t.pitch + semis) / 12);
-    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = t.lowcut;
-    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = t.highcut;
-    const sh = ctx.createWaveShaper();
-    if (t.drive) { const n = 1024, kk = t.drive * 60, c = new Float32Array(n); for (let j = 0; j < n; j++) { const x = (j / (n - 1)) * 2 - 1; c[j] = ((1 + kk) * x) / (1 + kk * Math.abs(x)); } sh.curve = c; }
-    const g = ctx.createGain(); g.gain.value = Math.pow(10, t.gain / 20) * (t.drive ? 1 / (1 + t.drive * 1.5) : 1) * (chorus ? (k === 0 ? 0.75 : 0.5) : 1);
-    const p = ctx.createStereoPanner(); p.pan.value = chorus ? pans[k] : 0;
-    s.connect(hp).connect(lp).connect(sh).connect(g).connect(p).connect(out);
-    if (t.reverb) { const rv = ctx.createConvolver(); rv.buffer = room(ctx); const wet = ctx.createGain(); wet.gain.value = t.reverb; g.connect(rv).connect(wet).connect(out); }
+    const s = treated(ctx, out, bufs[k], fxFor(m, id, unit), {
+      semis: k === 0 ? 0 : (Math.random() - 0.5) * 3, // ±1.5 semitones: different throats
+      gain: chorus ? (k === 0 ? 0.75 : 0.5) : 1, pan: chorus ? pans[k] : 0, delay: at,
+    });
     if (k === 0) s.onended = () => { playing--; };
-    s.start(ctx.currentTime + at);
   });
   return true;
 }
@@ -119,9 +129,9 @@ export async function sayLine(ctx: AudioContext, out: AudioNode, factionId: stri
 /**
  * A combat sound (Voice Lab "Combat" clips: combat:swing, combat:throw, combat:light, combat:solid, combat:heavy),
  * through `out`; false if there's no clip for it (the engine synthesizes one instead). Not a voice: no voice
- * setting, no voice cap (the engine already limits how many swings and hits sound at once).
+ * setting, no voice cap (the engine already limits how many swings and hits sound at once). `semis`: shift its pitch (heavier,
+ * lower); `delay`: seconds from now.
  */
-/** `semis`: shift its pitch (heavier, lower); `delay`: seconds from now. */
 export async function playCombat(ctx: AudioContext, out: AudioNode, kind: string, semis = 0, delay = 0): Promise<boolean> {
   const m = await load();
   const set = m?.lines[`combat:${kind}`];
@@ -131,13 +141,6 @@ export async function playCombat(ctx: AudioContext, out: AudioNode, kind: string
   turn.set(key, n + 1);
   const t = fxFor(m, id, key), buf = await clip(ctx, id);
   log(id, key);
-  const s = ctx.createBufferSource(); s.buffer = buf;
-  // a touch of random pitch so repeats don't sound stamped
-  s.playbackRate.value = Math.pow(2, (t.pitch + semis + (Math.random() - 0.5) * 1.5) / 12);
-  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = t.lowcut;
-  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = t.highcut;
-  const g = ctx.createGain(); g.gain.value = Math.pow(10, t.gain / 20);
-  s.connect(hp).connect(lp).connect(g).connect(out);
-  s.start(ctx.currentTime + delay);
+  treated(ctx, out, buf, t, { semis: semis + (Math.random() - 0.5) * 1.5, delay }); // a touch of random pitch: repeats don't sound stamped
   return true;
 }

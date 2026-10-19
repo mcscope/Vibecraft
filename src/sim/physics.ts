@@ -332,14 +332,14 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   const crystalCost = Math.ceil(loadoutCrystal);
   const trainTime = K.trainBaseSec + K.trainSecPerKg * mass;
 
-  const improvised = !canAttack && (spec.canGather ?? true) && !spec.dummy && spec.role !== 'carter' && !spec.bearer
-    ? (() => { const a = derive({ ...spec, attack: { style: 'strike', crystalMass: IMPROVISED_KG } }, techRefinement, techWork); return { damage: a.damage, cooldown: a.cooldown, range: a.range, attackCalories: a.attackCalories, crystalMass: IMPROVISED_KG }; })()
-    : undefined;
+  // the same body striking with a plain crystal of `kg` (a worker's improvised weapon, a sidearm)
+  const plainStrike = (kg: number) => {
+    const a = derive({ ...spec, attack: { style: 'strike', crystalMass: kg } }, techRefinement, techWork);
+    return { damage: a.damage, cooldown: a.cooldown, range: a.range, attackCalories: a.attackCalories, crystalMass: kg };
+  };
+  const improvised = !canAttack && (spec.canGather ?? true) && !spec.dummy && spec.role !== 'carter' && !spec.bearer ? plainStrike(IMPROVISED_KG) : undefined;
 
-  // the sidearm: the same body striking a plain blade of its crystal
-  const sidearm = side
-    ? (() => { const a = derive({ ...spec, attack: { style: 'strike', crystalMass: side } }, techRefinement, techWork); return { damage: a.damage, cooldown: a.cooldown, range: a.range, attackCalories: a.attackCalories, crystalMass: side }; })()
-    : undefined;
+  const sidearm = side ? plainStrike(side) : undefined; // a blade of its crystal
 
   return {
     improvised, sidearm,

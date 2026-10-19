@@ -10,6 +10,7 @@ import type { ArtBank } from '../render/artbank';
 import type { World, WorldEvent } from '../sim/world';
 import { settings, onSettings } from '../ui/settings';
 import { playCombat, preloadVoices, sayLine, voicesOn } from './clips';
+import type { Command } from '../sim/commands';
 
 const FORMANTS: Record<NonNullable<SynthRecipe['vowel']>, [number, number]> = {
   a: [800, 1200], e: [500, 1900], i: [320, 2300], o: [500, 900], u: [350, 700],
@@ -160,6 +161,19 @@ export class AudioEngine {
         }
       }
     }
+  }
+
+  /** `player` gave an order: the first of its units given it answers, once (a group in chorus). */
+  answerOrder(cmd: Command, player: number): void {
+    if (!('units' in cmd)) return;
+    const first = cmd.units.map((id) => this.world.units.get(id)).find((u) => u && u.owner === player);
+    if (first) this.unitLine(first.owner, first.specId, cmd.type === 'attack' || cmd.type === 'attackMove' ? 'attack' : 'acknowledge', undefined, cmd.units.length > 1);
+  }
+
+  /** `player` selected units: one of them answers (a double-click's whole group echoes the click's line in chorus). */
+  answerSelect(ids: number[], group: boolean | undefined, player: number): void {
+    const u = ids.map((id) => this.world.units.get(id)).find((x) => x && x.owner === player);
+    if (u) this.unitLine(u.owner, u.specId, 'select', undefined, group, group);
   }
 
   /**
