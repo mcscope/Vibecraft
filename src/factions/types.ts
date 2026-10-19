@@ -97,6 +97,11 @@ export interface UnitSpec {
   dropOff?: boolean;
   /** Can tame wild animals by feeding them from its pack (sim/abilities/herding.ts). */
   tamer?: boolean;
+  /**
+   * Metamorphosis: forms (unit ids of this faction) it can change into where it stands, paying only the difference
+   * in food, over 6 s × the new form's refinement; each at most 1.0 more refined than this (sim/abilities/metamorph.ts).
+   */
+  becomes?: string[];
 }
 
 export type ResourceKind = 'food' | 'wood' | 'crystal';

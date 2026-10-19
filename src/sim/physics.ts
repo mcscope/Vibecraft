@@ -26,6 +26,7 @@ export const M_PER_TILE = 2;
 
 import type { BuildingSpec, FactionSpec, Physique, TechSpec, UnitSpec } from '../factions/types';
 import { deriveGait } from './abilities/gait';
+import { validateMetamorphForms } from './abilities/metamorph';
 
 /** How high a flier flies unless its spec says (m). */
 export const DEFAULT_FLY_HEIGHT = 6;
@@ -563,6 +564,7 @@ export function techStart(tech: TechSpec, faction: FactionSpec): number {
 export function validateFaction(f: FactionSpec): string[] {
   const errs: string[] = [];
   for (const u of f.units) errs.push(...validate(u).map((e) => `${u.id}: ${e}`));
+  errs.push(...validateMetamorphForms(f.units, (u) => u.refinement ?? 1));
   for (const b of f.buildings ?? []) {
     const st = deriveBuilding(b, f);
     if (b.size < st.minSize) errs.push(`${b.id}: ${b.materials} kg needs a footprint of at least ${st.minSize}×${st.minSize}`);

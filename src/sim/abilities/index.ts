@@ -15,6 +15,7 @@ import { wall } from './wall';
 import { spear } from './spear';
 import { sling } from './sling';
 import { sidearm } from './sidearm';
+import { metamorph } from './metamorph';
 
 export interface Ability {
   id: string;
@@ -26,7 +27,7 @@ export interface Ability {
   buildingCodex?(b: BuildingSpec, st: BuildingStats): string | null;
 }
 
-export const ABILITIES: Ability[] = [bearer, gait, wall, living, dropOff, underfoot, flight, herding, spear, sling, sidearm];
+export const ABILITIES: Ability[] = [bearer, gait, wall, living, dropOff, underfoot, flight, herding, spear, sling, sidearm, metamorph];
 
 export function validateUnitAbilities(u: UnitSpec, where: string): string[] {
   return ABILITIES.flatMap((a) => a.validateUnit?.(u, where) ?? []);

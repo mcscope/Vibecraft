@@ -1,5 +1,6 @@
 import { capacity } from '../sim/garrison';
 import { FORMATIONS, formationSlots, formationUnit, type Formation } from './formations';
+import { metamorphCost } from '../sim/abilities/metamorph';
 import { resourceName, workerName, baseName, carterName } from '../factions/types';
 // DOM overlay: resources, selection panel, build / train / research buttons, tooltips.
 import type { ResourceKind, Stock, UnitSpec } from '../factions/types';
@@ -22,6 +23,8 @@ export interface HudActions {
   /** Put the selection in a formation, and which one it's in now. */
   formation(f: Formation): void;
   formationOf(): Formation;
+  /** Change the selected units that can into this form (sim/abilities/metamorph.ts). */
+  morph(into: string): void;
   ungarrison(buildingId: number): void;
   place(specId: string): void;
   idleWorker(): void;
@@ -137,7 +140,7 @@ export class Hud {
 
   private onClick(e: MouseEvent): void {
     if (this.suppressClick) { this.suppressClick = false; return; } // that was a hold, not a click
-    const el = (e.target as HTMLElement).closest('[data-train],[data-research],[data-cancel],[data-select],[data-cmd],[data-formation],[data-place],[data-sow],[data-ungarrison]') as HTMLElement | null;
+    const el = (e.target as HTMLElement).closest('[data-train],[data-research],[data-cancel],[data-select],[data-cmd],[data-morph],[data-formation],[data-place],[data-sow],[data-ungarrison]') as HTMLElement | null;
     if (!el || el.classList.contains('locked')) return;
     if (el.dataset.ungarrison) { this.actions.ungarrison(+el.dataset.ungarrison); return; }
     if (el.dataset.sow) {
@@ -152,6 +155,7 @@ export class Hud {
     else if (el.dataset.cancel) this.actions.cancelTrain(+el.dataset.cancel, el.dataset.index ? +el.dataset.index : undefined);
     else if (el.dataset.select) this.actions.select(el.dataset.select.split(',').map(Number));
     else if (el.dataset.cmd) this.actions.command(el.dataset.cmd as 'stop');
+    else if (el.dataset.morph) this.actions.morph(el.dataset.morph);
     else if (el.dataset.formation) { this.actions.formation(el.dataset.formation as Formation); this.sig = ''; }
     else if (el.dataset.place) this.actions.place(el.dataset.place);
   }
@@ -486,10 +490,23 @@ export class Hud {
       ${btn('stop', 'Stop', km.stop, 'Stop')}
     </div>
     <div class="cmds small">
+      ${this.morphButtons(units)}
       ${btn('resupply', 'Resupply', km.resupply, 'Resupply at the nearest stocked building, then return. Hold the key and click the ground to send them there afterwards.')}
       ${btn('give', 'Give', km.give, 'Give surplus to a friendly unit (then click it)')}
       ${btn('garrison', 'Garrison', km.garrison, 'Shelter inside one of your buildings (then click it). Throwers inside throw from cover. Only bodies that fit through a door (up to 150 kg): no mounts or beasts.')}
     </div>`;
+  }
+
+  /** A button for each form the selected units can change into (unit abilities live in this row). */
+  private morphButtons(units: Unit[]): string {
+    const w = this.world, forms = new Map<string, Unit>();
+    for (const u of units) for (const id of w.specOf(u.owner, u.specId)?.spec.becomes ?? []) if (!forms.has(id)) forms.set(id, u);
+    return [...forms.entries()].map(([id, u]) => {
+      const to = w.specOf(u.owner, id), from = w.specOf(u.owner, u.specId);
+      if (!to || !from) return '';
+      const c = metamorphCost(from.stats, to.stats);
+      return `<button data-morph="${id}" title="Change into ${to.spec.name} where they stand: ${c.food} ${this.names().food.toLowerCase()} (eaten as they change, from their packs, a food bearer or a building beside them), ${c.sec.toFixed(0)} s. They can't move or fight meanwhile.">${ICONS.morph}<span>→ ${to.spec.name}</span><small>${c.food} · ${c.sec.toFixed(0)} s</small></button>`;
+    }).join('');
   }
 
   /** A group of fighters: big order tiles, and each formation drawn with this group in it. */
@@ -512,6 +529,7 @@ export class Hud {
       </div>
       <div class="tiles forms">${FORMATIONS.map((f) => `<button data-formation="${f.id}" class="ftile ${f.id === formation ? 'on' : ''}" title="${f.tip}">${formationPicture(f.id, fus)}<span>${f.name}</span></button>`).join('')}</div>
       <div class="cmds small">
+        ${this.morphButtons(units)}
         ${(['resupply', 'give', 'garrison'] as const).map((c) => `<button data-cmd="${c}" title="${{ resupply: 'Resupply at the nearest stocked building, then come back.', give: 'Give surplus to a friendly unit (then click it).', garrison: 'Shelter inside one of your buildings (then click it). Only bodies that fit through a door (up to 150 kg): no mounts or beasts.' }[c]}">${ICONS[c]}<span>${c[0].toUpperCase() + c.slice(1)}</span><kbd>${km[c].toUpperCase()}</kbd></button>`).join('')}
       </div>
     </div>`;
@@ -605,6 +623,7 @@ export function describeOrder(w: World, u: Unit): string {
     case 'move': return 'Moving';
     case 'attackMove': return u.engage ? 'Fighting' : 'Attack-moving';
     case 'patrol': return u.engage ? 'Fighting' : 'Patrolling';
+    case 'metamorph': return `Changing into ${w.specOf(u.owner, o.into)?.spec.name ?? o.into}`;
     case 'attack': return 'Attacking';
     case 'gather': {
       const r = resourceName(w.factionOf(u.owner), o.nodeType);
@@ -650,6 +669,7 @@ function doing(units: Unit[]): string {
 }
 
 const ICONS: Record<string, string> = {
+  morph: svg('<path d="M12 4c-3 0-5 2.5-5 6 0 4 2.5 8 5 10 2.5-2 5-6 5-10 0-3.5-2-6-5-6z"/><path d="M9 10.5h6M9.5 14h5"/>'),
   move: svg('<path d="M3 12h15M13 6l6 6-6 6"/>'),
   attackMove: svg('<path d="M19 5 8.5 15.5M6 13l5 5M7.5 16.5 4 20"/><path d="M19 5h-3M19 5v3"/>'),
   patrol: svg('<path d="M4 8.5h14l-3.5-3.5M20 15.5H6l3.5 3.5"/>'),

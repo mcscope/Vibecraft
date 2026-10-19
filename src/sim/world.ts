@@ -16,6 +16,7 @@ import { eating, isTamer, runPens, runTame } from './abilities/herding';
 import { BOMB_REACH, canReach, dropTime, FLARE_HEIGHT, FLY_SIGHT, flyTo, heightBonus, LAUNCH_HEIGHT, LEAP_POSE, takeOff, tickFlight, walks } from './abilities/flight';
 import { MatchStats } from './stats';
 import { eject, fitsInside, runGarrison, tickGarrison } from './garrison';
+import { canBecome, runMetamorph } from './abilities/metamorph';
 import { isUnderfoot, loadBelt, nearestBelt, roadFactor, routeBelts, runBelts, type BeltRoutes, type Parcel } from './abilities/underfoot';
 import { grow, grownEnough, livingStats, seedMaterials } from './abilities/living';
 import {
@@ -91,6 +92,8 @@ export type Order =
   | { kind: 'wild'; hx: number; hy: number; tx: number; ty: number; rest: number }
   | { kind: 'move'; x: number; y: number; face?: number }
   | { kind: 'attackMove'; x: number; y: number; charge?: boolean; face?: number }
+  /** Changing into another form where it stands: `fed` kg of the food cost eaten, `t` seconds in (sim/abilities/metamorph.ts). */
+  | { kind: 'metamorph'; into: string; fed: number; t: number }
   /** Attack-move to (x, y), then back to (bx, by), and so on. */
   | { kind: 'patrol'; x: number; y: number; bx: number; by: number }
   | { kind: 'attack'; target: number; charge?: boolean }
@@ -362,6 +365,8 @@ export type WorldEvent =
   | { type: 'attack'; x: number; y: number; owner: number; specId?: string; style: 'strike' | 'throw'; kg: number }
   | { type: 'death'; x: number; y: number; id: number; owner: number; specId: string; heading: number }
   | { type: 'trained'; id: number; owner: number }
+  /** A unit finished changing: `id` is gone, `into` stands in its place. */
+  | { type: 'metamorph'; id: number; into: number; owner: number; x: number; y: number }
   | { type: 'built'; id: number; owner: number }
   | { type: 'researched'; owner: number; techId: string }
   | { type: 'buildingDestroyed'; id: number; owner: number; x: number; y: number; size: number }
@@ -684,6 +689,7 @@ export class World {
       case 'move': return set(mineAll(cmd.units), { kind: 'move', x: cmd.x, y: cmd.y, face: cmd.face });
       case 'attackMove': return set(mine(cmd.units), { kind: 'attackMove', x: cmd.x, y: cmd.y, charge: cmd.charge || undefined, face: cmd.face });
       case 'patrol': for (const u of mine(cmd.units)) set([u], { kind: 'patrol', x: cmd.x, y: cmd.y, bx: u.x, by: u.y }); return;
+      case 'metamorph': return set(mine(cmd.units).filter((u) => canBecome(this, u, cmd.into)), { kind: 'metamorph', into: cmd.into, fed: 0, t: 0 });
       case 'attack': {
         const tgt = this.units.get(cmd.target) ?? this.buildings.get(cmd.target);
         if (!tgt || tgt.owner === player) return;
@@ -1227,6 +1233,7 @@ export class World {
     if (reeling) anim = 'stagger';
     else if (((u.order.kind === 'gather' && u.order.phase === 'harvest') || (u.order.kind === 'build' && u.order.phase === 'chop')) && !moved && u.busy) anim = 'gather';
     else if ((u.order.kind === 'eatPack' || u.order.kind === 'resupply') && !moved && u.busy) anim = 'eat';
+    else if (u.order.kind === 'metamorph') anim = 'eat'; // feeding its change
     else if (u.exhausted && !moved) anim = 'tired';
     // in the air: a flight pose pitched to how it's moving: leaping off the ground, climbing, soaring level, or gliding down
     if (u.airborne) anim = u.vert > 0 ? (LEAP_POSE && u.alt < LAUNCH_HEIGHT ? 'leap' : 'climb') : u.vert < 0 ? (u.alt < FLARE_HEIGHT ? 'land' : 'glide') : 'soar'; // the last few metres down: flaring to land
@@ -1256,6 +1263,7 @@ export class World {
       case 'rearm': return bearerAbility.runRearm(this, u, o.unit);
       case 'eatFrom': return bearerAbility.runEatFrom(this, u, o.unit);
       case 'garrison': return runGarrison(this, u, o.building);
+      case 'metamorph': return runMetamorph(this, u, o, DT);
       case 'move': {
         const pass = u.queue.length > 0; // more orders after this one: ride on through the waypoint, don't pull up
         if (this.moveTo(u, o.x, o.y, pass ? 0.8 : 0.3, false, pass)) { this.finish(u); u.faceTo = o.face ?? null; }

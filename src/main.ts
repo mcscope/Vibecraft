@@ -198,6 +198,7 @@ async function run(g: GameSetup): Promise<void> {
     command: (kind) => input.hudCommand(kind),
     formation: (f) => input.setFormation(f),
     formationOf: () => input.formationOf(),
+    morph: (into) => local.issue({ type: 'metamorph', units: input.selectedUnits(), into }),
     ungarrison: (building) => local.issue({ type: 'ungarrison', building }),
   });
 
@@ -267,6 +268,8 @@ async function run(g: GameSetup): Promise<void> {
     }
     const t1 = performance.now();
     input.alpha = Math.min(1, acc / DT);
+    // a unit that changed form stays selected as its new self
+    for (const e of world.events) if (e.type === 'metamorph' && input.rs.selected.delete(e.id)) input.rs.selected.add(e.into);
     renderer.consumeEvents(world.events);
     audio.handle(world.events, renderer.cam);
     world.events = [];
