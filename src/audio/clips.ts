@@ -88,27 +88,31 @@ export async function sayLine(ctx: AudioContext, out: AudioNode, factionId: stri
   // round-robin through the type's clips for this line
   const key = `${unit}/${line}`, n = turn.get(key) ?? 0, i = ((echo && n > 0 ? n - 1 : n) % pool.length + pool.length) % pool.length;
   if (!echo || n === 0) turn.set(key, n + 1);
-  const id = pool[i], t = fxFor(m, id, unit), buf = await clip(ctx, id);
-  log(id, `${unit} ${line}${chorus ? ' (chorus)' : ''}`);
-  // a chorus: the whole group answers, a few voices slightly detuned, a beat apart, spread across the stereo field
-  const voices = chorus ? [[0, 0, 0], [-14, 0.025, -0.6], [11, 0.045, 0.6], [-6, 0.07, -0.25]] : [[0, 0, 0]];
-  const g0 = ctx.createGain(); g0.gain.value = chorus ? 0.55 : 1;
-  const srcs = voices.map(([cents, delay, pan]) => {
-    const s = ctx.createBufferSource(); s.buffer = buf; s.playbackRate.value = Math.pow(2, t.pitch / 12 + cents / 1200);
-    const p = ctx.createStereoPanner(); p.pan.value = pan;
-    s.connect(p).connect(g0);
-    return [s, delay] as const;
-  });
-  const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = t.lowcut;
-  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = t.highcut;
-  const sh = ctx.createWaveShaper();
-  if (t.drive) { const n = 1024, k = t.drive * 60, c = new Float32Array(n); for (let j = 0; j < n; j++) { const x = (j / (n - 1)) * 2 - 1; c[j] = ((1 + k) * x) / (1 + k * Math.abs(x)); } sh.curve = c; }
-  const g = ctx.createGain(); g.gain.value = Math.pow(10, t.gain / 20) * (t.drive ? 1 / (1 + t.drive * 1.5) : 1);
-  g0.connect(hp).connect(lp).connect(sh).connect(g).connect(out);
-  if (t.reverb) { const rv = ctx.createConvolver(); rv.buffer = room(ctx); const wet = ctx.createGain(); wet.gain.value = t.reverb; g.connect(rv).connect(wet).connect(out); }
+  // one voice, or a chorus: the group answering, several *different* clips from its pool, each a little higher or
+  // lower, starting at uneven moments over about a quarter of a second, spread across the stereo field
+  const ids = [pool[i]];
+  if (chorus) for (let k = 1; k < pool.length && ids.length < 4; k++) ids.push(pool[(i + k) % pool.length]);
+  log(ids[0], `${unit} ${line}${chorus ? ` (chorus of ${ids.length})` : ''}`);
+  const bufs = await Promise.all(ids.map((id) => clip(ctx, id)));
+  let at = 0;
+  const pans = [0, -0.55, 0.5, -0.2];
   playing++;
-  srcs[0][0].onended = () => { playing--; };
-  for (const [s, delay] of srcs) s.start(ctx.currentTime + delay);
+  ids.forEach((id, k) => {
+    const t = fxFor(m, id, unit);
+    const semis = k === 0 ? 0 : (Math.random() - 0.5) * 3; // ±1.5 semitones: different throats
+    if (k > 0) at += 0.04 + Math.random() * 0.09; // ragged, not in step
+    const s = ctx.createBufferSource(); s.buffer = bufs[k]; s.playbackRate.value = Math.pow(2, (t.pitch + semis) / 12);
+    const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = t.lowcut;
+    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = t.highcut;
+    const sh = ctx.createWaveShaper();
+    if (t.drive) { const n = 1024, kk = t.drive * 60, c = new Float32Array(n); for (let j = 0; j < n; j++) { const x = (j / (n - 1)) * 2 - 1; c[j] = ((1 + kk) * x) / (1 + kk * Math.abs(x)); } sh.curve = c; }
+    const g = ctx.createGain(); g.gain.value = Math.pow(10, t.gain / 20) * (t.drive ? 1 / (1 + t.drive * 1.5) : 1) * (chorus ? (k === 0 ? 0.75 : 0.5) : 1);
+    const p = ctx.createStereoPanner(); p.pan.value = chorus ? pans[k] : 0;
+    s.connect(hp).connect(lp).connect(sh).connect(g).connect(p).connect(out);
+    if (t.reverb) { const rv = ctx.createConvolver(); rv.buffer = room(ctx); const wet = ctx.createGain(); wet.gain.value = t.reverb; g.connect(rv).connect(wet).connect(out); }
+    if (k === 0) s.onended = () => { playing--; };
+    s.start(ctx.currentTime + at);
+  });
   return true;
 }
 
