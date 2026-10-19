@@ -1,5 +1,5 @@
 // Recorded unit voices (public/voices: clips cut from real recordings, labelled in the Voice Lab), on with the
-// "Unit voices" setting (?voices=1 / ?voices=0 overrides it). A unit type steps through its clips in turn, one line per action, never one per unit; a cooldown per
+// "Unit voices" setting, on by default (?voices=1 / ?voices=0 overrides it). A unit type steps through its clips in turn, one line per action, never one per unit; a cooldown per
 // type and a cap on voices at once keep it from getting noisy. Each clip plays through its treatment from the lab.
 
 import { settings } from '../ui/settings';

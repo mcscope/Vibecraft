@@ -52,15 +52,17 @@ export interface Settings {
   muted: boolean;
   /** Units answer with recorded voice lines (audio/clips.ts). */
   voices: boolean;
+  /** The player set `voices` themselves (a stored off from before voices were on for everyone is ignored). */
+  voicesChosen?: boolean;
 }
 
-const DEFAULTS: Settings = { scheme: 'wasd', edgeScroll: true, scrollSpeed: 1, perf: true, cartDebug: false, volume: 0.8, sfxVolume: 0.9, musicVolume: 0.6, muted: false, voices: false };
+const DEFAULTS: Settings = { scheme: 'wasd', edgeScroll: true, scrollSpeed: 1, perf: true, cartDebug: false, volume: 0.8, sfxVolume: 0.9, musicVolume: 0.6, muted: false, voices: true };
 const KEY = 'vibecraft.settings';
 
 function load(): Settings {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return { ...DEFAULTS, ...JSON.parse(raw) };
+    if (raw) { const s = { ...DEFAULTS, ...JSON.parse(raw) } as Settings; if (!s.voicesChosen) s.voices = DEFAULTS.voices; return s; }
   } catch { /* private mode etc. */ }
   return { ...DEFAULTS };
 }
@@ -130,7 +132,7 @@ export function mountSettingsDialog(): void {
     else if (t.name === 'cartDebug') updateSettings({ cartDebug: t.checked });
     else if (t.name === 'volume' || t.name === 'sfxVolume' || t.name === 'musicVolume') updateSettings({ [t.name]: +t.value });
     else if (t.name === 'muted') updateSettings({ muted: t.checked });
-    else if (t.name === 'voices') updateSettings({ voices: t.checked });
+    else if (t.name === 'voices') updateSettings({ voices: t.checked, voicesChosen: true });
     render();
   });
   dlg.querySelector('.close')!.addEventListener('click', () => toggleSettings(false));
