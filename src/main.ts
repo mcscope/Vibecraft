@@ -7,6 +7,12 @@ import { World, DT } from './sim/world';
 import { faceoff, provingGrounds, skirmish } from './sim/scenarios';
 import { LESSONS, tutorialScenario } from './tutorial';
 import { soundDebug } from './ui/soundDebug';
+import { aiDraft, BattleAI, defaultDeployment, pitchedBattle } from './sim/battle';
+import { draftBattle } from './ui/battleSetup';
+import { BattleDeploy } from './ui/battleDeploy';
+
+/** In a pitched battle: the computer's army (it starts moving once you're deployed). */
+let battleAI: BattleAI | null = null;
 import { MAPS } from './sim/map';
 import { Lockstep, LocalInput, LoopbackTransport, type CommandSource, type Transport } from './net/lockstep';
 import { NetTransport } from './net/relayClient';
@@ -25,7 +31,7 @@ import { Minimap } from './ui/minimap';
 import { AudioEngine } from './audio/engine';
 import { mountSettingsDialog, onSettings, settings } from './ui/settings';
 
-type Mode = 'demo' | 'skirmish' | 'spectate' | 'online' | 'faceoff' | 'tutorial';
+type Mode = 'demo' | 'skirmish' | 'spectate' | 'online' | 'faceoff' | 'tutorial' | 'battle';
 const params = new URLSearchParams(location.search);
 // Seed choice happens outside the sim, so Math.random is fine here.
 const seed = Number(params.get('seed') ?? Math.floor(Math.random() * 1e9));
@@ -80,6 +86,16 @@ else {
 }
 
 async function start(m: Mode): Promise<void> {
+  if (m === 'battle') {
+    // draft first (both armies), then the battle map with both deployed in standard ranks
+    menu.style.display = 'none';
+    const c = await draftBattle(params);
+    const foeArmy = aiDraft(c.foe, c.budget);
+    const world = new World({ seed, scenario: pitchedBattle(c.mapId, [defaultDeployment(c.you, c.army, 0), defaultDeployment(c.foe, foeArmy, 1)]), players: [{ name: 'You', faction: c.you }, { name: c.foe.name, faction: c.foe }] });
+    battleAI = new BattleAI(1);
+    await run({ mode: m, world, me: 0, transport: new LoopbackTransport(), delay: 2, sources: (local) => [local, battleAI!] });
+    return;
+  }
   const lessonIx = Math.max(0, Math.min(LESSONS.length - 1, +(params.get('lesson') ?? 0) || 0)), lesson = LESSONS[lessonIx];
   const world = m === 'tutorial'
     ? new World({ seed, scenario: tutorialScenario(lesson), players: [{ name: 'You', faction: lesson.you }, { name: lesson.foe.name, faction: lesson.foe }] })
@@ -161,10 +177,11 @@ async function run(g: GameSetup): Promise<void> {
   await renderer.init();
   const minimap = new Minimap(document.getElementById('minimap') as HTMLCanvasElement, world, 200, (x, y) => bank.biomeAt(x, y).ground);
   // fog of war for whoever's playing (spectators and the proving grounds see everything)
-  renderer.viewer = minimap.viewer = m === 'spectate' || m === 'demo' || m === 'faceoff' || m === 'tutorial' ? -1 : HUMAN;
+  // (a pitched battle is fought on open ground in full view of both armies)
+  renderer.viewer = minimap.viewer = m === 'spectate' || m === 'demo' || m === 'faceoff' || m === 'tutorial' || m === 'battle' ? -1 : HUMAN;
   const audio = new AudioEngine(world, bank, HUMAN);
   soundDebug();
-  audio.alerts = m === 'skirmish' || m === 'online'; // a horn when your side is newly attacked
+  audio.alerts = m === 'skirmish' || m === 'online' || m === 'battle'; // a horn when your side is newly attacked
   const input = new Input(canvas, world, renderer, minimap, HUMAN, (cmd) => {
     local.issue(cmd);
     audio.answerOrder(cmd, HUMAN);
@@ -187,7 +204,10 @@ async function run(g: GameSetup): Promise<void> {
   window.addEventListener('resize', resize);
   resize();
 
+  // a pitched battle opens on deployment: the world holds still until Ready
+  const deploy = m === 'battle' ? new BattleDeploy(world, renderer, canvas, (ids) => input.setSelection(ids), () => { if (battleAI) battleAI.started = true; }) : null;
   if (m === 'faceoff') renderer.cam.centerOn(25, 25);
+  else if (m === 'battle') { /* (the deploy step framed the camera) */ }
   else if (m === 'tutorial') {
     const ix = Math.max(0, Math.min(LESSONS.length - 1, +(params.get('lesson') ?? 0) || 0)), lesson = LESSONS[ix];
     renderer.cam.centerOn(lesson.look[0], lesson.look[1]);
@@ -235,7 +255,7 @@ async function run(g: GameSetup): Promise<void> {
     last = now;
     fps = fps * 0.95 + (1 / Math.max(dt, 1e-3)) * 0.05;
     const t0 = performance.now();
-    if (!input.paused) {
+    if (!input.paused && !deploy?.deploying) {
       acc += dt * input.speed;
       let steps = 0;
       while (acc >= DT && steps < 40) {

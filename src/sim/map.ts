@@ -82,7 +82,7 @@ const TREE_GAP = 1.5;
 const TREE_BASE_PAD = 3;
 
 /** Shared tools for drawing a point-symmetric map: everything placed is mirrored through the centre. */
-class MapBuilder {
+export class MapBuilder {
   readonly rng: Rng;
   readonly grid: Grid;
   readonly features: MapFeature[] = [];

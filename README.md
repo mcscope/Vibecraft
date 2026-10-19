@@ -60,6 +60,7 @@ Play the shipped factions in your browser at **[mcscope.com/game/vibecraft](http
 |---|---|
 | **Tutorial** | Seven hands-on lessons: calories, crystals, carts, Fen hauling, charges, groupings and birds. |
 | **Skirmish** | Build an economy and fight the computer. |
+| **Pitched Battle** | Draft an army to a food budget, deploy it on a battlefield (river fords, a broken ridge, lake lanes, twin woods or open steppe), and fight. No economy, no reinforcements. |
 | **Spectate** | Watch two computer players fight. |
 | **Arena** | Watch any two units fight on an equal budget, and see every matchup scored. Tick *You command blue* to fight it yourself. |
 | **Proving Grounds** | Command a full army against training dummies and a target fort. |

@@ -508,3 +508,26 @@ button.garrison-btn span { font-size: 11.5px; color: var(--dim); }
 .codex h3 a.small { font-size: 12px; font-family: 'Alegreya Sans', sans-serif; margin-left: 8px; }
 .codex img.vicon { vertical-align: middle; }
 .codex .dim { color: var(--dim); }
+
+/* pitched battle: the draft */
+#battle-draft { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 30; background: radial-gradient(ellipse at center, #2a2318, #0b0907); overflow: auto; padding: 16px; }
+#battle-draft .draft { width: min(560px, 100%); padding: 22px 26px; }
+#battle-draft h1 { font-family: 'Cinzel', serif; color: var(--gold); margin: 0 0 4px; text-align: center; }
+#battle-draft .sub, #battle-draft .draft-map { color: var(--dim); text-align: center; margin: 4px 0 12px; }
+#battle-draft .draft-row { display: flex; gap: 8px; align-items: center; justify-content: center; margin: 6px 0; flex-wrap: wrap; }
+#battle-draft .draft-units { width: 100%; border-collapse: collapse; margin: 8px 0; }
+#battle-draft .draft-units td { padding: 5px 6px; border-bottom: 1px solid rgba(216, 178, 90, 0.15); }
+#battle-draft .draft-units td:last-child { text-align: right; white-space: nowrap; }
+#battle-draft .draft-units .n { display: inline-block; min-width: 26px; text-align: center; font-weight: 700; }
+#battle-draft .draft-units button { display: inline-block; width: 30px; min-height: 0; margin: 0; padding: 2px 0; text-align: center; vertical-align: middle; }
+#battle-draft .draft-units td:first-child { text-align: left; }
+#battle-draft .draft-go button { display: inline-block; width: auto; margin: 0; }
+#battle-draft .draft-total { text-align: center; margin: 8px 0; }
+#battle-draft .draft-total.over b { color: #e07a6a; }
+#battle-draft .draft-go { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+#battle-draft .draft-go button { padding: 8px 22px; font-size: 16px; }
+#battle-draft .back { color: var(--dim); }
+#help .deploy-blocks { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+#help .deploy-blocks button { position: static; padding: 4px 8px; }
+#help .deploy-blocks button.on { border-color: var(--gold); color: var(--gold); }
+#help .deploy-note { color: #e8a87c; min-height: 1em; }
