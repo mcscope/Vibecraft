@@ -14,6 +14,9 @@ The user's decisions so far, as given. Nothing here is designed beyond what they
 - **Refinement:** each change can raise it by up to 1.0. Changing is how the faction climbs.
 - **Animations:** very cool transformation animations for everything (entering a shell, emerging).
 
+## Tiers
+- **Three tiers of egg and larva:** refinement 1, 2 and 3, each an egg and a larva.
+
 ## Larvae
 - Like caterpillars, with size and colour set by refinement:
   - small, green;
@@ -22,5 +25,5 @@ The user's decisions so far, as given. Nothing here is designed beyond what they
 
 ## Still open
 - The roster, buildings, names.
-- Which larva each egg size becomes (set in each egg's spec).
+- Is a mother stage's refinement the same as the egg tier she lays (stage 1 lays tier 1, and so on)? A parent can't spawn anything more refined than itself.
 - Does the mother change inside a shell, or in place?
