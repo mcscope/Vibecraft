@@ -31,7 +31,10 @@
     "fenfolk_voices_28"
    ],
    "death": [
-    "meadowfolk_voices_92"
+    "meadowfolk_voices_92",
+    "frogs_dying_01",
+    "frogs_dying_08",
+    "frogs_dying_15"
    ]
   },
   "fenfolk:fenling": {
@@ -45,7 +48,21 @@
     "fenfolk_voices_19"
    ],
    "death": [
-    "supplement2_07"
+    "supplement2_07",
+    "frogs_dying_02",
+    "frogs_dying_03",
+    "frogs_dying_04",
+    "frogs_dying_05",
+    "frogs_dying_06",
+    "frogs_dying_07",
+    "frogs_dying_09",
+    "frogs_dying_10",
+    "frogs_dying_11",
+    "frogs_dying_12",
+    "frogs_dying_13",
+    "frogs_dying_14",
+    "frogs_dying_16",
+    "frogs_dying_17"
    ]
   },
   "fenfolk:reedguard": {
@@ -56,7 +73,8 @@
     "fenfolk_voices_12"
    ],
    "death": [
-    "supplement2_08"
+    "supplement2_08",
+    "frogs_dying_18"
    ]
   },
   "fenfolk:great-siege-heron": {
