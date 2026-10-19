@@ -50,6 +50,8 @@ export class Minimap {
   }
 
   private layer: HTMLCanvasElement | null = null;
+  private fog: HTMLCanvasElement | null = null;
+  private fogImg: ImageData | null = null;
   private lastStatic = -1e9;
   private lastDraw = -1e9;
 
@@ -89,17 +91,27 @@ export class Minimap {
     this.staticLayer();
     const me = this.viewer;
     if (me >= 0) {
-      // fog: black where never seen, a veil where out of sight
-      const unseen = new Path2D(), veiled = new Path2D();
-      for (let ty = 0; ty < world.grid.height; ty++) for (let tx = 0; tx < world.grid.width; tx++) {
-        const v = world.vision(me, tx, ty);
-        if (v === 2) continue;
-        const p = v ? veiled : unseen;
-        const c = [this.toMini(tx, ty), this.toMini(tx + 1, ty), this.toMini(tx + 1, ty + 1), this.toMini(tx, ty + 1)];
-        p.moveTo(c[0][0], c[0][1]); for (let i = 1; i < 4; i++) p.lineTo(c[i][0], c[i][1]); p.closePath();
+      // fog: black where never seen, a veil where out of sight. One pixel per tile in a small image, laid over the
+      // map's diamond by a transform (a path of a quad per tile was thousands of shapes to fill, ten times a second)
+      const g = world.grid, s = this.size;
+      if (!this.fog || this.fog.width !== g.width || this.fog.height !== g.height) {
+        this.fog = document.createElement('canvas');
+        this.fog.width = g.width; this.fog.height = g.height;
+        this.fogImg = this.fog.getContext('2d')!.createImageData(g.width, g.height);
       }
-      ctx.fillStyle = 'rgba(6,8,10,0.5)'; ctx.fill(veiled);
-      ctx.fillStyle = '#06080a'; ctx.fill(unseen);
+      const d = this.fogImg!.data;
+      for (let ty = 0; ty < g.height; ty++) for (let tx = 0; tx < g.width; tx++) {
+        const v = world.vision(me, tx, ty), i = (ty * g.width + tx) * 4;
+        d[i] = 6; d[i + 1] = 8; d[i + 2] = 10;
+        d[i + 3] = v === 2 ? 0 : v === 1 ? 128 : 255;
+      }
+      this.fog.getContext('2d')!.putImageData(this.fogImg!, 0, 0);
+      // tile (x, y) → toMini: x·(s/2W) − y·(s/2H) + s/2, x·(s/4W) + y·(s/4H)
+      ctx.save();
+      ctx.imageSmoothingEnabled = false;
+      ctx.transform(s / (2 * g.width), s / (4 * g.width), -s / (2 * g.height), s / (4 * g.height), s / 2, 0); // (on top of the HiDPI scale)
+      ctx.drawImage(this.fog, 0, 0);
+      ctx.restore();
     }
     for (const b of world.buildings.values()) {
       if (me >= 0 && b.owner !== me && world.vision(me, b.ox + b.size / 2, b.oy + b.size / 2) === 0) continue;
