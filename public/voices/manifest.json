@@ -351,25 +351,11 @@
     "combat_104",
     "thuds_01",
     "thuds_02",
-    "thuds_03",
-    "thuds_04",
     "thuds_05",
     "thuds_06",
-    "thuds_07",
-    "thuds_08",
     "thuds_10",
-    "thuds_11",
-    "thuds_12",
     "thuds_13",
-    "thuds_14",
     "thuds_16",
-    "thuds_18",
-    "thuds_19",
-    "thuds_20",
-    "thuds_21",
-    "thuds_22",
-    "thuds_23",
-    "thuds_24",
     "thuds_27",
     "thuds_28",
     "thuds_30",
@@ -384,11 +370,15 @@
     "combat_82",
     "combat_83",
     "thuds_09",
-    "thuds_15",
     "thuds_17",
+    "thuds_29"
+   ]
+  },
+  "combat:collapse": {
+   "any": [
+    "thuds_15",
     "thuds_25",
     "thuds_26",
-    "thuds_29",
     "thuds_32"
    ]
   }
@@ -546,6 +536,12 @@
   },
   "fenfolk_voices_30": {
    "drive": 0.1
+  },
+  "thuds_15": {
+   "drive": 0.2,
+   "pitch": 0,
+   "reverb": 0.2,
+   "lowcut": 20
   }
  },
  "unitFx": {
