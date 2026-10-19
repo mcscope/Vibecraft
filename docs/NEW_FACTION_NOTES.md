@@ -17,6 +17,13 @@ The user's decisions so far, as given. Nothing here is designed beyond what they
 ## Tiers
 - **Three tiers of egg and larva:** refinement 1, 2 and 3, each an egg and a larva.
 
+## What each tier's larva can become (offshoots, one refinement up)
+- **T1:** a fast charging body. Maybe also micropikes.
+- **T2:** flier bodies and ground-attack bodies, plus a slinger. Maybe also the mother (but that might leave T1 anemic).
+- **T3 (to confirm; the user wrote "T2 and T2"):** flier bodies and ground-attack bodies.
+- **Work refinement equals refinement** for the larvae (being tried).
+- **Tier prices being tried:** 35 / 70 / 140 food, each double the last.
+
 ## Larvae
 - Like caterpillars, with size and colour set by refinement:
   - small, green;
