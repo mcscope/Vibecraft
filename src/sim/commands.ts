@@ -11,8 +11,10 @@ export type CommandBody =
   | { type: 'move'; units: number[]; x: number; y: number; face?: number }
   /** charge: sprint in from any distance and run on through (C). */
   | { type: 'attackMove'; units: number[]; x: number; y: number; charge?: boolean; face?: number }
-  /** Change where they stand into `into` (units whose spec `becomes` it), or with `spawn`, grow one beside them (`spawns`): sim/abilities/metamorph.ts. */
+  /** Change where they stand into `into` (units whose spec `becomes` it), or with `spawn`, queue one to train in their bodies (`spawns`): sim/abilities/metamorph.ts. */
   | { type: 'metamorph'; units: number[]; into: string; spawn?: boolean }
+  /** Cancel the last spawn queued in each of them (what it had paid goes back into its pack). */
+  | { type: 'cancelSpawn'; units: number[] }
   /** Walk back and forth between where they are now and (x, y), fighting anything met on the way. */
   | { type: 'patrol'; units: number[]; x: number; y: number }
   | { type: 'attack'; units: number[]; target: number; charge?: boolean }

@@ -10,12 +10,13 @@
 //    the refinement.
 //  • A form can be at most 1.0 more refined than the one it grows from (so refinement climbs a step at a time).
 //  • While it changes it stands still and can't fight; killed, the change is lost with it.
-// Spawning: `spawns: [unit ids]`. The same, except the parent stays: it grows a new unit of its side beside it, so it
-// pays the new unit's whole price, over the same METAMORPH_SEC × its refinement plus growing its whole body. A parent can't spawn anything more
-// refined than itself (refinement climbs only by changing).
+// Spawning: `spawns: [unit ids]`. The parent trains them in its own body, like a building: a queue of up to MAX_QUEUE,
+// each paid up front (its whole price, once that much is on hand) and grown over METAMORPH_SEC × its refinement plus
+// its whole body's growing time, then laid beside it. It goes on moving, gathering and fighting meanwhile. A parent
+// can't spawn anything more refined than itself (refinement climbs only by changing).
 import type { UnitSpec } from '../../factions/types';
 import { K, type DerivedStats } from '../physics';
-import type { Unit, World } from '../world';
+import { MAX_QUEUE, type Unit, type World } from '../world';
 import type { Ability } from './index';
 
 /** Seconds per point of the new form's refinement. */
@@ -55,10 +56,10 @@ function larders(w: World, u: Unit): Array<{ have: number; take: (kg: number) =>
  * unit is replaced by its new form (same place, heading, pack, and share of health and calories), or grows a new one
  * beside it. Returns whether it moved (never).
  */
-export function runMetamorph(w: World, u: Unit, o: { into: string; paid: number; t: number; spawn?: boolean }, dt: number): boolean {
+export function runMetamorph(w: World, u: Unit, o: { into: string; paid: number; t: number }, dt: number): boolean {
   const from = w.specOf(u.owner, u.specId), to = w.specOf(u.owner, o.into);
   if (!from || !to) { w.finish(u); return false; }
-  const cost = metamorphCost(from.stats, to.stats, o.spawn);
+  const cost = metamorphCost(from.stats, to.stats);
   const eaten = from.spec.growthFood === 'eaten';
   // what must be paid by the end of this tick: all of it before starting, or (eaten) its share of the time so far
   const due = !eaten || cost.sec <= 0 ? cost.food : Math.min(cost.food, (cost.food * (o.t + dt)) / cost.sec);
@@ -71,14 +72,6 @@ export function runMetamorph(w: World, u: Unit, o: { into: string; paid: number;
   }
   if (o.paid + 1e-6 >= due) o.t += dt; // fed: the change goes on (eaten, it pauses when the food runs out)
   if (o.t < cost.sec || o.paid + 1e-6 < cost.food) return false;
-  if (o.spawn) {
-    // done: the young one steps out beside its parent, which carries on
-    const spot = w.grid.nearestOpen(u.x + Math.cos(u.facing) * (u.stats.radius + 0.6), u.y + Math.sin(u.facing) * (u.stats.radius + 0.6), 3) ?? [u.x, u.y];
-    const n = w.spawnAt(u.owner, o.into, spot[0], spot[1], u.heading);
-    w.finish(u);
-    if (n) w.events.push({ type: 'trained', id: n.id, owner: u.owner });
-    return false;
-  }
   // done: the new body, where the old one stood
   const hpShare = u.hp / u.stats.maxHp, calShare = u.cal / u.stats.maxCalories;
   w.units.delete(u.id);
@@ -89,6 +82,40 @@ export function runMetamorph(w: World, u: Unit, o: { into: string; paid: number;
   n.food = u.food; n.wood = u.wood; n.crystal = u.crystal;
   w.events.push({ type: 'metamorph', id: u.id, into: n.id, owner: u.owner, x: n.x, y: n.y });
   return false;
+}
+
+/** Queue a spawn in `u` (a parent whose spec `spawns` it), up to MAX_QUEUE. */
+export function queueBrood(w: World, u: Unit, into: string): void {
+  if (canBecome(w, u, into, true) && u.brood.length < MAX_QUEUE) u.brood.push({ into, t: 0, paid: 0 });
+}
+
+/** Cancel the last spawn queued in `u`: what it had paid goes back into its pack. */
+export function cancelBrood(u: Unit): void {
+  const b = u.brood.pop();
+  if (b) u.food += b.paid;
+}
+
+/** Each tick, whatever the parent is doing: the front of its spawn queue, paid up front, grows and is laid beside it. */
+export function tickBrood(w: World, u: Unit, dt: number): void {
+  const b = u.brood[0];
+  if (!b) return;
+  const from = w.specOf(u.owner, u.specId), to = w.specOf(u.owner, b.into);
+  if (!from || !to) { u.brood.shift(); return; }
+  const cost = metamorphCost(from.stats, to.stats, true);
+  if (b.paid + 1e-6 < cost.food) {
+    const ls = larders(w, u);
+    if (ls.reduce((t, l) => t + l.have, 0) + 1e-6 < cost.food - b.paid) return; // waiting for its price to be on hand
+    let want = cost.food - b.paid;
+    b.paid = cost.food;
+    for (const l of ls) { const k = Math.min(l.have, want); l.take(k); want -= k; }
+  }
+  b.t += dt;
+  if (b.t < cost.sec) return;
+  u.brood.shift();
+  // laid beside it, in front
+  const spot = w.grid.nearestOpen(u.x + Math.cos(u.facing) * (u.stats.radius + 0.6), u.y + Math.sin(u.facing) * (u.stats.radius + 0.6), 3) ?? [u.x, u.y];
+  const n = w.spawnAt(u.owner, b.into, spot[0], spot[1], u.heading);
+  if (n) w.events.push({ type: 'trained', id: n.id, owner: u.owner });
 }
 
 export const metamorph: Ability = {
@@ -103,8 +130,9 @@ export const metamorph: Ability = {
   unitCodex(u: UnitSpec): string | null {
     const lines: string[] = [];
     if (u.becomes?.length) lines.push(`Metamorphosis: changes where it stands into ${u.becomes.join(' or ')}, paying only the difference in food (${u.growthFood === 'eaten' ? 'eaten as it changes' : 'up front'}, from its pack, food bearers in reach or a building beside it) over ${METAMORPH_SEC} s × the new form's refinement, plus the time to grow any extra body.`);
-    if (u.spawns?.length) lines.push(`Spawns: grows a ${u.spawns.join(' or ')} beside it, paying its whole price in food (${u.growthFood === 'eaten' ? 'eaten as it grows' : 'up front'}, the same way) over ${METAMORPH_SEC} s × its refinement plus the time to grow its body.`);
-    return lines.length ? `${lines.join(' ')} It can't move or fight meanwhile.` : null;
+    if (u.becomes?.length) lines.push(`It can't move or fight while it changes.`);
+    if (u.spawns?.length) lines.push(`Spawns: trains ${u.spawns.join(' or ')} in its own body, like a building (a queue of ${MAX_QUEUE}), each paid up front from its pack, food bearers in reach or a building beside it, grown over ${METAMORPH_SEC} s × its refinement plus the time to grow its body, then laid beside it. It goes on moving and fighting meanwhile.`);
+    return lines.length ? lines.join(' ') : null;
   },
 };
 

@@ -16,7 +16,7 @@ import { eating, isTamer, runPens, runTame } from './abilities/herding';
 import { BOMB_REACH, canReach, dropTime, FLARE_HEIGHT, FLY_SIGHT, flyTo, heightBonus, LAUNCH_HEIGHT, LEAP_POSE, takeOff, tickFlight, walks } from './abilities/flight';
 import { MatchStats } from './stats';
 import { eject, fitsInside, runGarrison, tickGarrison } from './garrison';
-import { canBecome, runMetamorph } from './abilities/metamorph';
+import { canBecome, cancelBrood, queueBrood, runMetamorph, tickBrood } from './abilities/metamorph';
 import { isUnderfoot, loadBelt, nearestBelt, roadFactor, routeBelts, runBelts, type BeltRoutes, type Parcel } from './abilities/underfoot';
 import { grow, grownEnough, livingStats, seedMaterials } from './abilities/living';
 import {
@@ -92,8 +92,8 @@ export type Order =
   | { kind: 'wild'; hx: number; hy: number; tx: number; ty: number; rest: number }
   | { kind: 'move'; x: number; y: number; face?: number }
   | { kind: 'attackMove'; x: number; y: number; charge?: boolean; face?: number }
-  /** Changing into another form where it stands (or growing one: `spawn`): `paid` kg of its food cost taken, `t` seconds in (sim/abilities/metamorph.ts). */
-  | { kind: 'metamorph'; into: string; paid: number; t: number; spawn?: boolean }
+  /** Changing into another form where it stands: `paid` kg of its food cost taken, `t` seconds in (sim/abilities/metamorph.ts). */
+  | { kind: 'metamorph'; into: string; paid: number; t: number }
   /** Attack-move to (x, y), then back to (bx, by), and so on. */
   | { kind: 'patrol'; x: number; y: number; bx: number; by: number }
   | { kind: 'attack'; target: number; charge?: boolean }
@@ -180,6 +180,8 @@ export interface Unit {
   facing: number; turnTick: number; turnLeft: number;
   /** Where to turn to face once it's standing (a formation's front, from its last move), or null. */
   faceTo: number | null;
+  /** Units it's training in its own body (spawns: sim/abilities/metamorph.ts), front first. */
+  brood: Array<{ into: string; t: number; paid: number }>;
   /** How it's actually been moving lately (tiles/s, smoothed over ~½ s): what an onlooker can see, and leads a throw by. */
   ovx: number; ovy: number;
   /** Which way a flier went this tick: +1 climbing, -1 coming down, 0 level. */
@@ -689,7 +691,10 @@ export class World {
       case 'move': return set(mineAll(cmd.units), { kind: 'move', x: cmd.x, y: cmd.y, face: cmd.face });
       case 'attackMove': return set(mine(cmd.units), { kind: 'attackMove', x: cmd.x, y: cmd.y, charge: cmd.charge || undefined, face: cmd.face });
       case 'patrol': for (const u of mine(cmd.units)) set([u], { kind: 'patrol', x: cmd.x, y: cmd.y, bx: u.x, by: u.y }); return;
-      case 'metamorph': return set(mine(cmd.units).filter((u) => canBecome(this, u, cmd.into, cmd.spawn)), { kind: 'metamorph', into: cmd.into, paid: 0, t: 0, spawn: cmd.spawn || undefined });
+      case 'metamorph':
+        if (cmd.spawn) { for (const u of mine(cmd.units)) queueBrood(this, u, cmd.into); return; } // trained in its body: it carries on
+        return set(mine(cmd.units).filter((u) => canBecome(this, u, cmd.into)), { kind: 'metamorph', into: cmd.into, paid: 0, t: 0 });
+      case 'cancelSpawn': for (const u of mine(cmd.units)) cancelBrood(u); return;
       case 'attack': {
         const tgt = this.units.get(cmd.target) ?? this.buildings.get(cmd.target);
         if (!tgt || tgt.owner === player) return;
@@ -964,7 +969,7 @@ export class World {
       food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
       order: { kind: 'idle' }, resume: null, queue: [], engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
-      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', cutting: false, facing: Math.PI / 4, turnTick: -1, turnLeft: 0, faceTo: null,
+      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', cutting: false, facing: Math.PI / 4, turnTick: -1, turnLeft: 0, faceTo: null, brood: [],
       dummy: !!spec.dummy,
       carter: spec.role === 'carter',
       gatherAcc: 0,
@@ -1211,6 +1216,7 @@ export class World {
     const st = u.stats;
     if (u.wild || u.tame) u.cal = st.maxCalories; // they graze
     if (u.cooldown > 0) u.cooldown -= DT;
+    tickBrood(this, u, DT); // spawns grow in it whatever it's doing
     if (u.swing > 0) u.swing -= DT;
     if (u.repathIn > 0) u.repathIn--;
     if (u.exhausted && u.cal > st.maxCalories * K.exhaustedRecoverFraction) u.exhausted = false;

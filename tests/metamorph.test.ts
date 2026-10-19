@@ -42,20 +42,26 @@ describe('metamorphosis', () => {
     expect(f.order.kind === 'metamorph' && f.order.t).toBe(0);
   });
 
-  test('a parent grows a new unit beside it, paying its whole price, and carries on', () => {
+  test('a parent trains spawns in its body like a building: a queue, paid up front, laid beside it while it keeps moving', () => {
     const brood = withExtras(fenfolk, { patch: { 'bog-toad': { spawns: ['fenling'] } } });
     const w = new World({ seed: 3, players: [{ name: 'Fen', faction: brood }, { name: 'Meadow', faction: meadowfolk }] });
     for (const u of [...w.units.values()]) if (w.players[u.owner].neutral) w.units.delete(u.id);
-    const hall = w.baseOf(0)!;
-    hall.stock.food = 1000;
-    const t = w.spawnAt(0, 'bog-toad', hall.ox + hall.size + 1, hall.oy + 1)!;
+    const t = w.spawnAt(0, 'bog-toad', 30.5, 30.5)!;
     const cost = metamorphCost(derive(brood.units.find((u) => u.id === 'bog-toad')!), derive(brood.units.find((u) => u.id === 'fenling')!), true);
+    t.food = cost.food * 2; // two fenlings' worth in its pack
     const before = w.unitsOf(0).filter((u) => u.specId === 'fenling').length;
-    w.enqueue({ player: 0, cmd: { type: 'metamorph', units: [t.id], into: 'fenling', spawn: true } });
-    for (let i = 0; i < Math.ceil(cost.sec * 20) + 10; i++) w.step();
-    expect(w.units.has(t.id)).toBe(true);
-    expect(w.unitsOf(0).filter((u) => u.specId === 'fenling').length).toBe(before + 1);
-    expect(1000 - hall.stock.food).toBeCloseTo(cost.food, 0);
+    for (let i = 0; i < 3; i++) w.enqueue({ player: 0, cmd: { type: 'metamorph', units: [t.id], into: 'fenling', spawn: true } });
+    w.enqueue({ player: 0, cmd: { type: 'move', units: [t.id], x: 40.5, y: 30.5 } });
+    w.step();
+    expect(t.brood.length).toBe(3);
+    const x0 = t.x;
+    for (let i = 0; i < Math.ceil(cost.sec * 20) * 2 + 20; i++) w.step();
+    expect(t.x).toBeGreaterThan(x0 + 3); // it kept moving
+    expect(w.unitsOf(0).filter((u) => u.specId === 'fenling').length).toBe(before + 2); // two paid for and laid
+    expect(t.brood.length).toBe(1); // the third waits for its price
+    w.enqueue({ player: 0, cmd: { type: 'cancelSpawn', units: [t.id] } });
+    w.step();
+    expect(t.brood.length).toBe(0);
     // nothing more refined than itself
     const up = withExtras(fenfolk, { patch: { fenling: { spawns: ['bog-toad'] } } });
     expect(validateFaction(up).some((e) => e.includes('spawns bog-toad'))).toBe(true);
