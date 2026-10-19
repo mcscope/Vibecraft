@@ -16,7 +16,7 @@ import { eating, isTamer, runPens, runTame } from './abilities/herding';
 import { BOMB_REACH, canReach, dropTime, FLARE_HEIGHT, FLY_SIGHT, flyTo, heightBonus, LAUNCH_HEIGHT, LEAP_POSE, takeOff, tickFlight, walks } from './abilities/flight';
 import { MatchStats } from './stats';
 import { eject, fitsInside, runGarrison, tickGarrison } from './garrison';
-import { canBecome, cancelBrood, queueBrood, runMetamorph, tickBrood } from './abilities/metamorph';
+import { beginMetamorph, canBecome, cancelBrood, queueBrood, refundMetamorph, runMetamorph, tickBrood } from './abilities/metamorph';
 import { isUnderfoot, loadBelt, nearestBelt, roadFactor, routeBelts, runBelts, type BeltRoutes, type Parcel } from './abilities/underfoot';
 import { grow, grownEnough, livingStats, seedMaterials } from './abilities/living';
 import {
@@ -92,8 +92,8 @@ export type Order =
   | { kind: 'wild'; hx: number; hy: number; tx: number; ty: number; rest: number }
   | { kind: 'move'; x: number; y: number; face?: number }
   | { kind: 'attackMove'; x: number; y: number; charge?: boolean; face?: number }
-  /** Changing into another form where it stands: `paid` kg of its food cost taken, `t` seconds in (sim/abilities/metamorph.ts). */
-  | { kind: 'metamorph'; into: string; paid: number; t: number }
+  /** Changing into another form where it stands: `paid` kg of its food cost taken, `t` seconds in; `from`: a shell brewing what went into it (sim/abilities/metamorph.ts). */
+  | { kind: 'metamorph'; into: string; paid: number; t: number; from?: string }
   /** Attack-move to (x, y), then back to (bx, by), and so on. */
   | { kind: 'patrol'; x: number; y: number; bx: number; by: number }
   | { kind: 'attack'; target: number; charge?: boolean }
@@ -180,6 +180,8 @@ export interface Unit {
   facing: number; turnTick: number; turnLeft: number;
   /** Where to turn to face once it's standing (a formation's front, from its last move), or null. */
   faceTo: number | null;
+  /** A shell: the unit type that went into it (what it's worth, and what it can become). */
+  shellOf?: string;
   /** Units it's training in its own body (spawns: sim/abilities/metamorph.ts), front first. */
   brood: Array<{ into: string; t: number; paid: number }>;
   /** How it's actually been moving lately (tiles/s, smoothed over ~½ s): what an onlooker can see, and leads a throw by. */
@@ -368,7 +370,7 @@ export type WorldEvent =
   | { type: 'death'; x: number; y: number; id: number; owner: number; specId: string; heading: number }
   | { type: 'trained'; id: number; owner: number }
   /** A unit finished changing: `id` is gone, `into` stands in its place. */
-  | { type: 'metamorph'; id: number; into: number; owner: number; x: number; y: number }
+  | { type: 'metamorph'; id: number; into: number; owner: number; x: number; y: number; specId: string; intoSpec: string; heading: number }
   | { type: 'built'; id: number; owner: number }
   | { type: 'researched'; owner: number; techId: string }
   | { type: 'buildingDestroyed'; id: number; owner: number; x: number; y: number; size: number }
@@ -681,6 +683,7 @@ export class World {
     const set = (units: Unit[], order: Order) => {
       for (const u of units) {
         // shift-queued: after the current order (and anything queued before it)
+        if (!cmd.queue) refundMetamorph(u); // a change called off: its food back in the pack
         if (cmd.queue && (u.order.kind !== 'idle' || u.queue.length)) { u.queue.push({ ...order } as Order); continue; }
         u.order = { ...order } as Order; u.resume = null; u.engage = 0; u.path = []; u.repathIn = 0; u.queue = []; u.faceTo = null;
         u.stance = 'auto'; // a new order ends holding ground
@@ -693,7 +696,8 @@ export class World {
       case 'patrol': for (const u of mine(cmd.units)) set([u], { kind: 'patrol', x: cmd.x, y: cmd.y, bx: u.x, by: u.y }); return;
       case 'metamorph':
         if (cmd.spawn) { for (const u of mine(cmd.units)) queueBrood(this, u, cmd.into); return; } // trained in its body: it carries on
-        return set(mine(cmd.units).filter((u) => canBecome(this, u, cmd.into)), { kind: 'metamorph', into: cmd.into, paid: 0, t: 0 });
+        for (const u of mine(cmd.units)) if (canBecome(this, u, cmd.into)) { refundMetamorph(u); beginMetamorph(this, u, cmd.into); }
+        return;
       case 'cancelSpawn': for (const u of mine(cmd.units)) cancelBrood(u); return;
       case 'attack': {
         const tgt = this.units.get(cmd.target) ?? this.buildings.get(cmd.target);
@@ -986,8 +990,10 @@ export class World {
     this.unitSpecs.set(`${owner}/${unitId}`, { spec: s.spec, stats });
     for (const u of this.units.values()) {
       if (u.owner !== owner || u.specId !== unitId) continue;
-      u.hp *= stats.maxHp / u.stats.maxHp;
-      u.stats = stats;
+      // (a shell is at the mass of what went into it: it keeps that mass)
+      const own = u.stats.mass === s.stats.mass ? stats : derive({ ...s.spec, mass: u.stats.mass }, this.players[owner].refine[unitId] ?? 0, this.players[owner].refineWork[unitId] ?? 0);
+      u.hp *= own.maxHp / u.stats.maxHp;
+      u.stats = own;
     }
     // orders not yet paid for get the new (cheaper) price
     for (const b of this.buildings.values()) {

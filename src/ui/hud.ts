@@ -504,14 +504,14 @@ export class Hud {
   private morphButtons(units: Unit[]): string {
     const w = this.world, forms = new Map<string, [Unit, boolean]>();
     for (const u of units) {
-      const spec = w.specOf(u.owner, u.specId)?.spec;
-      for (const id of spec?.becomes ?? []) if (!forms.has(`${id}:0`)) forms.set(`${id}:0`, [u, false]);
+      const spec = w.specOf(u.owner, u.specId)?.spec, origin = w.specOf(u.owner, u.shellOf ?? u.specId)?.spec; // (a shell: what went into it)
+      for (const id of origin?.becomes ?? []) if (!forms.has(`${id}:0`)) forms.set(`${id}:0`, [u, false]);
       for (const id of spec?.spawns ?? []) if (!forms.has(`${id}:1`)) forms.set(`${id}:1`, [u, true]);
     }
     return [...forms.entries()].map(([key, [u, spawn]]) => {
-      const id = key.slice(0, -2), to = w.specOf(u.owner, id), from = w.specOf(u.owner, u.specId);
+      const id = key.slice(0, -2), to = w.specOf(u.owner, id), from = w.specOf(u.owner, spawn ? u.specId : u.shellOf ?? u.specId);
       if (!to || !from) return '';
-      const c = metamorphCost(from.stats, to.stats, spawn), food = this.names().food.toLowerCase();
+      const c = metamorphCost(from.stats, to.stats, spawn, spawn ? undefined : u.stats.mass), food = this.names().food.toLowerCase();
       const what = spawn ? `Grow a ${to.spec.name} beside them` : `Change into ${to.spec.name} where they stand`;
       const queued = spawn ? units.reduce((t, x) => t + x.brood.filter((b) => b.into === id).length, 0) : 0;
       const tip = spawn

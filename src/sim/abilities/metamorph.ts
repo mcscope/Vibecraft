@@ -10,12 +10,17 @@
 //    the refinement.
 //  • A form can be at most 1.0 more refined than the one it grows from (so refinement climbs a step at a time).
 //  • While it changes it stands still and can't fight; killed, the change is lost with it.
+//  • `shell: 'unit-id'`: it changes inside a shell. Ordered to change, it becomes that unit at once, at its own mass
+//    (the shell's spec gives the body's makeup and its look; the mass is the one that went in), and the shell brews
+//    the new form: it's worth what went in, so it pays the new form's price less that, grows any extra body, and
+//    the new form emerges from it. A shell takes orders like any unit: a new order cancels the brew (refunding what
+//    it had paid to its pack), and it can start again on any form what went into it could become.
 // Spawning: `spawns: [unit ids]`. The parent trains them in its own body, like a building: a queue of up to MAX_QUEUE,
 // each paid up front (its whole price, once that much is on hand) and grown over METAMORPH_SEC × its refinement plus
 // its whole body's growing time, then laid beside it. It goes on moving, gathering and fighting meanwhile. A parent
 // can't spawn anything more refined than itself (refinement climbs only by changing).
 import type { UnitSpec } from '../../factions/types';
-import { K, type DerivedStats } from '../physics';
+import { derive, K, type DerivedStats } from '../physics';
 import { MAX_QUEUE, type Unit, type World } from '../world';
 import type { Ability } from './index';
 
@@ -24,15 +29,18 @@ export const METAMORPH_SEC = 6;
 /** The most refinement one change can add. */
 export const METAMORPH_MAX_STEP = 1;
 
-/** What changing `from` into `to` (or, `spawn`, growing a `to` beside it) costs: food, and seconds. */
-export function metamorphCost(from: DerivedStats, to: DerivedStats, spawn = false): { food: number; sec: number } {
-  const grow = spawn ? to.mass : Math.max(0, to.mass - from.mass); // kg of body to grow
+/**
+ * What changing `from` into `to` (or, `spawn`, growing a `to` beside it) costs: food, and seconds. `mass`: the body
+ * that's changing, if not `from`'s (a shell is at the mass of what went into it).
+ */
+export function metamorphCost(from: DerivedStats, to: DerivedStats, spawn = false, mass = from.mass): { food: number; sec: number } {
+  const grow = spawn ? to.mass : Math.max(0, to.mass - mass); // kg of body to grow
   return { food: spawn ? to.foodCost : Math.max(0, to.foodCost - from.foodCost), sec: METAMORPH_SEC * to.refinement + K.trainSecPerKg * grow };
 }
 
 /** Can this unit change into `into` (or, `spawn`, grow one)? */
 export function canBecome(w: World, u: Unit, into: string, spawn = false): boolean {
-  const spec = w.specOf(u.owner, u.specId)?.spec;
+  const spec = w.specOf(u.owner, (!spawn && u.shellOf) || u.specId)?.spec; // a shell: what went into it
   return !!(spawn ? spec?.spawns : spec?.becomes)?.includes(into) && !!w.specOf(u.owner, into);
 }
 
@@ -56,11 +64,11 @@ function larders(w: World, u: Unit): Array<{ have: number; take: (kg: number) =>
  * unit is replaced by its new form (same place, heading, pack, and share of health and calories), or grows a new one
  * beside it. Returns whether it moved (never).
  */
-export function runMetamorph(w: World, u: Unit, o: { into: string; paid: number; t: number }, dt: number): boolean {
-  const from = w.specOf(u.owner, u.specId), to = w.specOf(u.owner, o.into);
+export function runMetamorph(w: World, u: Unit, o: { into: string; paid: number; t: number; from?: string }, dt: number): boolean {
+  const from = w.specOf(u.owner, o.from ?? u.specId), to = w.specOf(u.owner, o.into); // (a shell: worth what went into it)
   if (!from || !to) { w.finish(u); return false; }
-  const cost = metamorphCost(from.stats, to.stats);
-  const eaten = from.spec.growthFood === 'eaten';
+  const cost = metamorphCost(from.stats, to.stats, false, u.stats.mass);
+  const eaten = from.spec.growthFood === 'eaten'; // (its own way of taking food, or what went into the shell's)
   // what must be paid by the end of this tick: all of it before starting, or (eaten) its share of the time so far
   const due = !eaten || cost.sec <= 0 ? cost.food : Math.min(cost.food, (cost.food * (o.t + dt)) / cost.sec);
   if (o.paid + 1e-6 < due) {
@@ -72,16 +80,52 @@ export function runMetamorph(w: World, u: Unit, o: { into: string; paid: number;
   }
   if (o.paid + 1e-6 >= due) o.t += dt; // fed: the change goes on (eaten, it pauses when the food runs out)
   if (o.t < cost.sec || o.paid + 1e-6 < cost.food) return false;
-  // done: the new body, where the old one stood
+  swapInto(w, u, o.into); // done: the new form, where the old body stood
+  return false;
+}
+
+/**
+ * Replace `u` with a new unit of `into` where it stands: same heading, pack, and share of health and calories (`mass`:
+ * at this mass rather than its spec's, for a shell). Returns the new unit.
+ */
+export function swapInto(w: World, u: Unit, into: string, mass?: number): Unit | null {
   const hpShare = u.hp / u.stats.maxHp, calShare = u.cal / u.stats.maxCalories;
   w.units.delete(u.id);
-  const n = w.spawnAt(u.owner, o.into, u.x, u.y, u.heading);
-  if (!n) return false;
+  const n = w.spawnAt(u.owner, into, u.x, u.y, u.heading);
+  if (!n) return null;
+  if (mass !== undefined) n.stats = statsAtMass(w, u.owner, into, mass);
   n.x = n.px = u.x; n.y = n.py = u.y; n.facing = u.facing;
   n.hp = n.stats.maxHp * hpShare; n.cal = n.stats.maxCalories * calShare;
   n.food = u.food; n.wood = u.wood; n.crystal = u.crystal;
-  w.events.push({ type: 'metamorph', id: u.id, into: n.id, owner: u.owner, x: n.x, y: n.y });
-  return false;
+  w.events.push({ type: 'metamorph', id: u.id, into: n.id, owner: u.owner, x: n.x, y: n.y, specId: u.specId, intoSpec: into, heading: u.heading });
+  return n;
+}
+
+/** A unit spec's stats at another mass (a shell takes the mass of what went into it). */
+const atMass = new Map<string, DerivedStats>();
+function statsAtMass(w: World, owner: number, specId: string, mass: number): DerivedStats {
+  const key = `${w.players[owner].factionId}/${specId}/${mass}`;
+  let st = atMass.get(key);
+  if (!st) { st = derive({ ...w.specOf(owner, specId)!.spec, mass }); atMass.set(key, st); }
+  return st;
+}
+
+/**
+ * Ordered to change into `into`: a unit with a shell goes into it at once (and the shell brews `into`); one without
+ * stands and changes in place.
+ */
+export function beginMetamorph(w: World, u: Unit, into: string): void {
+  if (u.shellOf) { u.order = { kind: 'metamorph', into, paid: 0, t: 0, from: u.shellOf }; return; } // a shell starting (again)
+  const shell = w.specOf(u.owner, u.specId)?.spec.shell;
+  if (shell && w.specOf(u.owner, shell)) {
+    const s = swapInto(w, u, shell, u.stats.mass);
+    if (s) { s.shellOf = u.specId; s.order = { kind: 'metamorph', into, paid: 0, t: 0, from: u.specId }; }
+  } else u.order = { kind: 'metamorph', into, paid: 0, t: 0 };
+}
+
+/** A change called off by another order: what it had paid goes back into the pack. */
+export function refundMetamorph(u: Unit): void {
+  if (u.order.kind === 'metamorph' && u.order.paid > 0) { u.food += u.order.paid; u.order.paid = 0; }
 }
 
 /** Queue a spawn in `u` (a parent whose spec `spawns` it), up to MAX_QUEUE. */
@@ -125,12 +169,13 @@ export const metamorph: Ability = {
     if (u.becomes !== undefined && (!Array.isArray(u.becomes) || u.becomes.some((id) => typeof id !== 'string' || id === u.id))) errs.push(`${where}: becomes must list other unit ids`);
     if (u.spawns !== undefined && (!Array.isArray(u.spawns) || u.spawns.some((id) => typeof id !== 'string'))) errs.push(`${where}: spawns must list unit ids`);
     if (u.growthFood !== undefined && u.growthFood !== 'upfront' && u.growthFood !== 'eaten') errs.push(`${where}: growthFood must be 'upfront' or 'eaten'`);
+    if (u.shell !== undefined && (typeof u.shell !== 'string' || u.shell === u.id)) errs.push(`${where}: shell must be another unit id`);
     return errs;
   },
   unitCodex(u: UnitSpec): string | null {
     const lines: string[] = [];
     if (u.becomes?.length) lines.push(`Metamorphosis: changes where it stands into ${u.becomes.join(' or ')}, paying only the difference in food (${u.growthFood === 'eaten' ? 'eaten as it changes' : 'up front'}, from its pack, food bearers in reach or a building beside it) over ${METAMORPH_SEC} s × the new form's refinement, plus the time to grow any extra body.`);
-    if (u.becomes?.length) lines.push(`It can't move or fight while it changes.`);
+    if (u.becomes?.length) lines.push(u.shell ? `It changes inside a ${u.shell}: at once it becomes one, at its own mass, and the new form emerges from it.` : `It can't move or fight while it changes.`);
     if (u.spawns?.length) lines.push(`Spawns: trains ${u.spawns.join(' or ')} in its own body, like a building (a queue of ${MAX_QUEUE}), each paid up front from its pack, food bearers in reach or a building beside it, grown over ${METAMORPH_SEC} s × its refinement plus the time to grow its body, then laid beside it. It goes on moving and fighting meanwhile.`);
     return lines.length ? lines.join(' ') : null;
   },
@@ -140,6 +185,7 @@ export const metamorph: Ability = {
 export function validateMetamorphForms(units: UnitSpec[], refinement: (u: UnitSpec) => number): string[] {
   const errs: string[] = [];
   for (const u of units) {
+    if (u.shell && !units.some((x) => x.id === u.shell)) errs.push(`${u.id}: shell "${u.shell}" isn't one of this faction's units`);
     for (const [verb, ids, step] of [['becomes', u.becomes, METAMORPH_MAX_STEP], ['spawns', u.spawns, 0]] as const) for (const id of ids ?? []) {
       const to = units.find((x) => x.id === id);
       if (!to) { errs.push(`${u.id}: ${verb} "${id}", which isn't one of this faction's units`); continue; }

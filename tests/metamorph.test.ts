@@ -84,6 +84,36 @@ describe('metamorphosis', () => {
     expect(o.t).toBeCloseTo(stuck, 3); // then waited
   });
 
+  test('with a shell: it becomes the shell at once, at its own mass; the shell brews the new form, which emerges from it', () => {
+    const cocoon: UnitSpec = { id: 'test-shell', name: 'Shell', description: 'Test shell.', mass: 5, physique: { muscle: 0.1, frame: 0.8, reserve: 0.1 }, canGather: false } as UnitSpec;
+    const f2 = withExtras(fenfolk, { units: [knight, cocoon], patch: { fenling: { becomes: ['frog-knight'], shell: 'test-shell' } } });
+    const w = new World({ seed: 3, players: [{ name: 'Fen', faction: f2 }, { name: 'Meadow', faction: meadowfolk }] });
+    for (const u of [...w.units.values()]) if (w.players[u.owner].neutral) w.units.delete(u.id);
+    const f = w.spawnAt(0, 'fenling', 40.5, 40.5)!;
+    const fenStats = derive(f2.units.find((u) => u.id === 'fenling')!);
+    const cost = metamorphCost(fenStats, derive(knight), false, fenStats.mass);
+    f.food = cost.food; // its pack holds the price
+    w.enqueue({ player: 0, cmd: { type: 'metamorph', units: [f.id], into: 'frog-knight' } });
+    w.step();
+    expect(w.units.has(f.id)).toBe(false);
+    const sh = w.unitsOf(0).find((u) => u.specId === 'test-shell')!;
+    expect(sh.stats.mass).toBe(fenStats.mass); // at the mass of what went in
+    expect(sh.stats.maxHp).toBeGreaterThan(fenStats.maxHp); // its own makeup: mostly frame
+    expect(sh.order.kind === 'metamorph' && sh.order.into).toBe('frog-knight');
+    // another order calls the brew off, refunding its food; it can start again
+    w.enqueue({ player: 0, cmd: { type: 'move', units: [sh.id], x: 50, y: 40 } });
+    w.step();
+    expect(sh.order.kind).toBe('move');
+    expect(sh.food).toBeCloseTo(cost.food, 3);
+    w.enqueue({ player: 0, cmd: { type: 'metamorph', units: [sh.id], into: 'frog-knight' } });
+    w.step();
+    expect(sh.order.kind === 'metamorph' && sh.order.from).toBe('fenling');
+    let into = 0;
+    for (let i = 0; i < Math.ceil(cost.sec * 20) + 20 && !into; i++) { w.step(); for (const e of w.events) if (e.type === 'metamorph' && e.id === sh.id) into = e.into; w.events = []; }
+    expect(w.units.get(into)?.specId).toBe('frog-knight');
+    expect(Math.hypot(w.units.get(into)!.x - sh.x, w.units.get(into)!.y - sh.y)).toBeLessThan(0.01);
+  });
+
   test('a form more than one refinement up is refused', () => {
     const far = withExtras(fenfolk, { units: [{ ...knight, refinement: 2.5 }], patch: { fenling: { becomes: ['frog-knight'] } } });
     expect(validateFaction(far).some((e) => e.includes('frog-knight'))).toBe(true);
