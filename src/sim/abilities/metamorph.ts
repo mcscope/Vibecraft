@@ -124,6 +124,20 @@ export function beginMetamorph(w: World, u: Unit, into: string): void {
   } else u.order = { kind: 'metamorph', into, paid: 0, t: 0 };
 }
 
+/**
+ * Food handed to a unit in the middle of a change (Give) goes straight into paying for it, not into its pack (an egg's
+ * pack is tiny), up to what the change still owes. Returns the kg it took.
+ */
+export function feedChange(w: World, u: Unit, kg: number): number {
+  const o = u.order;
+  if (o.kind !== 'metamorph' || kg <= 0) return 0;
+  const from = w.specOf(u.owner, o.from ?? u.specId), to = w.specOf(u.owner, o.into);
+  if (!from || !to) return 0;
+  const k = Math.max(0, Math.min(kg, metamorphCost(from.stats, to.stats, false, u.stats.mass).food - o.paid));
+  o.paid += k;
+  return k;
+}
+
 /** A change called off by another order: what it had paid goes back into the pack. */
 export function refundMetamorph(u: Unit): void {
   if (u.order.kind === 'metamorph' && u.order.paid > 0) { u.food += u.order.paid; u.order.paid = 0; }

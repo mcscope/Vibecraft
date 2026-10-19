@@ -16,7 +16,7 @@ import { eating, isTamer, runPens, runTame } from './abilities/herding';
 import { BOMB_REACH, canReach, dropTime, FLARE_HEIGHT, FLY_SIGHT, flyTo, heightBonus, LAUNCH_HEIGHT, LEAP_POSE, takeOff, tickFlight, walks } from './abilities/flight';
 import { MatchStats } from './stats';
 import { eject, fitsInside, runGarrison, tickGarrison } from './garrison';
-import { beginMetamorph, canBecome, cancelBrood, queueBrood, refundMetamorph, runMetamorph, tickBrood } from './abilities/metamorph';
+import { beginMetamorph, canBecome, cancelBrood, feedChange, queueBrood, refundMetamorph, runMetamorph, tickBrood } from './abilities/metamorph';
 import { isUnderfoot, loadBelt, nearestBelt, roadFactor, routeBelts, runBelts, type BeltRoutes, type Parcel } from './abilities/underfoot';
 import { grow, grownEnough, livingStats, seedMaterials } from './abilities/living';
 import {
@@ -1882,6 +1882,7 @@ export class World {
 
   /** Hand over the giver's cargo. Crystal tops up the receiver's weapon pack first, then its cargo. */
   transfer(from: Unit, to: Unit): void {
+    from.food -= feedChange(this, to, from.food); // a unit mid-change takes food straight into the change (sim/abilities/metamorph.ts)
     const arm = Math.min(from.crystal, Math.max(0, to.stats.loadoutCrystal - to.ammo));
     from.crystal -= arm; to.ammo += arm;
     let room = this.freeCapacity(to);

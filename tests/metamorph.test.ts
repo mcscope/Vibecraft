@@ -122,6 +122,23 @@ describe('metamorphosis', () => {
     expect(Math.hypot(w.units.get(into)!.x - sh.x, w.units.get(into)!.y - sh.y)).toBeLessThan(0.01);
   });
 
+  test('food Given to a unit mid-change goes straight into the change, past its tiny pack', () => {
+    const egg: UnitSpec = { id: 'test-egg', name: 'Egg', description: 'Test egg.', mass: 15, physique: { muscle: 0.1, frame: 0.8, reserve: 0.1 }, canGather: false, becomes: ['fenling'] } as UnitSpec;
+    const f3 = withExtras(fenfolk, { units: [egg] });
+    const w = new World({ seed: 3, players: [{ name: 'Fen', faction: f3 }, { name: 'Meadow', faction: meadowfolk }] });
+    for (const u of [...w.units.values()]) if (w.players[u.owner].neutral) w.units.delete(u.id);
+    const e = w.spawnAt(0, 'test-egg', 30.5, 30.5)!, giver = w.spawnAt(0, 'fenling', 31.5, 30.5)!;
+    expect(e.stats.carryCapacity).toBeLessThan(2); // a tiny pack
+    const owed = metamorphCost(e.stats, derive(fenfolk.units.find((u) => u.id === 'fenling')!)).food;
+    w.enqueue({ player: 0, cmd: { type: 'metamorph', units: [e.id], into: 'fenling' } });
+    w.step();
+    giver.food = owed + 5;
+    w.enqueue({ player: 0, cmd: { type: 'give', units: [giver.id], to: e.id } });
+    for (let i = 0; i < 40; i++) w.step();
+    expect(e.order.kind === 'metamorph' && e.order.paid).toBeCloseTo(owed, 3); // all of what it owed, in one delivery
+    expect(giver.food + e.food).toBeCloseTo(5, 3); // the rest: what fits in the egg's pack, the giver keeps the remainder
+  });
+
   test('a form more than one refinement up is refused', () => {
     const far = withExtras(fenfolk, { units: [{ ...knight, refinement: 2.5 }], patch: { fenling: { becomes: ['frog-knight'] } } });
     expect(validateFaction(far).some((e) => e.includes('frog-knight'))).toBe(true);
