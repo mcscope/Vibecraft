@@ -8,6 +8,7 @@ Things noticed while building the tutorial and the computer players that could i
 - **Hold is worse than auto against a charge.** In the Groupings lesson, the same pikes, slingers and macemen beat four charging lancers on auto, but lost on Hold. Hold seems to stop units responding fully: pikes already plant themselves on auto, so Hold only adds passivity. Worth deciding what Hold should be good for.
 - **Lancers' swords hit as hard as their lances (96).** The rider and the lynx are one fused body, so the sword swings with the whole body's muscle.
 - **Pikes are still the strongest body at refinement 1** (+0.52 average), mostly from beating lone big units that a budget buys only one of.
+- **Macemen are strictly worse than pikemen.** At 1200 food, pikes beat macemen head-on (+0.36) and do as well or better against every other unit; macemen only fare better against villagers (−0.31 vs −0.53). Price isn't why: per food the maceman is the better body (98 HP and 8.9 dps per 100 food, against the pike's 90 and 7.5). It's reach: the pike strikes from 1.83 tiles, the mace from 0.74, so every maceman crosses a tile of pike reach before it can swing. Two places to look: the deliberate walk a striker closes in at against a longer weapon (free blows for the pikes), and the second rank's points still reaching a maceman who's inside the first rank's.
 - **Fenfolk vs Meadowfolk** is the AI's closest pairing: Hard Fenfolk lost once to Easy Meadowfolk. The lynx beats everything Fenfolk have except the heron (`npm run arena`).
 
 ## Logistics
