@@ -135,7 +135,7 @@ npm install
 npm run dev          # play at http://localhost:5173
 npm test             # run the simulation tests
 npm run typecheck
-npm run arena        # print the unit matchup table
+npm run arena        # print the unit matchup table (add 'flat' to compare bodies at refinement 1)
 npm run aimatch      # play the computer players against each other
 npm run build        # production build, art pre-baked
 npm run build:fast   # production build, art baked in the browser
