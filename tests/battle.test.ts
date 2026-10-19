@@ -21,6 +21,8 @@ describe('pitched battle', () => {
     for (const owner of [0, 1]) {
       expect(w.unitsOf(owner).length).toBeGreaterThan(5);
       for (const u of w.unitsOf(owner)) expect(inZone(owner, Math.round(u.x), Math.round(u.y)), `${u.specId} at ${u.x},${u.y}`).toBe(true);
+      // every unit stands on its own spot (none stacked on another)
+      expect(new Set(w.unitsOf(owner).map((u) => `${u.x.toFixed(2)},${u.y.toFixed(2)}`)).size).toBe(w.unitsOf(owner).length);
     }
   });
 

@@ -1,4 +1,5 @@
 import { capacity } from '../sim/garrison';
+import { FORMATIONS, formationSlots, formationUnit, type Formation } from './formations';
 import { resourceName, workerName, baseName, carterName } from '../factions/types';
 // DOM overlay: resources, selection panel, build / train / research buttons, tooltips.
 import type { ResourceKind, Stock, UnitSpec } from '../factions/types';
@@ -17,7 +18,10 @@ export interface HudActions {
   research(buildingId: number, techId: string): void;
   cancelTrain(buildingId: number, index?: number): void;
   select(ids: number[]): void;
-  command(kind: 'stop' | 'attackMove' | 'move' | 'resupply' | 'give' | 'garrison' | 'hold' | 'charge'): void;
+  command(kind: 'stop' | 'attackMove' | 'move' | 'patrol' | 'resupply' | 'give' | 'garrison' | 'hold' | 'charge'): void;
+  /** Put the selection in a formation, and which one it's in now. */
+  formation(f: Formation): void;
+  formationOf(): Formation;
   ungarrison(buildingId: number): void;
   place(specId: string): void;
   idleWorker(): void;
@@ -133,7 +137,7 @@ export class Hud {
 
   private onClick(e: MouseEvent): void {
     if (this.suppressClick) { this.suppressClick = false; return; } // that was a hold, not a click
-    const el = (e.target as HTMLElement).closest('[data-train],[data-research],[data-cancel],[data-select],[data-cmd],[data-place],[data-sow],[data-ungarrison]') as HTMLElement | null;
+    const el = (e.target as HTMLElement).closest('[data-train],[data-research],[data-cancel],[data-select],[data-cmd],[data-formation],[data-place],[data-sow],[data-ungarrison]') as HTMLElement | null;
     if (!el || el.classList.contains('locked')) return;
     if (el.dataset.ungarrison) { this.actions.ungarrison(+el.dataset.ungarrison); return; }
     if (el.dataset.sow) {
@@ -148,6 +152,7 @@ export class Hud {
     else if (el.dataset.cancel) this.actions.cancelTrain(+el.dataset.cancel, el.dataset.index ? +el.dataset.index : undefined);
     else if (el.dataset.select) this.actions.select(el.dataset.select.split(',').map(Number));
     else if (el.dataset.cmd) this.actions.command(el.dataset.cmd as 'stop');
+    else if (el.dataset.formation) { this.actions.formation(el.dataset.formation as Formation); this.sig = ''; }
     else if (el.dataset.place) this.actions.place(el.dataset.place);
   }
 
@@ -222,8 +227,8 @@ export class Hud {
     const units = [...selected].map((id) => w.units.get(id)).filter((u): u is Unit => !!u);
     const building = [...selected].map((id) => w.buildings.get(id)).find((b): b is Building => !!b);
     const p = w.players[this.player];
-    const stances = units.map((u) => u.stance[0]).join('');
-    const sig = units.length === 1 ? `u${units[0].id}:${stances}`
+    const stances = units.map((u) => u.stance[0]).join('') + (units.length > 1 ? this.actions.formationOf() + doing(units) : '');
+    const sig = units.length === 1 ? `u${units[0].id}:${stances}${doing(units)}`
       : building ? `b${building.id}:${building.complete}:${building.queue.map((q) => (q.kind === 'unit' ? q.specId : q.techId)).join(',')}:${p.researched.length}:${building.owner}:${building.sowing.join('')}:${building.garrison.length}`
       : `m${units.map((u) => u.id).join(',')}:${stances}`;
     if (sig !== this.sig) {
@@ -436,10 +441,13 @@ export class Hud {
       return `<button class="group" data-select="${us.map((u) => u.id).join(',')}" title="${spec.name}">
         <canvas class="portrait" data-portrait="${k}"></canvas><b>${us.length}</b></button>`;
     });
-    const workers = units.some((u) => u.owner === this.player && this.isWorker(u.specId));
-    // same shape as a single unit's panel: tiles and commands on the left, build menu beside them
-    return `<div class="group-panel"><div class="info"><div class="groups">${tiles.join('')}</div>${this.commandButtons(units.filter((x) => x.owner === this.player))}</div>
+    const mine = units.filter((x) => x.owner === this.player);
+    const workers = mine.some((u) => this.isWorker(u.specId));
+    // workers: tiles and commands on the left, the build menu beside them (no formations: that's the build menu's room)
+    if (workers || mine.length < 2) return `<div class="group-panel"><div class="info"><div class="groups">${tiles.join('')}</div>${this.commandButtons(mine)}</div>
       ${workers ? this.buildMenu() : ''}</div>`;
+    // an army: the orders and formations take the panel
+    return `<div class="group-panel"><div class="info"><div class="groups">${tiles.join('')}</div></div>${this.armyOrders(mine)}</div>`;
   }
 
   private buildMenu(): string {
@@ -465,16 +473,47 @@ export class Hud {
 
   private commandButtons(units: Unit[] = []): string {
     const km = keymap();
-    const all = (s: Unit['stance']) => units.length > 0 && units.every((u) => u.stance === s);
+    // the order they're under is lit and says so (Moving, Holding...)
+    const now = doing(units);
+    const btn = (cmd: string, label: string, key: string, tip: string) =>
+      `<button data-cmd="${cmd}" class="${now === cmd ? 'on' : ''}" title="${tip}">${ICONS[cmd]}<span>${now === cmd ? ORDERS[cmd]?.[1] ?? label : label}</span><kbd>${key.toUpperCase()}</kbd></button>`;
     return `<div class="cmds">
-      <button data-cmd="move" title="Move there, ignoring enemies on the way (pull units out of a fight)">Move <kbd>${km.move.toUpperCase()}</kbd></button>
-      <button data-cmd="attackMove" title="Attack-move">Attack <kbd>${km.attackMove.toUpperCase()}</kbd></button>
-      <button data-cmd="stop" title="Stop">Stop <kbd>${km.stop.toUpperCase()}</kbd></button>
-      <button data-cmd="resupply" title="Resupply at the nearest stocked building, then return. Hold the key and click the ground to send them there afterwards.">Resupply <kbd>${km.resupply.toUpperCase()}</kbd></button>
-      <button data-cmd="give" title="Give surplus to a friendly unit (then click it)">Give <kbd>${km.give.toUpperCase()}</kbd></button>
-      <button data-cmd="garrison" title="Shelter inside one of your buildings (then click it). Throwers inside throw from cover.">Garrison <kbd>${km.garrison.toUpperCase()}</kbd></button>
-      <button data-cmd="hold" class="${all('hold') ? 'on' : ''}" title="Hold ground: don't go to meet the enemy; strike what comes into reach. Spears and pikes stay planted, so a charge runs onto the point (but a planted shaft is very slow to turn). Press again to let them decide.">Hold <kbd>${km.hold.toUpperCase()}</kbd></button>
-      <button data-cmd="charge" class="${all('charge') ? 'on' : ''}" title="Charge: then click an enemy or a spot: they sprint at it from wherever they are and run on through, riding out and coming round again. Shift-click to queue charges in a chain. Sprinting burns calories fast.">Charge <kbd>${km.charge.toUpperCase()}</kbd></button>
+      ${btn('move', 'Move', km.move, 'Move there, ignoring enemies on the way (pull units out of a fight). Right-drag to lay out where the front line stands.')}
+      ${btn('attackMove', 'Attack', km.attackMove, 'Attack-move: go there, fighting whatever they meet on the way.')}
+      ${btn('patrol', 'Patrol', km.patrol, 'Patrol: then click a spot: they walk back and forth between here and there, fighting whatever they meet.')}
+      ${btn('charge', 'Charge', km.charge, 'Charge: then click an enemy or a spot: they sprint at it and run on through, smashing into what\'s in the way. Pikes don\'t stop to brace. Sprinting burns calories fast.')}
+      ${btn('hold', 'Hold', km.hold, 'Hold ground here: stand still and strike whatever comes into reach. Pikes and spears plant their points and brace for a charge. Any other order (or Hold again) ends it.')}
+      ${btn('stop', 'Stop', km.stop, 'Stop')}
+    </div>
+    <div class="cmds small">
+      ${btn('resupply', 'Resupply', km.resupply, 'Resupply at the nearest stocked building, then return. Hold the key and click the ground to send them there afterwards.')}
+      ${btn('give', 'Give', km.give, 'Give surplus to a friendly unit (then click it)')}
+      ${btn('garrison', 'Garrison', km.garrison, 'Shelter inside one of your buildings (then click it). Throwers inside throw from cover. Only bodies that fit through a door (up to 150 kg): no mounts or beasts.')}
+    </div>`;
+  }
+
+  /** A group of fighters: big order tiles, and each formation drawn with this group in it. */
+  private armyOrders(units: Unit[]): string {
+    const km = keymap();
+    // the order they're under lights its tile and says so (Moving, Holding...)
+    const now = doing(units);
+    const tile = (cmd: string, key: string, tip: string) =>
+      `<button data-cmd="${cmd}" class="tile ${now === cmd ? 'on' : ''}" title="${tip}">${ICONS[cmd]}<span>${now === cmd ? ORDERS[cmd][1] : ORDERS[cmd][0]}</span><kbd>${key.toUpperCase()}</kbd></button>`;
+    const formation = this.actions.formationOf();
+    const fus = units.map(formationUnit);
+    return `<div class="army">
+      <div class="tiles">
+        ${tile('move', km.move, 'Click where to go. They ignore enemies on the way. Right-drag on the ground to draw where their front line stands.')}
+        ${tile('attackMove', km.attackMove, 'Click where to go. They fight whatever they meet on the way.')}
+        ${tile('patrol', km.patrol, 'Click a spot. They walk back and forth between here and there, fighting whatever they meet.')}
+        ${tile('charge', km.charge, 'Click an enemy or a spot. They sprint at it and run on through, smashing into what\'s in the way. Pikes charge with their points down; they don\'t stop to brace. Sprinting burns calories fast.')}
+        ${tile('hold', km.hold, 'Hold ground here: they stand still and strike whatever comes into reach. Pikes and spears plant their points and brace for a charge. Any other order (or Hold again) ends it.')}
+        ${tile('stop', km.stop, 'Stop where they are.')}
+      </div>
+      <div class="tiles forms">${FORMATIONS.map((f) => `<button data-formation="${f.id}" class="ftile ${f.id === formation ? 'on' : ''}" title="${f.tip}">${formationPicture(f.id, fus)}<span>${f.name}</span></button>`).join('')}</div>
+      <div class="cmds small">
+        ${(['resupply', 'give', 'garrison'] as const).map((c) => `<button data-cmd="${c}" title="${{ resupply: 'Resupply at the nearest stocked building, then come back.', give: 'Give surplus to a friendly unit (then click it).', garrison: 'Shelter inside one of your buildings (then click it). Only bodies that fit through a door (up to 150 kg): no mounts or beasts.' }[c]}">${ICONS[c]}<span>${c[0].toUpperCase() + c.slice(1)}</span><kbd>${km[c].toUpperCase()}</kbd></button>`).join('')}
+      </div>
     </div>`;
   }
 
@@ -565,6 +604,7 @@ export function describeOrder(w: World, u: Unit): string {
     case 'hunt': return 'Hunting';
     case 'move': return 'Moving';
     case 'attackMove': return u.engage ? 'Fighting' : 'Attack-moving';
+    case 'patrol': return u.engage ? 'Fighting' : 'Patrolling';
     case 'attack': return 'Attacking';
     case 'gather': {
       const r = resourceName(w.factionOf(u.owner), o.nodeType);
@@ -588,4 +628,52 @@ export function describeOrder(w: World, u: Unit): string {
       return `${o.phase === 'deliver' ? 'Delivering' : 'Fetching'} ${o.res} for the ${home.spec.name}${o.pinned ? ' (pinned)' : ''}`;
     }
   }
+}
+
+// Command icons (24×24, drawn in the button's colour).
+const svg = (body: string) => `<svg viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
+/** Each order tile's name, and what it says while they're under that order. */
+const ORDERS: Record<string, [string, string]> = {
+  move: ['Move', 'Moving'], attackMove: ['Attack', 'Attacking'], patrol: ['Patrol', 'Patrolling'],
+  charge: ['Charge', 'Charging'], hold: ['Hold', 'Holding'], stop: ['Stop', 'Stop'],
+};
+
+/** What most of a group is doing, as the order tile that does it (or '' when they're just standing). */
+function doing(units: Unit[]): string {
+  const n = new Map<string, number>();
+  for (const u of units) {
+    const o = u.order;
+    const k = o.kind === 'move' ? 'move' : o.kind === 'patrol' ? 'patrol' : (o.kind === 'attackMove' || o.kind === 'attack') ? (o.charge ? 'charge' : 'attackMove') : u.stance === 'hold' ? 'hold' : '';
+    n.set(k, (n.get(k) ?? 0) + 1);
+  }
+  return [...n.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
+}
+
+const ICONS: Record<string, string> = {
+  move: svg('<path d="M3 12h15M13 6l6 6-6 6"/>'),
+  attackMove: svg('<path d="M19 5 8.5 15.5M6 13l5 5M7.5 16.5 4 20"/><path d="M19 5h-3M19 5v3"/>'),
+  patrol: svg('<path d="M4 8.5h14l-3.5-3.5M20 15.5H6l3.5 3.5"/>'),
+  charge: svg('<path d="M9 12h11M15.5 7.5 20 12l-4.5 4.5M3 7.5h5M2 12h4M3 16.5h5"/>'),
+  stop: svg('<rect x="6" y="6" width="12" height="12" rx="1.5"/>'),
+  hold: svg('<path d="M12 3v14M7 21h10M12 17l-4 4M12 17l4 4"/><path d="M8 8h8"/>'),
+  resupply: svg('<path d="M4 8 12 4l8 4v8l-8 4-8-4zM4 8l8 4 8-4M12 12v8"/>'),
+  give: svg('<path d="M3 16h6l3 2h5l4-3.5M14 4v8M10.5 8.5 14 12l3.5-3.5"/>'),
+  garrison: svg('<path d="M4 11 12 4l8 7v9H4zM10 20v-5h4v5"/>'),
+};
+
+/** This group drawn in formation `f`, front at the top: a dot per unit (gold shafts, red strikers, blue throwers) with a tick the way it faces. */
+function formationPicture(f: Formation, units: ReturnType<typeof formationUnit>[]): string {
+  const slots = formationSlots(f, units, 0, 0, -Math.PI / 2);
+  const role = new Map(units.map((u) => [u.id, u.role]));
+  const xs = slots.map((s) => s.x), ys = slots.map((s) => s.y);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  // fit it in the tile, keeping its shape
+  const W = 76, H = 50, pad = 5, k = Math.min((W - 2 * pad) / Math.max(1, x1 - x0), (H - 2 * pad - 6) / Math.max(1, y1 - y0), 9);
+  const ox = W / 2 - ((x0 + x1) / 2) * k, oy = (H + 6) / 2 - ((y0 + y1) / 2) * k, r = Math.max(1.6, Math.min(3.2, k * 0.3));
+  const colour = ['#e8c547', '#e07a5f', '#7ab8e0'];
+  const dots = slots.map((s) => {
+    const x = ox + s.x * k, y = oy + s.y * k, c = colour[role.get(s.id) ?? 1];
+    return `<line x1="${x.toFixed(1)}" y1="${y.toFixed(1)}" x2="${(x + Math.cos(s.face) * r * 2.2).toFixed(1)}" y2="${(y + Math.sin(s.face) * r * 2.2).toFixed(1)}" stroke="${c}" stroke-width="1.3"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${r.toFixed(1)}" fill="${c}"/>`;
+  }).join('');
+  return `<svg viewBox="0 0 ${W} ${H}" aria-hidden="true"><path class="front" d="M${W / 2 - 5} 5 L${W / 2} 1 L${W / 2 + 5} 5"/>${dots}</svg>`;
 }

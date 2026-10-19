@@ -196,6 +196,8 @@ async function run(g: GameSetup): Promise<void> {
     cancelTrain: (building, index) => local.issue({ type: 'cancelTrain', building, index }),
     select: (ids) => input.setSelection(ids),
     command: (kind) => input.hudCommand(kind),
+    formation: (f) => input.setFormation(f),
+    formationOf: () => input.formationOf(),
     ungarrison: (building) => local.issue({ type: 'ungarrison', building }),
   });
 
@@ -204,7 +206,7 @@ async function run(g: GameSetup): Promise<void> {
   resize();
 
   // a pitched battle opens on deployment: the world holds still until Ready
-  const deploy = m === 'battle' ? new BattleDeploy(world, renderer, canvas, (ids) => input.setSelection(ids), () => { if (battleAI) battleAI.started = true; }) : null;
+  const deploy = m === 'battle' ? new BattleDeploy(world, renderer, canvas, input.rs, (ids) => input.setSelection(ids), () => { if (battleAI) battleAI.started = true; }) : null;
   if (m === 'faceoff') renderer.cam.centerOn(25, 25);
   else if (m === 'battle') { /* (the deploy step framed the camera) */ }
   else if (m === 'tutorial') {
@@ -237,7 +239,7 @@ async function run(g: GameSetup): Promise<void> {
   const speedEl = document.getElementById('speed')!;
   // resign (players only, in matches that can be won) and the score screen when it's over
   const resignBtn = document.getElementById('resign')!;
-  const canResign = m === 'skirmish' || m === 'online';
+  const canResign = m === 'skirmish' || m === 'online' || m === 'battle';
   resignBtn.style.display = canResign ? '' : 'none';
   resignBtn.onclick = () => { if (world.winner < 0 && !world.players[HUMAN].defeated && confirm('Resign this match?')) local.issue({ type: 'resign' }); };
   let scored = false;

@@ -10,6 +10,12 @@ export const DEPLOY_DEPTH = 15;
 export const inZone = (owner: number, x: number, y: number): boolean =>
   y >= 3 && y <= BATTLE_SIZE - 4 && (owner === 0 ? x >= 2 && x <= DEPLOY_DEPTH : x >= BATTLE_SIZE - 1 - DEPLOY_DEPTH && x <= BATTLE_SIZE - 3);
 
+/** The nearest point to (x, y) inside `owner`'s zone. */
+export const intoZone = (owner: number, x: number, y: number): [number, number] => {
+  const [x0, x1] = owner === 0 ? [2, DEPLOY_DEPTH] : [BATTLE_SIZE - 1 - DEPLOY_DEPTH, BATTLE_SIZE - 3];
+  return [Math.max(x0, Math.min(x1, x)), Math.max(3, Math.min(BATTLE_SIZE - 4, y))];
+};
+
 /** The middle of `owner`'s zone. */
 export const zoneCenter = (owner: number): [number, number] => (owner === 0 ? [DEPLOY_DEPTH / 2 + 1, BATTLE_SIZE / 2] : [BATTLE_SIZE - 2 - DEPLOY_DEPTH / 2, BATTLE_SIZE / 2]);
 

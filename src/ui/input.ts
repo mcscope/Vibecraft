@@ -8,9 +8,10 @@ import type { Renderer, RenderState } from '../render/renderer';
 import { TEAM_COLORS } from '../render/renderer';
 import type { Minimap } from './minimap';
 import { keymap, settings, settingsOpen, updateSettings } from './settings';
+import { formationSlots, formationUnit, type Formation, type Slot } from './formations';
 
 /** resupplyDest: units were just sent to resupply; a ground click picks where they go afterwards. */
-type Mode = 'attackMove' | 'charge' | 'move' | 'give' | 'garrison' | 'resupplyDest' | 'place' | null;
+type Mode = 'attackMove' | 'charge' | 'move' | 'patrol' | 'give' | 'garrison' | 'resupplyDest' | 'place' | null;
 
 export class Input {
   readonly rs: RenderState = { selected: new Set(), hoverId: 0, box: null, ping: null, ghost: null };
@@ -25,6 +26,8 @@ export class Input {
   private groups = new Map<string, number[]>();
   private lastClick = { t: 0, id: 0 };
   private lastGroupKey = { t: 0, key: '' };
+  /** Each unit's formation (what it was last set to with the group it was in); block if never set. */
+  private formations = new Map<number, Formation>();
   alpha = 0;
 
   constructor(
@@ -39,7 +42,8 @@ export class Input {
     canvas.addEventListener('mousedown', (e) => this.down(e));
     window.addEventListener('mousemove', (e) => this.move(e));
     window.addEventListener('mouseup', (e) => this.up(e));
-    canvas.addEventListener('mouseenter', () => (this.mouse.inside = true));
+    // (record where it came in: until the first move the position is unknown, and (-1, -1) would edge-scroll up-left)
+    canvas.addEventListener('mouseenter', (e) => { this.mouse.x = e.clientX; this.mouse.y = e.clientY; this.mouse.inside = true; });
     canvas.addEventListener('mouseleave', () => (this.mouse.inside = false));
     canvas.addEventListener('wheel', (e) => { e.preventDefault(); this.renderer.cam.zoomAt(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX, e.clientY); }, { passive: false });
     window.addEventListener('keydown', (e) => this.keydown(e));
@@ -97,6 +101,7 @@ export class Input {
     }
     cam.pan(dx * cam.zoom, dy * cam.zoom);
     cam.clampTo(this.world.grid.width, this.world.grid.height);
+    this.rs.formation = this.previewSlots();
     // hover shows what a right-click would target
     this.rs.hoverId = this.mouse.inside ? this.renderer.pick(this.mouse.x, this.mouse.y, this.alpha, this.orderPicker()) : 0;
     this.canvas.style.cursor = this.mode === 'attackMove' ? 'crosshair' : this.mode === 'move' ? 'pointer' : this.mode === 'give' ? 'copy' : this.mode === 'resupplyDest' ? 'alias' : this.mode === 'place' ? 'cell' : 'default';
@@ -141,6 +146,12 @@ export class Input {
     if (!d) return;
     const box = this.rs.box;
     this.rs.box = null;
+    if (d.button === 2 && d.moved && this.mode !== 'place') {
+      // a right-drag lays out the front line: the group forms up along it, facing away from you
+      const front = this.dragFront(d, e.clientX, e.clientY);
+      if (front) { this.queueing = e.shiftKey; this.formationOrder('move', this.selectedUnits(), ...front); this.queueing = false; }
+      return;
+    }
     if (d.button === 2 && !d.moved) {
       if (this.mode === 'place') { this.mode = null; return; }
       if (this.mode === 'resupplyDest') this.mode = null;
@@ -189,18 +200,22 @@ export class Input {
       }
       if (this.mode === 'move') {
         // a plain move: walk there whatever's under the cursor (pull out of a fight)
-        this.formationMove(units, wx, wy);
+        this.formationOrder('move', units, wx, wy);
         this.ping(wx, wy, TEAM_COLORS[this.player].secondary);
       } else if (this.mode === 'charge') {
         // a charge order: sprint at it from wherever they are and run on through (shift: queued after the rest)
         const t = this.world.units.get(target) ?? this.world.buildings.get(target);
         if (t && t.owner !== this.player) this.issue({ type: 'attack', units, target, charge: true });
-        else this.issue({ type: 'attackMove', units, x: wx, y: wy, charge: true });
+        else this.formationOrder('charge', units, wx, wy);
         this.ping(wx, wy, '#ff9a3a');
       } else if (this.mode === 'attackMove') {
         const t = this.world.units.get(target) ?? this.world.buildings.get(target);
         if (t && t.owner !== this.player) this.issue({ type: 'attack', units, target });
-        else this.issue({ type: 'attackMove', units, x: wx, y: wy });
+        else this.formationOrder('attackMove', units, wx, wy);
+        this.ping(wx, wy, '#ff6b5a');
+      } else if (this.mode === 'patrol') {
+        // back and forth between here and there, in formation, fighting what they meet
+        this.formationOrder('patrol', units, wx, wy);
         this.ping(wx, wy, '#ff6b5a');
       } else if (this.mode === 'resupplyDest') {
         const tc = this.supplyBuilding(units);
@@ -325,25 +340,80 @@ export class Input {
       if (others.length) this.issue({ type: 'give', units: others, to: tu.id });
       this.ping(tu.x, tu.y, '#7ae7c7');
     } else {
-      this.formationMove(units, wx, wy);
+      this.formationOrder('move', units, wx, wy);
       this.ping(wx, wy, TEAM_COLORS[this.player].secondary);
     }
   }
 
-  /** Spread a group's destinations into a loose grid so they don't pile up. */
-  private formationMove(units: number[], x: number, y: number): void {
-    if (units.length === 1) { this.issue({ type: 'move', units, x, y }); return; }
+  /** The selection's formation: the one most of them are in (block if none set). */
+  formationOf(units = this.selectedUnits()): Formation {
+    const n = new Map<Formation, number>();
+    for (const id of units) { const f = this.formations.get(id) ?? 'block'; n.set(f, (n.get(f) ?? 0) + 1); }
+    return [...n.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'block';
+  }
+
+  /** Put the selection in a formation: they form up in it where they stand, and keep it for their next moves. */
+  setFormation(f: Formation): void {
+    const units = this.selectedUnits();
+    for (const id of this.formations.keys()) if (!this.world.units.has(id)) this.formations.delete(id); // (the fallen)
+    for (const id of units) this.formations.set(id, f);
+    if (units.length < 2) return;
     const us = units.map((id) => this.world.units.get(id)!).filter(Boolean);
-    const cols = Math.ceil(Math.sqrt(us.length));
-    const spacing = 0.9;
-    // keep relative order: sort by current offset so units don't cross paths
-    const sorted = [...us].sort((a, b) => (a.x + a.y) - (b.x + b.y) || (a.x - a.y) - (b.x - b.y));
-    sorted.forEach((u, i) => {
-      const r = Math.floor(i / cols), c = i % cols;
-      const ox = (c - (cols - 1) / 2) * spacing, oy = (r - (Math.ceil(us.length / cols) - 1) / 2) * spacing;
-      const gx = x + (ox + oy) * 0.7, gy = y + (oy - ox) * 0.7;
-      this.issue({ type: 'move', units: [u.id], x: gx, y: gy });
-    });
+    const cx = us.reduce((t, u) => t + u.x, 0) / us.length, cy = us.reduce((t, u) => t + u.y, 0) / us.length;
+    this.formationOrder('move', units, cx, cy, this.groupFacing(us));
+  }
+
+  /** Where each of `units` would stand in its formation at (x, y): facing `angle` (default: the way they'd travel). */
+  private slotsAt(units: number[], x: number, y: number, angle?: number, width?: number, front = false): Slot[] {
+    const us = units.map((id) => this.world.units.get(id)).filter((u): u is NonNullable<typeof u> => !!u);
+    if (us.length < 2) return [];
+    const cx = us.reduce((t, u) => t + u.x, 0) / us.length, cy = us.reduce((t, u) => t + u.y, 0) / us.length;
+    const a = angle ?? (Math.hypot(x - cx, y - cy) > 1 ? Math.atan2(y - cy, x - cx) : this.groupFacing(us));
+    const slots = formationSlots(this.formationOf(units), us.map(formationUnit), x, y, a, width);
+    if (front) {
+      // (x, y) is the middle of the front rank, not of the whole formation
+      const fx = Math.cos(a), fy = Math.sin(a), lead = Math.max(...slots.map((s) => (s.x - x) * fx + (s.y - y) * fy));
+      for (const s of slots) { s.x -= fx * lead; s.y -= fy * lead; }
+    }
+    return slots;
+  }
+
+  /** Which way a group faces on average. */
+  private groupFacing(us: Array<{ facing: number }>): number {
+    return Math.atan2(us.reduce((t, u) => t + Math.sin(u.facing), 0), us.reduce((t, u) => t + Math.cos(u.facing), 0));
+  }
+
+  /** A right-drag's front line, from where it started to (sx, sy) on screen: [x, y, facing, width, front] or null. */
+  private dragFront(d: { x: number; y: number }, sx: number, sy: number): [number, number, number, number, boolean] | null {
+    if (!this.selectedUnits().length) return null;
+    const [x0, y0] = this.renderer.cam.toWorld(d.x, d.y), [x1, y1] = this.renderer.cam.toWorld(sx, sy);
+    const len = Math.hypot(x1 - x0, y1 - y0);
+    if (len < 0.5) return null;
+    // facing: square to the line, to its left as drawn (drag left to right and they face up the screen)
+    return [(x0 + x1) / 2, (y0 + y1) / 2, Math.atan2(-(x1 - x0), y1 - y0), len, true];
+  }
+
+  /** Send a group somewhere in its formation: each unit to its own spot, facing the formation's front on arrival. */
+  private formationOrder(kind: 'move' | 'attackMove' | 'charge' | 'patrol', units: number[], x: number, y: number, angle?: number, width?: number, front = false): void {
+    const slots = this.slotsAt(units, x, y, angle, width, front);
+    const one = (ids: number[], sx: number, sy: number, face?: number) => this.issue(
+      kind === 'move' ? { type: 'move', units: ids, x: sx, y: sy, face }
+        : kind === 'attackMove' ? { type: 'attackMove', units: ids, x: sx, y: sy, face }
+        : kind === 'charge' ? { type: 'attackMove', units: ids, x: sx, y: sy, charge: true } // (a charge runs on through: no forming up)
+        : { type: 'patrol', units: ids, x: sx, y: sy });
+    if (!slots.length) { one(units, x, y); return; }
+    for (const s of slots) one([s.id], s.x, s.y, s.face);
+  }
+
+  /** The formation to draw under the cursor: while choosing where to send the group, or dragging out its front. */
+  private previewSlots(): Slot[] | null {
+    const units = this.selectedUnits();
+    if (units.length < 2 || !this.mouse.inside) return null;
+    const d = this.drag;
+    if (d?.button === 2 && d.moved) { const f = this.dragFront(d, this.mouse.x, this.mouse.y); return f ? this.slotsAt(units, ...f) : null; }
+    if (this.mode !== 'move' && this.mode !== 'attackMove' && this.mode !== 'patrol' && this.mode !== 'charge') return null;
+    const [wx, wy] = this.renderer.cam.toWorld(this.mouse.x, this.mouse.y);
+    return this.slotsAt(units, wx, wy);
   }
 
   private ping(x: number, y: number, color: string): void {
@@ -351,7 +421,10 @@ export class Input {
   }
 
   private keydown(e: KeyboardEvent): void {
-    if ((e.target as HTMLElement).tagName === 'INPUT' || settingsOpen()) return;
+    // typing in a text field isn't a hotkey (a ticked checkbox or a slider that still has focus is no reason to ignore keys)
+    const el = e.target as HTMLInputElement;
+    const typing = el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !['checkbox', 'radio', 'range', 'button', 'submit'].includes(el.type));
+    if (typing || settingsOpen()) return;
     const k = e.key.toLowerCase();
     const km = keymap();
     this.keys.add(k);
@@ -385,6 +458,7 @@ export class Input {
     if (units.length) {
       if (k === km.attackMove) { this.mode = 'attackMove'; return; }
       if (k === km.move) { this.mode = 'move'; return; }
+      if (k === km.patrol) { this.mode = 'patrol'; return; }
       if (k === km.give) { this.mode = 'give'; return; }
       if (k === km.garrison) { this.mode = 'garrison'; return; }
       if (k === km.hold) { this.hudCommand('hold'); return; }
@@ -488,7 +562,7 @@ export class Input {
   }
 
   /** Commands triggered from HUD buttons. */
-  hudCommand(kind: 'stop' | 'attackMove' | 'move' | 'resupply' | 'give' | 'garrison' | 'hold' | 'charge'): void {
+  hudCommand(kind: 'stop' | 'attackMove' | 'move' | 'patrol' | 'resupply' | 'give' | 'garrison' | 'hold' | 'charge'): void {
     const units = this.selectedUnits();
     if (!units.length) return;
     if (kind === 'charge') { this.mode = 'charge'; return; } // then click what to charge

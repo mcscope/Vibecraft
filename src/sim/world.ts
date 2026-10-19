@@ -15,7 +15,7 @@ import { nearestDropOff } from './abilities/dropoff';
 import { eating, isTamer, runPens, runTame } from './abilities/herding';
 import { BOMB_REACH, canReach, dropTime, FLARE_HEIGHT, FLY_SIGHT, flyTo, heightBonus, LAUNCH_HEIGHT, LEAP_POSE, takeOff, tickFlight, walks } from './abilities/flight';
 import { MatchStats } from './stats';
-import { eject, runGarrison, tickGarrison } from './garrison';
+import { eject, fitsInside, runGarrison, tickGarrison } from './garrison';
 import { isUnderfoot, loadBelt, nearestBelt, roadFactor, routeBelts, runBelts, type BeltRoutes, type Parcel } from './abilities/underfoot';
 import { grow, grownEnough, livingStats, seedMaterials } from './abilities/living';
 import {
@@ -67,6 +67,12 @@ export interface PlayerState {
 /** Wildlife tuning (engine-wide). */
 export const WILD = { wander: 5, aggro: 3, leash: 6, minFromHome: 16, apart: 8 } as const;
 
+/**
+ * How a unit meets the enemy: 'auto' goes after what it sees; 'hold' stands its ground and strikes what comes into
+ * reach (spears and pikes planted, braced for a charge). Hold is given like an order: the next order ends it.
+ */
+export type Stance = 'auto' | 'hold';
+
 export type Order =
   | { kind: 'idle' }
   /** A worker hunting a passive animal (x/y: where it was last seen). */
@@ -83,8 +89,10 @@ export type Order =
   | { kind: 'garrison'; building: number }
   /** Wildlife: roam around a home spot (tx/ty: current wander target, rest: ticks until the next). */
   | { kind: 'wild'; hx: number; hy: number; tx: number; ty: number; rest: number }
-  | { kind: 'move'; x: number; y: number }
-  | { kind: 'attackMove'; x: number; y: number; charge?: boolean }
+  | { kind: 'move'; x: number; y: number; face?: number }
+  | { kind: 'attackMove'; x: number; y: number; charge?: boolean; face?: number }
+  /** Attack-move to (x, y), then back to (bx, by), and so on. */
+  | { kind: 'patrol'; x: number; y: number; bx: number; by: number }
   | { kind: 'attack'; target: number; charge?: boolean }
   | { kind: 'gather'; node: number; nodeType: ResourceKind; phase: 'toNode' | 'harvest' | 'toDrop'; stopWhenArmed: boolean }
   | { kind: 'resupply'; building: number }
@@ -163,10 +171,12 @@ export interface Unit {
   strideMul: number;
   /** Seconds left off balance (a hard hit or collision): it can't steer or strike, it just stumbles to a stop. */
   staggered: number;
-  /** How it meets the enemy: 'hold' stands its ground (strikes what comes to it, shafts set), 'charge' sprints in from any distance and runs through, 'auto' decides. */
-  stance: 'auto' | 'hold' | 'charge';
+  /** How it meets the enemy (see Stance). */
+  stance: Stance;
   /** Where it faces (radians, map space; `heading` is this as an octant) and what turning it has left this tick. */
   facing: number; turnTick: number; turnLeft: number;
+  /** Where to turn to face once it's standing (a formation's front, from its last move), or null. */
+  faceTo: number | null;
   /** How it's actually been moving lately (tiles/s, smoothed over ~½ s): what an onlooker can see, and leads a throw by. */
   ovx: number; ovy: number;
   /** Which way a flier went this tick: +1 climbing, -1 coming down, 0 level. */
@@ -288,7 +298,7 @@ function chargePays(u: Unit, t: Unit): boolean {
   const delivered = Math.min(energy, (st.minReach > 0 ? st.shaftForce : st.holdForce) * K.blowDepth);
   const runUp = (v * v) / (2 * K.traction * K.gravity); // m
   const cycle = (4 * runUp) / v + Math.PI / st.turnRate; // out and back at half speed on average, plus turning round
-  return (st.damage + delivered * K.damageScale) / cycle > 1.5 * (st.damage / st.cooldown);
+  return (st.damage + delivered * K.crushShare * K.damageScale) / cycle > 1.5 * (st.damage / st.cooldown);
 }
 
 /**
@@ -311,11 +321,11 @@ const leadAlt = (u: Unit, t: number): number => Math.max(0.3, Math.min(u.stats.f
  * close at along the line between them (in m/s: tiles × M_PER_TILE) and μ = m₁m₂/(m₁+m₂) the reduced mass
  * (a building doesn't move: μ is the striker's mass). Zero when they're drawing apart.
  */
-function collisionEnergy(u: Unit, t: Unit | null, tx: number, ty: number, shaft = true): { delivered: number; mu: number } {
+function collisionEnergy(u: Unit, t: Unit | null, tx: number, ty: number, shaft = true): { delivered: number; mu: number; grounded: boolean } {
   const dx = tx - u.x, dy = ty - u.y, d = Math.hypot(dx, dy) || 1;
   const rvx = u.vx - (t?.vx ?? 0), rvy = u.vy - (t?.vy ?? 0);
   const closing = ((rvx * dx + rvy * dy) / d) * M_PER_TILE; // m/s
-  if (closing <= 0) return { delivered: 0, mu: 0 };
+  if (closing <= 0) return { delivered: 0, mu: 0, grounded: false };
   const mu = t ? (u.stats.mass * t.stats.mass) / (u.stats.mass + t.stats.mass) : u.stats.mass;
   const energy = 0.5 * mu * closing * closing;
   // the weapon passes on only what the body can hold behind it (work = force × depth), unless the
@@ -324,8 +334,9 @@ function collisionEnergy(u: Unit, t: Unit | null, tx: number, ty: number, shaft 
   const v = Math.hypot(u.vx, u.vy);
   const planted = v * M_PER_TILE < 0.5;
   const couched = v > u.stats.speed && (u.vx * dx + u.vy * dy) / (v * d) > 0.8;
-  const set = shaft && u.stats.minReach > 0 && ((planted && u.stats.canPlant) || couched);
-  return { delivered: Math.min(energy, (set ? u.stats.shaftForce : u.stats.holdForce) * K.blowDepth), mu };
+  const grounded = shaft && u.stats.minReach > 0 && planted && u.stats.canPlant; // the butt in the ground: no body behind it to share the crush
+  const set = grounded || (shaft && u.stats.minReach > 0 && couched);
+  return { delivered: Math.min(energy, (set ? u.stats.shaftForce : u.stats.holdForce) * K.blowDepth), mu, grounded };
 }
 
 export interface Projectile {
@@ -664,13 +675,15 @@ export class World {
       for (const u of units) {
         // shift-queued: after the current order (and anything queued before it)
         if (cmd.queue && (u.order.kind !== 'idle' || u.queue.length)) { u.queue.push({ ...order } as Order); continue; }
-        u.order = { ...order } as Order; u.resume = null; u.engage = 0; u.path = []; u.repathIn = 0; u.queue = [];
+        u.order = { ...order } as Order; u.resume = null; u.engage = 0; u.path = []; u.repathIn = 0; u.queue = []; u.faceTo = null;
+        u.stance = 'auto'; // a new order ends holding ground
       }
     };
     const ownBuilding = (id: number) => { const b = this.buildings.get(id); return b && b.owner === player ? b : undefined; };
     switch (cmd.type) {
-      case 'move': return set(mineAll(cmd.units), { kind: 'move', x: cmd.x, y: cmd.y });
-      case 'attackMove': return set(mine(cmd.units), { kind: 'attackMove', x: cmd.x, y: cmd.y, charge: cmd.charge || undefined });
+      case 'move': return set(mineAll(cmd.units), { kind: 'move', x: cmd.x, y: cmd.y, face: cmd.face });
+      case 'attackMove': return set(mine(cmd.units), { kind: 'attackMove', x: cmd.x, y: cmd.y, charge: cmd.charge || undefined, face: cmd.face });
+      case 'patrol': for (const u of mine(cmd.units)) set([u], { kind: 'patrol', x: cmd.x, y: cmd.y, bx: u.x, by: u.y }); return;
       case 'attack': {
         const tgt = this.units.get(cmd.target) ?? this.buildings.get(cmd.target);
         if (!tgt || tgt.owner === player) return;
@@ -694,7 +707,7 @@ export class World {
           const prev = u.order.kind === 'resupply' ? u.resume : u.order;
           let back: Order;
           if (cmd.thenX !== undefined && cmd.thenY !== undefined) back = { kind: 'move', x: cmd.thenX, y: cmd.thenY };
-          else if (prev && (prev.kind === 'gather' || prev.kind === 'attackMove' || prev.kind === 'move' || prev.kind === 'attack' || prev.kind === 'build')) back = prev;
+          else if (prev && (prev.kind === 'gather' || prev.kind === 'attackMove' || prev.kind === 'patrol' || prev.kind === 'move' || prev.kind === 'attack' || prev.kind === 'build')) back = prev;
           else back = { kind: 'move', x: u.x, y: u.y };
           if (back.kind === 'gather') back = { ...back, phase: 'toNode' };
           // a thrower restocks from a friendly ammo bearer if one is nearer than the building
@@ -713,7 +726,7 @@ export class World {
           if (!u.throws || u === bearer) continue;
           const prev = u.order;
           set([u], { kind: 'rearm', unit: bearer.id });
-          u.resume = prev.kind === 'gather' || prev.kind === 'attackMove' || prev.kind === 'attack' ? prev : null;
+          u.resume = prev.kind === 'gather' || prev.kind === 'attackMove' || prev.kind === 'patrol' || prev.kind === 'attack' ? prev : null;
         }
         return;
       }
@@ -812,7 +825,7 @@ export class World {
       case 'garrison': {
         const b = ownBuilding(cmd.building);
         if (!b || !b.complete) return;
-        return set(mine(cmd.units), { kind: 'garrison', building: b.id });
+        return set(mine(cmd.units).filter(fitsInside), { kind: 'garrison', building: b.id }); // (too big for the door: stays put)
       }
       case 'ungarrison': {
         const b = ownBuilding(cmd.building);
@@ -820,6 +833,8 @@ export class World {
         return;
       }
       case 'stance': {
+        // holding: they stop where they are and stand there
+        if (cmd.stance === 'hold') set(mine(cmd.units), { kind: 'idle' });
         for (const u of mine(cmd.units)) u.stance = cmd.stance;
         return;
       }
@@ -943,7 +958,7 @@ export class World {
       food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
       order: { kind: 'idle' }, resume: null, queue: [], engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
-      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', cutting: false, facing: Math.PI / 4, turnTick: -1, turnLeft: 0,
+      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', cutting: false, facing: Math.PI / 4, turnTick: -1, turnLeft: 0, faceTo: null,
       dummy: !!spec.dummy,
       carter: spec.role === 'carter',
       gatherAcc: 0,
@@ -1203,9 +1218,12 @@ export class World {
     if (reeling) u.staggered = Math.max(0, u.staggered - DT);
     const moved = reeling ? false : this.runOrder(u) || midStride(u, this.tick); // a hopper crouching between bounds is still on its way
     tickFlight(this, u, moved, DT, (fx, fy) => this.face(u, fx, fy));
-    if (moved) anim = Math.hypot(u.vx, u.vy) > st.speed * 1.15 ? 'charge' : 'walk'; // flat out: a sprint, a charge
+    // a shaft going at an enemy is carried point-first: at any pace it moves in the charge pose (point levelled)
+    const atEnemy = st.minReach > 0 && (u.engage || u.order.kind === 'attack');
+    if (moved) anim = atEnemy || Math.hypot(u.vx, u.vy) > st.speed * 1.15 ? 'charge' : 'walk'; // flat out: a sprint, a charge
     if (u.swing > 0) anim = u.cutting ? 'cut' : 'attack';
-    else if (!moved && st.canPlant && (u.engage || u.order.kind === 'attack' || u.order.kind === 'attackMove') && u.cooldown <= 0) anim = 'brace'; // point set, waiting
+    // point set, waiting (between its jabs too: the point stays on the enemy)
+    else if (!moved && st.canPlant && (u.engage || u.order.kind === 'attack' || u.order.kind === 'attackMove' || u.order.kind === 'patrol' || u.stance === 'hold')) anim = 'brace';
     if (reeling) anim = 'stagger';
     else if (((u.order.kind === 'gather' && u.order.phase === 'harvest') || (u.order.kind === 'build' && u.order.phase === 'chop')) && !moved && u.busy) anim = 'gather';
     else if ((u.order.kind === 'eatPack' || u.order.kind === 'resupply') && !moved && u.busy) anim = 'eat';
@@ -1226,7 +1244,7 @@ export class World {
   private runOrder(u: Unit): boolean {
     const o = u.order;
     // Hunger interrupts work and wandering (not explicit fights or feeding).
-    if ((o.kind === 'idle' || o.kind === 'gather' || o.kind === 'attackMove' || o.kind === 'build' || o.kind === 'cart') && u.engage === 0) {
+    if ((o.kind === 'idle' || o.kind === 'gather' || o.kind === 'attackMove' || o.kind === 'patrol' || o.kind === 'build' || o.kind === 'cart') && u.engage === 0) {
       if (u.cal < u.stats.maxCalories * K.hungryFraction && this.autoFeed(u)) return false;
     }
     switch (o.kind) {
@@ -1240,12 +1258,17 @@ export class World {
       case 'garrison': return runGarrison(this, u, o.building);
       case 'move': {
         const pass = u.queue.length > 0; // more orders after this one: ride on through the waypoint, don't pull up
-        if (this.moveTo(u, o.x, o.y, pass ? 0.8 : 0.3, false, pass)) { this.finish(u); }
+        if (this.moveTo(u, o.x, o.y, pass ? 0.8 : 0.3, false, pass)) { this.finish(u); u.faceTo = o.face ?? null; }
         return u.x !== u.px || u.y !== u.py;
       }
       case 'attackMove': {
         if (this.runEngage(u)) return u.x !== u.px || u.y !== u.py;
-        if (this.moveTo(u, o.x, o.y, u.queue.length ? 0.8 : 0.5, !!o.charge, u.queue.length > 0 || !!o.charge)) this.finish(u); // a charge sprints there and runs on
+        if (this.moveTo(u, o.x, o.y, u.queue.length ? 0.8 : 0.5, !!o.charge, u.queue.length > 0 || !!o.charge)) { this.finish(u); u.faceTo = o.face ?? null; } // a charge sprints there and runs on
+        return u.x !== u.px || u.y !== u.py;
+      }
+      case 'patrol': {
+        if (this.runEngage(u)) return u.x !== u.px || u.y !== u.py;
+        if (this.moveTo(u, o.x, o.y, 0.5, false, false)) { u.order = { kind: 'patrol', x: o.bx, y: o.by, bx: o.x, by: o.y }; u.path = []; u.repathIn = 0; } // there: turn back
         return u.x !== u.px || u.y !== u.py;
       }
       case 'attack': {
@@ -1296,6 +1319,11 @@ export class World {
   private runIdle(u: Unit): boolean {
     if (u.carter) { if ((this.tick + u.id) % 40 === 0) this.logistics.autoAssignCart(u); return false; }
     if (this.runEngage(u)) return u.x !== u.px || u.y !== u.py;
+    // standing in formation: turn to face its front
+    if (u.faceTo !== null) {
+      this.turnToward(u, u.faceTo);
+      if (Math.abs(Math.atan2(Math.sin(u.faceTo - u.facing), Math.cos(u.faceTo - u.facing))) < 0.05) u.faceTo = null;
+    }
     if (bearerAbility.sweep(this, u)) return false; // idle bearers sweep up spent crystals nearby
     // idle throwers top their packs up from spent crystals (or a bearer) nearby, not just when empty
     // (not fliers: for them topping up means flying home, and an idle bird told to stop should stay put)
@@ -1355,16 +1383,19 @@ export class World {
   private runEngage(u: Unit): boolean {
     if (!this.armed(u) || u.exhausted || u.carter) { u.engage = 0; return false; }
     if (!u.stats.canAttack && u.order.kind !== 'attackMove') { u.engage = 0; return false; } // workers don't start fights on their own
+    // charging at a spot: it runs for that spot, striking only what comes within reach on the way (and leaving it behind)
+    const through = u.order.kind === 'attackMove' && !!u.order.charge;
+    const reach = u.throws ? u.stats.radius + 1 : u.stats.range + 0.5; // (a thrower doesn't stop to throw: it runs, and smashes into what's in its path)
     if (u.engage) {
       const p = this.entityPos(u.engage);
       // it keeps after what it's fighting while it's within its sight or its charge distance (the run-up it needs, its
       // reach, and a margin: as far as it rides out to come round again); beyond that it lets it go
-      const keep = Math.max(u.stats.sight * 1.5, runUpTiles(u) + u.stats.range + 4);
+      const keep = through ? reach + 0.5 : Math.max(u.stats.sight * 1.5, runUpTiles(u) + u.stats.range + 4);
       if (p && (p[0] - u.x) ** 2 + (p[1] - u.y) ** 2 < keep * keep && this.attackTarget(u, u.engage)) return true;
       u.engage = 0;
     }
     if ((this.tick + u.id) % 5 !== 0) return false;
-    const e = this.nearestEnemy(u, u.stats.sight, u.order.kind === 'attackMove');
+    const e = this.nearestEnemy(u, through ? reach : u.stats.sight, u.order.kind === 'attackMove' || u.order.kind === 'patrol');
     if (e) { u.engage = e; return this.attackTarget(u, e); }
     return false;
   }
@@ -1405,14 +1436,15 @@ export class World {
     // than pulling up, and a thrower brakes to stop at its range
     // sprint from far enough out to reach top speed by contact (v² = 2·a·d)
     const runUp = runUpTiles(u);
-    // charging: its stance, or this order is a charge (C)
-    const charging = u.stance === 'charge' || ((u.order.kind === 'attack' || u.order.kind === 'attackMove') && !!u.order.charge);
+    // charging: this order is a charge (C)
+    const charging = (u.order.kind === 'attack' || u.order.kind === 'attackMove') && !!u.order.charge;
     // (a striker that charges to fight, its own order or because the run-up pays, comes back in at a sprint too)
     const sprint = !u.airborne && (edge < Math.max(K.sprintRange, runUp + range) || charging || (!wpn.throws && !!tu && u.stance !== 'hold' && chargePays(u, tu)));
     // a thrower with an enemy close rams it with its body if it pays: the speed it can reach over the gap would knock
     // the target off its feet without jolting itself hurt (a great beast tramples a man; a slinger can't)
     // (it rams while it's reloading, or out of crystals: a throw is worth more when it has one ready)
-    if (wpn.throws && tu && !u.airborne && !tu.airborne && edge < K.ramRange && u.stance !== 'hold' && (u.cooldown > 0.3 || u.ammo < u.crystalMass - 1e-6) && ramPays(u, tu, edge)) {
+    // told to charge, it smashes into it at full tilt from wherever it is, whatever it pays
+    if (wpn.throws && tu && !u.airborne && !tu.airborne && u.stance !== 'hold' && (charging || (edge < K.ramRange && (u.cooldown > 0.3 || u.ammo < u.crystalMass - 1e-6) && ramPays(u, tu, edge)))) {
       this.moveTo(u, tu.x, tu.y, 0, true, true);
       return true;
     }
@@ -1422,7 +1454,7 @@ export class World {
         // holding ground: it doesn't go to meet anything (an explicit attack order still sends it)
         if (u.stance === 'hold' && u.order.kind !== 'attack') { this.face(u, tx - u.x, ty - u.y); return true; }
         // a long shaft with something coming at it fast doesn't go to meet it: it plants and lets it come onto the point
-        if (u.stance === 'auto' && u.stats.canPlant && !wpn.throws && edge < range + 3) {
+        if (u.stance !== 'hold' && !charging && u.stats.canPlant && !wpn.throws && edge < range + 3) {
           const d = Math.hypot(u.x - tx, u.y - ty) || 1;
           const coming = (tu.vx * (u.x - tx) + tu.vy * (u.y - ty)) / d; // tiles/s toward us
           if (coming * M_PER_TILE > 1) { this.face(u, tx - u.x, ty - u.y); return true; }
@@ -1504,7 +1536,8 @@ export class World {
   /** A blow of `damage` lands on `targetId` at (tx, ty), carrying the collision (`shaft`: struck with its shaft, which may be set). */
   private land(u: Unit, targetId: number, tu: Unit | null, tx: number, ty: number, damage: number, shaft: boolean): void {
     const hit = collisionEnergy(u, tu, tx, ty, shaft);
-    this.damage(targetId, damage + hit.delivered * K.damageScale, tx, ty);
+    // two bodies meeting share the crush; a point planted in the ground puts all of it on whoever runs onto it
+    this.damage(targetId, damage + hit.delivered * (hit.grounded ? 1 : K.crushShare) * K.damageScale, tx, ty);
     if (tu && hit.delivered > 0) {
       // the blow is an impulse, equal and opposite: each body changes speed by it over its own mass,
       // so a heavy charger ploughs on while a light body is flung (and either may be knocked off its feet)
@@ -2222,9 +2255,12 @@ export class World {
       const a = arr[i];
       for (let j = i + 1; j < arr.length; j++) {
         const b = arr[j];
-        if (a.airborne || b.airborne) continue; // fliers pass overhead
+        if (a.airborne !== b.airborne) continue; // fliers pass overhead
         const dx = b.x - a.x, dy = b.y - a.y;
-        const r = a.stats.radius + b.stats.radius;
+        // two fliers keep a little room for their wings (a quarter span apart: wings may overlap, one passing
+        // above the other), aloft or landed; in the air that's all there is (no bodies to collide)
+        const body = a.stats.radius + b.stats.radius;
+        const r = a.stats.wingspan && b.stats.wingspan ? Math.max(body, (a.stats.wingspan + b.stats.wingspan) / 8) : body;
         const d2 = dx * dx + dy * dy;
         if (d2 >= r * r) continue;
         let d = Math.sqrt(d2);
@@ -2235,8 +2271,11 @@ export class World {
         const total = ma + mb;
         const pa = overlap * (mb / total), pb = overlap * (ma / total);
         const ax = a.x - nx * pa, ay = a.y - ny * pa, bx = b.x + nx * pb, by = b.y + ny * pb;
-        if (!this.grid.isBlocked(ax, ay)) { a.x = ax; a.y = ay; }
-        if (!this.grid.isBlocked(bx, by)) { b.x = bx; b.y = by; }
+        // (wing room is a gentle spread, not a shove)
+        const k = d < body ? 1 : 0.15;
+        if (a.airborne ? this.grid.inBounds(ax, ay) : !this.grid.isBlocked(ax, ay)) { a.x += (ax - a.x) * k; a.y += (ay - a.y) * k; }
+        if (b.airborne ? this.grid.inBounds(bx, by) : !this.grid.isBlocked(bx, by)) { b.x += (bx - b.x) * k; b.y += (by - b.y) * k; }
+        if (a.airborne || d >= body) continue; // bodies only collide when they touch
         // momentum: if they're closing, they meet in an inelastic collision along the line between them
         // (the lighter body is knocked aside more), and a hard enough impact hurts both
         // what each body is actually doing this instant: a bounding body mid-leap is going faster than its average

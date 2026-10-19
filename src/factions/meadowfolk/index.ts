@@ -16,7 +16,7 @@ import type { BuildingModel, Mat, ModelBuilder, UnitModel } from '../../kits/bak
 /** Meadowfolk specs carry their 3D models; the engine ignores the extra field. */
 export type MeadowUnit = UnitSpec & { model: UnitModel };
 export type MeadowBuilding = BuildingSpec & { model: BuildingModel };
-import { armAngle, cargoPack, human, quadLegs, swing, type HumanLook } from './body';
+import { armAngle, cargoPack, human, quadLegs, swing, torsoLean, type HumanLook } from './body';
 import * as models from './buildings';
 
 const WOOD: Mat = { color: '#6b4a2e', tex: 'wood' };
@@ -126,14 +126,25 @@ const pikeman: MeadowUnit = {
       skin: '#c49270', hair: '#4a3020', head: 'helmet', scale: 1.0, bulk: 1.0, tabard: true,
       tunic: { color: '#a08a62', tex: 'leather' }, trousers: { color: '#6a5a44', tex: 'cloth' }, boots: LEATHER,
     };
-    // a pike thrusts straight out, it doesn't swing: arms stay level, the whole pike drives forward
-    const thrust = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) * 0.45 : 0;
-    human(b, p, look, p.anim === 'attack' ? 0 : armAngle(p) * 0.4, (h) => {
+    // the pike shows what it's doing. Braced: set low in a lunge, the butt planted on the ground behind the back foot
+    // and the point up at a charger's chest. A jab drives out from the brace (the butt lifting off the ground) and
+    // comes back to it. On the move it's carried level at the hip, steady (not swinging with the arms)
+    const attacking = p.anim === 'attack';
+    const thrust = attacking ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0;
+    const braced = p.style === 'brace' || attacking;
+    const moving = p.anim === 'walk';
+    const stance = braced ? { ...look, stance: 'lunge' as const } : look;
+    const arm = braced ? 0.55 + thrust * 0.55 : moving ? 0.35 : armAngle(p) * 0.4;
+    const aim = braced ? 0.42 - thrust * 0.3 : moving ? (p.style === 'charge' ? 0.2 : 0) : 0.05; // radians above level (a charge: the baker tips the body 0.2 forward)
+    const slide = thrust * 0.6, back = braced ? 1.5 : 1.0;
+    human(b, p, stance, arm, (h) => {
       if (!p.armed) return;
-      // the pike, levelled forward, butt trailing behind
-      h.limb([-0.9 + thrust, -0.02, 0], [1.6 + thrust, 0.06, 0], 0.022, WOOD);
-      h.cylinder(0.03, 0.03, 0.08, [1.45 + thrust, 0.055, 0], IRON, [0, 0, Math.PI / 2], 6);
-      h.crystal(0.24, [1.62 + thrust, 0.06, 0], [0, 0, -Math.PI / 2]);
+      // the hand's frame turns with the arm (arm + 0.25) and the body's lean: undo that, so the pike holds its own aim
+      h.joint([0, 0, 0], [0, 0, aim - (arm + 0.25) + torsoLean(p, stance)], (k) => {
+        k.limb([-back + slide, 0, 0], [1.6 + slide, 0, 0], 0.022, WOOD);
+        k.cylinder(0.03, 0.03, 0.08, [1.45 + slide, 0, 0], IRON, [0, 0, Math.PI / 2], 6);
+        k.crystal(0.24, [1.62 + slide, 0, 0], [0, 0, -Math.PI / 2]);
+      });
     }, (h) => {
       h.sphere([0.06, 0.05, 0.05], [0.02, -0.05, 0], LEATHER);
     });

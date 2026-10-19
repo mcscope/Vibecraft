@@ -344,24 +344,34 @@ export class AudioEngine {
     this.horn();
   }
 
-  /** A short war-horn call: two brassy notes, the second a fifth below. */
+  /**
+   * The alarm: a trumpet call on the tritone (half an octave, the discordant interval), C5 and F♯5 twice, quick and
+   * tongued, the last note held with a shake.
+   */
   private horn(): void {
-    const ctx = this.ctx!, out = this.out({ pan: 0, gain: 1 }, 0.5, this.sfx, 0.35);
-    const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 2; lp.connect(out);
-    const notes: Array<[number, number, number]> = [[220, 0, 0.42], [146.8, 0.46, 0.75]]; // A3, then D3
+    const ctx = this.ctx!, out = this.out({ pan: 0, gain: 1 }, 0.5, this.sfx, 0.3);
+    const C5 = 523.25, Fs5 = C5 * Math.SQRT2; // the tritone: exactly half an octave up
+    const notes: Array<[number, number, number]> = [[C5, 0, 0.17], [Fs5, 0.2, 0.17], [C5, 0.4, 0.17], [Fs5, 0.6, 0.6]];
     for (const [f, start, len] of notes) {
       const t0 = ctx.currentTime + start;
-      const g = ctx.createGain(); g.connect(lp);
+      // a trumpet's brightness: the bell's resonance opens up as the note is blown, then settles
+      const bell = ctx.createBiquadFilter(); bell.type = 'lowpass'; bell.Q.value = 4; bell.connect(out);
+      bell.frequency.setValueAtTime(900, t0);
+      bell.frequency.linearRampToValueAtTime(4200, t0 + 0.05);
+      bell.frequency.linearRampToValueAtTime(2800, t0 + Math.min(len, 0.25));
+      const g = ctx.createGain(); g.connect(bell);
       g.gain.setValueAtTime(0, t0);
-      g.gain.linearRampToValueAtTime(0.5, t0 + 0.08);
-      g.gain.setValueAtTime(0.45, t0 + len - 0.12);
+      g.gain.linearRampToValueAtTime(0.5, t0 + 0.025); // tongued: a hard, fast attack
+      g.gain.linearRampToValueAtTime(0.38, t0 + 0.09);
+      g.gain.setValueAtTime(0.38, t0 + len - 0.05);
       g.gain.linearRampToValueAtTime(0, t0 + len);
-      // the brass opens up as it's blown: the filter sweeps up with each note
-      lp.frequency.setValueAtTime(500, t0);
-      lp.frequency.linearRampToValueAtTime(2200, t0 + 0.12);
-      for (const [det, type] of [[0, 'sawtooth'], [7, 'sawtooth'], [-1200, 'square']] as const) {
-        const o = ctx.createOscillator(); o.type = type; o.frequency.value = f; o.detune.value = det;
-        o.frequency.setValueAtTime(f * 0.97, t0); o.frequency.linearRampToValueAtTime(f, t0 + 0.06); // lips find the note
+      // the held last note shakes (vibrato)
+      const shake = len > 0.3 ? ctx.createOscillator() : null, depth = ctx.createGain();
+      if (shake) { shake.frequency.value = 6; depth.gain.value = 18; shake.connect(depth); shake.start(t0 + 0.15); shake.stop(t0 + len + 0.05); }
+      for (const det of [0, 6, -5]) {
+        const o = ctx.createOscillator(); o.type = 'sawtooth'; o.detune.value = det;
+        o.frequency.setValueAtTime(f * 0.985, t0); o.frequency.linearRampToValueAtTime(f, t0 + 0.03); // lips find the note
+        if (shake) depth.connect(o.detune);
         o.connect(g); o.start(t0); o.stop(t0 + len + 0.05);
       }
     }

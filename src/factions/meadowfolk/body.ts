@@ -47,6 +47,18 @@ export interface HumanLook {
   /** Metal shoulder pads (armoured units). */
   pads?: boolean;
   beard?: boolean;
+  /** 'lunge': set low behind a braced weapon: feet wide, front knee bent, back leg straight, hips dropped, leaning in. */
+  stance?: 'lunge';
+}
+
+/** Hip drop (model units) and forward lean (radians) of a lunge. */
+const LUNGE = { drop: 0.16, lean: 0.3 };
+
+/** How far the upper body leans forward from the hips (radians) in this pose: weapons that hold their own aim undo it. */
+export function torsoLean(p: Pose, look: HumanLook): number {
+  if (look.stance === 'lunge' && !look.mounted) return LUNGE.lean;
+  const walking = p.anim === 'walk' && !look.mounted;
+  return p.anim === 'tired' ? 0.45 : p.anim === 'gather' ? 0.35 + Math.sin(p.phase * Math.PI) * 0.1 : p.anim === 'attack' ? 0.12 : walking ? 0.06 : 0;
 }
 
 /**
@@ -66,10 +78,11 @@ export function human(
   const s = look.scale ?? 1;
   const bulk = look.bulk ?? 1;
   const t = p.phase;
-  const walking = p.anim === 'walk' && !look.mounted;
+  const lunge = look.stance === 'lunge' && !look.mounted;
+  const walking = p.anim === 'walk' && !look.mounted && !lunge;
   const stride = walking ? Math.sin(t * TAU) * 0.5 : 0;
-  const bob = walking ? Math.abs(Math.sin(t * TAU)) * 0.035 : p.anim === 'idle' ? Math.sin(t * TAU) * 0.008 : 0;
-  const lean = p.anim === 'tired' ? 0.45 : p.anim === 'gather' ? 0.35 + Math.sin(t * Math.PI) * 0.1 : p.anim === 'attack' ? 0.12 : walking ? 0.06 : 0;
+  const bob = lunge ? -LUNGE.drop : walking ? Math.abs(Math.sin(t * TAU)) * 0.035 : p.anim === 'idle' ? Math.sin(t * TAU) * 0.008 : 0;
+  const lean = torsoLean(p, look);
   const skin: Mat = { color: look.skin, tex: 'skin', rough: 0.7 };
   const hipY = 0.9;
 
@@ -87,9 +100,10 @@ export function human(
         b.cylinder(0.068, 0.068, 0.05, [knee[0] + (ankle[0] - knee[0]) * 0.3, knee[1] + (ankle[1] - knee[1]) * 0.3, knee[2] + (ankle[2] - knee[2]) * 0.3], look.boots, undefined, 10);
         continue;
       }
-      const a = stride * side;
+      // a lunge: the near (left) leg forward with its knee bent over the foot, the other straight out behind
+      const a = lunge ? (side > 0 ? 0.7 : -0.55) : stride * side;
       const knee = swing(hip, 0.44, a);
-      const lift = walking ? Math.max(0, Math.sin(t * TAU + (side > 0 ? 0 : Math.PI))) * 0.5 : 0;
+      const lift = lunge ? (side > 0 ? 0.9 : 0) : walking ? Math.max(0, Math.sin(t * TAU + (side > 0 ? 0 : Math.PI))) * 0.5 : 0;
       const ankle = swing(knee, 0.42, a - lift);
       b.limb(hip, knee, 0.075 * bulk, look.trousers, 0.06);
       b.limb(knee, ankle, 0.06, look.boots, 0.05);

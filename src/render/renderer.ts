@@ -27,6 +27,10 @@ export interface RenderState {
   /** Building placement preview. */
   /** Placement preview; `line` is the tiles of a dragged line of one-tile pieces (walls, canals, roads). */
   ghost: { specId: string; ox: number; oy: number; size: number; ok: boolean; line?: Array<[number, number, boolean]> } | null;
+  /** Where a group would form up (a preview while giving the order): each spot, and the way it faces. */
+  formation?: Array<{ x: number; y: number; face: number }> | null;
+  /** Tiles to tint on the ground (a deployment zone). */
+  zone?: Array<[number, number]> | null;
 }
 
 export interface RenderOptions {
@@ -119,6 +123,7 @@ export class Renderer {
   private puffs: Array<{ x: number; y: number; t: number; life: number; fire: boolean; drift: number; size: number }> = [];
   private screenPool = new Pool(this.screenLayer);
   private ringTex!: Texture;
+  private tileTex!: Texture;
   private discTex!: Texture;
   private diamondTex!: Texture;
   private texts = new Container();
@@ -216,6 +221,7 @@ export class Renderer {
       g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.7, 'rgba(255,255,255,0.8)'); g.addColorStop(1, 'rgba(255,255,255,0)');
       c.setTransform(1, 0, 0, h / w, 0, 0); c.fillStyle = g; c.fillRect(0, 0, w, w);
     });
+    this.tileTex = shapeTexture((c, w, h) => { c.fillStyle = '#fff'; c.beginPath(); c.moveTo(w / 2, 0); c.lineTo(w, h / 2); c.lineTo(w / 2, h); c.lineTo(0, h / 2); c.closePath(); c.fill(); });
     this.diamondTex = shapeTexture((c, w, h) => { c.strokeStyle = '#fff'; c.lineWidth = 5; c.beginPath(); c.moveTo(w / 2, 3); c.lineTo(w - 4, h / 2); c.lineTo(w / 2, h - 3); c.lineTo(4, h / 2); c.closePath(); c.stroke(); });
     // terrain → chunked textures
     const t = this.terrainCanvas!;
@@ -491,6 +497,13 @@ export class Renderer {
       const rx = Math.max(9, r * 64 * 0.75);
       ellipse(this.ringTex, isoX(x, y), isoY(x, y), rx, rx * 0.5, color, a);
     };
+    // a formation preview: a ring for each spot, and a tick out of it the way that unit will face
+    for (const f of rs.formation ?? []) {
+      ellipse(this.ringTex, isoX(f.x, f.y), isoY(f.x, f.y), 9, 4.5, 0xffffff, 0.7);
+      const tx = f.x + Math.cos(f.face) * 0.45, ty = f.y + Math.sin(f.face) * 0.45;
+      ellipse(this.discTex, isoX(tx, ty), isoY(tx, ty), 2.4, 1.2, 0xffffff, 0.8);
+    }
+    for (const [x, y] of rs.zone ?? []) ellipse(this.tileTex, isoX(x + 0.5, y + 0.5), isoY(x + 0.5, y + 0.5), 32, 16, 0x9fd8ff, 0.14);
     let rally: Building | null = null;
     for (const id of rs.selected) {
       const u = w.units.get(id);
@@ -518,7 +531,7 @@ export class Renderer {
       let p: [number, number] | null = null, color = 0xffffff;
       switch (o.kind) {
         case 'move': p = [o.x, o.y]; break;
-        case 'attackMove': p = [o.x, o.y]; color = 0xff6b5a; break;
+        case 'attackMove': case 'patrol': p = [o.x, o.y]; color = 0xff6b5a; break;
         case 'attack': p = ent(o.target); color = 0xff6b5a; break;
         case 'gather': p = ent(o.node); color = 0xe0457a; break;
         case 'build': p = ent(o.site); color = 0x7aff7a; break;

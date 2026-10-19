@@ -120,6 +120,8 @@ export const K = {
   holdForcePerMuscleKg: 40,
   /** Metres a blow drives in: a blow does at most (holding force × this) joules of work, unless the weapon is braced. */
   blowDepth: 0.15,
+  /** Share of a collision's crush (a charge's blow) that falls on the body struck: two bodies meeting share it, the striker's own body, shield and shaft taking the rest. A point planted in the ground has no body behind it: all of the crush falls on whoever runs onto it. The knock-back is the whole impulse either way. */
+  crushShare: 0.5,
   /** A thrower considers ramming an enemy this close (tiles): see ramPays (sim/world.ts). */
   ramRange: 3,
   /** A change of velocity (m/s) bigger than this in one hit or collision knocks a 70 kg upright body off balance for a moment (staggered); see DerivedStats.balance. */
@@ -170,6 +172,8 @@ export interface DerivedStats {
   /** kg the cargo pack holds: carry capacity less the weapon pack (loadout). */
   cargoCapacity: number;
   radius: number;
+  /** Tiles, wingtip to wingtip (fliers; 0 for the rest): fliers keep this much room between each other. */
+  wingspan: number;
   sight: number;
 
   limbSpeed: number;
@@ -243,6 +247,16 @@ export function clampMass(m: number): number {
 
 /** Speed is mildly hump-shaped in mass: tiny and huge creatures are both slower. */
 /** Gait speed scales with leg length (a constant Froude number: v ∝ √(g·L)), and leg length with ∛mass: so v ∝ mass^⅙. Big bodies stride faster. */
+/**
+ * A heavy body runs out of its fast-twitch burst before it's done accelerating, so top speed peaks around a man's
+ * size and falls off above it (Hirt et al. 2017, Nature Ecology & Evolution: the 1 − e^(−22·M^−0.6) term). Relative
+ * to a 70 kg body, and only ever a slow-down: 1 for 70 kg and lighter.
+ */
+function burstLimit(m: number): number {
+  const reach = (kg: number) => 1 - Math.exp(-22 * Math.pow(kg, -0.6));
+  return Math.min(1, reach(m) / reach(70));
+}
+
 function massSpeedFactor(m: number): number {
   return 0.966 * Math.pow(m / 70, 1 / 6); // 0.966: a 70 kg body's speed is as it was
 }
@@ -312,6 +326,8 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
 
   const sizeRel = Math.cbrt(mass / 70);
   const radius = clamp(0.25 * sizeRel, 0.15, 0.8);
+  // a flier's wings grow with its mass like a bird's (span ≈ 1.17·m^0.39 m, from bird allometry)
+  const wingspan = spec.flight ? (1.17 * mass ** 0.39) / M_PER_TILE : 0;
   const reach = radius + 0.35 + 0.1 * Math.cbrt(crystalMass) + (shaft * 0.75) / M_PER_TILE; // a shaft held a quarter of the way along: ¾ of it reaches forward
   const range = throwing
     ? Math.min(K.maxThrowRange, (crystalVelocity * crystalVelocity) / K.gravity / M_PER_TILE) // v²/g metres, in tiles
@@ -322,7 +338,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   const height = bodyHeight(mass), leg = K.legPerHeight * height, upright = 0.18 * height;
   const length = spec.length ? Math.max(0.2, Math.min(12, spec.length)) : upright; // an upright body: its depth, ~0.18 of its height
   const gallop = spec.wheeled || spec.flight ? 1 : Math.sqrt((leg + Math.max(upright, length)) / (leg + upright));
-  const sprintTiles = speed * K.sprintPerCruise * gallop, runUpTiles = ((sprintTiles * M_PER_TILE) ** 2 / (2 * K.traction * K.gravity)) / M_PER_TILE;
+  const sprintTiles = speed * K.sprintPerCruise * gallop * burstLimit(mass), runUpTiles = ((sprintTiles * M_PER_TILE) ** 2 / (2 * K.traction * K.gravity)) / M_PER_TILE;
   const sight = Math.max(10, range + 3, runUpTiles + range + 1);
 
   const gatherRate = (spec.canGather ?? true) ? K.gatherKgPerSec * Math.sqrt(muscleMass / 18) * workRefinement : 0;
@@ -344,7 +360,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   return {
     improvised, sidearm,
     mass, physique, muscleMass, frameMass, reserveMass,
-    maxHp, armour, coverage, maxCalories, speed, sprint: sprintTiles, canAttack, wheeled, gait: deriveGait(spec), flight: !!spec.flight, flyHeight: !spec.flight ? 0 : spec.flight === true ? DEFAULT_FLY_HEIGHT : spec.flight.height, carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, sight,
+    maxHp, armour, coverage, maxCalories, speed, sprint: sprintTiles, canAttack, wheeled, gait: deriveGait(spec), flight: !!spec.flight, flyHeight: !spec.flight ? 0 : spec.flight === true ? DEFAULT_FLY_HEIGHT : spec.flight.height, carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, wingspan, sight,
     limbSpeed, maxAttackEnergy, crystalVelocity, attackEnergy, damage, attackCalories, cooldown, range,
     dps: damage / cooldown,
     holdForce: K.holdForcePerMuscleKg * muscleMass,

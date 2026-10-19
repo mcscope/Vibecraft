@@ -8,13 +8,13 @@
 //   • master farmers: peat farms sow big, fast-growing plots
 //   • bog toads: the hardest-hitting mount for the price, but short-reached
 //   • the heron perch: the tallest tower — long reach, a wide blind spot under it
-//   • siege herons: enormous fliers that drop heavy crystals over walls and water,
+//   • great siege herons: enormous fliers that drop heavy crystals over walls and water,
 //     but so heavy they can only stay up for a few seconds' bombing run
 // Self-contained: only engine types and kits, never another faction.
 import type { BuildingSpec, FactionSpec, TechSpec, UnitSpec } from '../types';
 import type { BuildingModel, Mat, ModelBuilder, UnitModel } from '../../kits/bake3d/types';
 import { fenWildlife } from './wildlife';
-import { fenArm, fenLoad, fenling as body, type FenLook } from './rig';
+import { fenArm, fenLoad, fenling as body, hop, type FenLook } from './rig';
 import * as models from './buildings';
 
 export type FenUnit = UnitSpec & { model: UnitModel };
@@ -54,18 +54,25 @@ const reedguard: FenUnit = {
   attack: { style: 'strike', crystalMass: 1, shaft: 2.5 },
   gait: { hop: 0.76, period: 0.85 }, // heavier bounds behind the shield
   model(b, p) {
-    // a spear jab is a thrust, not a swing: the arm reaches out a little and the spear drives forward along itself
+    // a spear jab is a thrust, not a swing: the arm reaches out a little and the spear drives forward along itself.
+    // Whenever it's fighting the point is on the enemy: braced, charging (hops too) and through every jab, which
+    // starts from the brace and comes back to it (so the spear never flicks up between blows)
     const attacking = p.anim === 'attack';
+    const levelled = attacking || p.style === 'brace' || p.style === 'charge';
     const thrust = attacking ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0;
-    const arm = attacking ? 0.95 + thrust * 0.3 : fenArm(p, 'jab');
-    // the whole body goes into the jab: a lunge forward behind the shield, the spear driven out with it
-    b.joint([thrust * 0.22, -thrust * 0.04, 0], [0, 0, -thrust * 0.15], (b) => body(b, p, guardLook, arm, (h) => {
-      if (attacking || p.style === 'brace') { // levelled: braced with the point set, or the jab driving it forward
-        // the hand's frame turns with the arm (arm + 0.25) and the body's lean (-0.12; a brace leans 0.1 more):
-        // undo that, so the spear holds its own aim: near level on the jab, point raised a little at a charger when braced
-        const aim = attacking ? -0.05 : 0.2;
+    const arm = levelled ? 0.95 + thrust * 0.3 : fenArm(p, 'jab');
+    // the whole body goes into the jab: from the brace's lean, a lunge forward behind the shield, the spear driven out with it
+    const lunge = attacking ? 0.1 + thrust * 0.15 : 0; // (the baker leans a brace 0.1 and a charge 0.2 itself)
+    b.joint([thrust * 0.22, -thrust * 0.04, 0], [0, 0, -lunge], (b) => body(b, p, guardLook, arm, (h) => {
+      if (levelled) {
+        // the hand's frame turns with the arm (arm + 0.25), the body's own lean (-0.12) and the pose's lean (brace
+        // 0.1, charge 0.2, the lunge): undo that, so the spear holds its own aim: point raised a little at a charger
+        // when braced, level as it runs, easing to level through the jab
+        const lean = p.style === 'brace' ? 0.1 : p.style === 'charge' ? 0.2 : lunge;
+        const aim = attacking ? 0.2 * (1 - thrust) - 0.05 * thrust : p.style === 'brace' ? 0.2 : 0;
         const slide = thrust * 0.8;
-        h.joint([0, 0, 0], [0, 0, aim - (arm + 0.25 - 0.12) + (p.style === 'brace' ? 0.1 : 0) + thrust * 0.15], (s) => { // (+ the lunge's pitch)
+        // (and the hop's pitch: mid-bound the body tips, the spear mustn't dip into the ground with it)
+        h.joint([0, 0, 0], [0, 0, aim - (arm + 0.25 - 0.12 + hop(p).pitch) + lean], (s) => {
           s.limb([-0.6 + slide, 0, 0], [1.85 + slide, 0, 0], 0.017, WILLOW);
           if (p.armed) s.crystal(0.14, [1.92 + slide, 0, 0], [0, 0, -Math.PI / 2]);
         });
@@ -241,13 +248,14 @@ const heronLeg: Mat = { color: '#9a7a3a', rough: 0.6 };
 const WICKER: Mat = { color: '#a08850', tex: 'thatch' };
 const HERON_BRONZE: Mat = { color: '#b0823a', tex: 'metal', metal: 0.5, rough: 0.35 };
 const HERON_CHAIN: Mat = { color: '#2a2824', tex: 'metal', metal: 0.8 };
-const siegeHeron: FenUnit = {
-  id: 'siege-heron',
-  name: 'Siege Heron',
-  description: 'An enormous grey heron, a fenling riding between its shoulders and a wicker basket of heavy crystals slung beneath. It flaps ponderously over walls and water to drop crystals on whatever lies below, but it is far too heavy to stay up for long.',
-  mass: 180,
+/** The Great Siege Heron: a vast heron carrying twelve crystals. */
+const greatSiegeHeron: FenUnit = {
+  id: 'great-siege-heron',
+  name: 'Great Siege Heron',
+  description: 'The eldest of the siege herons, vast as a reed hut, its basket heaped with twelve great crystals. Slow to rise and hungry in the air, but one pass can flatten a hall.',
+  mass: 540,
   physique: { muscle: 0.45, frame: 0.2, reserve: 0.35 },
-  attack: { style: 'throw', crystalMass: 8, ammo: 4 },
+  attack: { style: 'throw', crystalMass: 8, ammo: 12 },
   refinement: 2.4, // as refined as the Elder Mound can raise (its capital supports up to 2.42)
   flight: { height: 18 }, // a siege bird climbs high: each crystal falls 18 m, but holding up there burns calories 3× as fast
   model(root, p) {
@@ -388,19 +396,8 @@ const siegeHeron: FenUnit = {
         c.box([0.42, 0.26, 0.02], [-0.6 - (flying ? 0.08 : 0), 2.7, 0.18], { team: 'primary', tex: 'cloth' }, [0, 0, flying ? Math.sin(t * 2) * 0.15 : 0]);
         c.sphere(0.035, [-0.38, 2.87, 0.18], HERON_BRONZE);
       }));
-    }, 1.4); // drawn big: it towers over a reed hut
+    }, 2.03); // drawn big: it towers over a reed hut
   },
-};
-
-/** The Great Siege Heron: the siege-heron model grown vast, a 400-root body carrying twelve crystals. */
-const greatSiegeHeron: FenUnit = {
-  ...siegeHeron,
-  id: 'great-siege-heron',
-  name: 'Great Siege Heron',
-  description: 'The eldest of the siege herons, vast as a reed hut, its basket heaped with twelve great crystals. Slow to rise and hungry in the air, but one pass can flatten a hall.',
-  mass: 540,
-  attack: { style: 'throw', crystalMass: 8, ammo: 12 },
-  model: (b, p) => b.joint([0, 0, 0], [0, 0, 0], (s) => siegeHeron.model(s, p), 1.45),
 };
 
 export const units: FenUnit[] = [fenling, reedguard, bogToad, packTortoise, greatSiegeHeron];

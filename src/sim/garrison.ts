@@ -2,9 +2,13 @@
 // are off the map (nothing can reach them) and the building feeds them and
 // restocks their crystal. Throwers inside keep throwing, from the building's
 // height and under cover. If the building falls, or on Ungarrison, they come out.
-// A building holds two units per tile of footprint.
+// A building holds two units per tile of footprint, of a body that fits through its door.
 import { K } from './physics';
 import { DT, type Building, type Unit, type World } from './world';
+
+/** The heaviest body that fits through a door (kg): about a big man in armour. Mounts, beasts and great birds stay out. */
+export const DOOR_KG = 150;
+export const fitsInside = (u: Unit): boolean => u.stats.mass <= DOOR_KG;
 
 /** Units a building can hold. */
 export const capacity = (b: Building): number => (b.complete ? b.size * b.size * 2 : 0);
@@ -15,7 +19,7 @@ export const garrisonHeight = (b: Building): number => 1.5 + b.size;
 /** Order kind 'garrison': walk up to the building and go in (if there's room). Returns whether it moved. */
 export function runGarrison(w: World, u: Unit, buildingId: number): boolean {
   const b = w.buildings.get(buildingId);
-  if (!b || b.owner !== u.owner || b.garrison.length >= capacity(b)) { w.finish(u); return false; }
+  if (!b || b.owner !== u.owner || b.garrison.length >= capacity(b) || !fitsInside(u)) { w.finish(u); return false; }
   if (!w.moveToBuilding(u, b)) return u.x !== u.px || u.y !== u.py;
   u.order = { kind: 'idle' }; u.path = []; u.engage = 0; u.queue = []; u.resume = null;
   u.x = u.px = b.ox + b.size / 2; u.y = u.py = b.oy + b.size / 2;

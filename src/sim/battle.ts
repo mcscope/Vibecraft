@@ -5,7 +5,7 @@
 import type { BuildingSpec, FactionSpec, UnitSpec } from '../factions/types';
 import { derive } from './physics';
 import { isUnderfoot } from './abilities/underfoot';
-import { battleMap, inZone, zoneCenter } from './battleMaps';
+import { battleMap, inZone, intoZone, zoneCenter } from './battleMaps';
 import type { Scenario } from './scenarios';
 import { TICK_RATE, type World } from './world';
 import type { Command } from './commands';
@@ -96,16 +96,27 @@ export function placeBlock(w: World, owner: number, b: Block, ids?: number[]): n
   const s = w.specOf(owner, b.specId);
   if (!s) return w.buildingSpecOf(owner, b.specId) ? placeCamps(w, owner, b, ids) : [];
   const gap = s.stats.radius * 2 + 0.35, cols = Math.max(1, Math.ceil(Math.sqrt(b.n * 1.6)));
-  const heading = owner === 0 ? 0 : 4;
+  const heading = owner === 0 ? 0 : 4, back = owner === 0 ? 1 : -1;
+  // the whole formation fits in the zone: a click near its edge sets the block against the edge, not over it
+  const depth = (Math.ceil(b.n / cols) - 1) * gap, half = ((cols - 1) * gap) / 2;
+  const [rx, ry] = intoZone(owner, b.x - back * depth, b.y - half); // the back corner, inside
+  const [bx, fy] = intoZone(owner, rx + back * depth, ry + 2 * half); // then the front corner, inside
+  const by = fy - half;
   const out: number[] = [];
-  for (let i = 0; i < b.n; i++) {
-    const r = Math.floor(i / cols), c = i % cols;
-    let x = b.x - (owner === 0 ? r : -r) * gap, y = b.y + (c - (cols - 1) / 2) * gap;
-    if (!inZone(owner, x, y)) { x = Math.max(2, Math.min(w.grid.width - 3, x)); y = Math.max(3, Math.min(w.grid.height - 4, y)); }
-    const spot = w.grid.nearestOpen(x, y, 4) ?? [x, y];
+  // each unit takes the next free spot in the ranks (exactly there: the world isn't stepping yet, so nothing
+  // would push apart two units snapped onto one tile); a spot on rock, water or trees, or out of the zone, is skipped
+  for (let i = 0, k = 0; i < b.n; k++) {
+    const r = Math.floor(k / cols), c = k % cols;
+    const x = bx - back * r * gap, y = by + (c - (cols - 1) / 2) * gap;
+    const free = inZone(owner, x, y) && !w.grid.isBlocked(Math.floor(x), Math.floor(y));
+    if (!free && k < b.n * 6) continue;
+    const spot = free ? [x, y] : w.grid.nearestOpen(x, y, 4) ?? [x, y]; // (no room left in the ranks: anywhere near)
     const existing = ids?.[i] !== undefined ? w.units.get(ids[i]) : undefined;
-    if (existing) { existing.x = existing.px = spot[0]; existing.y = existing.py = spot[1]; out.push(existing.id); }
-    else { const u = w.spawnAt(owner, b.specId, spot[0], spot[1], heading); if (u) out.push(u.id); }
+    const u = existing ?? w.spawnAt(owner, b.specId, spot[0], spot[1], heading);
+    i++;
+    if (!u) continue;
+    u.x = u.px = spot[0]; u.y = u.py = spot[1];
+    out.push(u.id);
   }
   return out;
 }

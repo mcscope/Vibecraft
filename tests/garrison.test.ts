@@ -25,6 +25,12 @@ describe('garrison', () => {
     const hp = m.hp;
     run(w, 20 * 6);
     expect(m.hp).toBeLessThan(hp);
+    // a bog toad is too big for the door: it stays outside
+    const toad = w.spawnAt(0, 'bog-toad', spot[0], spot[1] + 2)!;
+    w.enqueue({ player: 0, cmd: { type: 'garrison', units: [toad.id], building: hall.id } });
+    run(w, 20 * 4);
+    expect(w.units.has(toad.id)).toBe(true);
+    expect(hall.garrison.includes(toad)).toBe(false);
     // the hall falls: they come out
     hall.hp = 0;
     run(w, 1);

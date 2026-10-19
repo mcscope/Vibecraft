@@ -7,9 +7,12 @@ export type Command = CommandBody & {
 };
 
 export type CommandBody =
-  | { type: 'move'; units: number[]; x: number; y: number }
+  /** `face`: the way to face on arrival (radians, map space), e.g. a formation's front. */
+  | { type: 'move'; units: number[]; x: number; y: number; face?: number }
   /** charge: sprint in from any distance and run on through (C). */
-  | { type: 'attackMove'; units: number[]; x: number; y: number; charge?: boolean }
+  | { type: 'attackMove'; units: number[]; x: number; y: number; charge?: boolean; face?: number }
+  /** Walk back and forth between where they are now and (x, y), fighting anything met on the way. */
+  | { type: 'patrol'; units: number[]; x: number; y: number }
   | { type: 'attack'; units: number[]; target: number; charge?: boolean }
   | { type: 'gather'; units: number[]; node: number }
   /**
@@ -47,8 +50,8 @@ export type CommandBody =
   | { type: 'rally'; building: number; x: number; y: number; node?: number }
   /** Give up: you lose, the others play on (or win). */
   | { type: 'resign' }
-  /** How the units meet the enemy: stand their ground, charge in, or decide for themselves. */
-  | { type: 'stance'; units: number[]; stance: 'auto' | 'hold' | 'charge' }
+  /** Hold ground ('hold': they stop and stand there, braced) or not ('auto'); see Stance in world.ts. */
+  | { type: 'stance'; units: number[]; stance: 'auto' | 'hold' }
   /** Units shelter inside one of your buildings (two per tile of footprint). */
   | { type: 'garrison'; units: number[]; building: number }
   /** Everyone inside comes out. */
