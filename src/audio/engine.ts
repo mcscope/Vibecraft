@@ -171,7 +171,9 @@ export class AudioEngine {
     const art = this.bank.unit(owner, specId);
     const custom = line !== 'attack' ? art?.sounds?.[line] : undefined;
     if (custom) { this.play(custom, at); return; }
-    if (voicesOn()) void sayLine(this.ctx, this.out(at, 0.55), this.world.factionOf(owner).id, specId, line === 'acknowledge' ? 'order' : line, chorus, echo);
+    // a group of big bodies answers as one: their lines are a beast's own call, not a crowd's (over 150 kg)
+    const big = (this.world.specOf(owner, specId)?.stats.mass ?? 0) > 150;
+    if (voicesOn()) void sayLine(this.ctx, this.out(at, 0.55), this.world.factionOf(owner).id, specId, line === 'acknowledge' ? 'order' : line, chorus && !big, echo && !big);
   }
 
   ui(): void { if (this.ctx) this.synth({ kind: 'pluck', pitch: 660, timbre: 'triangle', length: 0.08 }, { pan: 0, gain: 0.5 }, 0.25); }
