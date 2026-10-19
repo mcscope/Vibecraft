@@ -120,7 +120,7 @@ Both players need the same version of the engine, since both games must follow i
 
 **Fairness.** Your opponent's game works out every stat and cost from your faction itself. So every unit costs what its body is worth. Both players start from the same pool of resources (`START_POOL`), and your starting base and workers come out of it. A grand base means a lean start. A few things sit outside physics, like how much wildlife roams your half, and the game limits those too. The rules live in `src/sim/fairness.ts`.
 
-**Determinism.** Only commands travel between players. Each game then simulates the same world in step ("lockstep"). So the simulation must give identical results everywhere: use `world.rng` for randomness, never `Math.random` or the clock. `tests/determinism.test.ts` checks this.
+**Determinism.** Only commands travel between players. Each game then simulates the same world in step ("lockstep"). So the simulation must give identical results everywhere: use `world.rng` for randomness, never `Math.random` or the clock. `tests/factions.test.ts` checks this: it plays the same AI game twice and compares the worlds throughout.
 
 ---
 
