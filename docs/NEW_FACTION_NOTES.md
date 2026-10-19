@@ -3,6 +3,7 @@
 The user's decisions so far, as given. Nothing here is designed beyond what they said. Ask before adding names, flavor or specifics.
 
 ## How it works
+- **The mother mutates twice herself.** Each later stage lets her lay bigger eggs.
 - **A mother unit lays eggs.** There are eggs of different sizes. She trains them in her own body, like a building: a queue, each paid up front. She keeps moving while they grow.
 - **Eggs and cocoons are shells.** A shell is a unit with its own statblock: its own body makeup, but the mass of what went in. It costs the same as the unit that went into it.
 - **A laid egg** is born and starts changing into a larva straight away. It pays the larva's price less its own, once it has been Given enough.
@@ -22,3 +23,4 @@ The user's decisions so far, as given. Nothing here is designed beyond what they
 ## Still open
 - The roster, buildings, names.
 - Which larva each egg size becomes (set in each egg's spec).
+- Does the mother change inside a shell, or in place?
