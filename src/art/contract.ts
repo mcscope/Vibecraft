@@ -108,33 +108,7 @@ export interface SynthRecipe {
   count?: number;
 }
 
-/**
- * A unit's speaking voice: a little babble, synthesised. Each line (select, acknowledge, death) strings a few
- * syllables of these vowels together, starting each with its consonant.
- */
-export interface VoiceSpec {
-  /** Base pitch, Hz. */
-  pitch: number;
-  timbre?: SynthRecipe['timbre'];
-  /** The vowels it babbles through, in order, e.g. 'aoi'. */
-  vowels?: string;
-  /** How each syllable starts: 'soft' (straight into the vowel), 'click' (k, t), 'hiss' (s, sh), 'buzz' (z, v), 'pop' (b, p). */
-  consonant?: 'soft' | 'click' | 'hiss' | 'buzz' | 'pop';
-  /** Syllables per second (default 7). */
-  rate?: number;
-  /** Pitch wobble, as a share of pitch (0–0.1). */
-  vibrato?: number;
-  /** Breathy noise mixed in (0–1). */
-  breath?: number;
-  /** Vocal tract size: under 1 a big creature (lower formants), over 1 a small one. */
-  size?: number;
-}
-
 export interface UnitSounds {
-  /** Voices for this unit; each unit of the type speaks with one of them (by its id), for a crowd that isn't all one voice. */
-  voices?: VoiceSpec[];
-  /** Shapes the default voice lines (select, acknowledge, death) when there are no `voices`. */
-  voice?: { pitch?: number; vowel?: SynthRecipe['vowel']; timbre?: SynthRecipe['timbre'] };
   select?: SoundSpec;
   acknowledge?: SoundSpec;
   attack?: SoundSpec;

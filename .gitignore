@@ -21,3 +21,7 @@ dist/
 
 # raw voice clips for labelling (not shipped)
 public/voicelab/
+
+# Voice Lab working files: raw recordings and saved labels (npm run voices reads the newest labels)
+/*.m4a
+/voicelab_labels*.json

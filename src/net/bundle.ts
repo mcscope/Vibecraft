@@ -156,7 +156,7 @@ function checkSprites(images: unknown, sprites: PackedSprite[], e: string[]): vo
   }
 }
 const sounds = (x: SoundSpec | undefined): SoundSpec | undefined => (x && 'clip' in x ? (DATA_AUDIO.test(x.clip) ? x : undefined) : x); // never fetch URLs from someone else's bundle
-const unitSounds = (s?: UnitSounds): UnitSounds | undefined => s && { voice: s.voice, select: sounds(s.select), acknowledge: sounds(s.acknowledge), attack: sounds(s.attack), death: sounds(s.death) };
+const unitSounds = (s?: UnitSounds): UnitSounds | undefined => s && { select: sounds(s.select), acknowledge: sounds(s.acknowledge), attack: sounds(s.attack), death: sounds(s.death) };
 
 function allSprites(a: PackedArt | PackedBiome): PackedSprite[] {
   const out: PackedSprite[] = [];
