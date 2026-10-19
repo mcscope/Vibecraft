@@ -3,7 +3,9 @@
 The user's decisions so far, as given. Nothing here is designed beyond what they said. Ask before adding names, flavor or specifics.
 
 ## How it works
-- **The mother mutates twice herself.** Each later stage lets her lay bigger eggs.
+- **The mother's refinement sets which eggs she can lay:** anything up to her own refinement. The game starts with an r1 mother laying T1 eggs. She mutates twice (+1.0 each, to r2 then r3), unlocking T2 and then T3 eggs.
+- **A T2 larva can also become a mother** (the usual one step up, so r3): a paid shortcut to a top mother.
+- **Principle:** the faction picks from the engine's options and adds no self-imposed handicaps. The natural rules do the gating.
 - **A mother unit lays eggs.** There are eggs of different sizes. She trains them in her own body, like a building: a queue, each paid up front. She keeps moving while they grow.
 - **Eggs and cocoons are shells.** A shell is a unit with its own statblock: its own body makeup, but the mass of what went in. It costs the same as the unit that went into it.
 - **A laid egg** is born and starts changing into a larva straight away. It pays the larva's price less its own, once it has been Given enough.
@@ -42,6 +44,5 @@ The user's decisions so far, as given. Nothing here is designed beyond what they
   - big, purple/pink.
 
 ## Still open
-- The roster, buildings, names.
-- Is a mother stage's refinement the same as the egg tier she lays (stage 1 lays tier 1, and so on)? A parent can't spawn anything more refined than itself.
+- The roster details, buildings, names.
 - Does the mother change inside a shell, or in place?
