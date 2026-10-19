@@ -32,8 +32,6 @@
    ],
    "death": [
     "meadowfolk_voices_92",
-    "frogs_dying_01",
-    "frogs_dying_08",
     "frogs_dying_15"
    ]
   },
@@ -51,18 +49,9 @@
     "supplement2_07",
     "frogs_dying_02",
     "frogs_dying_03",
-    "frogs_dying_04",
     "frogs_dying_05",
     "frogs_dying_06",
-    "frogs_dying_07",
-    "frogs_dying_09",
-    "frogs_dying_10",
-    "frogs_dying_11",
-    "frogs_dying_12",
-    "frogs_dying_13",
-    "frogs_dying_14",
-    "frogs_dying_16",
-    "frogs_dying_17"
+    "frogs_dying_07"
    ]
   },
   "fenfolk:reedguard": {
@@ -70,11 +59,16 @@
     "fenfolk_voices_04",
     "fenfolk_voices_05",
     "fenfolk_voices_06",
-    "fenfolk_voices_12"
+    "fenfolk_voices_12",
+    "frogs_dying_01"
    ],
    "death": [
     "supplement2_08",
-    "frogs_dying_18"
+    "frogs_dying_04",
+    "frogs_dying_10",
+    "frogs_dying_11",
+    "frogs_dying_12",
+    "frogs_dying_14"
    ]
   },
   "fenfolk:great-siege-heron": {
@@ -502,7 +496,9 @@
    "highcut": 10200
   },
   "supplement2_07": {
-   "pitch": -3
+   "pitch": -2.5,
+   "highcut": 4100,
+   "drive": 0
   },
   "supplement2_11": {
    "drive": 0.05
@@ -544,6 +540,9 @@
    "pitch": 0,
    "reverb": 0.2,
    "lowcut": 20
+  },
+  "frogs_dying_14": {
+   "pitch": 1
   }
  },
  "unitFx": {
