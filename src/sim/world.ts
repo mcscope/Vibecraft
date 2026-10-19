@@ -16,6 +16,7 @@ import { eating, isTamer, runPens, runTame } from './abilities/herding';
 import { BOMB_REACH, canReach, dropTime, FLARE_HEIGHT, FLY_SIGHT, flyTo, heightBonus, LAUNCH_HEIGHT, LEAP_POSE, takeOff, tickFlight, walks } from './abilities/flight';
 import { MatchStats } from './stats';
 import { eject, fitsInside, runGarrison, tickGarrison } from './garrison';
+import { digestsTrees, runDigest } from './abilities/digest';
 import { beginMetamorph, canBecome, cancelBrood, feedChange, queueBrood, refundMetamorph, runMetamorph, tickBrood } from './abilities/metamorph';
 import { isUnderfoot, loadBelt, nearestBelt, roadFactor, routeBelts, runBelts, type BeltRoutes, type Parcel } from './abilities/underfoot';
 import { grow, grownEnough, livingStats, seedMaterials } from './abilities/living';
@@ -94,6 +95,8 @@ export type Order =
   | { kind: 'attackMove'; x: number; y: number; charge?: boolean; face?: number }
   /** Changing into another form where it stands: `paid` kg of its food cost taken, `t` seconds in; `from`: a shell brewing what went into it (sim/abilities/metamorph.ts). */
   | { kind: 'metamorph'; into: string; paid: number; t: number; from?: string }
+  /** Walk to a tree and digest it (sim/abilities/digest.ts). */
+  | { kind: 'digest'; node: number }
   /** Attack-move to (x, y), then back to (bx, by), and so on. */
   | { kind: 'patrol'; x: number; y: number; bx: number; by: number }
   | { kind: 'attack'; target: number; charge?: boolean }
@@ -262,6 +265,8 @@ export interface ResourceNode {
   growRate?: number;
   /** Building that sowed it. */
   sownBy?: number;
+  /** A tree turned to food by a digesting unit (sim/abilities/digest.ts). */
+  digested?: boolean;
 }
 
 /**
@@ -369,6 +374,8 @@ export type WorldEvent =
   | { type: 'attack'; x: number; y: number; owner: number; specId?: string; style: 'strike' | 'throw'; kg: number }
   | { type: 'death'; x: number; y: number; id: number; owner: number; specId: string; heading: number }
   | { type: 'trained'; id: number; owner: number }
+  /** A unit digested a tree (sim/abilities/digest.ts): it's gone, the food node `node` stands where the tree was. */
+  | { type: 'digested'; id: number; owner: number; node: number; x: number; y: number }
   /** A unit finished changing: `id` is gone, `into` stands in its place. */
   | { type: 'metamorph'; id: number; into: number; owner: number; x: number; y: number; specId: string; intoSpec: string; heading: number }
   | { type: 'built'; id: number; owner: number }
@@ -703,6 +710,11 @@ export class World {
         const tgt = this.units.get(cmd.target) ?? this.buildings.get(cmd.target);
         if (!tgt || tgt.owner === player) return;
         return set(mine(cmd.units), { kind: 'attack', target: cmd.target, charge: cmd.charge || undefined });
+      }
+      case 'digest': {
+        const n = this.nodes.get(cmd.node);
+        if (n?.tree) set(mine(cmd.units).filter((u) => digestsTrees(this, u)), { kind: 'digest', node: n.id });
+        return;
       }
       case 'gather': {
         const n = this.nodes.get(cmd.node);
@@ -1275,6 +1287,7 @@ export class World {
       case 'rearm': return bearerAbility.runRearm(this, u, o.unit);
       case 'eatFrom': return bearerAbility.runEatFrom(this, u, o.unit);
       case 'garrison': return runGarrison(this, u, o.building);
+      case 'digest': return runDigest(this, u, o.node);
       case 'metamorph': return runMetamorph(this, u, o, DT);
       case 'move': {
         const pass = u.queue.length > 0; // more orders after this one: ride on through the waypoint, don't pull up
@@ -2013,6 +2026,12 @@ export class World {
       if (d < bestD) { bestD = d; best = b; }
     }
     return best;
+  }
+
+  /** Swap a node for a new one in its place (it keeps blocking its tile). */
+  replaceNode(old: ResourceNode, n: Omit<ResourceNode, 'id' | 'maxAmount'>): ResourceNode {
+    this.removeNode(old);
+    return this.addNode(n);
   }
 
   private removeNode(n: ResourceNode): void {

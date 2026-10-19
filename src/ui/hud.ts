@@ -635,6 +635,7 @@ export function describeOrder(w: World, u: Unit): string {
     case 'move': return 'Moving';
     case 'attackMove': return u.engage ? 'Fighting' : 'Attack-moving';
     case 'patrol': return u.engage ? 'Fighting' : 'Patrolling';
+    case 'digest': return 'Going to digest a tree';
     case 'metamorph': {
       const name = w.specOf(u.owner, o.into)?.spec.name ?? o.into;
       return o.t > 0 ? `Changing into ${name}` : `Waiting for food to change into ${name}`;

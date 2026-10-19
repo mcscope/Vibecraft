@@ -1,6 +1,7 @@
 import { isTamer, tameable } from '../sim/abilities/herding';
 import { isUnderfoot } from '../sim/abilities/underfoot';
 import { isWall } from '../sim/abilities/wall';
+import { digestsTrees } from '../sim/abilities/digest';
 // Mouse + keyboard → selection, camera, and Commands.
 import type { Command } from '../sim/commands';
 import type { World } from '../sim/world';
@@ -308,6 +309,13 @@ export class Input {
     } else if ((tu && tu.owner !== this.player) || (tb && tb.owner !== this.player)) {
       this.issue({ type: 'attack', units, target });
       this.ping(wx, wy, '#ff6b5a');
+    } else if (tn?.tree && units.some((id) => { const u = w.units.get(id); return u && digestsTrees(w, u); })) {
+      // tree digesters go and digest it; anyone else gathers it
+      const eaters = units.filter((id) => { const u = w.units.get(id); return u && digestsTrees(w, u); });
+      this.issue({ type: 'digest', units: eaters, node: tn.id });
+      const rest = units.filter((id) => !eaters.includes(id));
+      if (rest.length) this.issue({ type: 'gather', units: rest, node: tn.id });
+      this.ping(tn.x, tn.y, '#e0457a');
     } else if (tn) {
       this.issue({ type: 'gather', units, node: tn.id });
       this.ping(tn.x, tn.y, tn.type === 'food' ? '#e0457a' : '#7ae7ff');

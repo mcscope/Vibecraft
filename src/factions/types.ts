@@ -104,6 +104,8 @@ export interface UnitSpec {
   becomes?: string[];
   /** Spawning: units (of this faction, no more refined than this) it can grow beside it, paying their whole price in food over 6 s × their refinement plus growing their body (sim/abilities/metamorph.ts). */
   spawns?: string[];
+  /** Sent onto a tree, it turns the whole tree into food (1 kg per kg of wood) and is absorbed into it (sim/abilities/digest.ts). */
+  digestsTrees?: boolean;
   /** The unit it changes inside: ordered to change, it becomes this at once, at its own mass, and the new form emerges from it (sim/abilities/metamorph.ts). Without one it changes in place. */
   shell?: string;
   /** How metamorphosis and spawning take their food: 'upfront' (default: like a building's training, it starts once the whole cost is on hand) or 'eaten' (eaten as it goes, pausing when the food runs out). */
