@@ -22,4 +22,3 @@ The user's decisions so far, as given. Nothing here is designed beyond what they
 ## Still open
 - The roster, buildings, names.
 - Which larva each egg size becomes (set in each egg's spec).
-- Feeding a shell: you said Give. Food bearers in reach and a building beside it also count, which was Claude's addition, not yours. Keep or drop?
