@@ -93,7 +93,7 @@ export type Order =
   | { kind: 'move'; x: number; y: number; face?: number }
   | { kind: 'attackMove'; x: number; y: number; charge?: boolean; face?: number }
   /** Changing into another form where it stands: `fed` kg of the food cost eaten, `t` seconds in (sim/abilities/metamorph.ts). */
-  | { kind: 'metamorph'; into: string; fed: number; t: number }
+  | { kind: 'metamorph'; into: string; fed: number; t: number; spawn?: boolean }
   /** Attack-move to (x, y), then back to (bx, by), and so on. */
   | { kind: 'patrol'; x: number; y: number; bx: number; by: number }
   | { kind: 'attack'; target: number; charge?: boolean }
@@ -689,7 +689,7 @@ export class World {
       case 'move': return set(mineAll(cmd.units), { kind: 'move', x: cmd.x, y: cmd.y, face: cmd.face });
       case 'attackMove': return set(mine(cmd.units), { kind: 'attackMove', x: cmd.x, y: cmd.y, charge: cmd.charge || undefined, face: cmd.face });
       case 'patrol': for (const u of mine(cmd.units)) set([u], { kind: 'patrol', x: cmd.x, y: cmd.y, bx: u.x, by: u.y }); return;
-      case 'metamorph': return set(mine(cmd.units).filter((u) => canBecome(this, u, cmd.into)), { kind: 'metamorph', into: cmd.into, fed: 0, t: 0 });
+      case 'metamorph': return set(mine(cmd.units).filter((u) => canBecome(this, u, cmd.into, cmd.spawn)), { kind: 'metamorph', into: cmd.into, fed: 0, t: 0, spawn: cmd.spawn || undefined });
       case 'attack': {
         const tgt = this.units.get(cmd.target) ?? this.buildings.get(cmd.target);
         if (!tgt || tgt.owner === player) return;

@@ -23,8 +23,8 @@ export interface HudActions {
   /** Put the selection in a formation, and which one it's in now. */
   formation(f: Formation): void;
   formationOf(): Formation;
-  /** Change the selected units that can into this form (sim/abilities/metamorph.ts). */
-  morph(into: string): void;
+  /** Change the selected units that can into this form, or (`spawn`) have them grow one (sim/abilities/metamorph.ts). */
+  morph(into: string, spawn: boolean): void;
   ungarrison(buildingId: number): void;
   place(specId: string): void;
   idleWorker(): void;
@@ -155,7 +155,7 @@ export class Hud {
     else if (el.dataset.cancel) this.actions.cancelTrain(+el.dataset.cancel, el.dataset.index ? +el.dataset.index : undefined);
     else if (el.dataset.select) this.actions.select(el.dataset.select.split(',').map(Number));
     else if (el.dataset.cmd) this.actions.command(el.dataset.cmd as 'stop');
-    else if (el.dataset.morph) this.actions.morph(el.dataset.morph);
+    else if (el.dataset.morph) this.actions.morph(el.dataset.morph, el.dataset.spawn === '1');
     else if (el.dataset.formation) { this.actions.formation(el.dataset.formation as Formation); this.sig = ''; }
     else if (el.dataset.place) this.actions.place(el.dataset.place);
   }
@@ -499,13 +499,18 @@ export class Hud {
 
   /** A button for each form the selected units can change into (unit abilities live in this row). */
   private morphButtons(units: Unit[]): string {
-    const w = this.world, forms = new Map<string, Unit>();
-    for (const u of units) for (const id of w.specOf(u.owner, u.specId)?.spec.becomes ?? []) if (!forms.has(id)) forms.set(id, u);
-    return [...forms.entries()].map(([id, u]) => {
-      const to = w.specOf(u.owner, id), from = w.specOf(u.owner, u.specId);
+    const w = this.world, forms = new Map<string, [Unit, boolean]>();
+    for (const u of units) {
+      const spec = w.specOf(u.owner, u.specId)?.spec;
+      for (const id of spec?.becomes ?? []) if (!forms.has(`${id}:0`)) forms.set(`${id}:0`, [u, false]);
+      for (const id of spec?.spawns ?? []) if (!forms.has(`${id}:1`)) forms.set(`${id}:1`, [u, true]);
+    }
+    return [...forms.entries()].map(([key, [u, spawn]]) => {
+      const id = key.slice(0, -2), to = w.specOf(u.owner, id), from = w.specOf(u.owner, u.specId);
       if (!to || !from) return '';
-      const c = metamorphCost(from.stats, to.stats);
-      return `<button data-morph="${id}" title="Change into ${to.spec.name} where they stand: ${c.food} ${this.names().food.toLowerCase()} (eaten as they change, from their packs, a food bearer or a building beside them), ${c.sec.toFixed(0)} s. They can't move or fight meanwhile.">${ICONS.morph}<span>→ ${to.spec.name}</span><small>${c.food} · ${c.sec.toFixed(0)} s</small></button>`;
+      const c = metamorphCost(from.stats, to.stats, spawn), food = this.names().food.toLowerCase();
+      const what = spawn ? `Grow a ${to.spec.name} beside them` : `Change into ${to.spec.name} where they stand`;
+      return `<button data-morph="${id}" data-spawn="${spawn ? 1 : 0}" title="${what}: ${c.food} ${food} (eaten as they go, from their packs, a food bearer or a building beside them), ${c.sec.toFixed(0)} s. They can't move or fight meanwhile.">${ICONS.morph}<span>${spawn ? '+' : '→'} ${to.spec.name}</span><small>${c.food} · ${c.sec.toFixed(0)} s</small></button>`;
     }).join('');
   }
 
@@ -623,7 +628,7 @@ export function describeOrder(w: World, u: Unit): string {
     case 'move': return 'Moving';
     case 'attackMove': return u.engage ? 'Fighting' : 'Attack-moving';
     case 'patrol': return u.engage ? 'Fighting' : 'Patrolling';
-    case 'metamorph': return `Changing into ${w.specOf(u.owner, o.into)?.spec.name ?? o.into}`;
+    case 'metamorph': return `${o.spawn ? 'Growing a' : 'Changing into'} ${w.specOf(u.owner, o.into)?.spec.name ?? o.into}`;
     case 'attack': return 'Attacking';
     case 'gather': {
       const r = resourceName(w.factionOf(u.owner), o.nodeType);

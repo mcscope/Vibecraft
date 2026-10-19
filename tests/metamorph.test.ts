@@ -20,10 +20,10 @@ describe('metamorphosis', () => {
     const f = w.spawnAt(0, 'fenling', hall.ox + hall.size + 0.6, hall.oy + 1)!;
     const cost = metamorphCost(derive(fen.units.find((u) => u.id === 'fenling')!), derive(knight));
     expect(cost.food).toBe(derive(knight).foodCost - derive(fen.units.find((u) => u.id === 'fenling')!).foodCost);
-    expect(cost.sec).toBeCloseTo(12);
+    expect(cost.sec).toBeCloseTo(6 * 2 + (90 - 32) / 12); // refinement 2, plus 58 kg more body
     w.enqueue({ player: 0, cmd: { type: 'metamorph', units: [f.id], into: 'frog-knight' } });
     let into = 0;
-    for (let i = 0; i < 20 * 14 && !into; i++) { w.step(); for (const e of w.events) if (e.type === 'metamorph') into = e.into; w.events = []; if (!into) expect(f.order.kind).toBe('metamorph'); }
+    for (let i = 0; i < 20 * 20 && !into; i++) { w.step(); for (const e of w.events) if (e.type === 'metamorph') into = e.into; w.events = []; if (!into) expect(f.order.kind).toBe('metamorph'); }
     expect(w.units.has(f.id)).toBe(false);
     const k = w.units.get(into)!;
     expect(k.specId).toBe('frog-knight');
@@ -39,6 +39,25 @@ describe('metamorphosis', () => {
     for (let i = 0; i < 20 * 20; i++) w.step();
     expect(w.units.has(f.id)).toBe(true);
     expect(f.order.kind === 'metamorph' && f.order.t).toBeLessThan(1);
+  });
+
+  test('a parent grows a new unit beside it, paying its whole price, and carries on', () => {
+    const brood = withExtras(fenfolk, { patch: { 'bog-toad': { spawns: ['fenling'] } } });
+    const w = new World({ seed: 3, players: [{ name: 'Fen', faction: brood }, { name: 'Meadow', faction: meadowfolk }] });
+    for (const u of [...w.units.values()]) if (w.players[u.owner].neutral) w.units.delete(u.id);
+    const hall = w.baseOf(0)!;
+    hall.stock.food = 1000;
+    const t = w.spawnAt(0, 'bog-toad', hall.ox + hall.size + 1, hall.oy + 1)!;
+    const cost = metamorphCost(derive(brood.units.find((u) => u.id === 'bog-toad')!), derive(brood.units.find((u) => u.id === 'fenling')!), true);
+    const before = w.unitsOf(0).filter((u) => u.specId === 'fenling').length;
+    w.enqueue({ player: 0, cmd: { type: 'metamorph', units: [t.id], into: 'fenling', spawn: true } });
+    for (let i = 0; i < Math.ceil(cost.sec * 20) + 10; i++) w.step();
+    expect(w.units.has(t.id)).toBe(true);
+    expect(w.unitsOf(0).filter((u) => u.specId === 'fenling').length).toBe(before + 1);
+    expect(1000 - hall.stock.food).toBeCloseTo(cost.food, 0);
+    // nothing more refined than itself
+    const up = withExtras(fenfolk, { patch: { fenling: { spawns: ['bog-toad'] } } });
+    expect(validateFaction(up).some((e) => e.includes('spawns bog-toad'))).toBe(true);
   });
 
   test('a form more than one refinement up is refused', () => {
