@@ -6,6 +6,7 @@
 //        saved as profiles/<date>-<label>.trace.json (DevTools: Performance > Load profile)
 // Profiles land in profiles/<date>-<label>.cpuprofile. Same scenario every time, so runs compare like for like.
 import { chromium } from 'playwright-core';
+import { execSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 
 const [label = 'run', base = 'http://localhost:5179', mode] = process.argv.slice(2);
@@ -17,7 +18,10 @@ const PLAY_S = 30, SETTLED_S = 10; // then the frame rate over 10 s more, once s
 // a kept browser profile: the dev server's baked-art cache survives between runs (else every run re-bakes for minutes)
 // headless: a visible window gets throttled by macOS when it's behind other apps, which made runs vary wildly
 // (WINDOW=1 to watch it)
-const browser = await chromium.launchPersistentContext('profiles/.chrome', { channel: 'chrome', headless: !process.env.WINDOW, args: process.env.JSFLAGS ? [`--js-flags=${process.env.JSFLAGS}`] : [], viewport: { width: 1500, height: 880 }, deviceScaleFactor: +(process.env.DPR ?? 1) });
+// on Apple Silicon, Chrome's native build: from an Intel-build Node (nvm's x64) it would run under Rosetta, whose
+// translating made starts look seconds slow that are smooth for players
+const appleSilicon = process.platform === 'darwin' && execSync('sysctl -n hw.optional.arm64 2>/dev/null || echo 0').toString().trim() === '1';
+const browser = await chromium.launchPersistentContext('profiles/.chrome', { ...(appleSilicon ? { executablePath: 'scripts/chrome-arm64.sh' } : { channel: 'chrome' }), headless: !process.env.WINDOW, args: process.env.JSFLAGS ? [`--js-flags=${process.env.JSFLAGS}`] : [], viewport: { width: 1500, height: 880 }, deviceScaleFactor: +(process.env.DPR ?? 1) });
 const page = await browser.newPage();
 // the window may take focus when it opens: keys and clicks meant for other apps mustn't reach the game (p pauses it)
 await page.addInitScript(() => {
