@@ -202,7 +202,10 @@ export class Renderer {
         // sprites are baked at ≤2× so rendering finer than that only costs fill rate
         autoStart: false, autoDensity: true, resolution: Math.min(2, window.devicePixelRatio || 1),
         width: window.innerWidth, height: window.innerHeight,
+        // input is our own (ui/input.ts): Pixi's pointer events would hit-test every sprite on each mouse move
+        eventFeatures: { move: false, globalMove: false, click: false, wheel: false },
       });
+      this.app.stage.eventMode = 'none';
     } catch (e) {
       // no WebGL (or WebGPU) for this page: say so, rather than sit on the loading screen
       const loading = document.getElementById('loading');
