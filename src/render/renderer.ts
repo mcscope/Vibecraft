@@ -6,7 +6,7 @@ import { type Building, type Order, type ResourceNode, type Unit, type World, ty
 import { Camera, isoX, isoY, TILE_H, TILE_W } from './camera';
 import { isUnderfoot, parcelPos } from '../sim/abilities/underfoot';
 import { buildingSprite, unitSprite, type ArtAnim, type Sprite } from '../art/contract';
-import { gpuTexture, setFrameReader } from '../art/gpu';
+import { gpuTexture, keepOnGpu, setFrameReader } from '../art/gpu';
 import { TEAM_COLORS, type ArtBank } from './artbank';
 import { buildGround } from './ground';
 
@@ -233,7 +233,12 @@ export class Renderer {
     setFrameReader((tex, x, y, w, h) => this.app.renderer.extract.canvas(new Texture({ source: tex as TextureSource, frame: new Rectangle(x, y, w, h) })) as HTMLCanvasElement);
     // Upload every sprite sheet now, so the first swing or death of each unit
     // doesn't hitch mid-battle while its sheet goes to the GPU.
-    for (const img of this.bank.allImages()) this.app.renderer.texture.initSource(this.source(img));
+    // Once there, a page's copy in memory is let go (art/gpu.ts).
+    for (const img of this.bank.allImages()) {
+      const src = this.source(img);
+      this.app.renderer.texture.initSource(src);
+      keepOnGpu(img, src);
+    }
   }
 
   private source(img: CanvasImageSource): TextureSource {

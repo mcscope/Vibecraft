@@ -230,6 +230,38 @@ async function run(g: GameSetup): Promise<void> {
     renderer.cam.centerOn(tc.ox + 3, tc.oy + 3);
     input.setSelection(world.unitsOf(HUMAN).map((u) => u.id));
   }
+  // Warm up behind the loading screen. The browser runs code slowly until it has run often enough to be compiled
+  // fast, and at a few frames a second that took half a minute: the game opened in slow motion. So a throwaway copy of
+  // a match (the sim and two AIs) plays here while frames are drawn, until steps and frames are quick (30 s at most).
+  // The first frames' one-off work (every tree's sprite, shader compiles, the fog, minimap and HUD icons) is done too.
+  label.textContent = 'Getting ready…';
+  {
+    const sides = world.players.filter((p) => !p.neutral).slice(0, 2);
+    const practice = new World({ seed: 1, scenario: skirmish('woodlands'), players: sides.map((p) => ({ name: p.name, faction: world.factionOf(p.id) })) });
+    const ais = sides.map((_, i) => new SkirmishAI(i, 'easy'));
+    await new Promise<void>((done) => {
+      const start = performance.now();
+      let prev = start, quick = 0, steps = 0;
+      const warm = (now: number) => {
+        quick = now - prev < 50 ? quick + 1 : 0;
+        prev = now;
+        let slowest = 0;
+        for (let t0 = performance.now(); performance.now() - t0 < 20 && practice.winner < 0;) {
+          const a = performance.now();
+          practice.step(ais.flatMap((ai) => ai.think(practice).map((cmd) => ({ player: ai.player, cmd }))));
+          practice.events = [];
+          slowest = Math.max(slowest, performance.now() - a);
+          steps++;
+        }
+        renderer.draw(0, 0, input.rs);
+        minimap.draw(renderer.cam);
+        hud.update(0, input.selected, 60);
+        if ((quick >= 10 && steps >= 400 && slowest < 5) || now - start > 30000) done();
+        else requestAnimationFrame(warm);
+      };
+      requestAnimationFrame(warm);
+    });
+  }
   loading.style.display = 'none';
   document.getElementById('hud')!.style.display = 'block';
   if (m === 'demo' || m === 'tutorial') document.getElementById('help')!.style.display = 'block';
@@ -240,6 +272,8 @@ async function run(g: GameSetup): Promise<void> {
   // the fps readout: real frames counted over each half second, and the worst frame in it (nothing smoothed away)
   let perfFrames = 0, perfSince = last, perfWorst = 0;
   const debugPerf = new URLSearchParams(location.search).has('debug'); // ?debug: the worst frame too
+  const slowFrames: Array<Record<string, number>> = [];
+  if (debugPerf) (window as unknown as { slowFrames: unknown }).slowFrames = slowFrames;
   const overlay = document.getElementById('overlay')!;
   const speedEl = document.getElementById('speed')!;
   // resign (players only, in matches that can be won) and the score screen when it's over
@@ -284,6 +318,8 @@ async function run(g: GameSetup): Promise<void> {
     minimap.draw(renderer.cam);
     hud.update(dt, input.selected, fps);
     cartDebug.update(input.alpha, dt);
+    // ?debug: each slow frame's breakdown, for scripts/perf.mjs (the time since the last frame, and this frame's parts)
+    if (debugPerf && real > 0.1) slowFrames.push({ at: Math.round(now), gap: Math.round(real * 1000), sim: Math.round(t1 - t0), draw: Math.round(t2 - t1), hud: Math.round(performance.now() - t2) });
     simMs = simMs * 0.95 + (t1 - t0) * 0.05;
     drawMs = drawMs * 0.95 + (t2 - t1) * 0.05;
     if (now - perfSince > 500) {

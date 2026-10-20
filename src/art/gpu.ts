@@ -14,6 +14,18 @@ export function gpuPage(texture: unknown): HTMLCanvasElement {
   return c;
 }
 
+/**
+ * From now on `img` lives only on the GPU, as `texture` (already uploaded): its pixels in memory are let go (a canvas
+ * shrinks to 1×1, a bitmap is closed), and 2D-canvas code reads its frames back like a compressed page's. Holding every
+ * sprite page twice, in memory and on the GPU, starved the browser for the first half-minute of a game.
+ */
+export function keepOnGpu(img: CanvasImageSource, texture: unknown): void {
+  if (pages.has(img as object)) return;
+  pages.set(img as object, texture);
+  if (typeof ImageBitmap !== 'undefined' && img instanceof ImageBitmap) img.close();
+  else if (img instanceof HTMLCanvasElement || (typeof OffscreenCanvas !== 'undefined' && img instanceof OffscreenCanvas)) img.width = img.height = 1;
+}
+
 /** The GPU texture behind a stand-in `img`, or undefined for an ordinary image. */
 export const gpuTexture = (img: CanvasImageSource): unknown => pages.get(img as object);
 
