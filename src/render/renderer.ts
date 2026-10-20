@@ -8,7 +8,7 @@ import { isUnderfoot, parcelPos } from '../sim/abilities/underfoot';
 import { buildingSprite, unitSprite, type ArtAnim, type Sprite } from '../art/contract';
 import { gpuTexture, setFrameReader } from '../art/gpu';
 import { TEAM_COLORS, type ArtBank } from './artbank';
-import { paintTerrain, TERRAIN_SCALE } from './terrain';
+import { buildGround } from './ground';
 
 export { TEAM_COLORS };
 
@@ -102,7 +102,7 @@ const AIR_BODY_PX = 30;
 export class Renderer {
   readonly cam = new Camera();
   private app = new Application();
-  private terrainCanvas: HTMLCanvasElement | null;
+  private extraDirt: Array<[number, number, number]>;
   private effects: Effect[] = [];
   private time = 0;
 
@@ -191,7 +191,7 @@ export class Renderer {
   }
 
   constructor(private canvas: HTMLCanvasElement, private world: World, readonly bank: ArtBank, private opts: RenderOptions, extraDirt: Array<[number, number, number]> = []) {
-    this.terrainCanvas = paintTerrain(world, extraDirt, { biomes: bank.biomes, homes: world.homes });
+    this.extraDirt = extraDirt;
   }
 
   async init(): Promise<void> {
@@ -224,19 +224,8 @@ export class Renderer {
     });
     this.tileTex = shapeTexture((c, w, h) => { c.fillStyle = '#fff'; c.beginPath(); c.moveTo(w / 2, 0); c.lineTo(w, h / 2); c.lineTo(w / 2, h); c.lineTo(0, h / 2); c.closePath(); c.fill(); });
     this.diamondTex = shapeTexture((c, w, h) => { c.strokeStyle = '#fff'; c.lineWidth = 5; c.beginPath(); c.moveTo(w / 2, 3); c.lineTo(w - 4, h / 2); c.lineTo(w / 2, h - 3); c.lineTo(4, h / 2); c.closePath(); c.stroke(); });
-    // terrain → chunked textures
-    const t = this.terrainCanvas!;
-    const C = 1024;
-    const H = this.world.grid.height;
-    for (let y = 0; y < t.height; y += C) for (let x = 0; x < t.width; x += C) {
-      const w = Math.min(C, t.width - x), h = Math.min(C, t.height - y);
-      const bmp = await createImageBitmap(t, x, y, w, h);
-      const s = new PixiSprite(new Texture({ source: new ImageSource({ resource: bmp, autoGenerateMipmaps: true, scaleMode: 'linear' }) }));
-      s.position.set(x / TERRAIN_SCALE - H * 32, y / TERRAIN_SCALE);
-      s.scale.set(1 / TERRAIN_SCALE);
-      this.ground.addChild(s);
-    }
-    this.terrainCanvas = null;
+    // the ground: painted by a shader from small per-tile data (render/ground.ts), its clutter as sprites
+    this.ground.addChild(buildGround(this.world, this.extraDirt, { biomes: this.bank.biomes, homes: this.world.homes }, (s) => this.texture(s)));
     // 2D-canvas art (HUD icons, portraits) read back from compressed pages, which only the GPU holds
     setFrameReader((tex, x, y, w, h) => this.app.renderer.extract.canvas(new Texture({ source: tex as TextureSource, frame: new Rectangle(x, y, w, h) })) as HTMLCanvasElement);
     // Upload every sprite sheet now, so the first swing or death of each unit
