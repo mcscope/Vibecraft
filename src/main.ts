@@ -239,6 +239,7 @@ async function run(g: GameSetup): Promise<void> {
   let fps = 60;
   // the fps readout: real frames counted over each half second, and the worst frame in it (nothing smoothed away)
   let perfFrames = 0, perfSince = last, perfWorst = 0;
+  const debugPerf = new URLSearchParams(location.search).has('debug'); // ?debug: the worst frame too
   const overlay = document.getElementById('overlay')!;
   const speedEl = document.getElementById('speed')!;
   // resign (players only, in matches that can be won) and the score screen when it's over
@@ -287,7 +288,7 @@ async function run(g: GameSetup): Promise<void> {
     drawMs = drawMs * 0.95 + (t2 - t1) * 0.05;
     if (now - perfSince > 500) {
       fps = (perfFrames * 1000) / (now - perfSince);
-      perfEl.textContent = `${Math.round(fps)} fps (worst ${Math.round(perfWorst * 1000)} ms) · sim ${simMs.toFixed(1)} ms · draw ${drawMs.toFixed(1)} ms`;
+      perfEl.textContent = `${Math.round(fps)} fps${debugPerf ? ` (worst ${Math.round(perfWorst * 1000)} ms)` : ''} · sim ${simMs.toFixed(1)} ms · draw ${drawMs.toFixed(1)} ms`;
       perfFrames = 0; perfSince = now; perfWorst = 0;
     }
 
