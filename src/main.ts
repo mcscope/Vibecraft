@@ -237,6 +237,8 @@ async function run(g: GameSetup): Promise<void> {
   let acc = 0;
   let last = performance.now();
   let fps = 60;
+  // the fps readout: real frames counted over each half second, and the worst frame in it (nothing smoothed away)
+  let perfFrames = 0, perfSince = last, perfWorst = 0;
   const overlay = document.getElementById('overlay')!;
   const speedEl = document.getElementById('speed')!;
   // resign (players only, in matches that can be won) and the score screen when it's over
@@ -248,23 +250,24 @@ async function run(g: GameSetup): Promise<void> {
   const scoreBox = document.getElementById('score')!;
 
   const cartDebug = new CartDebug(world, renderer.cam, HUMAN);
-  let simMs = 0, drawMs = 0, perfTick = 0;
+  let simMs = 0, drawMs = 0;
   const perfEl = document.querySelector<HTMLElement>('[data-res="fps"]')!;
   const showPerf = () => (perfEl.style.display = settings().perf ? '' : 'none');
   showPerf();
   onSettings(showPerf);
   const frame = (now: number) => {
-    const dt = Math.min(0.1, (now - last) / 1000);
+    const real = (now - last) / 1000;
+    const dt = Math.min(0.1, real); // (animation and camera: a long frame doesn't jump them)
     last = now;
-    fps = fps * 0.95 + (1 / Math.max(dt, 1e-3)) * 0.05;
+    perfFrames++; perfWorst = Math.max(perfWorst, real);
     const t0 = performance.now();
     if (!input.paused && !deploy?.deploying) {
-      acc += dt * input.speed;
-      let steps = 0;
-      while (acc >= DT && steps < 40) {
+      // the game keeps to the clock: a slow frame's time is made up in the frames after it, a few ms of steps at a
+      // time (so a slow machine doesn't spiral), and only a stall of over a second is let go
+      acc = Math.min(acc + Math.min(real, 1) * input.speed, 1);
+      while (acc >= DT && performance.now() - t0 < 30) {
         if (!lockstep.tryStep()) { acc = 0; break; }
         acc -= DT;
-        steps++;
       }
     }
     const t1 = performance.now();
@@ -282,9 +285,10 @@ async function run(g: GameSetup): Promise<void> {
     cartDebug.update(input.alpha, dt);
     simMs = simMs * 0.95 + (t1 - t0) * 0.05;
     drawMs = drawMs * 0.95 + (t2 - t1) * 0.05;
-    if ((perfTick += dt) > 0.5) {
-      perfTick = 0;
-      perfEl.textContent = `${Math.round(fps)} fps · sim ${simMs.toFixed(1)} ms · draw ${drawMs.toFixed(1)} ms`;
+    if (now - perfSince > 500) {
+      fps = (perfFrames * 1000) / (now - perfSince);
+      perfEl.textContent = `${Math.round(fps)} fps (worst ${Math.round(perfWorst * 1000)} ms) · sim ${simMs.toFixed(1)} ms · draw ${drawMs.toFixed(1)} ms`;
+      perfFrames = 0; perfSince = now; perfWorst = 0;
     }
 
     if (world.winner >= 0 && !scored && world.scenario.victory) {
