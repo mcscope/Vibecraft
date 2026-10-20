@@ -16,7 +16,7 @@ const PLAY_S = 30, SETTLED_S = 10; // then the frame rate over 10 s more, once s
 // a kept browser profile: the dev server's baked-art cache survives between runs (else every run re-bakes for minutes)
 // headless: a visible window gets throttled by macOS when it's behind other apps, which made runs vary wildly
 // (WINDOW=1 to watch it)
-const browser = await chromium.launchPersistentContext('profiles/.chrome', { channel: 'chrome', headless: !process.env.WINDOW, viewport: { width: 1500, height: 880 } });
+const browser = await chromium.launchPersistentContext('profiles/.chrome', { channel: 'chrome', headless: !process.env.WINDOW, viewport: { width: 1500, height: 880 }, deviceScaleFactor: +(process.env.DPR ?? 1) });
 const page = await browser.newPage();
 // the window may take focus when it opens: keys and clicks meant for other apps mustn't reach the game (p pauses it)
 await page.addInitScript(() => {
