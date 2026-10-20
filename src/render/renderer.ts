@@ -6,6 +6,7 @@ import { type Building, type Order, type ResourceNode, type Unit, type World, ty
 import { Camera, isoX, isoY, TILE_H, TILE_W } from './camera';
 import { isUnderfoot, parcelPos } from '../sim/abilities/underfoot';
 import { buildingSprite, unitSprite, type ArtAnim, type Sprite } from '../art/contract';
+import { gpuTexture, setFrameReader } from '../art/gpu';
 import { TEAM_COLORS, type ArtBank } from './artbank';
 import { paintTerrain, TERRAIN_SCALE } from './terrain';
 
@@ -236,6 +237,8 @@ export class Renderer {
       this.ground.addChild(s);
     }
     this.terrainCanvas = null;
+    // 2D-canvas art (HUD icons, portraits) read back from compressed pages, which only the GPU holds
+    setFrameReader((tex, x, y, w, h) => this.app.renderer.extract.canvas(new Texture({ source: tex as TextureSource, frame: new Rectangle(x, y, w, h) })) as HTMLCanvasElement);
     // Upload every sprite sheet now, so the first swing or death of each unit
     // doesn't hitch mid-battle while its sheet goes to the GPU.
     for (const img of this.bank.allImages()) this.app.renderer.texture.initSource(this.source(img));
@@ -244,7 +247,8 @@ export class Renderer {
   private source(img: CanvasImageSource): TextureSource {
     let src = this.sources.get(img);
     if (!src) {
-      src = new ImageSource({ resource: img as ImageBitmap, autoGenerateMipmaps: true, scaleMode: 'linear' });
+      // a compressed page is already a GPU texture (art/gpu.ts); anything else is uploaded from its pixels
+      src = (gpuTexture(img) as TextureSource | undefined) ?? new ImageSource({ resource: img as ImageBitmap, autoGenerateMipmaps: true, scaleMode: 'linear' });
       this.sources.set(img, src);
       this.textures.set(src, new Map());
     }

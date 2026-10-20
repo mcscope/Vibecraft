@@ -2,6 +2,7 @@
 // plus a JSON of everything else, so a production build loads its shipped factions instead of baking them on
 // every visit. Any art works: each sprite's image becomes an index into the pages; the rest is plain data.
 import type { TeamColors } from './contract';
+import { gpuPage } from './gpu';
 
 /** The file a baked art is saved under: a faction in a team's colours, or a faction's land. */
 export const teamKey = (factionId: string, team: TeamColors): string => `${factionId}.${[team.primary, team.secondary, team.dark].map((c) => c.replace('#', '')).join('-')}`;
@@ -30,7 +31,11 @@ export async function packArt(art: unknown): Promise<{ json: string; pages: Blob
 
 /** Rebuild art packed by packArt from its JSON and its page images. */
 export async function unpackArt<T>(art: unknown, pages: Blob[]): Promise<T> {
-  const imgs = await Promise.all(pages.map((b) => createImageBitmap(b)));
+  return reviveArt<T>(art, await Promise.all(pages.map((b) => createImageBitmap(b))));
+}
+
+/** Packed art with its page indexes swapped for the page images. */
+function reviveArt<T>(art: unknown, imgs: CanvasImageSource[]): T {
   const revive = (o: unknown): unknown => {
     if (Array.isArray(o)) return o.map(revive);
     if (!o || typeof o !== 'object') return o;
@@ -42,12 +47,24 @@ export async function unpackArt<T>(art: unknown, pages: Blob[]): Promise<T> {
   return revive(art) as T;
 }
 
-/** Load art saved by packArt from `base/<key>.json` and `base/<key>.<page>.webp`; null if there's none. */
-export async function loadPrebaked<T>(key: string, base = 'baked'): Promise<T | null> {
+/**
+ * Load art saved by packArt from `base/<key>.json` and `base/<key>.<page>.webp`; null if there's none. With
+ * `gpuLoad` and the pages also saved compressed (`ktx2`, scripts/ktx2.mjs), the pages go straight to the GPU
+ * compressed instead (art/gpu.ts), falling back to the WebP pages if that fails.
+ */
+export async function loadPrebaked<T>(key: string, base = 'baked', gpuLoad?: (url: string) => Promise<unknown>): Promise<T | null> {
   try {
     const res = await fetch(`${base}/${key}.json`);
     if (!res.ok) return null;
-    const { pages, art } = (await res.json()) as { pages: number; art: unknown };
+    const { pages, art, ktx2 } = (await res.json()) as { pages: number; art: unknown; ktx2?: boolean };
+    if (ktx2 && gpuLoad) {
+      try {
+        const textures = await Promise.all(Array.from({ length: pages }, (_, i) => gpuLoad(`${base}/${key}.${i}.ktx2`)));
+        return reviveArt<T>(art, textures.map(gpuPage));
+      } catch (e) {
+        console.warn(`compressed art for ${key} failed, loading WebP`, e);
+      }
+    }
     const blobs = await Promise.all(Array.from({ length: pages }, async (_, i) => (await fetch(`${base}/${key}.${i}.webp`)).blob()));
     return await unpackArt<T>(art, blobs);
   } catch {

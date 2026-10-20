@@ -6,10 +6,15 @@ import type { FactionSpec } from '../factions/types';
 import { PLAYABLE } from '../factions';
 import { biomeKey, loadPrebaked, teamKey } from '../art/prebaked';
 import { cacheArt, cachedArt } from '../art/devCache';
+import { loadGpuPage } from './gpuPages';
 
-/** A shipped faction's art (or its land's) as pre-baked for a production build (scripts/prebake.mjs); null to bake it here. */
-const prebaked = <T>(f: FactionSpec | null, key: string): Promise<T | null> =>
-  import.meta.env.PROD && (!f || PLAYABLE.includes(f)) ? loadPrebaked<T>(key) : Promise.resolve(null);
+/**
+ * A shipped faction's art (or its land's) as pre-baked for a production build (scripts/prebake.mjs); null to bake it
+ * here. A faction's pages go to the GPU compressed where they were encoded (scripts/ktx2.mjs); a land's stay images
+ * (the ground painter draws them on the CPU).
+ */
+const prebaked = <T>(f: FactionSpec | null, key: string, gpu = false): Promise<T | null> =>
+  import.meta.env.PROD && (!f || PLAYABLE.includes(f)) ? loadPrebaked<T>(key, 'baked', gpu ? loadGpuPage : undefined) : Promise.resolve(null);
 
 /** The Wilds' colours (selection rings, minimap dots). */
 export const WILD_COLORS: TeamColors = { primary: '#8a6a3a', secondary: '#d8c08a', dark: '#4a3a20' };
@@ -107,7 +112,7 @@ export class ArtBank {
       else if (!f.art) factions.push(placeholderArt(world, p.id, team));
       else {
         const key = `${teamKey(f.id, team)}${only ? `.${[...only].sort().join('+')}` : ''}`;
-        let art = (await prebaked<FactionArt>(f, teamKey(f.id, team))) ?? (await cachedArt<FactionArt>(f.id, key));
+        let art = (await prebaked<FactionArt>(f, teamKey(f.id, team), true)) ?? (await cachedArt<FactionArt>(f.id, key));
         if (!art) { art = await f.art(team, sub, only); cacheArt(f.id, key, art); }
         factions.push(art);
       }

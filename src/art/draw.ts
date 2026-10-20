@@ -1,11 +1,12 @@
 // 2D-canvas helpers for drawing contract sprites (HUD portraits, icons, terrain clutter).
 import type { Sprite } from './contract';
+import { cpuFrame } from './gpu';
 
 /** Draw a sprite with its anchor at (x, y), scaled by zoom. */
 export function blit(ctx: CanvasRenderingContext2D, s: Sprite, x: number, y: number, zoom: number, alpha = 1): void {
-  const k = zoom / s.q;
+  const k = zoom / s.q, f = cpuFrame(s);
   if (alpha !== 1) ctx.globalAlpha = alpha;
-  ctx.drawImage(s.img, s.sx, s.sy, s.sw, s.sh, x - s.ax * k, y - s.ay * k, s.sw * k, s.sh * k);
+  ctx.drawImage(f.img, f.sx, f.sy, s.sw, s.sh, x - s.ax * k, y - s.ay * k, s.sw * k, s.sh * k);
   if (alpha !== 1) ctx.globalAlpha = 1;
 }
 
@@ -14,8 +15,8 @@ export function spriteToCanvas(s: Sprite, size: number, crop = 1): HTMLCanvasEle
   const c = document.createElement('canvas');
   c.width = c.height = size;
   const ctx = c.getContext('2d')!;
-  const k = Math.min(size / s.sw, size / s.sh) * crop;
-  ctx.drawImage(s.img, s.sx, s.sy, s.sw, s.sh, size / 2 - s.ax * k, size * 0.85 - s.ay * k, s.sw * k, s.sh * k);
+  const k = Math.min(size / s.sw, size / s.sh) * crop, f = cpuFrame(s);
+  ctx.drawImage(f.img, f.sx, f.sy, s.sw, s.sh, size / 2 - s.ax * k, size * 0.85 - s.ay * k, s.sw * k, s.sh * k);
   return c;
 }
 
@@ -24,7 +25,8 @@ export function spriteIcon(s: Sprite, size: number, pad = 0.04): HTMLCanvasEleme
   const src = document.createElement('canvas');
   src.width = s.sw; src.height = s.sh;
   const sctx = src.getContext('2d', { willReadFrequently: true })!;
-  sctx.drawImage(s.img, s.sx, s.sy, s.sw, s.sh, 0, 0, s.sw, s.sh);
+  const f = cpuFrame(s);
+  sctx.drawImage(f.img, f.sx, f.sy, s.sw, s.sh, 0, 0, s.sw, s.sh);
   const d = sctx.getImageData(0, 0, s.sw, s.sh).data;
   let x0 = s.sw, y0 = s.sh, x1 = -1, y1 = -1;
   // ignore faint shadow pixels so the subject fills the icon
