@@ -10,8 +10,8 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 
 const [label = 'run', base = 'http://localhost:5179', mode] = process.argv.slice(2);
 const profiling = mode !== 'noprof' && mode !== 'trace', tracing = mode === 'trace';
-// MODE=demo (etc.): another game mode; NOWARM=1: skip the warm-up behind the loading screen; JSFLAGS='...': flags for Chrome's JavaScript engine (V8)
-const url = `${base.replace(/\/$/, '')}/?mode=${process.env.MODE ?? 'skirmish'}&you=meadowfolk&foe=fenfolk&map=woodlands&ai=easy&debug${process.env.NOWARM ? '&nowarm' : ''}`;
+// MODE=demo (etc.): another game mode; JSFLAGS='...': flags for Chrome's JavaScript engine (V8)
+const url = `${base.replace(/\/$/, '')}/?mode=${process.env.MODE ?? 'skirmish'}&you=meadowfolk&foe=fenfolk&map=woodlands&ai=easy&debug`;
 const PLAY_S = 30, SETTLED_S = 10; // then the frame rate over 10 s more, once start-up is over (not profiled)
 
 // a kept browser profile: the dev server's baked-art cache survives between runs (else every run re-bakes for minutes)
