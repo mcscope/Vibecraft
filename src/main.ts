@@ -235,7 +235,7 @@ async function run(g: GameSetup): Promise<void> {
   // a match (the sim and two AIs) plays here while frames are drawn, until steps and frames are quick (30 s at most).
   // The first frames' one-off work (every tree's sprite, shader compiles, the fog, minimap and HUD icons) is done too.
   label.textContent = 'Getting ready…';
-  {
+  if (!params.has('nowarm')) { // (?nowarm: skip it, to measure the cold start: scripts/perf.mjs NOWARM=1)
     const sides = world.players.filter((p) => !p.neutral).slice(0, 2);
     const practice = new World({ seed: 1, scenario: skirmish('woodlands'), players: sides.map((p) => ({ name: p.name, faction: world.factionOf(p.id) })) });
     const ais = sides.map((_, i) => new SkirmishAI(i, 'easy'));

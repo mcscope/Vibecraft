@@ -10,18 +10,20 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 
 const [label = 'run', base = 'http://localhost:5179', mode] = process.argv.slice(2);
 const profiling = mode !== 'noprof' && mode !== 'trace', tracing = mode === 'trace';
-const url = `${base.replace(/\/$/, '')}/?mode=skirmish&you=meadowfolk&foe=fenfolk&map=woodlands&ai=easy&debug`;
+// NOWARM=1: skip the warm-up behind the loading screen; JSFLAGS='...': flags for Chrome's JavaScript engine (V8)
+const url = `${base.replace(/\/$/, '')}/?mode=skirmish&you=meadowfolk&foe=fenfolk&map=woodlands&ai=easy&debug${process.env.NOWARM ? '&nowarm' : ''}`;
 const PLAY_S = 30, SETTLED_S = 10; // then the frame rate over 10 s more, once start-up is over (not profiled)
 
 // a kept browser profile: the dev server's baked-art cache survives between runs (else every run re-bakes for minutes)
 // headless: a visible window gets throttled by macOS when it's behind other apps, which made runs vary wildly
 // (WINDOW=1 to watch it)
-const browser = await chromium.launchPersistentContext('profiles/.chrome', { channel: 'chrome', headless: !process.env.WINDOW, viewport: { width: 1500, height: 880 }, deviceScaleFactor: +(process.env.DPR ?? 1) });
+const browser = await chromium.launchPersistentContext('profiles/.chrome', { channel: 'chrome', headless: !process.env.WINDOW, args: process.env.JSFLAGS ? [`--js-flags=${process.env.JSFLAGS}`] : [], viewport: { width: 1500, height: 880 }, deviceScaleFactor: +(process.env.DPR ?? 1) });
 const page = await browser.newPage();
 // the window may take focus when it opens: keys and clicks meant for other apps mustn't reach the game (p pauses it)
 await page.addInitScript(() => {
   for (const type of ['keydown', 'keyup', 'pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'wheel', 'contextmenu']) window.addEventListener(type, (e) => { if (e.isTrusted) { e.stopImmediatePropagation(); e.preventDefault(); } }, { capture: true, passive: false });
 });
+page.on('pageerror', (e) => console.log(`  page error: ${e.message}`));
 const cdp = await page.context().newCDPSession(page);
 if (profiling) {
   await cdp.send('Profiler.enable');
@@ -29,7 +31,7 @@ if (profiling) {
   await cdp.send('Profiler.start');
 }
 const t0 = Date.now();
-await page.goto(url);
+await page.goto(url, { timeout: 900000 });
 await page.waitForFunction(() => document.getElementById('loading')?.style.display === 'none', null, { timeout: 900000 });
 const loadS = (Date.now() - t0) / 1000;
 const traceEvents = [];
