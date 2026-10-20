@@ -1,0 +1,55 @@
+# The start-up measurement (scripts/perf.mjs) on a real Windows PC with Chrome's Windows build, against the deployed
+# game. Runs on every push to the perf-windows branch; the logs and profiles are the run's "perf-windows" artifact.
+# (The runner has no graphics card: Chrome draws WebGL in software there.)
+name: perf-windows
+on:
+  push:
+    branches: [perf-windows]
+jobs:
+  perf:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        shell: bash
+    env:
+      SITE: http://mcscope.com/game/vibecraft/
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Browser and GPU
+        run: |
+          mkdir -p profiles
+          node --input-type=module -e "
+            import { chromium } from 'playwright-core';
+            const b = await chromium.launch({ channel: 'chrome', headless: true });
+            const p = await b.newPage();
+            console.log(JSON.stringify(await p.evaluate(() => {
+              const gl = document.createElement('canvas').getContext('webgl2'), dbg = gl && gl.getExtension('WEBGL_debug_renderer_info');
+              return { ua: navigator.userAgent, cpus: navigator.hardwareConcurrency, memoryGB: navigator.deviceMemory, webgl2: !!gl, renderer: dbg ? gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) : gl && gl.getParameter(gl.RENDERER) };
+            }), null, 1));
+            await b.close();
+          " | tee profiles/browser.txt
+      - name: Skirmish, no warm-up (frame times)
+        continue-on-error: true
+        run: MODE='skirmish&nowarm' node scripts/perf.mjs win-skirmish-nowarm "$SITE" noprof | tee profiles/win-skirmish-nowarm.txt
+      - name: Skirmish, warm-up (frame times)
+        continue-on-error: true
+        run: MODE=skirmish node scripts/perf.mjs win-skirmish-warm "$SITE" noprof | tee profiles/win-skirmish-warm.txt
+      - name: Skirmish, no warm-up (CPU profile)
+        continue-on-error: true
+        run: MODE='skirmish&nowarm' node scripts/perf.mjs win-skirmish-nowarm "$SITE" | tee profiles/win-skirmish-nowarm-profile.txt
+      - name: Skirmish, no warm-up (trace)
+        continue-on-error: true
+        run: MODE='skirmish&nowarm' node scripts/perf.mjs win-skirmish-nowarm "$SITE" trace | tee profiles/win-skirmish-nowarm-trace.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: perf-windows
+          path: |
+            profiles/*.txt
+            profiles/*.cpuprofile
+            profiles/*.trace.json
