@@ -64,6 +64,12 @@ export interface UnitSpec {
    * Leave it out for an upright body: it's then its front-to-back depth, from its mass (a 70 kg person: ~0.3 m).
    */
   length?: number;
+  /**
+   * Metres across the ground it takes up (its footprint, as drawn): bodies the sim keeps apart by this much don't
+   * overlap on screen. Leave it out and it comes from the mass (a 70 kg body: 1 m). A body at another mass (a shell)
+   * scales it by ∛ of the mass.
+   */
+  size?: number;
   /** It flies: walks short hops, takes off to go further, straight over everything; burns calories aloft (∝ mass, so endurance comes from its reserve); lands when it stops or runs low. Melee fliers land to strike. */
   flight?: boolean | { height: number };
   /** Can this unit harvest resource nodes? Default true. */

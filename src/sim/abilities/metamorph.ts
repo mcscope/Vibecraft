@@ -107,7 +107,11 @@ const atMass = new Map<string, DerivedStats>();
 function statsAtMass(w: World, owner: number, specId: string, mass: number): DerivedStats {
   const key = `${w.players[owner].factionId}/${specId}/${mass}`;
   let st = atMass.get(key);
-  if (!st) { st = derive({ ...w.specOf(owner, specId)!.spec, mass }); atMass.set(key, st); }
+  if (!st) {
+    const spec = w.specOf(owner, specId)!.spec;
+    st = derive({ ...spec, mass, size: spec.size && spec.size * Math.cbrt(mass / spec.mass) }); // (its footprint grows with it)
+    atMass.set(key, st);
+  }
   return st;
 }
 

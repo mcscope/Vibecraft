@@ -21,11 +21,17 @@ const TAU = Math.PI * 2;
 const TIER = { 1: '#5fae3a', 2: '#2fb8c4', 3: '#b04fb8' } as const;
 
 /**
- * How much to scale a model so it's drawn the size of its body: as long as its collision circle is wide (the engine's
- * radius for that mass: 0.25 × ∛(m / 70) tiles, 0.15 to 0.8, 2 m a tile), so bodies the sim keeps apart don't overlap
- * on screen. `length`: the model's length at scale 1 (metres).
+ * Each look's drawn scale for a mass (a body's length grows with ∛ of its mass), and its footprint: the metres across
+ * it's drawn, which is its collision size (UnitSpec.size), so bodies the sim keeps apart don't overlap on screen.
  */
-const sizeFor = (mass: number, length: number) => (4 * Math.min(0.8, Math.max(0.15, 0.25 * Math.cbrt(mass / 70)))) / length;
+const LOOK = {
+  caterpillar: { scale: (m: number) => 1.2 * Math.cbrt(m / 15), length: 1.2 },
+  egg: { scale: (m: number) => Math.cbrt(m / 15), length: 0.42 },
+  bug: { scale: (m: number) => Math.cbrt(m / 40), length: 0.85 },
+  winged: { scale: (m: number) => Math.cbrt(m / 40), length: 0.85 },
+  mother: { scale: (m: number) => 1.4 * Math.cbrt(m / 40), length: 1.25 },
+} as const;
+const footprint = (look: keyof typeof LOOK, mass: number) => LOOK[look].scale(mass) * LOOK[look].length;
 
 /** A caterpillar: a row of segments that ripple as it crawls, stubby legs, a round head (the user's larvae). */
 function caterpillar(b: ModelBuilder, p: Pose, color: string, mass: number): void {
@@ -45,7 +51,7 @@ function caterpillar(b: ModelBuilder, p: Pose, color: string, mass: number): voi
     c.sphere(0.11, [0.56, 0.12 + eat, 0], skin); // head
     for (const z of [1, -1]) c.sphere(0.018, [0.65, 0.15 + eat, z * 0.05], { color: '#111111' });
     if (p.cargo) c.sphere([0.08, 0.06, 0.08], [0.3, 0.24, 0], { color: p.cargo === 'food' ? '#a83a4a' : p.cargo === 'wood' ? '#7a5634' : '#8fe6ff' });
-  }, sizeFor(mass, 1.2));
+  }, LOOK.caterpillar.scale(mass));
 }
 
 /** An egg: a whitish, folded, faceted shell (origami-like), tinted toward its larva, sized by tier (the user's). */
@@ -57,7 +63,7 @@ function origamiEgg(b: ModelBuilder, p: Pose, tint: string, mass: number): void 
     e.cylinder(0.0, 0.2, 0.3, [0, 0.35, 0], paper, undefined, 5); // folded top
     e.cylinder(0.2, 0.0, 0.3, [0, 0.05 + 0.0, 0], fold, undefined, 5); // folded bottom
     e.cylinder(0.2, 0.2, 0.06, [0, 0.2, 0], paper, [0, Math.PI / 5, 0], 5); // the crease band
-  }, sizeFor(mass, 0.4) * breathe);
+  }, LOOK.egg.scale(mass) * breathe);
 }
 
 /** PLACEHOLDER body for the units the user hasn't described: a segmented bug on six legs, sized by mass. */
@@ -81,7 +87,7 @@ function bug(b: ModelBuilder, p: Pose, color: string, mass: number, weapon: 'str
       c.crystal(0.1, [1.0 + jab * 0.2, 0.42, 0.06], [0, 0, -Math.PI / 2]);
     }
     if (weapon === 'sling') c.limb([0.2, 0.38, 0.08], [0.2 + Math.cos(t * 2) * 0.15, 0.6, 0.08], 0.008, { color: '#5a4a3a' });
-  }, sizeFor(mass, 0.8));
+  }, LOOK.bug.scale(mass));
 }
 
 /** PLACEHOLDER flier: a bug with two pairs of broad butterfly-like wings that beat in flight. */
@@ -101,7 +107,7 @@ function winged(b: ModelBuilder, p: Pose, color: string, wing: string, mass: num
       c.joint([0.02, 0.44, z * 0.08], [z * beat * 0.85, 0, 0], (wg) => wg.sphere([0.18, 0.012, 0.32], [-0.05, 0, z * 0.32], wingMat));
       if (!flying) for (const x of [0.2, 0.05, -0.1]) c.limb([x, 0.32, z * 0.07], [x + 0.06, 0, z * 0.18], 0.016, shell);
     }
-  }, sizeFor(mass, 0.8));
+  }, LOOK.winged.scale(mass));
 }
 
 /**
@@ -146,7 +152,7 @@ function mother(b: ModelBuilder, p: Pose, mass: number): void {
         ab.cylinder(0.085, 0.085, 0.02, [-0.34, 0.02, z * 0.265], { team: 'primary', tex: 'skin' }, [Math.PI / 2, 0, 0], 14); // the rim, in her side's colour
       }
     });
-  }, sizeFor(mass, 1.25));
+  }, LOOK.mother.scale(mass));
 }
 
 function mix(a: string, b: string, k: number): string {
@@ -161,51 +167,52 @@ const EGG = { muscle: 0.1, frame: 0.1, reserve: 0.8 }; // cheap: an egg is fed a
 const SHELL = { muscle: 0.1, frame: 0.8, reserve: 0.1 };
 const MOTHER = { muscle: 0.55, frame: 0.25, reserve: 0.2 }; // enough muscle to carry her dearest egg's price beside her weapon crystal
 
-const unit = (u: Omit<Unit, 'description'> & { description?: string }): Unit => ({ description: '', ...u }) as Unit;
+const unit = (u: Omit<Unit, 'description'> & { description?: string }, look?: keyof typeof LOOK): Unit =>
+  ({ description: '', ...u, ...(look ? { size: footprint(look, u.mass) } : {}) }) as Unit; // collision as wide as it's drawn
 
 // the larvae: 35 / 70 / 140 food, work refinement = refinement
 const larva1 = unit({ id: 'larva1', name: 'T1 Larva', mass: 15, physique: LARVA, refinement: 1, workRefinement: 1, shell: 'cocoon',
   becomes: ['larva2', 'charger', 'micropike', 'tree-worm', 'mother1'], description: 'A small green larva. Gathers, then changes into a T1 form.',
-  model: (b, p) => caterpillar(b, p, TIER[1], 15) });
+  model: (b, p) => caterpillar(b, p, TIER[1], 15) }, 'caterpillar');
 const larva2 = unit({ id: 'larva2', name: 'T2 Larva', mass: 60, physique: LARVA, refinement: 2, workRefinement: 2, shell: 'cocoon',
   becomes: ['larva3', 'flier', 'ground-attacker2', 'slinger', 'mother2'], description: 'A medium cyan larva. Gathers, then changes into a T2 form.',
-  model: (b, p) => caterpillar(b, p, TIER[2], 60) });
+  model: (b, p) => caterpillar(b, p, TIER[2], 60) }, 'caterpillar');
 const larva3 = unit({ id: 'larva3', name: 'T3 Larva', mass: 179, physique: LARVA, refinement: 3, workRefinement: 3, shell: 'cocoon',
   becomes: ['dragon-fly', 'ground-attacker3', 'mother3'], description: 'A big purple larva. Gathers, then changes into a T3 form.',
-  model: (b, p) => caterpillar(b, p, TIER[3], 179) });
+  model: (b, p) => caterpillar(b, p, TIER[3], 179) }, 'caterpillar');
 
 // eggs: laid cheap (about 19.5 food each), sized by tier, then fed until they hatch into their tier's larva
 const egg = (tier: 1 | 2 | 3, mass: number) => unit({ id: `egg${tier}`, name: `T${tier} Egg`, mass, physique: EGG, refinement: tier, canGather: false,
   becomes: [`larva${tier}`], description: `A T${tier} egg. Give it food: it hatches into a T${tier} larva.`,
-  model: (b, p) => origamiEgg(b, p, TIER[tier], mass) });
+  model: (b, p) => origamiEgg(b, p, TIER[tier], mass) }, 'egg');
 
 // the shell larvae change inside (at the larva's own mass): mostly frame, tough
 const cocoon = unit({ id: 'cocoon', name: 'Cocoon', mass: 15, physique: SHELL, canGather: false, description: 'A larva changing. Give it food to finish.',
-  model: (b, p) => origamiEgg(b, p, '#c8b88a', 15) }); // PLACEHOLDER look
+  model: (b, p) => origamiEgg(b, p, '#c8b88a', 15) }, 'egg'); // PLACEHOLDER look
 
 // mothers: lay anything up to their own refinement (a mother carries at least her cheapest egg's price)
 const motherOf = (r: 1 | 2 | 3, mass: number) => unit({ id: `mother${r}`, name: `Mother (r${r})`, mass, physique: MOTHER, refinement: r,
   spawns: ['egg1', 'egg2', 'egg3'].slice(0, r), attack: { style: 'strike', crystalMass: 1 }, // PLACEHOLDER attack (a side with no buildings needs something that can fight)
-  description: `Lays eggs up to T${r}, and carries food to them.`, model: (b, p) => mother(b, p, mass) });
+  description: `Lays eggs up to T${r}, and carries food to them.`, model: (b, p) => mother(b, p, mass) }, 'mother');
 
 // offshoots, one refinement up (PLACEHOLDER bodies, attacks and names)
 const charger = unit({ id: 'charger', name: 'Charger', mass: 38, physique: { muscle: 0.6, frame: 0.25, reserve: 0.15 }, refinement: 2,
-  attack: { style: 'strike', crystalMass: 1.5 }, description: 'T1: a fast charging body.', model: (b, p) => bug(b, p, '#7fbf4a', 38, 'strike') });
+  attack: { style: 'strike', crystalMass: 1.5 }, description: 'T1: a fast charging body.', model: (b, p) => bug(b, p, '#7fbf4a', 38, 'strike') }, 'bug');
 const micropike = unit({ id: 'micropike', name: 'Micropike', mass: 35, physique: { muscle: 0.45, frame: 0.4, reserve: 0.15 }, refinement: 2,
-  attack: { style: 'strike', crystalMass: 0.8, shaft: 1.5 }, description: 'T1: micropikes.', model: (b, p) => bug(b, p, '#6aa84a', 35, 'pike') });
+  attack: { style: 'strike', crystalMass: 0.8, shaft: 1.5 }, description: 'T1: micropikes.', model: (b, p) => bug(b, p, '#6aa84a', 35, 'pike') }, 'bug');
 const treeWorm = unit({ id: 'tree-worm', name: 'Tree Worm', mass: 20, physique: { muscle: 0.2, frame: 0.1, reserve: 0.7 }, refinement: 2, canGather: false,
-  digestsTrees: true, description: 'T1: turns a whole tree into food, and is absorbed into it.', model: (b, p) => caterpillar(b, p, '#8a9a3a', 20) });
+  digestsTrees: true, description: 'T1: turns a whole tree into food, and is absorbed into it.', model: (b, p) => caterpillar(b, p, '#8a9a3a', 20) }, 'caterpillar');
 const flier = unit({ id: 'flier', name: 'Flier', mass: 120, physique: { muscle: 0.5, frame: 0.25, reserve: 0.25 }, refinement: 3, flight: true,
-  attack: { style: 'strike', crystalMass: 2 }, description: 'T2: a flier.', model: (b, p) => winged(b, p, '#2a9aa6', '#9fe6ee', 120) });
+  attack: { style: 'strike', crystalMass: 2 }, description: 'T2: a flier.', model: (b, p) => winged(b, p, '#2a9aa6', '#9fe6ee', 120) }, 'winged');
 const groundAttacker2 = unit({ id: 'ground-attacker2', name: 'T2 Ground Attacker', mass: 150, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 3,
-  attack: { style: 'strike', crystalMass: 4 }, description: 'T2: a ground attacker.', model: (b, p) => bug(b, p, '#2a8a96', 150, 'strike') });
+  attack: { style: 'strike', crystalMass: 4 }, description: 'T2: a ground attacker.', model: (b, p) => bug(b, p, '#2a8a96', 150, 'strike') }, 'bug');
 const slinger = unit({ id: 'slinger', name: 'Slinger', mass: 60, physique: { muscle: 0.5, frame: 0.3, reserve: 0.2 }, refinement: 3,
-  attack: { style: 'throw', crystalMass: 0.5, ammo: 8, sling: 0.6 }, description: 'T2: a slinger.', model: (b, p) => bug(b, p, '#3ab0bc', 60, 'sling') });
+  attack: { style: 'throw', crystalMass: 0.5, ammo: 8, sling: 0.6 }, description: 'T2: a slinger.', model: (b, p) => bug(b, p, '#3ab0bc', 60, 'sling') }, 'bug');
 const dragonFly = unit({ id: 'dragon-fly', name: 'Dragon Fly', mass: 500, physique: { muscle: 0.5, frame: 0.3, reserve: 0.2 }, refinement: 4, flight: true,
   attack: { style: 'throw', crystalMass: 6, ammo: 10 }, // PLACEHOLDER: its fire (a conversion of crystal) is still to design
-  description: 'T3: a fire-breathing dragon with butterfly wings, insectoid and reptilian.', model: (b, p) => winged(b, p, '#8a3a6a', '#e0a0d8', 500, true) });
+  description: 'T3: a fire-breathing dragon with butterfly wings, insectoid and reptilian.', model: (b, p) => winged(b, p, '#8a3a6a', '#e0a0d8', 500, true) }, 'winged');
 const groundAttacker3 = unit({ id: 'ground-attacker3', name: 'T3 Ground Attacker', mass: 600, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 4,
-  attack: { style: 'strike', crystalMass: 8 }, description: 'T3: a ground attacker.', model: (b, p) => bug(b, p, '#9a3aa6', 600, 'strike') });
+  attack: { style: 'strike', crystalMass: 8 }, description: 'T3: a ground attacker.', model: (b, p) => bug(b, p, '#9a3aa6', 600, 'strike') }, 'bug');
 
 export const units: Unit[] = [
   motherOf(1, 80), motherOf(2, 120), motherOf(3, 190),

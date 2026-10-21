@@ -326,7 +326,8 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   const cooldown = Math.max(K.minCooldown, attackEnergy / power) + (throwing ? K.throwReload : 0) + windUp + bringRound;
 
   const sizeRel = Math.cbrt(mass / 70);
-  const radius = clamp(0.25 * sizeRel, 0.15, 0.8);
+  // its footprint: as wide as it's drawn (spec.size, metres across), else from its mass
+  const radius = spec.size ? clamp(spec.size / 2 / M_PER_TILE, 0.15, 1.5) : clamp(0.25 * sizeRel, 0.15, 0.8);
   // a flier's wings grow with its mass like a bird's (span ≈ 1.17·m^0.39 m, from bird allometry)
   const wingspan = spec.flight ? (1.17 * mass ** 0.39) / M_PER_TILE : 0;
   const reach = radius + 0.35 + 0.1 * Math.cbrt(crystalMass) + (shaft * 0.75) / M_PER_TILE; // a shaft held a quarter of the way along: ¾ of it reaches forward
