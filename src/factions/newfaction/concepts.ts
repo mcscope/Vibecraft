@@ -153,3 +153,13 @@ export const MOTHER_FORMS = [
   { waist: true, pitch: -0.9, curl: 0.35, abdomen: 0.9, legs: 6, head: 1.25 },
   { pitch: -1.1, curl: 0.5, abdomen: 1.1, legs: 4, head: 1.5 },
 ] as const;
+
+/** Concepts 11–15 (2026-10-21): more varied takes on the scorpion curl with the flattened head: 11 low scorpion, 12 tall
+ *  curl, 13 bulb queen, 14 upright curl, 15 hunched giant. */
+export const MOTHER_FORMS_2 = [
+  { pitch: -0.6, curl: 1.0, abdomen: 1.3, legs: 6, girth: 1.3, neck: 0.7, head: 1.6 },
+  { pitch: -1.5, curl: 0.9, abdomen: 1.1, legs: 4, girth: 0.8, neck: 1.4, head: 1.2 },
+  { pitch: -0.9, curl: 0.3, abdomen: 1.5, girth: 1.5, waist: true, legs: 6, head: 1.0 },
+  { legs: 2, pitch: -0.9, curl: 0.6, abdomen: 1.2, neck: 1.3, head: 1.5 },
+  { pitch: -1.1, curl: 0.5, abdomen: 1.6, girth: 1.2, legs: 4, neck: 0.6, head: 1.8, crest: 1.4 },
+] as const;

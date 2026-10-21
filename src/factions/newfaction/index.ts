@@ -606,10 +606,11 @@ function mother(b: ModelBuilder, p: Pose, mass: number, tier: 1 | 2 | 3 = 1): vo
  */
 /** A variation on the T3 mother's form (for concepts): how steeply her abdomen rises, how far it curls over, its size, a
  *  wasp's waist before it, how many legs she stands on (2: upright on her hind pair, forelegs as mantis arms), her head's size. */
-export interface MotherForm { pitch?: number; curl?: number; abdomen?: number; waist?: boolean; legs?: 2 | 4 | 6; head?: number }
+export interface MotherForm { pitch?: number; curl?: number; abdomen?: number; waist?: boolean; legs?: 2 | 4 | 6; head?: number; girth?: number; neck?: number; crest?: number }
 
 function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): void {
-  const pitch = o.pitch ?? -0.75, curl = o.curl ?? 0.22, legs = o.legs ?? 4;
+  // (her form: the scorpion curl, the user's pick, its abdomen bigger)
+  const pitch = o.pitch ?? -1.25, curl = o.curl ?? 0.75, legs = o.legs ?? 4;
   const plate: Mat = { color: '#5e4a3a', tex: 'leather', rough: 0.35 };
   const under: Mat = { color: '#d8c49a', tex: 'skin', rough: 0.6 };
   const dark: Mat = { color: '#241812', tex: 'skin', rough: 0.95 };
@@ -640,34 +641,43 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
     const abAt: V3 = o.waist ? [-0.3, y0 + 0.12, 0] : [-0.12, y0 + 0.08, 0];
     if (o.waist) c.limb([-0.12, y0 + 0.04, 0], abAt, 0.06, plate, 0.05); // a wasp's waist
     c.joint(abAt, [0, 0, pitch + (walking ? Math.sin(t * 2) * 0.03 : 0)], (abs) => abs.joint([0, 0, 0], [0, 0, 0], (ab) => {
-      ab.loft(shape.map(([x, w, up, down, keel]) => ({ at: centre(x, up), w, up, down, keel })), under);
+      const g = o.girth ?? 1; // (how stout it is, side to side and through)
+      ab.loft(shape.map(([x, w, up, down, keel]) => ({ at: centre(x, up), w: w * g, up: up * g, down: down * g, keel })), under);
       for (const [from, to] of [[0, 3], [2, 5], [4, 6]] as const) {
         ab.loft(shape.slice(from, to + 1).map(([x, w, up, , keel], i, all) => {
           const end = i === 0 || i === all.length - 1 ? 0.6 : 1; // (each plate's ends tuck in)
-          return { at: centre(x, up, 0.02), w: w * 1.04 * end, up: (up + 0.015) * end, down: 0.04 * (w / 0.3), keel, flat: 0.15 };
+          return { at: centre(x, up * g, 0.02), w: w * g * 1.04 * end, up: (up * g + 0.015) * end, down: 0.04 * (w / 0.3), keel, flat: 0.15 };
         }), plate);
       }
-      for (const [x, rz] of [[-0.3, 0.31], [-0.56, 0.27]] as const) for (const z of [1, -1]) {
+      for (const [x, rz0] of [[-0.3, 0.31], [-0.56, 0.27]] as const) for (const z of [1, -1]) {
+        const rz = rz0 * g;
         const at = centre(x, 0.2);
         ab.sphere([0.065, 0.06, 0.03], [x, at[1], z * rz], dark);
         ab.cylinder(0.07, 0.07, 0.018, [x, at[1], z * (rz - 0.005)], { team: 'primary', tex: 'skin' }, [Math.PI / 2, 0, 0], 12);
       }
-    }, o.abdomen ?? 1));
+    }, o.abdomen ?? 1.4));
     // neck, and a big head with its great crest sweeping back
-    const head: [number, number, number] = [0.46, y0 + 0.5, 0];
-    c.limb([0.14, y0 + 0.05, 0], [0.3, y0 + 0.3, 0], 0.1, plate, 0.08);
-    c.limb([0.3, y0 + 0.3, 0], head, 0.08, plate, 0.07);
+    const nk = o.neck ?? 1;
+    const head: [number, number, number] = [0.14 + 0.32 * nk, y0 + 0.05 + 0.45 * nk, 0], mid: V3 = [0.14 + 0.16 * nk, y0 + 0.05 + 0.25 * nk, 0];
+    c.limb([0.14, y0 + 0.05, 0], mid, 0.07, plate, 0.055); // (slim, against her great abdomen)
+    c.limb(mid, head, 0.055, plate, 0.045);
     c.joint(head, [0, 0, 0], (hs) => hs.joint([0, 0, 0], [0, 0, 0], (h) => {
-      h.sphere([0.2, 0.11, 0.11], [0.08, 0, 0], plate);
-      h.cone(0.08, 0.2, [0.34, -0.03, 0], plate, [0, 0, -Math.PI / 2], 8); // beak
+      // a flattened head, broad and low like a duck-billed dinosaur's: a wide skull flattening into a broad bill
+      h.loft([
+        { at: [-0.1, 0, 0], w: 0.08, up: 0.06, down: 0.05 },
+        { at: [0.06, 0.01, 0], w: 0.15, up: 0.07, down: 0.05, flat: 0.4 },
+        { at: [0.22, -0.01, 0], w: 0.13, up: 0.045, down: 0.04, flat: 0.6 },
+        { at: [0.36, -0.03, 0], w: 0.12, up: 0.022, down: 0.022, flat: 0.8 },
+        { at: [0.42, -0.035, 0], w: 0.08, up: 0.012, down: 0.012, flat: 0.8 },
+      ], plate);
+      h.loft([{ at: [0.12, -0.05, 0], w: 0.1, up: 0.015, down: 0.02 }, { at: [0.32, -0.065, 0], w: 0.1, up: 0.012, down: 0.015, flat: 0.6 }, { at: [0.4, -0.065, 0], w: 0.06, up: 0.008, down: 0.01 }], under); // the lower bill
       for (const z of [1, -1]) {
-        h.sphere(0.032, [0.16, 0.05, z * 0.085], { color: '#111111' });
-        h.cone(0.028, 0.12, [0.34, -0.1, z * 0.05], plate, [0, z * 0.4, -Math.PI / 2], 5); // mandibles
+        h.sphere([0.03, 0.026, 0.02], [0.08, 0.05, z * 0.13], { color: '#111111' }); // eyes at the skull's corners
+        h.cone(0.02, 0.1, [0.4, -0.07, z * 0.07], plate, [0, z * 0.5, -Math.PI / 2], 5); // mandibles
       }
-      // the crest: a long, curving hollow tube sweeping back from her brow
-      h.limb([0.06, 0.09, 0], [-0.3, 0.3, 0], 0.07, plate, 0.06);
-      h.limb([-0.3, 0.3, 0], [-0.66, 0.42, 0], 0.06, plate, 0.045);
-      h.sphere(0.05, [-0.66, 0.42, 0], under);
+      // the crest: one long hollow tube, tapering as it sweeps back from her brow
+      h.loft([[0.0, 0.05, 0.045], [-0.18, 0.15, 0.05], [-0.38, 0.26, 0.045], [-0.56, 0.34, 0.038], [-0.7, 0.38, 0.026], [-0.76, 0.39, 0.012]]
+        .map(([x, y, r]) => ({ at: [x * (o.crest ?? 1), y * (o.crest ?? 1), 0] as V3, w: r * 0.8, up: r, down: r })), plate);
     }, o.head ?? 1));
     // eggs on the thorax
     for (let k = 0; k < 9; k++) {
@@ -682,10 +692,10 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
       const foot = walking ? footAt(rest, legs === 2 ? p.phase + (z > 0 ? 0 : 0.5) : ph, 0.12, 0.06) : rest;
       const ankle: V3 = [foot[0] + ankleRest[0] - rest[0], foot[1] + ankleRest[1], foot[2] + ankleRest[2] - rest[2]];
       const knee = jointBetween(hip, ankle, span(hip, kneeRest), span(kneeRest, ankleRest), [0.3, 1, z]);
-      c.limb(hip, knee, 0.11, plate, 0.085);
-      c.sphere([0.12, 0.1, 0.1], [(hip[0] + knee[0]) / 2, (hip[1] + knee[1]) / 2, (hip[2] + knee[2]) / 2], plate); // the thigh's bulk
-      c.limb(knee, ankle, 0.075, plate, 0.06);
-      c.limb(ankle, foot, 0.06, plate, 0.045);
+      c.limb(hip, knee, 0.08, plate, 0.06);
+      c.sphere([0.09, 0.075, 0.075], [(hip[0] + knee[0]) / 2, (hip[1] + knee[1]) / 2, (hip[2] + knee[2]) / 2], plate); // the thigh's bulk
+      c.limb(knee, ankle, 0.055, plate, 0.045);
+      c.limb(ankle, foot, 0.045, plate, 0.032);
       c.sphere([0.09, 0.04, 0.1], [foot[0] + 0.02, 0.03, foot[2]], plate); // a broad foot
       if (legs === 2) { // upright on her hind pair: her forelegs folded up as mantis arms
         c.limb([0.12, y0 - 0.02, z * 0.12], [0.3, y0 + 0.22, z * 0.16], 0.05, plate, 0.04);
