@@ -33,6 +33,47 @@ export const CLIMB_RATE = 1;
 export const LAUNCH_HEIGHT = 1.5;
 /** Extra climb rate (× CLIMB_RATE) right off the ground, easing away by 1.5 × LAUNCH_HEIGHT. 0: no burst. */
 export const LAUNCH_BURST = 0;
+/** A dive steeper than this (radians from level) it noses over into; it dives no steeper than DIVE_MAX. */
+export const DIVE_START = Math.PI / 4;
+export const DIVE_MAX = 1.3;
+/** Air drag on a diving (or zooming) body: k in dv/dt = g·sinθ − k·v², so it falls no faster than ~45 m/s. */
+const DRAG = K.gravity / 45 ** 2;
+/** Climbing away after a dive, it zooms up at this angle, trading its extra speed for height. */
+const ZOOM_ANGLE = 0.5;
+
+/**
+ * A striker in the air going for something on the ground dives on it, honestly: it flies over at its height till the
+ * target lies steeply below (DIVE_START), then noses over, gathering speed as it drops (g·sinθ, less drag), steering
+ * at it; it can strike only once it's down within reach of it (the target's shoulders plus its own reach). True then:
+ * the strike, with the dive's downward speed behind it (its forward speed is already in its motion). Pulling out of
+ * a dive it keeps its speed, and zooms up on it (tickFlight).
+ */
+export function diveAt(w: World, u: Unit, t: Unit, dt: number, face: (dx: number, dy: number) => void): boolean {
+  const strikeAlt = 0.8 * bodyHeight(t.stats.mass) + Math.max(0, u.stats.range - u.stats.radius) * M_PER_TILE;
+  const reach = u.stats.range + t.stats.radius + u.stats.radius;
+  const dm = Math.max(0, Math.hypot(t.x - u.x, t.y - u.y) - reach * 0.5) * M_PER_TILE; // metres to go, across
+  const drop = u.alt - strikeAlt;
+  if (drop <= 0.05) { // down at it
+    if (u.diving) { u.diveSpeed = u.flySpeed * M_PER_TILE * Math.sin(u.diveAngle); u.diving = false; }
+    if (Math.hypot(t.x - u.x, t.y - u.y) <= reach) return true;
+    flyTo(w, u, t.x, t.y, 0.05, u.flySpeed / FLY_SPEED, dt, face); // (missed: on round, low)
+    return false;
+  }
+  const angle = Math.atan2(drop, dm);
+  // (it dives only from high enough to gather speed: after a dive it climbs back up first)
+  if (!u.diving && (angle < DIVE_START || drop < u.stats.flyHeight * 0.5)) { flyTo(w, u, t.x, t.y, 0.05, Math.max(u.flySpeed / FLY_SPEED, u.stats.speed), dt, face); return false; } // over to it
+  // diving: speed from the drop, the angle steepening to bring it down onto the target
+  u.diving = true;
+  const th = Math.min(DIVE_MAX, Math.max(0.2, angle));
+  let v = Math.max(u.flySpeed, airSpeed(u)) * M_PER_TILE;
+  v = Math.max(0, v + (K.gravity * Math.sin(th) - DRAG * v * v) * dt);
+  u.diveAngle = th;
+  u.alt = Math.max(strikeAlt, u.alt - v * Math.sin(th) * dt);
+  flyTo(w, u, t.x, t.y, 0.01, (v * Math.cos(th)) / M_PER_TILE / FLY_SPEED, dt, face);
+  u.flySpeed = v / M_PER_TILE;
+  return false;
+}
+
 /** Seconds it crouches, winding up, before its legs spring it off the ground. */
 export const LAUNCH_WINDUP = 0.35;
 /** Seconds of its 'leap' pose: the wind-up, then the spring up to LAUNCH_HEIGHT. */
@@ -101,7 +142,7 @@ export function flyTo(w: World, u: Unit, gx: number, gy: number, arrive: number,
   turn = Math.max(-max, Math.min(max, turn));
   u.flyDir += turn;
   u.bank = max > 0 ? turn / max : 0;
-  u.flySpeed = speed * FLY_SPEED; // it keeps this pace when it coasts
+  u.flySpeed = u.diving ? speed * FLY_SPEED : Math.max(speed * FLY_SPEED, u.flySpeed); // it keeps this pace when it coasts (and the extra a dive gave it, till it zooms it away)
   glide(w, u, u.flySpeed, dt, face);
   u.flewTick = w.tick;
   return Math.hypot(gx - u.x, gy - u.y) <= arrive;
@@ -117,6 +158,15 @@ export function tickFlight(w: World, u: Unit, _moved: boolean, dt: number, face:
   if (!u.airborne) { u.alt = 0; u.vert = 0; u.vz = 0; u.launchT = 0; return; }
   const alt0 = u.alt;
   u.launchT += dt;
+  if (u.diving && u.flewTick !== w.tick) u.diving = false; // (it broke off: its target gone, or new orders)
+  if (u.diving) { u.vert = -1; u.vz = 0; return; } // (a dive moves it itself: diveAt)
+  // faster than it flies, after a dive: it zooms up, trading the extra speed for height
+  const cruise = airSpeed(u) * M_PER_TILE, v = u.flySpeed * M_PER_TILE;
+  if (v > cruise + 0.01) {
+    const v2 = Math.max(cruise, v - (K.gravity * Math.sin(ZOOM_ANGLE) + DRAG * v * v) * dt);
+    u.alt = Math.min(u.stats.flyHeight, u.alt + v * Math.sin(ZOOM_ANGLE) * dt);
+    u.flySpeed = v2 / M_PER_TILE;
+  }
   const flew = u.flewTick === w.tick;
   const flaring = !flew && u.alt < FLARE_HEIGHT && (u.vert < 0 || u.alt < 0.5); // the last few metres down: straight in, airbrakes out
   if (!flew) { u.bank = flaring ? 0 : 1; if (!flaring) u.flyDir += turnRate(u) * dt; glide(w, u, (u.flySpeed || airSpeed(u)) * (flaring ? 0.5 : 1), dt, face); } // no stopping in the air: circle at its pace
