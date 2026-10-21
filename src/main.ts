@@ -226,8 +226,9 @@ async function run(g: GameSetup): Promise<void> {
     renderer.cam.centerOn(22, 26);
     input.setSelection(world.unitsOf(HUMAN).filter((u) => u.specId !== world.factionOf(HUMAN).workerId).map((u) => u.id));
   } else {
-    const tc = world.buildingsOf(HUMAN)[0];
-    renderer.cam.centerOn(tc.ox + 3, tc.oy + 3);
+    // your base, or (a faction that starts in the field) your first unit
+    const tc = world.buildingsOf(HUMAN)[0], u0 = world.unitsOf(HUMAN)[0];
+    if (tc) renderer.cam.centerOn(tc.ox + 3, tc.oy + 3); else if (u0) renderer.cam.centerOn(u0.x, u0.y);
     input.setSelection(world.unitsOf(HUMAN).map((u) => u.id));
   }
   loading.style.display = 'none';
