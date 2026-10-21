@@ -11,6 +11,7 @@
 //   • great siege herons: enormous fliers that drop heavy crystals over walls and water,
 //     but so heavy they can only stay up for a few seconds' bombing run
 // Self-contained: only engine types and kits, never another faction.
+import { footAt, jointBetween } from '../../kits/bake3d/gait';
 import type { BuildingSpec, FactionSpec, TechSpec, UnitSpec } from '../types';
 import type { BuildingModel, Mat, ModelBuilder, UnitModel } from '../../kits/bake3d/types';
 import { fenWildlife } from './wildlife';
@@ -157,9 +158,10 @@ const packTortoise: FenUnit = {
       const walking = p.anim === 'walk';
       const glow = { color: '#9fefff', emissive: '#3ab8e0' };
       // four pillar legs in iron greaves, clawed
-      for (const [x, z, ph] of [[0.48, 0.42, 0], [0.48, -0.42, Math.PI], [-0.48, 0.42, Math.PI], [-0.48, -0.42, 0]] as Array<[number, number, number]>) {
-        const a = walking ? Math.sin(t + ph) * 0.3 : 0;
-        const foot: [number, number, number] = [x + Math.sin(a) * 0.18, 0.06 + (walking ? Math.max(0, Math.sin(t + ph)) * 0.06 : 0), z * 1.18];
+      // (on planted feet: diagonal pairs stepping together, a foot holding where it stands as the body goes over it)
+      for (const [x, z, ph] of [[0.48, 0.42, 0], [0.48, -0.42, 0.5], [-0.48, 0.42, 0.5], [-0.48, -0.42, 0]] as Array<[number, number, number]>) {
+        const rest: [number, number, number] = [x, 0.06, z * 1.18];
+        const foot = walking ? footAt(rest, p.phase + ph, 0.09, 0.06) : rest;
         b.limb([x, 0.42, z], foot, 0.14, hide, 0.12);
         b.cylinder(0.15, 0.17, 0.2, [(x + foot[0]) / 2, 0.24, (z + foot[2]) / 2], IRON, undefined, 8); // greave
         b.cylinder(0.16, 0.16, 0.03, [(x + foot[0]) / 2, 0.35, (z + foot[2]) / 2], BRASS, undefined, 8);
@@ -280,7 +282,6 @@ const greatSiegeHeron: FenUnit = {
       const legLen = 1.15;
       // stilt legs: striding when walking, trailing behind in flight
       for (const z of [1, -1]) {
-        const a = walking ? Math.sin(t + (z > 0 ? 0 : Math.PI)) * 0.45 : 0;
         const hip: [number, number, number] = [-0.05, 1.3 + lift, 0.16 * z];
         if (landing) {
           // legs swung forward and down, toes spread to catch the ground
@@ -305,8 +306,10 @@ const greatSiegeHeron: FenUnit = {
           b.limb(hip, [-0.75, 1.2 + lift, 0.12 * z], 0.04, heronLeg, 0.03);
           b.limb([-0.75, 1.2 + lift, 0.12 * z], [-1.35, 1.15 + lift, 0.1 * z], 0.03, heronLeg, 0.025);
         } else {
-          const knee: [number, number, number] = [hip[0] + Math.sin(a) * legLen * 0.5, hip[1] - legLen * 0.55, hip[2]];
-          const foot: [number, number, number] = [knee[0] + Math.sin(a * 0.4) * legLen * 0.5 - 0.05, 0.04, hip[2]];
+          // (walking, on planted feet; the joint between, its ankle, bending backward as a bird's does)
+          const rest: [number, number, number] = [-0.05, 0.04, hip[2]];
+          const foot = walking ? footAt(rest, p.phase + (z > 0 ? 0 : 0.5), 0.3, 0.16) : rest;
+          const knee = jointBetween(hip, foot, legLen * 0.55, legLen * 0.52, [-1, 0, 0]);
           b.limb(hip, knee, 0.045, heronLeg, 0.035);
           b.limb(knee, foot, 0.035, heronLeg, 0.028);
           for (const tz of [-0.08, 0, 0.08]) b.limb(foot, [foot[0] + 0.22, 0.02, foot[2] + tz * 1.5], 0.015, heronLeg); // splayed toes
