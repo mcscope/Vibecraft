@@ -547,56 +547,9 @@ function drawDragonFly(b: ModelBuilder, p: Pose, mass: number): void {
   }, LOOK.dragon.scale(mass));
 }
 
-/**
- * The mother, built around her thorax (the model's origin, so she turns from there): a hard thorax carrying all six
- * legs and a cluster of eggs, a head in front, and a swollen abdomen dragging behind with a cavity on each side.
- */
+/** The mothers: one creature at three sizes (the user's picks): T1 and T2 the T3 simplified, smaller and crawling. */
 function mother(b: ModelBuilder, p: Pose, mass: number, tier: 1 | 2 | 3 = 1): void {
-  if (tier === 3) { motherT3(b, p, mass); return; }
-  if (tier === 2) { motherT3(b, p, mass, T2_MOTHER); return; } // (a smaller, simpler, crawling her: the user's pick, T2a)
-  const W = 1, H = 1, legR = 1; // (the T1 mother, until her new form is chosen)
-  const shell: Mat = { color: '#7a5a3a', tex: 'leather', rough: 0.4 }; // thorax, head, legs: hard
-  const belly: Mat = { color: '#e8d8b0', tex: 'skin', rough: 0.6 }; // the abdomen: soft, swollen
-  const band: Mat = { color: '#c4ac80', tex: 'skin', rough: 0.6 };
-  const dark: Mat = { color: '#2e1e18', tex: 'skin', rough: 0.95 };
-  const eggMat: Mat = { color: '#f4f1e8', tex: 'none', rough: 0.85 };
-  const t = p.phase * TAU, walking = p.anim === 'walk';
-  const sway = walking ? Math.sin(t) * 0.06 : 0;
-  b.joint([0, 0, 0], [0, 0, 0], (c) => {
-    // thorax at the origin
-    c.sphere([0.17, 0.14, 0.16], [0, 0.22, 0], shell);
-    // head, in front, with mandibles
-    c.sphere([0.11, 0.1, 0.11], [0.22, 0.21, 0], shell);
-    for (const z of [1, -1]) {
-      c.sphere(0.022, [0.3, 0.25, z * 0.07], { color: '#111111' });
-      c.cone(0.025, 0.09, [0.34, 0.16, z * 0.04], shell, [0, z * 0.5, -Math.PI / 2], 6);
-    }
-    // six legs, all off the thorax: short and spread wide, a tripod gait
-    for (const [x, ph, fx] of [[0.08, 0, 0.16], [0, 0.5, 0], [-0.08, 0, -0.16]] as const) for (const z of [1, -1]) {
-      // (on planted feet: a tripod, each foot holding where it stands while she goes over it)
-      const hip: V3 = [x, 0.2 * H, z * 0.12 * W], kneeRest: V3 = [x + fx * 0.5, 0.26 * H, z * 0.3 * W], rest: V3 = [x + fx, 0, z * 0.46 * W];
-      const foot = walking ? footAt(rest, p.phase + ph + (z > 0 ? 0 : 0.5), 0.05, 0.04) : rest;
-      const knee = jointBetween(hip, foot, span(hip, kneeRest), span(kneeRest, rest), [0, 1, z]);
-      c.limb(hip, knee, 0.032 * legR, shell, 0.027 * legR);
-      c.limb(knee, foot, 0.027 * legR, shell, 0.016 * legR);
-    }
-    // eggs clustered on the thorax
-    const eggs = 7;
-    for (let k = 0; k < eggs; k++) {
-      const a = (k / eggs) * TAU, r = k === 0 ? 0 : 0.08 * W, up = k === 0 ? 0.04 : 0;
-      c.sphere([0.045, 0.06, 0.045], [Math.cos(a) * r - 0.02, 0.39 * H + up, Math.sin(a) * r], eggMat);
-    }
-    // the swollen abdomen, dragging behind, banded, a cavity on each side
-    c.joint([-0.12, 0.23 * H, 0], [0, sway, 0], (ab) => { // its belly on the ground
-      ab.sphere([0.4, 0.25 * H, 0.28 * W], [-0.36, 0, 0], belly);
-      for (const x of [-0.14, -0.32, -0.5]) ab.sphere([0.025, 0.26 * H, 0.29 * W], [x, 0, 0], band);
-      // a cavity on each side (T2: two on each side)
-      for (const cx of [-0.34]) for (const z of [1, -1]) {
-        ab.sphere([0.08, 0.07, 0.03], [cx, 0.02, z * 0.27 * W], dark);
-        ab.cylinder(0.085, 0.085, 0.02, [cx, 0.02, z * 0.265 * W], { team: 'primary', tex: 'skin' }, [Math.PI / 2, 0, 0], 14); // the rim, in her side's colour
-      }
-    });
-  }, LOOK.mother.scale(mass));
+  motherT3(b, p, mass, tier === 3 ? {} : tier === 2 ? T2_MOTHER : T1_MOTHER);
 }
 
 
@@ -693,6 +646,8 @@ function motherHead(h: ModelBuilder, style: MotherHead, crestK: number, plate: M
  *  wasp's waist before it, how many legs she stands on (2: upright on her hind pair, forelegs as mantis arms), her head's size. */
 export interface MotherForm { pitch?: number; curl?: number; abdomen?: number; waist?: boolean; legs?: 2 | 4 | 6; head?: number; girth?: number; neck?: number; crest?: number; headStyle?: MotherHead; detail?: number; crawl?: number; fore?: number }
 /** The T2 mother: the T3 simplified and made smaller, crawling (concept T2a, the user's), her forelegs tucked in. */
+/** The T1 mother: the plainest and smallest, low on four sprawled legs, no crest but its stub (concept T1a, the user's). */
+const T1_MOTHER: MotherForm = { legs: 4, pitch: -0.3, curl: 0.05, abdomen: 0.8, crest: 0.25, detail: 0.2, crawl: 0.9, fore: 0.65 };
 const T2_MOTHER: MotherForm = { legs: 4, pitch: -0.7, curl: 0.3, abdomen: 1.0, crest: 0.6, detail: 0.6, crawl: 0.6, fore: 0.65 };
 
 export type MotherHead = 'duck' | 'hammer' | 'shovel' | 'helmet' | 'mantis' | 'frill' | 'mantisFrill' | 'shortShovel';
