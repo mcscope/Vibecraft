@@ -604,9 +604,63 @@ function mother(b: ModelBuilder, p: Pose, mass: number, tier: 1 | 2 | 3 = 1): vo
  * long chitin-plated body running back into a segmented tail, a raised neck and a head with the long tube crest
  * sweeping back; cavities on the sides of the abdomen, eggs on the thorax. Built around the thorax.
  */
+/** The T3 mother's head, in one of its styles (concepts), facing +x: duck-billed (hers), hammerhead, shovel snout, armoured helmet, mantis, frilled. */
+function motherHead(h: ModelBuilder, style: MotherHead, crestK: number, plate: Mat, under: Mat): void {
+  type V = [number, number, number];
+  const eye: Mat = { color: '#111111', rough: 0.1 };
+  const crestTube = (pts: number[][]) => h.loft(pts.map(([x, y, r]) => ({ at: [x * crestK, y * crestK, 0] as V, w: r * 0.8, up: r, down: r })), plate);
+  const mandibles = (x: number, y: number, len: number) => { for (const z of [1, -1]) h.cone(0.02, len, [x, y, z * 0.06], plate, [0, z * 0.5, -Math.PI / 2], 5); };
+  if (style === 'duck') {
+    // flattened, broad and low like a duck-billed dinosaur's: a wide skull flattening into a broad bill; a long crest tube
+    h.loft([{ at: [-0.1, 0, 0], w: 0.08, up: 0.06, down: 0.05 }, { at: [0.06, 0.01, 0], w: 0.15, up: 0.07, down: 0.05, flat: 0.4 }, { at: [0.22, -0.01, 0], w: 0.13, up: 0.045, down: 0.04, flat: 0.6 }, { at: [0.36, -0.03, 0], w: 0.12, up: 0.022, down: 0.022, flat: 0.8 }, { at: [0.42, -0.035, 0], w: 0.08, up: 0.012, down: 0.012, flat: 0.8 }], plate);
+    h.loft([{ at: [0.12, -0.05, 0], w: 0.1, up: 0.015, down: 0.02 }, { at: [0.32, -0.065, 0], w: 0.1, up: 0.012, down: 0.015, flat: 0.6 }, { at: [0.4, -0.065, 0], w: 0.06, up: 0.008, down: 0.01 }], under);
+    for (const z of [1, -1]) h.sphere([0.03, 0.026, 0.02], [0.08, 0.05, z * 0.13], eye);
+    mandibles(0.4, -0.07, 0.1);
+    crestTube([[0.0, 0.05, 0.045], [-0.18, 0.15, 0.05], [-0.38, 0.26, 0.045], [-0.56, 0.34, 0.038], [-0.7, 0.38, 0.026], [-0.76, 0.39, 0.012]]);
+  } else if (style === 'hammer') {
+    // a hammerhead: a wide flat bar across her face, eyes out at its ends; a short swept crest
+    h.loft([{ at: [-0.08, 0, 0], w: 0.07, up: 0.06, down: 0.05 }, { at: [0.06, 0, 0], w: 0.1, up: 0.06, down: 0.05 }, { at: [0.16, -0.01, 0], w: 0.08, up: 0.04, down: 0.04 }], plate);
+    h.joint([0.16, 0, 0], [Math.PI / 2, 0, 0], (bar) => bar.loft([-0.32, -0.2, 0, 0.2, 0.32].map((x, i) => ({ at: [0, x, 0] as V, w: i % 4 === 0 ? 0.04 : 0.08, up: 0.022, down: 0.022, flat: 0.7 })), plate));
+    for (const z of [1, -1]) h.sphere([0.04, 0.04, 0.035], [0.17, 0.01, z * 0.33], eye);
+    mandibles(0.24, -0.04, 0.09);
+    crestTube([[0.0, 0.05, 0.04], [-0.16, 0.13, 0.035], [-0.3, 0.17, 0.02], [-0.36, 0.18, 0.008]]);
+  } else if (style === 'shovel') {
+    // a long, flat, narrow snout like a gharial's or a pterosaur's; a crest running back off the skull
+    h.loft([{ at: [-0.1, 0.01, 0], w: 0.08, up: 0.07, down: 0.05 }, { at: [0.04, 0.01, 0], w: 0.1, up: 0.06, down: 0.05 }, { at: [0.2, -0.01, 0], w: 0.05, up: 0.03, down: 0.03, flat: 0.5 }, { at: [0.5, -0.03, 0], w: 0.04, up: 0.02, down: 0.02, flat: 0.6 }, { at: [0.62, -0.035, 0], w: 0.05, up: 0.012, down: 0.012, flat: 0.8 }], plate);
+    for (let x = 0.24; x < 0.6; x += 0.06) for (const z of [1, -1]) h.cone(0.006, 0.03, [x, -0.05, z * 0.035], under, [Math.PI, 0, 0], 4); // a row of teeth
+    for (const z of [1, -1]) h.sphere([0.028, 0.03, 0.02], [0.02, 0.06, z * 0.085], eye);
+    crestTube([[-0.02, 0.06, 0.03], [-0.2, 0.1, 0.05], [-0.42, 0.1, 0.035], [-0.56, 0.08, 0.01]]);
+  } else if (style === 'helmet') {
+    // an armoured casque: a rounded helmet of a skull, a heavy beak, overlapping plates sweeping back as its crest
+    h.loft([{ at: [-0.14, 0.02, 0], w: 0.09, up: 0.08, down: 0.05 }, { at: [0.02, 0.03, 0], w: 0.14, up: 0.12, down: 0.06, flat: 0.2 }, { at: [0.16, 0, 0], w: 0.1, up: 0.07, down: 0.05 }, { at: [0.28, -0.04, 0], w: 0.04, up: 0.035, down: 0.04, keel: 0.6 }], plate);
+    for (let i = 0; i < 4; i++) h.loft([0, 1, 2].map((k) => ({ at: [-0.02 - i * 0.12 - k * 0.06, 0.13 + i * 0.05 + k * 0.01, 0] as V, w: 0.07 - i * 0.012, up: 0.03, down: 0.01, flat: 0.4 })), i % 2 ? under : plate); // the plates
+    for (const z of [1, -1]) h.sphere([0.025, 0.022, 0.02], [0.12, 0.04, z * 0.1], eye);
+    mandibles(0.28, -0.07, 0.08);
+  } else if (style === 'mantis') {
+    // a mantis's: a broad triangle, wide across the top where great eyes bulge at its corners, narrowing to heavy mandibles
+    h.loft([{ at: [-0.06, 0.02, 0], w: 0.06, up: 0.05, down: 0.04 }, { at: [0.02, 0.03, 0], w: 0.17, up: 0.07, down: 0.05, flat: 0.4 }, { at: [0.14, -0.02, 0], w: 0.08, up: 0.05, down: 0.04 }, { at: [0.24, -0.06, 0], w: 0.03, up: 0.03, down: 0.03 }], plate);
+    for (const z of [1, -1]) {
+      h.sphere([0.07, 0.07, 0.065], [0.04, 0.06, z * 0.17], { color: '#2a3a18', rough: 0.2, metal: 0.3 });
+      h.limb([0.03, 0.08, z * 0.03], [-0.1, 0.36, z * 0.1], 0.008, plate, 0.004); // antennae
+    }
+    for (const z of [1, -1]) { h.limb([0.2, -0.06, z * 0.05], [0.34, -0.1, z * 0.07], 0.025, plate, 0.018); h.limb([0.34, -0.1, z * 0.07], [0.4, -0.08, -z * 0.02], 0.018, plate, 0.006); }
+    crestTube([[0.0, 0.08, 0.03], [-0.12, 0.16, 0.025], [-0.22, 0.2, 0.01]]);
+  } else {
+    // frilled: a flattened skull and beak, and behind it a broad fan of a frill, ribbed, like a ceratopsian's
+    h.loft([{ at: [-0.1, 0, 0], w: 0.08, up: 0.06, down: 0.05 }, { at: [0.06, 0.01, 0], w: 0.12, up: 0.07, down: 0.05, flat: 0.3 }, { at: [0.22, -0.02, 0], w: 0.07, up: 0.04, down: 0.04 }, { at: [0.32, -0.05, 0], w: 0.03, up: 0.025, down: 0.03, keel: 0.6 }], plate);
+    h.joint([-0.06, 0.06, 0], [0, 0, 0.9], (f) => {
+      f.sphere([0.04, 0.3 * crestK, 0.34 * crestK], [0, 0.12 * crestK, 0], under); // the frill
+      for (let k = -3; k <= 3; k++) f.limb([0.01, 0, 0], [0.02, (0.12 + 0.28 * Math.cos(k * 0.4)) * crestK, k * 0.1 * crestK], 0.012, plate, 0.006); // its ribs
+    });
+    for (const z of [1, -1]) h.sphere([0.025, 0.024, 0.02], [0.12, 0.05, z * 0.1], eye);
+    mandibles(0.3, -0.07, 0.08);
+  }
+}
+
 /** A variation on the T3 mother's form (for concepts): how steeply her abdomen rises, how far it curls over, its size, a
  *  wasp's waist before it, how many legs she stands on (2: upright on her hind pair, forelegs as mantis arms), her head's size. */
-export interface MotherForm { pitch?: number; curl?: number; abdomen?: number; waist?: boolean; legs?: 2 | 4 | 6; head?: number; girth?: number; neck?: number; crest?: number }
+export interface MotherForm { pitch?: number; curl?: number; abdomen?: number; waist?: boolean; legs?: 2 | 4 | 6; head?: number; girth?: number; neck?: number; crest?: number; headStyle?: MotherHead }
+export type MotherHead = 'duck' | 'hammer' | 'shovel' | 'helmet' | 'mantis' | 'frill';
 
 function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): void {
   // (her form: the scorpion curl, the user's pick, its abdomen bigger)
@@ -616,7 +670,7 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
   const dark: Mat = { color: '#241812', tex: 'skin', rough: 0.95 };
   const t = p.phase * TAU, walking = p.anim === 'walk';
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
-    const y0 = 0.55;
+    const y0 = 0.42; // (her body low)
     // thorax: a sculpted, keeled segment, plated over the top, a ridge of short spines down it
     c.loft([[-0.2, 0.09, 0.08, 0.08, 0.2], [-0.08, 0.17, 0.15, 0.13, 0.5], [0.06, 0.16, 0.15, 0.12, 0.5], [0.16, 0.1, 0.1, 0.08, 0.3], [0.22, 0.05, 0.05, 0.05, 0]]
       .map(([x, w, u, d, keel]) => ({ at: [x, y0, 0] as V3, w, up: u, down: d, keel })), under);
@@ -668,24 +722,7 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
       const at: V3 = [from[0] + (to[0] - from[0]) * k, from[1] + (to[1] - from[1]) * k + 0.06, 0];
       c.cone(0.018, 0.06, at, plate, [0, 0, 0.5], 4);
     }
-    c.joint(head, [0, 0, 0], (hs) => hs.joint([0, 0, 0], [0, 0, 0], (h) => {
-      // a flattened head, broad and low like a duck-billed dinosaur's: a wide skull flattening into a broad bill
-      h.loft([
-        { at: [-0.1, 0, 0], w: 0.08, up: 0.06, down: 0.05 },
-        { at: [0.06, 0.01, 0], w: 0.15, up: 0.07, down: 0.05, flat: 0.4 },
-        { at: [0.22, -0.01, 0], w: 0.13, up: 0.045, down: 0.04, flat: 0.6 },
-        { at: [0.36, -0.03, 0], w: 0.12, up: 0.022, down: 0.022, flat: 0.8 },
-        { at: [0.42, -0.035, 0], w: 0.08, up: 0.012, down: 0.012, flat: 0.8 },
-      ], plate);
-      h.loft([{ at: [0.12, -0.05, 0], w: 0.1, up: 0.015, down: 0.02 }, { at: [0.32, -0.065, 0], w: 0.1, up: 0.012, down: 0.015, flat: 0.6 }, { at: [0.4, -0.065, 0], w: 0.06, up: 0.008, down: 0.01 }], under); // the lower bill
-      for (const z of [1, -1]) {
-        h.sphere([0.03, 0.026, 0.02], [0.08, 0.05, z * 0.13], { color: '#111111' }); // eyes at the skull's corners
-        h.cone(0.02, 0.1, [0.4, -0.07, z * 0.07], plate, [0, z * 0.5, -Math.PI / 2], 5); // mandibles
-      }
-      // the crest: one long hollow tube, tapering as it sweeps back from her brow
-      h.loft([[0.0, 0.05, 0.045], [-0.18, 0.15, 0.05], [-0.38, 0.26, 0.045], [-0.56, 0.34, 0.038], [-0.7, 0.38, 0.026], [-0.76, 0.39, 0.012]]
-        .map(([x, y, r]) => ({ at: [x * (o.crest ?? 1), y * (o.crest ?? 1), 0] as V3, w: r * 0.8, up: r, down: r })), plate);
-    }, o.head ?? 1));
+    c.joint(head, [0, 0, 0], (hs) => hs.joint([0, 0, 0], [0, 0, 0], (h) => motherHead(h, o.headStyle ?? 'duck', o.crest ?? 1, plate, under), o.head ?? 1));
     // four legs, all off the central thorax: the great hind pair just behind its middle, under the arched abdomen's
     // weight, the forelegs just ahead; her weight balanced between them
     for (const z of [1, -1]) {
@@ -697,10 +734,10 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
       // shaped, not pipes: a thigh swelling with muscle and tapering to the knee, a long flattened shin with a ridge
       // and a spur, knobbed joints, a clawed foot
       shapedLimb(c, hip, knee, 0.1, [0.6, 1.15, 1.35, 1.1, 0.7, 0.45], plate, { flat: 0.35, up: [0, 0, z] });
-      c.sphere([0.06, 0.055, 0.055], knee, under);
+      c.sphere([0.06, 0.055, 0.055], knee, plate);
       shapedLimb(c, knee, ankle, 0.07, [0.7, 1.0, 0.9, 0.7, 0.5], plate, { flat: 0.7, keel: 0.7, up: [-1, 0, 0] }); // (a broad blade of a shin)
       c.cone(0.02, 0.09, [knee[0] - 0.05, knee[1] - 0.03, knee[2]], plate, [0, 0, 2.2], 4); // the spur
-      c.sphere(0.04, ankle, under);
+      c.sphere(0.04, ankle, plate);
       shapedLimb(c, ankle, foot, 0.035, [0.9, 0.7, 0.6, 0.7], plate, { flat: 0.3 });
       for (const dz of [-0.04, 0, 0.04]) c.cone(0.016, 0.08, [foot[0] + 0.06, 0.012, foot[2] + dz], dark, [0, dz * 4, -Math.PI / 2], 4); // claws
       if (legs === 2) { // upright on her hind pair: her forelegs folded up as mantis arms
@@ -719,7 +756,7 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
       const ffoot = walking ? footAt(frest, ph + 0.5, 0.12, 0.05) : frest;
       const fk = jointBetween(fhip, ffoot, span(fhip, fkRest), span(fkRest, frest), [0.5, 1, z]);
       shapedLimb(c, fhip, fk, 0.07, [0.6, 1.15, 1.25, 0.95, 0.55], plate, { flat: 0.35, up: [0, 0, z] });
-      c.sphere(0.04, fk, under);
+      c.sphere(0.04, fk, plate);
       shapedLimb(c, fk, ffoot, 0.05, [0.7, 1.0, 0.85, 0.6, 0.4], plate, { flat: 0.7, keel: 0.6, up: [1, 0, 0] });
       for (const dz of [-0.03, 0.03]) c.cone(0.012, 0.06, [ffoot[0] + 0.04, 0.01, ffoot[2] + dz], dark, [0, dz * 4, -Math.PI / 2], 4);
     }
