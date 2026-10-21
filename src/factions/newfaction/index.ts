@@ -745,7 +745,7 @@ const groundAttacker3 = unit({ id: 'ground-attacker3', name: 'Goliath Charger', 
   attack: { style: 'strike', crystalMass: 8 }, description: 'T3: a hulking charger like a Hercules beetle, low and wide on massive legs, a great horn over a small one.', model: (b, p) => drawCharger(b, p, 600, GOLIATH) }, 'goliath');
 
 export const units: Unit[] = [
-  motherOf(1, 80), motherOf(2, 120), motherOf(3, 190),
+  motherOf(1, 80), motherOf(2, 120), motherOf(3, 500), // (the T3 mother weighs a lot more: the user's)
   egg(1, 15), egg(2, 30), egg(3, 45), larva1, larva2, larva3, cocoon,
   charger, micropike, flier, groundAttacker2, slinger, dragonFly, groundAttacker3,
 ];
