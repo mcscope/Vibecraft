@@ -123,20 +123,20 @@ function drawVee(b: ModelBuilder, p: Pose, mass: number): void {
       o.joint([0, 0.6, 0], [0, 0, diving && p.style !== 'swoop' ? -0.9 : 0], (c) => vee(c, diving ? 0 : 1, flap)); // (swooping: pulled out level, still folded)
       return;
     }
-    if (leaping && p.phase >= 0.3) {
+    if (leaping && p.phase >= 0.2) {
       // its leap: it flings its heavy crystal up, and the crystal hauls the body after it: the centre goes up first
       // while the joints it stood on unfold in turn (the inner ones as it leaves the ground, the outer ones as it
       // lifts), and over in a half loop, rolling upright at the top: away, the other way round from how it stood
-      const k = (p.phase - 0.3) / 0.7;
+      const k = (p.phase - 0.2) / 0.8;
       const loop = Math.PI * ease(k / 0.85), roll = Math.PI * ease((k - 0.5) / 0.5);
-      const legs: [number, number] = [1 - ease(k / 0.35), 1 - ease((k - 0.2) / 0.45)];
+      const legs: [number, number] = [1 - ease(k / 0.15), 1 - ease((k - 0.05) / 0.35)]; // (off the ground as it springs)
       o.joint([0, 0.3 + 0.5 * Math.sin(Math.min(Math.PI / 2, loop * 0.8)), 0], [0, Math.PI, 0], (yaw) => yaw.joint([0, 0, 0], [0, 0, loop], (pitch) =>
         pitch.joint([0, 0, 0], [roll, 0, 0], (c) => vee(c, ease((k - 0.2) / 0.5), 0, legs))));
       return;
     }
     // on the ground: standing on its wings (below). Crouching to leap: facing back the way it'll come round from,
     // squatting low on them
-    const crouch = leaping ? ease(p.phase / 0.3) : 0;
+    const crouch = leaping ? ease(p.phase / 0.2) : 0;
     if (leaping) { o.joint([0, 0, 0], [0, Math.PI, 0], (c) => c.joint([0, 0, 0], [0, 0, 0.25 * crouch], (s) => stand(s, 0.5 - 0.2 * crouch))); return; }
     stand(o, 0.5);
   }, LOOK.vee.scale(mass));

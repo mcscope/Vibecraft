@@ -87,10 +87,10 @@ export function diveAt(w: World, u: Unit, t: Unit, dt: number, face: (dx: number
   return false;
 }
 
-/** Seconds it crouches, winding up, before its legs spring it off the ground. */
-export const LAUNCH_WINDUP = 0.35;
-/** Seconds of its 'leap' pose: the wind-up, then the spring up to LAUNCH_HEIGHT. */
-export const LEAP_TIME = LAUNCH_WINDUP + LAUNCH_HEIGHT / CLIMB_RATE;
+/** Seconds it crouches, winding up, before its legs spring it off the ground (still, its feet planted). */
+export const LAUNCH_WINDUP = 0.25;
+/** Seconds of its 'leap' pose: the crouch (its first fifth), then the spring, away. Its pace builds through the spring. */
+export const LEAP_TIME = 1.25;
 /** How close (tiles) a bomber gets over its target before it drops. */
 export const BOMB_REACH = 0.6;
 /** Seconds a crystal takes to fall `h` metres. */
@@ -136,7 +136,8 @@ export function walks(w: World, u: Unit, gx: number, gy: number): boolean {
 /** Fly forward along its heading for a tick, staying on the map. */
 function glide(w: World, u: Unit, speed: number, dt: number, face: (dx: number, dy: number) => void): void {
   const cx = Math.cos(u.flyDir), cy = Math.sin(u.flyDir);
-  if (u.launchT <= LAUNCH_WINDUP) speed = 0; // (crouched, winding up to spring)
+  // crouched, winding up, it stays put (its feet planted); springing, its pace builds from nothing
+  if (u.launchT < LEAP_TIME) speed *= Math.max(0, (u.launchT - LAUNCH_WINDUP) / (LEAP_TIME - LAUNCH_WINDUP)) ** 2;
   u.x = Math.max(0.5, Math.min(w.grid.width - 0.5, u.x + cx * speed * dt));
   u.y = Math.max(0.5, Math.min(w.grid.height - 0.5, u.y + cy * speed * dt));
   face(cx, cy);
