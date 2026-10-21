@@ -473,6 +473,7 @@ export class Input {
       if (k === km.attackMove) { this.mode = 'attackMove'; return; }
       if (k === km.move) { this.mode = 'move'; return; }
       if (k === km.patrol) { this.mode = 'patrol'; return; }
+      if (k === km.tend) { this.hudCommand('tend'); return; }
       if (k === km.give) { this.mode = 'give'; return; }
       if (k === km.garrison) { this.mode = 'garrison'; return; }
       if (k === km.hold) { this.hudCommand('hold'); return; }

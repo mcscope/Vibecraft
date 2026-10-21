@@ -274,6 +274,8 @@ export interface ResourceNode {
   sownBy?: number;
   /** A tree turned to food by a digesting unit (sim/abilities/digest.ts). */
   digested?: boolean;
+  /** Which tree it was (for its look): the id of the tree node it replaced. */
+  look?: number;
 }
 
 /**

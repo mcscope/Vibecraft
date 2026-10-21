@@ -318,6 +318,7 @@ export class Renderer {
         this.setFrame(sp, this.nodeSprite(n));
       }
       sp.visible = this.explored(n.x, n.y); // fog of war: not on the map until found
+      if (n.digested) { this.drawDigested(sp, n); continue; }
       if (n.tree) {
         // sown saplings grow into full trees
         if (n.growLeft !== undefined) sp.scale.set((0.35 + 0.65 * Math.min(1, (n.maxAmount - n.growLeft) / n.maxAmount)) / this.nodeSprite(n).q);
@@ -330,6 +331,48 @@ export class Renderer {
     }
     for (const [id, sp] of seen) if (!this.world.nodes.has(id)) { sp.destroy(); seen.delete(id); }
   }
+
+  /**
+   * A digested tree (sim/abilities/digest.ts): the tree it was, webbed over; once it's eaten past half, thick with web
+   * and weeping red. Painted on a copy of the tree's own picture, over its pixels only.
+   */
+  private drawDigested(sp: PixiSprite, n: ResourceNode): void {
+    const b = this.bank.biomeAt(n.x, n.y), look = n.look ?? n.id, tree = b.trees[look % b.trees.length];
+    const stage = n.amount > n.maxAmount * 0.5 ? 1 : 2;
+    const key = `${b.trees.indexOf(tree)}:${look % 97}:${stage}`;
+    let tex = this.digestedTex.get(key);
+    if (!tex) {
+      const c = document.createElement('canvas');
+      c.width = tree.sw; c.height = tree.sh;
+      const g = c.getContext('2d')!;
+      g.drawImage(tree.img, tree.sx, tree.sy, tree.sw, tree.sh, 0, 0, tree.sw, tree.sh);
+      g.globalCompositeOperation = 'source-atop'; // only over the tree itself
+      let seed = look * 9301 + 49297;
+      const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
+      const W = tree.sw, H = tree.sh, px = tree.q;
+      if (stage === 2) { g.fillStyle = 'rgba(235,235,230,0.35)'; g.fillRect(0, 0, W, H); } // a haze of web
+      g.strokeStyle = stage === 1 ? 'rgba(245,245,240,0.6)' : 'rgba(250,250,245,0.8)';
+      g.lineWidth = Math.max(1, px * 0.6);
+      for (let i = 0; i < (stage === 1 ? 14 : 34); i++) { // strands, and a few radial webs
+        const x0 = rnd() * W, y0 = rnd() * H * 0.8;
+        g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo(rnd() * W, rnd() * H * 0.8, rnd() * W, rnd() * H * 0.85); g.stroke();
+        if (i % 5 === 0) for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2, r = 6 * px + rnd() * 10 * px; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x0 + Math.cos(a) * r, y0 + Math.sin(a) * r); g.stroke(); }
+      }
+      if (stage === 2) { // weeping red
+        for (let i = 0; i < 12; i++) {
+          const x = rnd() * W, y = rnd() * H * 0.6, len = (8 + rnd() * 26) * px, w = (1.2 + rnd() * 1.6) * px;
+          const grad = g.createLinearGradient(x, y, x, y + len);
+          grad.addColorStop(0, 'rgba(150,10,20,0.95)'); grad.addColorStop(1, 'rgba(110,0,10,0.35)');
+          g.fillStyle = grad; g.fillRect(x - w / 2, y, w, len);
+          g.beginPath(); g.arc(x, y + len, w * 0.9, 0, Math.PI * 2); g.fillStyle = 'rgba(130,5,15,0.9)'; g.fill();
+        }
+      }
+      tex = Texture.from(c);
+      this.digestedTex.set(key, tex);
+    }
+    if (sp.texture !== tex) { sp.texture = tex; sp.anchor.set(tree.ax / tree.sw, tree.ay / tree.sh); sp.scale.set(1 / tree.q); }
+  }
+  private digestedTex = new Map<string, Texture>();
 
   private nodeSprite(n: ResourceNode): Sprite {
     if (n.shard) return this.bank.biome.shard;

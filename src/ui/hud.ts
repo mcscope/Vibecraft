@@ -536,7 +536,7 @@ export class Hud {
       ${this.hasBuildings() ? btn('resupply', 'Resupply', km.resupply, 'Resupply at the nearest stocked building, then return. Hold the key and click the ground to send them there afterwards.') : ''}
       ${btn('give', 'Give', km.give, 'Give surplus to a friendly unit (then click it)')}
       ${this.hasBuildings() ? btn('garrison', 'Garrison', km.garrison, 'Shelter inside one of your buildings (then click it). Throwers inside throw from cover. Only bodies that fit through a door (up to 150 kg): no mounts or beasts.') : ''}
-      ${this.tends(units) ? `<button data-cmd="tend" title="Tend the nest until told otherwise: carry food to whoever's waiting on it (an egg, a cocoon, a mother with an egg queued), gathering more in between.">${ICONS.tend}<span>Tend</span></button>` : ''}
+      ${this.tends(units) ? `<button data-cmd="tend" title="Tend the nest until told otherwise: carry food to whoever's waiting on it (an egg, a cocoon, a mother with an egg queued), gathering more in between.">${ICONS.tend}<span>Tend</span><kbd>${km.tend.toUpperCase()}</kbd></button>` : ''}
     </div>`;
   }
 

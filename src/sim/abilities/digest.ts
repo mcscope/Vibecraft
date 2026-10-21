@@ -13,7 +13,7 @@ export function runDigest(w: World, u: Unit, nodeId: number): boolean {
   const n = w.nodes.get(nodeId);
   if (!n || !n.tree) { w.finish(u); return false; }
   if (!w.moveTo(u, n.x, n.y, u.stats.radius + 0.9)) return u.x !== u.px || u.y !== u.py;
-  const food = w.replaceNode(n, { type: 'food', x: n.x, y: n.y, amount: n.amount, shard: false, tree: false, digested: true });
+  const food = w.replaceNode(n, { type: 'food', x: n.x, y: n.y, amount: n.amount, shard: false, tree: false, digested: true, look: n.look ?? n.id });
   w.units.delete(u.id);
   w.events.push({ type: 'digested', id: u.id, owner: u.owner, node: food.id, x: n.x, y: n.y });
   return false;
