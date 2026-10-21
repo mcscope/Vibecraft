@@ -234,7 +234,7 @@ export class Hud {
       const elsewhere = stock[r] - base[r];
       this.resEls[r].innerHTML = `${have(base[r])}${elsewhere >= 1 ? ` <small>(+${have(elsewhere)})</small>` : ''}`;
     }
-    const idle = w.unitsOf(this.player).filter((u) => u.specId === w.factionOf(this.player).workerId && u.order.kind === 'idle').length;
+    const idle = w.unitsOf(this.player).filter((u) => w.idleWorker(u)).length;
     this.resEls.idle.textContent = `${idle}`;
     this.resEls.idle.parentElement!.classList.toggle('none', idle === 0);
     this.resEls.pop.textContent = `${w.unitsOf(this.player).length}`;

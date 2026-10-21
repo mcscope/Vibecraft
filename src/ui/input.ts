@@ -541,8 +541,7 @@ export class Input {
 
   /** Select the next idle worker and jump the camera to it. */
   nextIdleWorker(): void {
-    const wid = this.world.factionOf(this.player).workerId;
-    const idle = this.world.unitsOf(this.player).filter((u) => u.specId === wid && u.order.kind === 'idle');
+    const idle = this.world.unitsOf(this.player).filter((u) => this.world.idleWorker(u));
     if (!idle.length) return;
     const u = idle[this.idleCursor++ % idle.length];
     this.setSelection([u.id]);

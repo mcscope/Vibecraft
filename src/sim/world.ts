@@ -1866,6 +1866,12 @@ export class World {
   /** Can this unit gather `r` (any resource if omitted)? Ammo bearers gather crystal only, and keep it. */
   gathers(u: Unit, r?: ResourceKind): boolean { return bearerAbility.gathers(this, u, r); }
 
+  /** An idle worker (for the idle count and the next-idle key): its side's worker, or anything that gathers and doesn't fight (a larva), standing idle; not carts or bearers. */
+  idleWorker(u: Unit): boolean {
+    if (u.order.kind !== 'idle' || u.carter || this.isBearer(u)) return false;
+    return u.specId === this.factionOf(u.owner).workerId || (this.gathers(u) && !u.stats.canAttack);
+  }
+
   /** A dry thrower's nearest crystal: a spent one on the ground, or a bearer to take from. Sets a detour/order; false if none. */
   private seekAmmo(u: Unit, detour: boolean): boolean {
     if (u.stats.flight) {
