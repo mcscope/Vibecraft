@@ -344,9 +344,17 @@ export class Renderer {
     if (!tex) {
       const c = document.createElement('canvas');
       c.width = tree.sw; c.height = tree.sh;
-      const g = c.getContext('2d')!;
-      g.drawImage(tree.img, tree.sx, tree.sy, tree.sw, tree.sh, 0, 0, tree.sw, tree.sh);
-      g.globalCompositeOperation = 'source-atop'; // only over the tree itself
+      const base = c.getContext('2d', { willReadFrequently: true })!;
+      base.drawImage(tree.img, tree.sx, tree.sy, tree.sw, tree.sh, 0, 0, tree.sw, tree.sh);
+      // the web goes on the tree only, not its shadow (baked in, half see-through): a mask of its solid pixels
+      const mask = document.createElement('canvas');
+      mask.width = tree.sw; mask.height = tree.sh;
+      const px0 = base.getImageData(0, 0, tree.sw, tree.sh);
+      for (let i = 3; i < px0.data.length; i += 4) px0.data[i] = px0.data[i] > 230 ? 255 : 0;
+      mask.getContext('2d')!.putImageData(px0, 0, 0);
+      const web = document.createElement('canvas');
+      web.width = tree.sw; web.height = tree.sh;
+      const g = web.getContext('2d')!;
       let seed = look * 9301 + 49297;
       const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
       const W = tree.sw, H = tree.sh, px = tree.q, heavy = stage === 2;
@@ -389,6 +397,8 @@ export class Renderer {
           g.beginPath(); g.arc(x, y + len, w * 0.9, 0, Math.PI * 2); g.fillStyle = 'rgba(130,5,15,0.9)'; g.fill();
         }
       }
+      g.globalCompositeOperation = 'destination-in'; g.drawImage(mask, 0, 0); // only over the tree itself
+      base.drawImage(web, 0, 0);
       tex = Texture.from(c);
       this.digestedTex.set(key, tex);
     }
