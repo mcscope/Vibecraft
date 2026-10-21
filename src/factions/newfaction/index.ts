@@ -615,72 +615,76 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number): void {
     // thorax at the origin, plated
     c.sphere([0.2, 0.16, 0.17], [0, y0, 0], plate);
     c.sphere([0.16, 0.08, 0.13], [0, y0 - 0.1, 0], under);
-    // the abdomen: huge against her thin neck and legs, one sculpted shape. A ratite's chest: broad, high shoulders
-    // whose sides fall steeply to a deep keel under the breast (a chicken's breast), the topline arching smoothly
-    // back and the whole body tapering naturally away into the tail. Plated over the top, cavities on its sides
-    const shape: [number, number, number, number, number][] = [ // x, half-width, up, down, keel
-      [0.0, 0.13, 0.12, 0.1, 0.3],
-      [-0.14, 0.3, 0.21, 0.3, 0.75],
-      [-0.32, 0.39, 0.28, 0.42, 0.85],
-      [-0.52, 0.41, 0.31, 0.34, 0.6],
-      [-0.72, 0.36, 0.29, 0.24, 0.4],
-      [-0.94, 0.28, 0.24, 0.17, 0.25],
-      [-1.1, 0.17, 0.15, 0.1, 0.1],
-      [-1.2, 0.06, 0.06, 0.05, 0], // (no tail: her body rounds off behind)
+    // the abdomen: a clearly enlarged brood abdomen, arched up into the air behind her thorax so its weight rides over
+    // her legs: one sculpted shape, broad and keeled, plated over the top, cavities on its sides, curling over at its
+    // end. (Part dinosaur, part insect: it balances like a great tail held high.)
+    const shape: [number, number, number, number, number][] = [ // along it, half-width, up, down, keel
+      [0.0, 0.12, 0.1, 0.09, 0.3],
+      [-0.12, 0.25, 0.18, 0.24, 0.7],
+      [-0.28, 0.32, 0.23, 0.32, 0.8],
+      [-0.45, 0.33, 0.25, 0.28, 0.6],
+      [-0.62, 0.28, 0.22, 0.2, 0.4],
+      [-0.78, 0.18, 0.15, 0.12, 0.15],
+      [-0.88, 0.06, 0.06, 0.05, 0],
     ];
-    const along = (x: number): [number, number] => { // (her tail's droop and sway, growing toward its tip)
-      const k = Math.max(0, (-0.9 - x) / 1.4);
-      return [-0.16 * k * k, walking ? Math.sin(t - x * 2.5) * 0.09 * k * k : 0];
+    // (its curl: rising behind her, its end curling over and down; swaying a little as she walks)
+    const centre = (x: number, up: number, dy = 0): [number, number, number] => {
+      const k = -x / 0.88;
+      return [x, up * 0.15 - 0.22 * k * k + dy, walking ? Math.sin(t + x * 3) * 0.04 * k * k : 0];
     };
-    const centre = (x: number, up: number, dy = 0): [number, number, number] => { const [dr, sw] = along(x); return [x, y0 + up * 0.15 + dr + dy, sw]; };
-    c.loft(shape.map(([x, w, up, down, keel]) => ({ at: centre(x, up), w, up, down, keel })), under);
-    // the carapace: plates over the top, each a little proud of the last, their edges along her flanks, smaller and
-    // closer down the tail
-    for (const [from, to] of [[0, 3], [2, 5], [4, 7]] as const) {
-      c.loft(shape.slice(from, to + 1).map(([x, w, up, , keel], i, all) => {
-        const end = i === 0 || i === all.length - 1 ? 0.6 : 1; // (each plate's ends tuck in)
-        return { at: centre(x, up, 0.02), w: w * 1.04 * end, up: (up + 0.015) * end, down: 0.04 * (w / 0.3), keel, flat: 0.15 };
-      }), plate);
-    }
-    for (const [x, rz] of [[-0.32, 0.39], [-0.66, 0.37]] as const) for (const z of [1, -1]) {
-      c.sphere([0.075, 0.07, 0.03], [x, y0 + 0.03, z * rz], dark);
-      c.cylinder(0.08, 0.08, 0.018, [x, y0 + 0.03, z * (rz - 0.005)], { team: 'primary', tex: 'skin' }, [Math.PI / 2, 0, 0], 12);
-    }
-    // neck, head and its crest: the long tube sweeping back
-    const head: [number, number, number] = [0.42, y0 + 0.42, 0];
-    c.limb([0.14, y0 + 0.05, 0], head, 0.09, plate, 0.06);
-    c.sphere([0.12, 0.07, 0.07], [head[0] + 0.06, head[1], 0], plate);
-    c.cone(0.05, 0.12, [head[0] + 0.2, head[1] - 0.02, 0], plate, [0, 0, -Math.PI / 2], 8); // beak
-    for (const z of [1, -1]) {
-      c.sphere(0.02, [head[0] + 0.1, head[1] + 0.03, z * 0.055], { color: '#111111' });
-      c.cone(0.018, 0.07, [head[0] + 0.2, head[1] - 0.06, z * 0.03], plate, [0, z * 0.4, -Math.PI / 2], 5); // mandibles
-    }
-    c.limb([head[0] + 0.04, head[1] + 0.06, 0], [head[0] - 0.42, head[1] + 0.28, 0], 0.04, plate, 0.03); // the crest
+    c.joint([-0.12, y0 + 0.08, 0], [0, 0, -0.75 + (walking ? Math.sin(t * 2) * 0.03 : 0)], (ab) => {
+      ab.loft(shape.map(([x, w, up, down, keel]) => ({ at: centre(x, up), w, up, down, keel })), under);
+      for (const [from, to] of [[0, 3], [2, 5], [4, 6]] as const) {
+        ab.loft(shape.slice(from, to + 1).map(([x, w, up, , keel], i, all) => {
+          const end = i === 0 || i === all.length - 1 ? 0.6 : 1; // (each plate's ends tuck in)
+          return { at: centre(x, up, 0.02), w: w * 1.04 * end, up: (up + 0.015) * end, down: 0.04 * (w / 0.3), keel, flat: 0.15 };
+        }), plate);
+      }
+      for (const [x, rz] of [[-0.3, 0.31], [-0.56, 0.27]] as const) for (const z of [1, -1]) {
+        const at = centre(x, 0.2);
+        ab.sphere([0.065, 0.06, 0.03], [x, at[1], z * rz], dark);
+        ab.cylinder(0.07, 0.07, 0.018, [x, at[1], z * (rz - 0.005)], { team: 'primary', tex: 'skin' }, [Math.PI / 2, 0, 0], 12);
+      }
+    });
+    // neck, and a big head with its great crest sweeping back
+    const head: [number, number, number] = [0.46, y0 + 0.5, 0];
+    c.limb([0.14, y0 + 0.05, 0], [0.3, y0 + 0.3, 0], 0.1, plate, 0.08);
+    c.limb([0.3, y0 + 0.3, 0], head, 0.08, plate, 0.07);
+    c.joint(head, [0, 0, 0], (h) => {
+      h.sphere([0.2, 0.11, 0.11], [0.08, 0, 0], plate);
+      h.cone(0.08, 0.2, [0.34, -0.03, 0], plate, [0, 0, -Math.PI / 2], 8); // beak
+      for (const z of [1, -1]) {
+        h.sphere(0.032, [0.16, 0.05, z * 0.085], { color: '#111111' });
+        h.cone(0.028, 0.12, [0.34, -0.1, z * 0.05], plate, [0, z * 0.4, -Math.PI / 2], 5); // mandibles
+      }
+      // the crest: a long, curving hollow tube sweeping back from her brow
+      h.limb([0.06, 0.09, 0], [-0.3, 0.3, 0], 0.07, plate, 0.06);
+      h.limb([-0.3, 0.3, 0], [-0.66, 0.42, 0], 0.06, plate, 0.045);
+      h.sphere(0.05, [-0.66, 0.42, 0], under);
+    });
     // eggs on the thorax
     for (let k = 0; k < 9; k++) {
       const a = (k / 9) * TAU, r = k === 0 ? 0 : 0.09;
       c.sphere([0.045, 0.06, 0.045], [Math.cos(a) * r - 0.04, y0 + 0.2 + (k === 0 ? 0.04 : 0), Math.sin(a) * r], eggMat);
     }
-    // big jointed hind legs, small forelegs: insect legs
+    // four legs, all off the central thorax: the great hind pair just behind its middle, under the arched abdomen's
+    // weight, the forelegs just ahead; her weight balanced between them
     for (const z of [1, -1]) {
-      // (on planted feet: each hind leg steps with the foreleg across from it)
-      const ph = p.phase + (z > 0 ? 0 : 0.5);
-      // (her weight is in the abdomen: the great hind legs stand under the middle of it, thick, set wide on her
-      // flanks; the forelegs bear the front under her thorax)
-      const hip: V3 = [-0.46, y0 - 0.02, z * 0.3], kneeRest: V3 = [-0.3, y0 + 0.14, z * 0.62], ankleRest: V3 = [-0.5, 0.2, z * 0.68], rest: V3 = [-0.42, 0, z * 0.7];
-      const foot = walking ? footAt(rest, ph, 0.1, 0.06) : rest;
+      const ph = p.phase + (z > 0 ? 0 : 0.5); // (each hind leg steps with the foreleg across from it)
+      const hip: V3 = [-0.1, y0 - 0.04, z * 0.16], kneeRest: V3 = [0.02, y0 + 0.12, z * 0.5], ankleRest: V3 = [-0.24, 0.2, z * 0.6], rest: V3 = [-0.16, 0, z * 0.62];
+      const foot = walking ? footAt(rest, ph, 0.12, 0.06) : rest;
       const ankle: V3 = [foot[0] + ankleRest[0] - rest[0], foot[1] + ankleRest[1], foot[2] + ankleRest[2] - rest[2]];
       const knee = jointBetween(hip, ankle, span(hip, kneeRest), span(kneeRest, ankleRest), [0.3, 1, z]);
-      c.limb(hip, knee, 0.12, plate, 0.09);
-      c.sphere([0.13, 0.11, 0.11], [(hip[0] + knee[0]) / 2, (hip[1] + knee[1]) / 2, (hip[2] + knee[2]) / 2], plate); // the thigh's bulk
-      c.limb(knee, ankle, 0.08, plate, 0.065);
-      c.limb(ankle, foot, 0.065, plate, 0.05);
+      c.limb(hip, knee, 0.11, plate, 0.085);
+      c.sphere([0.12, 0.1, 0.1], [(hip[0] + knee[0]) / 2, (hip[1] + knee[1]) / 2, (hip[2] + knee[2]) / 2], plate); // the thigh's bulk
+      c.limb(knee, ankle, 0.075, plate, 0.06);
+      c.limb(ankle, foot, 0.06, plate, 0.045);
       c.sphere([0.09, 0.04, 0.1], [foot[0] + 0.02, 0.03, foot[2]], plate); // a broad foot
-      const fhip: V3 = [0.06, y0 - 0.06, z * 0.12], fkRest: V3 = [0.2, y0 + 0.02, z * 0.3], frest: V3 = [0.3, 0, z * 0.36];
-      const ffoot = walking ? footAt(frest, ph + 0.5, 0.1, 0.04) : frest;
+      const fhip: V3 = [0.1, y0 - 0.06, z * 0.12], fkRest: V3 = [0.24, y0 + 0.02, z * 0.34], frest: V3 = [0.36, 0, z * 0.4];
+      const ffoot = walking ? footAt(frest, ph + 0.5, 0.12, 0.05) : frest;
       const fk = jointBetween(fhip, ffoot, span(fhip, fkRest), span(fkRest, frest), [0.5, 1, z]);
-      c.limb(fhip, fk, 0.06, plate, 0.05);
-      c.limb(fk, ffoot, 0.05, plate, 0.035);
+      c.limb(fhip, fk, 0.065, plate, 0.055);
+      c.limb(fk, ffoot, 0.055, plate, 0.04);
       c.sphere([0.06, 0.03, 0.07], [ffoot[0] + 0.02, 0.02, ffoot[2]], plate);
     }
   }, LOOK.mother.scale(mass));
