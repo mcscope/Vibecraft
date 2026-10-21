@@ -22,10 +22,10 @@ const TIER = { 1: '#5fae3a', 2: '#2fb8c4', 3: '#b04fb8' } as const;
 
 /**
  * Each look's drawn scale for a mass (a body's length grows with ∛ of its mass), and its footprint: the metres across
- * it's drawn, which is its collision size (UnitSpec.size), so bodies the sim keeps apart don't overlap on screen.
+ * it's drawn (a long body: how wide), which is its collision size (UnitSpec.size).
  */
 const LOOK = {
-  caterpillar: { scale: (m: number) => 1.2 * Math.cbrt(m / 15), length: 1.2 },
+  caterpillar: { scale: (m: number) => 1.2 * Math.cbrt(m / 15), length: 0.24 }, // (a long body: its collision circle is its width)
   egg: { scale: (m: number) => Math.cbrt(m / 15), length: 0.42 },
   bug: { scale: (m: number) => Math.cbrt(m / 40), length: 0.85 },
   winged: { scale: (m: number) => Math.cbrt(m / 40), length: 0.85 },
@@ -171,13 +171,13 @@ const unit = (u: Omit<Unit, 'description'> & { description?: string }, look?: ke
   ({ description: '', ...u, ...(look ? { size: footprint(look, u.mass) } : {}) }) as Unit; // collision as wide as it's drawn
 
 // the larvae: 35 / 70 / 140 food, work refinement = refinement
-const larva1 = unit({ id: 'larva1', name: 'T1 Larva', mass: 15, physique: LARVA, refinement: 1, workRefinement: 1, shell: 'cocoon',
+const larva1 = unit({ crawls: true, id: 'larva1', name: 'T1 Larva', mass: 15, physique: LARVA, refinement: 1, workRefinement: 1, shell: 'cocoon',
   becomes: ['larva2', 'charger', 'micropike', 'tree-worm', 'mother1'], description: 'A small green larva. Gathers, then changes into a T1 form.',
   model: (b, p) => caterpillar(b, p, TIER[1], 15) }, 'caterpillar');
-const larva2 = unit({ id: 'larva2', name: 'T2 Larva', mass: 60, physique: LARVA, refinement: 2, workRefinement: 2, shell: 'cocoon',
+const larva2 = unit({ crawls: true, id: 'larva2', name: 'T2 Larva', mass: 60, physique: LARVA, refinement: 2, workRefinement: 2, shell: 'cocoon',
   becomes: ['larva3', 'flier', 'ground-attacker2', 'slinger', 'mother2'], description: 'A medium cyan larva. Gathers, then changes into a T2 form.',
   model: (b, p) => caterpillar(b, p, TIER[2], 60) }, 'caterpillar');
-const larva3 = unit({ id: 'larva3', name: 'T3 Larva', mass: 179, physique: LARVA, refinement: 3, workRefinement: 3, shell: 'cocoon',
+const larva3 = unit({ crawls: true, id: 'larva3', name: 'T3 Larva', mass: 179, physique: LARVA, refinement: 3, workRefinement: 3, shell: 'cocoon',
   becomes: ['dragon-fly', 'ground-attacker3', 'mother3'], description: 'A big purple larva. Gathers, then changes into a T3 form.',
   model: (b, p) => caterpillar(b, p, TIER[3], 179) }, 'caterpillar');
 
@@ -200,7 +200,7 @@ const charger = unit({ id: 'charger', name: 'Charger', mass: 38, physique: { mus
   attack: { style: 'strike', crystalMass: 1.5 }, description: 'T1: a fast charging body.', model: (b, p) => bug(b, p, '#7fbf4a', 38, 'strike') }, 'bug');
 const micropike = unit({ id: 'micropike', name: 'Micropike', mass: 35, physique: { muscle: 0.45, frame: 0.4, reserve: 0.15 }, refinement: 2,
   attack: { style: 'strike', crystalMass: 0.8, shaft: 1.5 }, description: 'T1: micropikes.', model: (b, p) => bug(b, p, '#6aa84a', 35, 'pike') }, 'bug');
-const treeWorm = unit({ id: 'tree-worm', name: 'Tree Worm', mass: 20, physique: { muscle: 0.2, frame: 0.1, reserve: 0.7 }, refinement: 2, canGather: false,
+const treeWorm = unit({ crawls: true, id: 'tree-worm', name: 'Tree Worm', mass: 20, physique: { muscle: 0.2, frame: 0.1, reserve: 0.7 }, refinement: 2, canGather: false,
   digestsTrees: true, description: 'T1: turns a whole tree into food, and is absorbed into it.', model: (b, p) => caterpillar(b, p, '#8a9a3a', 20) }, 'caterpillar');
 const flier = unit({ id: 'flier', name: 'Flier', mass: 120, physique: { muscle: 0.5, frame: 0.25, reserve: 0.25 }, refinement: 3, flight: true,
   attack: { style: 'strike', crystalMass: 2 }, description: 'T2: a flier.', model: (b, p) => winged(b, p, '#2a9aa6', '#9fe6ee', 120) }, 'winged');

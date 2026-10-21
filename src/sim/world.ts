@@ -2321,6 +2321,8 @@ export class World {
     return (cx2 - u.x) ** 2 + (cy2 - u.y) ** 2 <= reach * reach;
   }
 
+  private crawls(u: Unit): boolean { return !!this.specOf(u.owner, u.specId)?.spec.crawls; }
+
   /** Soft collisions so crowds spread out. Heavier units push lighter ones. */
   private separate(): void {
     const arr = Array.from(this.units.values());
@@ -2329,6 +2331,7 @@ export class World {
       for (let j = i + 1; j < arr.length; j++) {
         const b = arr[j];
         if (a.airborne !== b.airborne) continue; // fliers pass overhead
+        if (this.crawls(a) && this.crawls(b)) continue; // soft bodies crawl over each other
         const dx = b.x - a.x, dy = b.y - a.y;
         // two fliers keep a little room for their wings (a quarter span apart: wings may overlap, one passing
         // above the other), aloft or landed; in the air that's all there is (no bodies to collide)
