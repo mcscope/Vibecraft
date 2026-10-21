@@ -299,29 +299,37 @@ function goliathBody(c: ModelBuilder, p: Pose, tint: string): void {
 }
 
 /**
- * The lasher's two whip arms (the user's design), from its shoulders: at rest held back along its torso; striking, the
- * near one lashes out round its side to its whole length straight ahead, unrolling segment by segment like a whip,
- * the crystal at its tip, and is drawn back in. `len`: the lash's length in its body's frame.
+ * The lasher's two whip arms (the user's design), from its shoulders: at rest held back along its torso in swaying S
+ * curves, their tips curling up, a wave running down them; striking, the near one lashes out round its side to its
+ * whole length straight ahead, unrolling segment by segment, rippling, its tip cracking over at full stretch, the
+ * crystal at its tip, and is drawn back in. `len`: the lash's length in its body's frame.
  */
 function whipArms(c: ModelBuilder, p: Pose, len: number, tint: string): void {
   type V = [number, number, number];
   const chitin: Mat = { color: '#1a2628', tex: 'leather', rough: 0.3, metal: 0.35 };
   const sheen: Mat = { color: tint, tex: 'leather', rough: 0.3, metal: 0.4 };
   const ease = (x: number) => { const k = Math.max(0, Math.min(1, x)); return k * k * (3 - 2 * k); };
-  const n = 10, seg = len / n, s = p.anim === 'attack' ? p.phase : 0;
-  // out and back: lashing out over the first half, drawn in over the rest
+  const n = 14, seg = len / n, s = p.anim === 'attack' ? p.phase : 0, t = p.phase * TAU;
+  // out and back: lashing out over the first half, drawn in over the rest; at full stretch the tip cracks over
   const out = s < 0.45 ? ease(s / 0.45) : 1 - ease((s - 0.45) / 0.55);
+  const crack = p.anim === 'attack' ? Math.sin(Math.max(0, Math.min(1, (s - 0.3) / 0.35)) * Math.PI) : 0;
+  const speed = p.anim === 'walk' ? 1 : 0.5; // (a wave runs down them, quicker on the move)
   for (const z of [1, -1]) {
     const lash = z > 0 ? out : 0; // (the near arm strikes; the other stays back)
+    const loose = 1 - lash; // (held back they curve and sway freely; lashing out they straighten, rippling)
     let at: V = [0.12, 0.03, z * 0.1];
     for (let i = 0; i < n; i++) {
-      // each segment swings from back along its side (π) round to straight ahead (0), the ones nearer the tip a beat later
-      const a = Math.PI * (1 - ease(lash * 1.35 - (i / n) * 0.35));
-      const rest = 1 - lash; // (held back, it hugs the torso, curling a little at the tip)
-      const dir: V = [Math.cos(a), 0.04 - rest * 0.02 * i, z * Math.sin(a) * (lash > 0.02 ? 1 : 0.18) + z * rest * 0.03];
+      const u = i / n;
+      // swung from back along its side (π) round to straight ahead (0), the ones nearer the tip a beat later
+      let a = Math.PI * (1 - ease(lash * 1.35 - u * 0.35));
+      // an S along its side when held, swaying, a wave running down it; a ripple chasing the lash out
+      a += z * (Math.sin(t * speed - u * 5 + (z > 0 ? 0 : Math.PI)) * (0.42 * loose + 0.12) + loose * 0.25 * Math.sin(u * Math.PI * 1.5));
+      // rising and falling as it goes: the tip curling up when held, cracking over at full stretch
+      const e = 0.1 * Math.sin(t * speed * 1.3 - u * 4) + loose * Math.max(0, u - 0.6) * 2.2 + crack * (z > 0 ? 1 : 0) * Math.max(0, u - 0.65) * 4;
+      const dir: V = [Math.cos(a) * Math.cos(e), Math.sin(e), z * Math.sin(a) * Math.cos(e) * (lash > 0.02 ? 1 : 0.3)];
       const l = Math.hypot(...dir), next: V = [at[0] + (dir[0] / l) * seg, at[1] + (dir[1] / l) * seg, at[2] + (dir[2] / l) * seg];
-      const r = 0.03 * (1 - i / (n + 2));
-      c.limb(at, next, r, i % 3 === 2 ? sheen : chitin, r * 0.9);
+      const r = 0.032 * (1 - u * 0.75);
+      c.limb(at, next, r, i % 3 === 2 ? sheen : chitin, 0.032 * (1 - (i + 1) / n * 0.75));
       at = next;
     }
     if (p.armed && z > 0) c.crystal(0.14, at, [0, 0, -Math.PI / 2 + (1 - out) * Math.PI]); // the crystal at the near lash's tip
