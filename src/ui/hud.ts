@@ -19,7 +19,7 @@ export interface HudActions {
   research(buildingId: number, techId: string): void;
   cancelTrain(buildingId: number, index?: number): void;
   select(ids: number[]): void;
-  command(kind: 'stop' | 'attackMove' | 'move' | 'patrol' | 'resupply' | 'give' | 'garrison' | 'hold' | 'charge'): void;
+  command(kind: 'stop' | 'attackMove' | 'move' | 'patrol' | 'resupply' | 'give' | 'garrison' | 'hold' | 'charge' | 'tend'): void;
   /** Put the selection in a formation, and which one it's in now. */
   formation(f: Formation): void;
   formationOf(): Formation;
@@ -533,10 +533,20 @@ export class Hud {
       ${btn('stop', 'Stop', km.stop, 'Stop')}
     </div>
     <div class="cmds small">
-      ${btn('resupply', 'Resupply', km.resupply, 'Resupply at the nearest stocked building, then return. Hold the key and click the ground to send them there afterwards.')}
+      ${this.hasBuildings() ? btn('resupply', 'Resupply', km.resupply, 'Resupply at the nearest stocked building, then return. Hold the key and click the ground to send them there afterwards.') : ''}
       ${btn('give', 'Give', km.give, 'Give surplus to a friendly unit (then click it)')}
-      ${btn('garrison', 'Garrison', km.garrison, 'Shelter inside one of your buildings (then click it). Throwers inside throw from cover. Only bodies that fit through a door (up to 150 kg): no mounts or beasts.')}
+      ${this.hasBuildings() ? btn('garrison', 'Garrison', km.garrison, 'Shelter inside one of your buildings (then click it). Throwers inside throw from cover. Only bodies that fit through a door (up to 150 kg): no mounts or beasts.') : ''}
+      ${this.tends(units) ? `<button data-cmd="tend" title="Tend the nest until told otherwise: carry food to whoever's waiting on it (an egg, a cocoon, a mother with an egg queued), gathering more in between.">${ICONS.tend}<span>Tend</span></button>` : ''}
     </div>`;
+  }
+
+  /** Does this side have buildings at all (else there's nothing to garrison)? */
+  private hasBuildings(): boolean { return (this.world.factionOf(this.player).buildings ?? []).length > 0; }
+
+  /** Could these tend a nest: they gather food, and their side has things that lay or change (and so wait on food)? */
+  private tends(units: Unit[]): boolean {
+    const f = this.world.factionOf(this.player);
+    return f.units.some((x) => x.spawns?.length || x.becomes?.length) && units.some((u) => this.world.gathers(u, 'food'));
   }
 
   /** What the selected units can lay (spawns) or change into (becomes): tiles like a building's training buttons. */
@@ -596,7 +606,7 @@ export class Hud {
       </div>
       <div class="tiles forms">${FORMATIONS.map((f) => `<button data-formation="${f.id}" class="ftile ${f.id === formation ? 'on' : ''}" title="${f.tip}">${formationPicture(f.id, fus)}<span>${f.name}</span></button>`).join('')}</div>
       <div class="cmds small">
-        ${(['resupply', 'give', 'garrison'] as const).map((c) => `<button data-cmd="${c}" title="${{ resupply: 'Resupply at the nearest stocked building, then come back.', give: 'Give surplus to a friendly unit (then click it).', garrison: 'Shelter inside one of your buildings (then click it). Only bodies that fit through a door (up to 150 kg): no mounts or beasts.' }[c]}">${ICONS[c]}<span>${c[0].toUpperCase() + c.slice(1)}</span><kbd>${km[c].toUpperCase()}</kbd></button>`).join('')}
+        ${(this.hasBuildings() ? ['resupply', 'give', 'garrison'] as const : ['give'] as const).map((c) => `<button data-cmd="${c}" title="${{ resupply: 'Resupply at the nearest stocked building, then come back.', give: 'Give surplus to a friendly unit (then click it).', garrison: 'Shelter inside one of your buildings (then click it). Only bodies that fit through a door (up to 150 kg): no mounts or beasts.' }[c]}">${ICONS[c]}<span>${c[0].toUpperCase() + c.slice(1)}</span><kbd>${km[c].toUpperCase()}</kbd></button>`).join('')}
       </div>
     </div>`;
   }
@@ -689,6 +699,7 @@ export function describeOrder(w: World, u: Unit): string {
     case 'move': return 'Moving';
     case 'attackMove': return u.engage ? 'Fighting' : 'Attack-moving';
     case 'patrol': return u.engage ? 'Fighting' : 'Patrolling';
+    case 'tend': return !o.g ? (u.food >= 0.5 ? 'Tending: bringing food' : 'Tending: waiting') : o.g.phase === 'toDrop' ? 'Tending: bringing food' : 'Tending: gathering food';
     case 'digest': return 'Going to digest a tree';
     case 'metamorph': {
       const name = w.specOf(u.owner, o.into)?.spec.name ?? o.into;
@@ -697,7 +708,6 @@ export function describeOrder(w: World, u: Unit): string {
     case 'attack': return 'Attacking';
     case 'gather': {
       const r = resourceName(w.factionOf(u.owner), o.nodeType);
-      if (o.feeds) return o.phase === 'toDrop' ? `Bringing ${r} to feed` : `Gathering ${r} to feed`;
       return o.stopWhenArmed ? 'Picking up crystals' : o.phase === 'toDrop' ? `Hauling ${r} home` : `Gathering ${r}`;
     }
     case 'resupply': return u.anim === 'eat' ? 'Eating' : 'Going to resupply';
@@ -750,6 +760,7 @@ const ICONS: Record<string, string> = {
   resupply: svg('<path d="M4 8 12 4l8 4v8l-8 4-8-4zM4 8l8 4 8-4M12 12v8"/>'),
   give: svg('<path d="M3 16h6l3 2h5l4-3.5M14 4v8M10.5 8.5 14 12l3.5-3.5"/>'),
   garrison: svg('<path d="M4 11 12 4l8 7v9H4zM10 20v-5h4v5"/>'),
+  tend: svg('<ellipse cx="9" cy="15" rx="4" ry="5"/><ellipse cx="16" cy="14" rx="3" ry="4"/><path d="M12 4v5M9.5 6.5 12 4l2.5 2.5"/>'),
 };
 
 /** This group drawn in formation `f`, front at the top: a dot per unit (gold shafts, red strikers, blue throwers) with a tick the way it faces. */

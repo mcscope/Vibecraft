@@ -100,8 +100,12 @@ export type Order =
   /** Attack-move to (x, y), then back to (bx, by), and so on. */
   | { kind: 'patrol'; x: number; y: number; bx: number; by: number }
   | { kind: 'attack'; target: number; charge?: boolean }
-  /** `feeds`: a feeder: it takes each load to whoever of its side is waiting on food (an egg, a cocoon, a mother with an egg queued) instead of to a building (sim/abilities/metamorph.ts). */
-  | { kind: 'gather'; node: number; nodeType: ResourceKind; phase: 'toNode' | 'harvest' | 'toDrop'; stopWhenArmed: boolean; feeds?: boolean }
+  | { kind: 'gather'; node: number; nodeType: ResourceKind; phase: 'toNode' | 'harvest' | 'toDrop'; stopWhenArmed: boolean }
+  /**
+   * Tending the nest, until told otherwise: carrying food to whoever of its side is waiting on it (an egg, a cocoon, a
+   * mother with an egg queued), gathering more in between (`g`: the gathering trip it's on), waiting full when nobody is.
+   */
+  | { kind: 'tend'; g: Extract<Order, { kind: 'gather' }> | null }
   | { kind: 'resupply'; building: number }
   | { kind: 'give'; to: number }
   | { kind: 'eatPack' }
@@ -720,12 +724,13 @@ export class World {
         if (n?.tree) set(mine(cmd.units).filter((u) => digestsTrees(this, u)), { kind: 'digest', node: n.id });
         return;
       }
+      case 'tend': return set(mine(cmd.units).filter((u) => this.gathers(u, 'food')), { kind: 'tend', g: null });
       case 'gather': {
         const n = this.nodes.get(cmd.node);
         if (!n) return;
         for (const u of mine(cmd.units)) {
           if (!this.gathers(u, n.type)) continue;
-          set([u], { kind: 'gather', node: n.id, nodeType: n.type, phase: 'toNode', stopWhenArmed: false, feeds: (cmd.feeds && n.type === 'food') || undefined });
+          set([u], { kind: 'gather', node: n.id, nodeType: n.type, phase: 'toNode', stopWhenArmed: false });
         }
         return;
       }
@@ -1279,7 +1284,7 @@ export class World {
   private runOrder(u: Unit): boolean {
     const o = u.order;
     // Hunger interrupts work and wandering (not explicit fights or feeding).
-    if ((o.kind === 'idle' || o.kind === 'gather' || o.kind === 'attackMove' || o.kind === 'patrol' || o.kind === 'build' || o.kind === 'cart') && u.engage === 0) {
+    if ((o.kind === 'idle' || o.kind === 'gather' || o.kind === 'tend' || o.kind === 'attackMove' || o.kind === 'patrol' || o.kind === 'build' || o.kind === 'cart') && u.engage === 0) {
       if (u.cal < u.stats.maxCalories * K.hungryFraction && this.autoFeed(u)) return false;
     }
     switch (o.kind) {
@@ -1313,6 +1318,7 @@ export class World {
         return u.x !== u.px || u.y !== u.py;
       }
       case 'gather': return this.runGather(u, o);
+      case 'tend': return this.runTend(u, o);
       case 'resupply': return this.runResupply(u, o.building);
       case 'give': return this.runGive(u, o.to);
       case 'eatPack': {
@@ -1778,16 +1784,6 @@ export class World {
       }
       return false;
     }
-    // a feeder: the load goes to whoever's waiting on food; it waits with it till someone is, then goes back for more
-    if (o.feeds) {
-      const to = nearestHungry(this, u);
-      if (!to) return false;
-      if (this.moveTo(u, to.x, to.y, u.stats.radius + to.stats.radius + 0.5)) {
-        this.transfer(u, to);
-        if (u.food < 0.5 || foodOwed(this, to) < 0.05) o.phase = 'toNode';
-      }
-      return u.x !== u.px || u.y !== u.py;
-    }
     // toDrop: the nearest finished building (carts move it on from there), or a nearer walking drop-off
     const drop = this.nearestCache(u, () => true);
     const dd = drop ? (drop.ox + drop.size / 2 - u.x) ** 2 + (drop.oy + drop.size / 2 - u.y) ** 2 : Infinity;
@@ -1819,6 +1815,26 @@ export class World {
       }
     }
     return u.x !== u.px || u.y !== u.py;
+  }
+
+  /** Tending the nest (order 'tend'): deliver, else gather, else wait full; it never runs out of things to do. */
+  private runTend(u: Unit, o: Extract<Order, { kind: 'tend' }>): boolean {
+    const to = nearestHungry(this, u), full = this.freeCapacity(u) < 1;
+    // carrying food and someone's waiting: take it to them (once full, or with enough for them, or the trip's done)
+    if (to && u.food >= 0.5 && (full || !o.g || o.g.phase === 'toDrop' || u.food >= foodOwed(this, to))) {
+      if (this.moveTo(u, to.x, to.y, u.stats.radius + to.stats.radius + 0.5)) { this.transfer(u, to); o.g = null; }
+      return u.x !== u.px || u.y !== u.py;
+    }
+    if (full) return false; // full and nobody waiting: it waits with the food
+    // gather food: the nearest source, a trip at a time
+    if (!o.g || o.g.phase === 'toDrop' || !this.nodes.get(o.g.node)) {
+      const n = this.nearestNode(u, 'food', 40, false);
+      if (!n) return false;
+      o.g = { kind: 'gather', node: n.id, nodeType: 'food', phase: 'toNode', stopWhenArmed: false };
+    }
+    const moved = this.runGather(u, o.g);
+    if (u.order !== o) u.order = o; // (a gathering trip that finishes doesn't end the tending)
+    return moved;
   }
 
   /** An ammo bearer: a walking crystal pile (see sim/abilities/bearer.ts). */

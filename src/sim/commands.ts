@@ -22,8 +22,9 @@ export type CommandBody =
   /** Walk back and forth between where they are now and (x, y), fighting anything met on the way. */
   | { type: 'patrol'; units: number[]; x: number; y: number }
   | { type: 'attack'; units: number[]; target: number; charge?: boolean }
-  /** `feeds`: food goes to whoever of their side is waiting on it (an egg, a cocoon, a mother), not to a building. */
-  | { type: 'gather'; units: number[]; node: number; feeds?: boolean }
+  | { type: 'gather'; units: number[]; node: number }
+  /** Tend the nest: carry food to whoever of their side is waiting on it, gathering more in between, until told otherwise. */
+  | { type: 'tend'; units: number[] }
   /**
    * Go to own town center: drop off cargo, restock crystal loadout, eat to full.
    * Afterwards units return to what they were doing (or where they stood),
