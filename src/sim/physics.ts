@@ -135,6 +135,8 @@ export const K = {
   limbShare: 0.06,
   /** kg of wood per metre of spear shaft. */
   shaftKgPerM: 1.5,
+  /** kg of lash per metre of a whip limb, swung out with the crystal at its tip. */
+  whipKgPerM: 0.4,
   /** Wood: density (kg/m³) and stiffness (Young's modulus, Pa), for how hard a shaft can be pushed before it buckles. */
   woodDensity: 700,
   woodStiffness: 11e9,
@@ -306,12 +308,14 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   const weaponMass = crystalMass + shaft * K.shaftKgPerM;
   // a thrown crystal flies alone; a blow swings the striking limb with the weapon (the arm behind a mace, a great
   // beast's head and forequarters behind its bite), as fast as limbs move and as hard as the muscle can put into it
-  const strikeMass = throwing ? weaponMass : weaponMass + K.limbShare * mass;
+  // (a whip lashes the crystal out alone at its tip, the light lash behind it: sim/abilities/whip.ts)
+  const whip = !throwing && !shaft && atk?.whip ? Math.max(0, Math.min(3, atk.whip)) : 0;
+  const strikeMass = throwing ? weaponMass : whip ? weaponMass + K.whipKgPerM * whip : weaponMass + K.limbShare * mass;
   // a sling is a lever: its cord lengthens the throwing arm (~0.4 of the body's height), so the stone leaves faster in
   // proportion; but never faster than the muscle's energy allows (√(2E/m)), however long the cord
   const sling = throwing && atk?.sling ? Math.max(0, Math.min(bodyHeight(mass), atk.sling)) : 0;
   const arm = 0.4 * bodyHeight(mass);
-  const crystalVelocity = Math.min(limbSpeed * (1 + sling / arm), Math.sqrt((2 * maxAttackEnergy) / strikeMass));
+  const crystalVelocity = Math.min(limbSpeed * (1 + (sling + whip) / arm), Math.sqrt((2 * maxAttackEnergy) / strikeMass));
   const attackEnergy = 0.5 * strikeMass * crystalVelocity * crystalVelocity;
   // and it has to be spun up first: about a turn of the arm and cord before release
   const windUp = sling ? (2 * Math.PI * (arm + sling)) / crystalVelocity : 0;
@@ -325,14 +329,15 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   const weaponI = (shaftKg * 0.75 * (0.75 * shaft) ** 2) / 3 + (shaftKg * 0.25 * (0.25 * shaft) ** 2) / 3 + crystalMass * leverOut * leverOut;
   const armTorque = K.holdForcePerMuscleKg * muscleMass * 0.5;
   const bringRound = throwing ? 0 : Math.sqrt((2 * (Math.PI / 2) * weaponI) / armTorque);
-  const cooldown = Math.max(K.minCooldown, attackEnergy / power) + (throwing ? K.throwReload : 0) + windUp + bringRound;
+  const lashBack = whip / limbSpeed; // (drawing the lash back in)
+  const cooldown = Math.max(K.minCooldown, attackEnergy / power) + (throwing ? K.throwReload : 0) + windUp + bringRound + lashBack;
 
   const sizeRel = Math.cbrt(mass / 70);
   // its footprint: as wide as it's drawn (spec.size, metres across), else from its mass
   const radius = spec.size ? clamp(spec.size / 2 / M_PER_TILE, 0.15, 1.5) : clamp(0.25 * sizeRel, 0.15, 0.8);
   // a flier's wings grow with its mass like a bird's (span ≈ 1.17·m^0.39 m, from bird allometry)
   const wingspan = spec.flight ? (1.17 * mass ** 0.39) / M_PER_TILE : 0;
-  const reach = radius + 0.35 + 0.1 * Math.cbrt(crystalMass) + (shaft * 0.75) / M_PER_TILE; // a shaft held a quarter of the way along: ¾ of it reaches forward
+  const reach = radius + 0.35 + 0.1 * Math.cbrt(crystalMass) + (shaft * 0.75) / M_PER_TILE + whip / M_PER_TILE; // a shaft held a quarter of the way along: ¾ of it reaches forward; a whip its whole length
   const range = throwing
     ? Math.min(K.maxThrowRange, (crystalVelocity * crystalVelocity) / K.gravity / M_PER_TILE) // v²/g metres, in tiles
     : reach;

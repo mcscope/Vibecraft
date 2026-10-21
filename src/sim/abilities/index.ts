@@ -14,6 +14,7 @@ import { living } from './living';
 import { wall } from './wall';
 import { spear } from './spear';
 import { sling } from './sling';
+import { whip } from './whip';
 import { sidearm } from './sidearm';
 import { metamorph } from './metamorph';
 import { digest } from './digest';
@@ -28,7 +29,7 @@ export interface Ability {
   buildingCodex?(b: BuildingSpec, st: BuildingStats): string | null;
 }
 
-export const ABILITIES: Ability[] = [bearer, gait, wall, living, dropOff, underfoot, flight, herding, spear, sling, sidearm, metamorph, digest];
+export const ABILITIES: Ability[] = [bearer, gait, wall, living, dropOff, underfoot, flight, herding, spear, sling, whip, sidearm, metamorph, digest];
 
 export function validateUnitAbilities(u: UnitSpec, where: string): string[] {
   return ABILITIES.flatMap((a) => a.validateUnit?.(u, where) ?? []);

@@ -34,6 +34,8 @@ export interface AttackSpec {
   sling?: number;
   /** Strikers only: metres of wooden shaft (0–3), a spear or pike. Held a quarter of the way along, ¾ of it adds reach; its wood (1.5 kg/m) is priced like body mass and swung with the crystal, so it hits harder and recovers slower. Like every blow, a strike also carries the collision energy of the bodies closing (sim/world.ts). */
   shaft?: number;
+  /** Strikers only (not with a shaft): metres of whip-like limb (0–3) the crystal is lashed out on. It reaches its whole length, and it's a lever: the crystal leaves faster in proportion to arm + lash, up to what the muscle's energy allows, all of that energy going into the light crystal at its tip rather than a heavy arm; it takes a moment to draw the lash back in (sim/abilities/whip.ts). */
+  whip?: number;
   /** Strikers with a shaft only: a hand weapon worn beside it (sword, axe), struck where the point can't bear: inside it, or off to the side (sim/abilities/sidearm.ts). */
   sidearm?: { crystalMass: number };
 }
