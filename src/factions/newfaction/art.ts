@@ -2,13 +2,13 @@
 import type { FactionArt, TeamColors } from '../../art/contract';
 import { Baker } from '../../kits/bake3d/baker';
 import { toBitmaps } from '../../kits/bake3d/bitmaps';
-import { units as allUnits } from './index';
+import { caterpillarSegments, units as allUnits } from './index';
 
 export async function bakeArt(team: TeamColors, onProgress?: (f: number, label: string) => void, only?: string[]): Promise<FactionArt> {
   const baker = new Baker();
   const units = only ? allUnits.filter((u) => only.includes(u.id)) : allUnits;
   const carry = (id: string) => id.startsWith('larva') || id.startsWith('mother');
-  const opts = (u: (typeof allUnits)[number]) => ({ withCarry: carry(u.id), fly: !!u.flight, brace: !!u.attack?.shaft, ownLeap: u.id === 'flier' });
+  const opts = (u: (typeof allUnits)[number]) => ({ withCarry: carry(u.id), fly: !!u.flight, brace: !!u.attack?.shaft, ownLeap: u.id === 'flier', segments: u.id.startsWith('larva') ? caterpillarSegments(u.mass) : undefined });
   const total = units.reduce((n, u) => n + Baker.frameCount(opts(u)), 0) + 1;
   let done = 0;
   // PLACEHOLDER flag: an egg; PLACEHOLDER music

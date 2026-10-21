@@ -7,7 +7,7 @@ import { Camera, isoX, isoY, TILE_H, TILE_W } from './camera';
 import { isUnderfoot, parcelPos } from '../sim/abilities/underfoot';
 import { LEAP_TIME } from '../sim/abilities/flight';
 import { M_PER_TILE } from '../sim/physics';
-import { buildingSprite, unitShadow, unitSprite, UNITS_PER_TILE, type ArtAnim, type FrameTime, type Sprite } from '../art/contract';
+import { buildingSprite, unitShadow, unitSprite, UNITS_PER_TILE, type ArtAnim, type FrameTime, type Sprite, type UnitArt } from '../art/contract';
 import { gpuTexture, setFrameReader } from '../art/gpu';
 import { TEAM_COLORS, type ArtBank } from './artbank';
 import { buildGround } from './ground';
@@ -145,6 +145,9 @@ export class Renderer {
   private textures = new Map<TextureSource, Map<string, Texture>>();
   private nodeSprites = new Map<number, PixiSprite>();
   private unitSprites = new Map<number, PixiSprite>();
+  /** A body in trailing parts (UnitArt.segments): each part's sprite, and the path it has come along (newest first). */
+  private segSprites = new Map<number, PixiSprite[]>();
+  private trails = new Map<number, Array<[number, number]>>();
   private buildingSprites = new Map<number, PixiSprite>();
   private projSprites = new Map<number, PixiSprite>();
   private flagSprite: PixiSprite | null = null;
@@ -499,8 +502,10 @@ export class Renderer {
       const disarmed = !u.dummy && !u.carter && !this.world.armed(u) && u.specId !== this.world.factionOf(u.owner).workerId;
       sp.tint = disarmed ? 0x707070 : 0xffffff;
       sp.visible = this.seen(u.owner, u.x, u.y); // fog of war
+      if (art?.segments) this.drawSegments(u, art, x, y, sp);
     }
     for (const [id, sp] of this.unitSprites) if (!this.world.units.has(id)) { sp.destroy(); this.unitSprites.delete(id); this.alt.delete(id); }
+    for (const [id, segs] of this.segSprites) if (!this.world.units.has(id)) { segs.forEach((s) => s.destroy()); this.segSprites.delete(id); this.trails.delete(id); }
   }
 
   private syncProjectiles(alpha: number): void {
@@ -704,6 +709,42 @@ export class Renderer {
       this.flagSprite.zIndex = rally.rallyX + rally.rallyY;
       this.flagSprite.visible = true;
     } else if (this.flagSprite) this.flagSprite.visible = false;
+  }
+
+  /**
+   * A body in trailing parts, like Snake: each part laid back along the path the unit has come (its trail, kept as it
+   * moves), facing along the path there; before it has gone that far, straight out behind it.
+   */
+  private drawSegments(u: Unit, art: UnitArt, x: number, y: number, front: PixiSprite): void {
+    const trail = this.trails.get(u.id) ?? [];
+    if (!trail.length || Math.hypot(x - trail[0][0], y - trail[0][1]) > 0.03) { trail.unshift([x, y]); if (trail.length > 300) trail.pop(); }
+    this.trails.set(u.id, trail);
+    let segs = this.segSprites.get(u.id);
+    if (!segs) { segs = art.segments!.map(() => { const s = new PixiSprite(); this.objects.addChild(s); return s; }); this.segSprites.set(u.id, segs); }
+    const spec = this.world.specOf(u.owner, u.specId);
+    const k = spec && spec.stats.mass !== u.stats.mass ? Math.cbrt(u.stats.mass / spec.stats.mass) : 1;
+    const f = unitFrame(u), moving = f.anim === 'walk' || f.anim === 'charge' || f.anim.startsWith('carry');
+    if (f.walked !== undefined) f.walked /= k;
+    art.segments!.forEach((seg, i) => {
+      // the point `behind` back along the trail, and which way the trail runs there
+      let want = (seg.behind / UNITS_PER_TILE) * k, px = x, py = y, dx = Math.cos(u.facing), dy = Math.sin(u.facing);
+      for (const [tx, ty] of trail) {
+        const d = Math.hypot(tx - px, ty - py);
+        if (d < 1e-6) continue;
+        if (d >= want) { px += ((tx - px) / d) * want; py += ((ty - py) / d) * want; want = 0; dx = -(tx - px); dy = -(ty - py); break; }
+        dx = px - tx; dy = py - ty; want -= d; px = tx; py = ty;
+      }
+      if (want > 0) { const l = Math.hypot(dx, dy) || 1; px -= (dx / l) * want; py -= (dy / l) * want; } // (beyond its trail: straight on behind)
+      const octant = ((Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) % 8) + 8) % 8;
+      const s = segs![i];
+      const frame = unitSprite({ height: art.height, anims: seg.anims }, moving ? 'walk' : 'idle', octant, moving ? f : { time: this.time });
+      this.setFrame(s, frame);
+      s.scale.set(k / frame.q);
+      s.position.set(isoX(px, py), isoY(px, py));
+      s.zIndex = px + py;
+      s.tint = front.tint;
+      s.visible = front.visible;
+    });
   }
 
   /** Health / calorie / ammo bars, sparks and the drag box, in screen space. */

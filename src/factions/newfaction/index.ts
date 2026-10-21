@@ -33,6 +33,8 @@ const LOOK = {
   vee: { scale: (m: number) => 1.3 * Math.cbrt(m / 120), length: 0.75 }, // (collision: its body; wings overlap others, as fliers' do)
   dragon: { scale: (m: number) => 2.0 * Math.cbrt(m / 500), length: 0.9 }, // 500 kg: ~4.5 m snout to tail-tip (collision: its body; wings overlap others, as fliers' do)
 } as const;
+/** A caterpillar's trailing segments, as model units behind its front (for the baker). */
+export const caterpillarSegments = (mass: number): number[] => [1, 2].map((k) => k * CATERPILLAR_GAP * LOOK.caterpillar.scale(mass));
 const footprint = (look: keyof typeof LOOK, mass: number) => LOOK[look].scale(mass) * LOOK[look].length;
 
 /**
@@ -160,27 +162,37 @@ function drawVee(b: ModelBuilder, p: Pose, mass: number): void {
   }
 }
 
-/** A caterpillar (the user's larvae): three segments of two balls each, rippling segment by segment as it crawls,
- *  stubby legs, a round head. */
+/** How far apart a caterpillar's segments are along its path (model units, before its size). */
+const CATERPILLAR_GAP = 0.3;
+
+/**
+ * A caterpillar (the user's larvae): three segments of two balls each, heaving one after another as it crawls, stubby
+ * legs, a round head. Its segments trail along the way it has gone, like Snake (Pose.part): the front one with the head,
+ * then each of the others on its own.
+ */
 function caterpillar(b: ModelBuilder, p: Pose, color: string, mass: number): void {
   const skin: Mat = { color, tex: 'skin', rough: 0.55 };
   const belly: Mat = { color: '#e8e2c8', tex: 'skin' };
   const crawl = p.anim === 'walk' ? p.phase * TAU : 0;
+  // (drawn whole, the segments lie in a line behind the front one; in parts, each is drawn on its own at the origin)
+  const segs = p.part === undefined ? [0, 1, 2] : [p.part];
+  const at = (seg: number) => (p.part === undefined ? -seg * CATERPILLAR_GAP : 0);
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
-    for (let seg = 0; seg < 3; seg++) {
+    for (const seg of segs) {
       const lift = p.anim === 'walk' ? Math.max(0, Math.sin(crawl - seg * 2.1)) * 0.06 : 0; // (each segment heaves in turn)
       for (let k = 0; k < 2; k++) {
-        const x = 0.4 - seg * 0.3 - k * 0.13, r = 0.1 - seg * 0.006 - k * 0.004;
+        const x = at(seg) + 0.065 - k * 0.13, r = 0.1 - seg * 0.006 - k * 0.004;
         c.sphere([r * 1.05, r, r], [x, r + lift, 0], skin);
         c.sphere([r * 0.7, r * 0.35, r * 0.75], [x, r * 0.45 + lift, 0], belly);
         for (const z of [1, -1]) c.limb([x, 0.06 + lift, z * r * 0.7], [x, 0.0, z * r * 1.0], 0.016, skin); // stubby legs
       }
-      c.sphere(0.022, [0.33 - seg * 0.3, 0.2 + lift, 0], { team: 'primary', tex: 'none' }); // a team dot on each segment
+      c.sphere(0.022, [at(seg), 0.2 + lift, 0], { team: 'primary', tex: 'none' }); // a team dot on each segment
     }
+    if (!segs.includes(0)) return;
     const eat = p.anim === 'gather' || p.anim === 'eat' ? Math.sin(p.phase * TAU * 2) * 0.03 : 0;
-    c.sphere(0.11, [0.56, 0.12 + eat, 0], skin); // head
-    for (const z of [1, -1]) c.sphere(0.018, [0.65, 0.15 + eat, z * 0.05], { color: '#111111' });
-    if (p.cargo) c.sphere([0.08, 0.06, 0.08], [0.3, 0.24, 0], { color: p.cargo === 'food' ? '#a83a4a' : p.cargo === 'wood' ? '#7a5634' : '#8fe6ff' });
+    c.sphere(0.11, [0.22, 0.12 + eat, 0], skin); // head
+    for (const z of [1, -1]) c.sphere(0.018, [0.31, 0.15 + eat, z * 0.05], { color: '#111111' });
+    if (p.cargo) c.sphere([0.08, 0.06, 0.08], [0, 0.24, 0], { color: p.cargo === 'food' ? '#a83a4a' : p.cargo === 'wood' ? '#7a5634' : '#8fe6ff' });
   }, LOOK.caterpillar.scale(mass));
 }
 

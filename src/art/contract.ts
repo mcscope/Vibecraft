@@ -50,6 +50,11 @@ export interface AnimArt {
 export interface UnitArt {
   /** On-screen height of the unit at zoom 1, in px (for health bars and clicking). */
   height: number;
+  /**
+   * Parts drawn trailing along the path it has moved, like Snake (a caterpillar's body segments): each `behind` model
+   * units back along its trail, facing along the trail there. The unit's own frames are then its front part.
+   */
+  segments?: Array<{ anims: Partial<Record<ArtAnim, AnimArt>> & { idle: AnimArt }; behind: number }>;
   anims: Partial<Record<ArtAnim, AnimArt>> & { idle: AnimArt };
   sounds?: UnitSounds;
 }

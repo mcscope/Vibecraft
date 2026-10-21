@@ -22,6 +22,11 @@ export interface Pose {
    * out level, running in fast low over the ground after a dive (a model may level its glide for it).
    */
   style?: 'charge' | 'stagger' | 'brace' | 'bankL' | 'bankR' | 'swoop';
+  /**
+   * A body drawn in parts that trail along its path (a caterpillar's segments, like Snake): 0 is the front (its head
+   * and what goes with it), 1, 2 … each trailing part on its own, centred where it joins the path. Unset: the whole body.
+   */
+  part?: number;
 }
 
 export type Vec3 = [number, number, number];

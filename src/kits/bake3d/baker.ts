@@ -34,6 +34,10 @@ export interface UnitBakeOptions {
   sidearm?: boolean;
   /** Its model draws its whole leap itself (no springy squash and tip from the baker). */
   ownLeap?: boolean;
+  /** Its body trails along its path in parts (Pose.part), each this many model units behind its front: baked apart. */
+  segments?: number[];
+  /** (A trailing part: only standing, crawling and dying.) */
+  part?: boolean;
 }
 
 /**
@@ -369,9 +373,19 @@ export class Baker {
 
   /** Bake every animation × facing for a unit. Yields between rows so the page stays responsive. */
   async bakeUnit(model: UnitModel, team: TeamColors, opts: UnitBakeOptions = {}, onFrame?: () => void): Promise<UnitArt> {
+    if (opts.segments?.length) {
+      // a body in trailing parts: its front as the unit, then each part on its own
+      const front = await this.bakeUnit((b, p) => model(b, { ...p, part: 0 }), team, { ...opts, segments: undefined }, onFrame);
+      front.segments = [];
+      for (const [i, behind] of opts.segments.entries()) {
+        const seg = await this.bakeUnit((b, p) => model(b, { ...p, part: i + 1 }), team, { part: true }, onFrame);
+        front.segments.push({ anims: seg.anims, behind });
+      }
+      return front;
+    }
     const withCarry = !!opts.withCarry;
-    const anims: BakedAnim[] = opts.dummy ? ['idle', 'die'] : ['idle', 'walk', 'attack', 'gather', 'eat', 'tired', 'die'];
-    if (!opts.dummy) anims.push('charge', 'stagger');
+    const anims: BakedAnim[] = opts.part ? ['idle', 'walk', 'die'] : opts.dummy ? ['idle', 'die'] : ['idle', 'walk', 'attack', 'gather', 'eat', 'tired', 'die'];
+    if (!opts.dummy && !opts.part) anims.push('charge', 'stagger');
     if (opts.brace && !opts.dummy) anims.push('brace');
     if (opts.sidearm && !opts.dummy) anims.push('cut');
     if (withCarry && !opts.dummy) anims.push('carryFood', 'carryWood', 'carryCrystal');
