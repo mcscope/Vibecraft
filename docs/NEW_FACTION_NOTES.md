@@ -20,8 +20,8 @@ The user's decisions so far, as given. Nothing here is designed beyond what they
 - **Three tiers of egg and larva:** refinement 1, 2 and 3, each an egg and a larva.
 
 ## What each tier's larva can become (offshoots, one refinement up). All confirmed.
-- **T1:** a fast charging body, micropikes; and the T2 larva. The T1 larva itself can eat a tree (see Food source).
-- **T2:** flier bodies, ground-attack bodies, a slinger, the mother; and the T3 larva.
+- **T1:** the charger (a small body like the Vimmer's on two long, muscular legs, striding long), micropikes; and the T2 larva. The T1 larva itself can eat a tree (see Food source).
+- **T2:** the Vimmer (the flier: an insectoid flying-V that dives and charges, stands on its wings, leaps up and over backward), ground-attack bodies, a slinger, the mother; and the T3 larva.
 - **T3:** the Dragon Fly (flier) and ground-attack bodies.
 
 ## Dragon Fly (T3 flier)
