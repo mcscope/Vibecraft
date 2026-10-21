@@ -17,7 +17,7 @@ import { BOMB_REACH, canReach, dropTime, FLARE_HEIGHT, FLY_SIGHT, flyTo, heightB
 import { MatchStats } from './stats';
 import { eject, fitsInside, runGarrison, tickGarrison } from './garrison';
 import { digestsTrees, runDigest } from './abilities/digest';
-import { beginMetamorph, canBecome, cancelBrood, feedChange, queueBrood, refundMetamorph, runMetamorph, tickBrood } from './abilities/metamorph';
+import { beginMetamorph, canBecome, cancelBrood, feedChange, foodOwed, nearestHungry, queueBrood, refundMetamorph, runMetamorph, tickBrood } from './abilities/metamorph';
 import { isUnderfoot, loadBelt, nearestBelt, roadFactor, routeBelts, runBelts, type BeltRoutes, type Parcel } from './abilities/underfoot';
 import { grow, grownEnough, livingStats, seedMaterials } from './abilities/living';
 import {
@@ -100,7 +100,8 @@ export type Order =
   /** Attack-move to (x, y), then back to (bx, by), and so on. */
   | { kind: 'patrol'; x: number; y: number; bx: number; by: number }
   | { kind: 'attack'; target: number; charge?: boolean }
-  | { kind: 'gather'; node: number; nodeType: ResourceKind; phase: 'toNode' | 'harvest' | 'toDrop'; stopWhenArmed: boolean }
+  /** `feeds`: a feeder: it takes each load to whoever of its side is waiting on food (an egg, a cocoon, a mother with an egg queued) instead of to a building (sim/abilities/metamorph.ts). */
+  | { kind: 'gather'; node: number; nodeType: ResourceKind; phase: 'toNode' | 'harvest' | 'toDrop'; stopWhenArmed: boolean; feeds?: boolean }
   | { kind: 'resupply'; building: number }
   | { kind: 'give'; to: number }
   | { kind: 'eatPack' }
@@ -721,7 +722,7 @@ export class World {
         if (!n) return;
         for (const u of mine(cmd.units)) {
           if (!this.gathers(u, n.type)) continue;
-          set([u], { kind: 'gather', node: n.id, nodeType: n.type, phase: 'toNode', stopWhenArmed: false });
+          set([u], { kind: 'gather', node: n.id, nodeType: n.type, phase: 'toNode', stopWhenArmed: false, feeds: (cmd.feeds && n.type === 'food') || undefined });
         }
         return;
       }
@@ -1773,6 +1774,16 @@ export class World {
         else o.phase = 'toDrop';
       }
       return false;
+    }
+    // a feeder: the load goes to whoever's waiting on food; it waits with it till someone is, then goes back for more
+    if (o.feeds) {
+      const to = nearestHungry(this, u);
+      if (!to) return false;
+      if (this.moveTo(u, to.x, to.y, u.stats.radius + to.stats.radius + 0.5)) {
+        this.transfer(u, to);
+        if (u.food < 0.5 || foodOwed(this, to) < 0.05) o.phase = 'toNode';
+      }
+      return u.x !== u.px || u.y !== u.py;
     }
     // toDrop: the nearest finished building (carts move it on from there), or a nearer walking drop-off
     const drop = this.nearestCache(u, () => true);

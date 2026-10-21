@@ -678,6 +678,7 @@ export function describeOrder(w: World, u: Unit): string {
     case 'attack': return 'Attacking';
     case 'gather': {
       const r = resourceName(w.factionOf(u.owner), o.nodeType);
+      if (o.feeds) return o.phase === 'toDrop' ? `Bringing ${r} to feed` : `Gathering ${r} to feed`;
       return o.stopWhenArmed ? 'Picking up crystals' : o.phase === 'toDrop' ? `Hauling ${r} home` : `Gathering ${r}`;
     }
     case 'resupply': return u.anim === 'eat' ? 'Eating' : 'Going to resupply';

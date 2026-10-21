@@ -138,6 +138,28 @@ export function feedChange(w: World, u: Unit, kg: number): number {
   return k;
 }
 
+/** How much food `u` is waiting on: what its change still owes, or (a parent) the unpaid rest of its next spawn. */
+export function foodOwed(w: World, u: Unit): number {
+  const o = u.order;
+  if (o.kind === 'metamorph') {
+    const from = w.specOf(u.owner, o.from ?? u.specId), to = w.specOf(u.owner, o.into);
+    return from && to ? Math.max(0, metamorphCost(from.stats, to.stats, false, u.stats.mass).food - o.paid) : 0;
+  }
+  const b = u.brood[0], from = w.specOf(u.owner, u.specId), to = b && w.specOf(u.owner, b.into);
+  return b && from && to ? Math.max(0, metamorphCost(from.stats, to.stats, true).food - b.paid - u.food) : 0;
+}
+
+/** The nearest of `u`'s side (not itself) waiting on food, for a feeder to bring its load to. */
+export function nearestHungry(w: World, u: Unit): Unit | null {
+  let best: Unit | null = null, bestD = Infinity;
+  for (const x of w.units.values()) {
+    if (x.owner !== u.owner || x === u || foodOwed(w, x) < 0.05) continue;
+    const d = (x.x - u.x) ** 2 + (x.y - u.y) ** 2;
+    if (d < bestD) { bestD = d; best = x; }
+  }
+  return best;
+}
+
 /** A change called off by another order: what it had paid goes back into the pack. */
 export function refundMetamorph(u: Unit): void {
   if (u.order.kind === 'metamorph' && u.order.paid > 0) { u.food += u.order.paid; u.order.paid = 0; }
@@ -171,8 +193,9 @@ export function tickBrood(w: World, u: Unit, dt: number): void {
   b.t += dt;
   if (b.t < cost.sec) return;
   u.brood.shift();
-  // laid beside it, in front
-  const spot = w.grid.nearestOpen(u.x + Math.cos(u.facing) * (u.stats.radius + 0.6), u.y + Math.sin(u.facing) * (u.stats.radius + 0.6), 3) ?? [u.x, u.y];
+  // laid out of its back
+  const back = u.facing + Math.PI;
+  const spot = w.grid.nearestOpen(u.x + Math.cos(back) * (u.stats.radius + 0.6), u.y + Math.sin(back) * (u.stats.radius + 0.6), 3) ?? [u.x, u.y];
   const n = w.spawnAt(u.owner, b.into, spot[0], spot[1], u.heading);
   if (!n) return;
   w.events.push({ type: 'trained', id: n.id, owner: u.owner });

@@ -2,6 +2,7 @@ import { isTamer, tameable } from '../sim/abilities/herding';
 import { isUnderfoot } from '../sim/abilities/underfoot';
 import { isWall } from '../sim/abilities/wall';
 import { digestsTrees } from '../sim/abilities/digest';
+import { foodOwed } from '../sim/abilities/metamorph';
 // Mouse + keyboard → selection, camera, and Commands.
 import type { Command } from '../sim/commands';
 import type { World } from '../sim/world';
@@ -339,6 +340,12 @@ export class Input {
       else rest.push(...haulers);
       if (rest.length) this.issue({ type: 'resupply', units: rest, building: tb.id });
       this.ping(wx, wy, '#ffd23f');
+    } else if (tu && tu.owner === this.player && !this.rs.selected.has(tu.id) && foodOwed(w, tu) > 0.05 && units.some((id) => { const u = w.units.get(id); return u && w.gathers(u, 'food'); })) {
+      // one of ours waiting on food (an egg, a cocoon, a mother with an egg queued): the gatherers feed it, trip after
+      // trip from the nearest food (and then whoever else is waiting)
+      const food = [...w.nodes.values()].filter((n) => n.type === 'food' && n.amount > 1).sort((a, b) => Math.hypot(a.x - tu.x, a.y - tu.y) - Math.hypot(b.x - tu.x, b.y - tu.y))[0];
+      if (food) this.issue({ type: 'gather', units: units.filter((id) => { const u = w.units.get(id); return u && w.gathers(u, 'food'); }), node: food.id, feeds: true });
+      this.ping(tu.x, tu.y, '#e0457a');
     } else if (tu && tu.owner === this.player && !this.rs.selected.has(tu.id)) {
       // an ammo bearer: throwers restock from it; anyone else gives it what they carry
       const isBearer = w.bearerRes(tu) === 'crystal'; // an ammo bearer (sim/abilities/bearer.ts)
