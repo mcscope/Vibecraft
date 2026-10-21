@@ -2280,7 +2280,8 @@ export class World {
     if (!open) return false;
     const there = this.moveTo(u, open[0], open[1], 0.15);
     const d2 = (x - u.x) ** 2 + (y - u.y) ** 2;
-    return d2 <= reach * reach || (there && d2 < 2.3 * 2.3);
+    // (made it to its spot but jostled a little off it in a crowd: still within a third of a tile of reach)
+    return d2 <= reach * reach || (there && d2 < (reach + 0.35) ** 2);
   }
 
   /** The open tile beside tile (tx, ty) nearest to `u`: edge-on before corners, walled-in pockets skipped. Null if boxed in. */
