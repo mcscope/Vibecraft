@@ -47,6 +47,8 @@ export function unitFrame(u: Unit): { anim: ArtAnim; time?: number; progress?: n
     case 'fly': case 'climb': case 'soar': case 'glide': case 'land':
       // turning hard in level flight or climbing: banked into the turn
       if ((u.anim === 'soar' || u.anim === 'climb' || u.anim === 'fly') && Math.abs(u.bank) > 0.5) return { anim: u.bank > 0 ? 'bankL' : 'bankR', time: u.animT };
+      // flying straight and level: a few beats of its wings now and then, gliding between
+      if (u.anim === 'soar' && (u.animT + (u.id % 7) * 0.5) % 3.5 < 1.3) return { anim: 'fly', time: u.animT };
       return { anim: u.anim, time: u.animT };
     case 'walk': {
       const most = Math.max(u.food, u.wood, u.crystal); // what the cargo pack mostly holds
