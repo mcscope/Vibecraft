@@ -222,7 +222,7 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
   type V = [number, number, number];
   const chitin: Mat = { color: '#1a2628', tex: 'leather', rough: 0.3, metal: 0.35 };
   const muscle: Mat = { color: mix('#2a3a20', k.tint, 0.25), tex: 'leather', rough: 0.4, metal: 0.2 };
-  const plate: Mat = { color: mix('#22262a', k.tint, 0.3), tex: 'leather', rough: 0.25, metal: 0.45 };
+  const plate: Mat = { color: '#1a2628', tex: 'leather', rough: 0.3, metal: 0.35 };
   const claw: Mat = { color: '#0e1210', tex: 'none', rough: 0.4 };
   const walking = p.anim === 'walk', running = walking && p.style === 'charge';
   const stab = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0;
@@ -254,56 +254,47 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
 }
 
 /**
- * The Goliath's body (the user's: hulking, ultralisk vibes): massive and hunched, not uniform: a great armoured hump
- * over its shoulders, the body falling away behind it, keeled and ridged, to a short heavy tail; a low, broad,
- * armoured head between its shoulders; and its weapon, two huge scythe arms rising from the shoulders in segments and
- * arcing up and over to great serrated blades, crystal set at their points. Walking, they're held high; striking,
- * they slash down and forward. `up` 0 … 1 is how far it has risen from its squat (the scythes lift as it rises).
+ * The Goliath's body: the Vimmer and charger family's body (dark chitin, tinted segment rims, spines down its back, a
+ * barbed tail, a cluster of glossy eyes over a toothed maw, the crystal spike), made big and heavy, deep and broad at
+ * the shoulders and falling away behind; and two great scythe arms from its shoulders, in the same chitin as the
+ * Vimmer's wing spars, spined along their backs, arcing over into clean curved blades. Walking, they're held high;
+ * striking, they slash down and forward. `up` 0 … 1 is how far it has risen from its squat (the scythes lift as it rises).
  */
 function goliathBody(c: ModelBuilder, p: Pose, tint: string, up: number): void {
   type V = [number, number, number];
-  const hide: Mat = { color: '#1c1820', tex: 'leather', rough: 0.35, metal: 0.3 };
-  const plate: Mat = { color: mix('#2a2430', tint, 0.35), tex: 'leather', rough: 0.22, metal: 0.5 };
-  const edge: Mat = { color: '#d8d2c8', tex: 'none', rough: 0.3, metal: 0.4 };
-  const eye: Mat = { color: '#ff5a3a', tex: 'none', rough: 0.1, emissive: '#801a08' };
+  const chitin: Mat = { color: '#1a2628', tex: 'leather', rough: 0.3, metal: 0.35 };
+  const sheen: Mat = { color: tint, tex: 'leather', rough: 0.3, metal: 0.4 };
+  const eye: Mat = { color: '#050608', tex: 'none', rough: 0.05, metal: 0.5 };
+  const tooth: Mat = { color: '#d8d4c0', tex: 'none', rough: 0.5 };
+  const maw: Mat = { color: '#3a0e10', tex: 'skin', rough: 0.8 };
   const slash = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.55) * Math.PI) : 0;
-  // the body: deep and broad at the shoulders, falling away behind
-  const body: Array<[number, number, number, number, number]> = [ // x, half-width, up, down, keel
-    [0.34, 0.12, 0.1, 0.08, 0.2], [0.22, 0.24, 0.24, 0.16, 0.4], [0.06, 0.3, 0.32, 0.18, 0.5], [-0.12, 0.26, 0.24, 0.16, 0.4],
-    [-0.3, 0.2, 0.16, 0.13, 0.3], [-0.48, 0.12, 0.1, 0.09, 0.1], [-0.62, 0.06, 0.05, 0.05, 0], [-0.72, 0.02, 0.02, 0.02, 0],
-  ];
-  c.loft(body.map(([x, w, u, d, keel]) => ({ at: [x, (u - d) * 0.3, 0] as V, w, up: u, down: d, keel })), hide);
-  // the hump: overlapping plates over the shoulders and down its back, each standing proud, ridged
-  for (const [x0, x1, h] of [[0.32, 0.02, 1], [0.14, -0.2, 0.9], [-0.06, -0.38, 0.7], [-0.26, -0.56, 0.5], [-0.44, -0.7, 0.32]] as const) {
-    c.loft([0, 0.5, 1].map((u) => {
-      const x = x0 + (x1 - x0) * u, end = u === 0.5 ? 1 : 0.55;
-      return { at: [x, 0.06 + 0.08 * h, 0] as V, w: (0.16 + 0.16 * h) * end, up: (0.12 + 0.16 * h) * end, down: 0.04, flat: 0.25 };
-    }), plate);
-    c.cone(0.03 * h + 0.01, 0.12 * h, [(x0 + x1) / 2, 0.06 + 0.08 * h + (0.12 + 0.16 * h), 0], plate, [0, 0, 0.5], 4); // a ridge spine
-  }
-  // the head: low and broad between the shoulders, armoured, a row of small eyes, heavy mandibles
-  c.loft([{ at: [0.32, -0.04, 0], w: 0.14, up: 0.08, down: 0.08 }, { at: [0.44, -0.06, 0], w: 0.12, up: 0.07, down: 0.07, flat: 0.3 }, { at: [0.54, -0.08, 0], w: 0.06, up: 0.04, down: 0.05 }], plate);
-  for (const z of [-0.08, -0.04, 0.04, 0.08]) c.sphere(0.014, [0.5, -0.03, z], eye);
-  for (const z of [1, -1]) c.limb([0.52, -0.1, z * 0.05], [0.62 + slash * 0.04, -0.14, z * (0.02 + slash * 0.03)], 0.018, edge, 0.006);
-  // the scythes: from the shoulders up in two heavy segments, then arcing over and down into great blades
+  // the body: the family's, heavier, deepest at the shoulders
+  const body: Array<[number, number, number, number]> = [[-0.62, 0.03, 0.03, 0.03], [-0.46, 0.08, 0.07, 0.07], [-0.3, 0.12, 0.1, 0.11], [-0.12, 0.16, 0.14, 0.14], [0.04, 0.19, 0.18, 0.15], [0.16, 0.15, 0.13, 0.11], [0.24, 0.09, 0.08, 0.07]];
+  c.loft(body.map(([x, w, u, d]) => ({ at: [x, 0, 0] as V, w, up: u, down: d, keel: 0.4 })), chitin);
+  for (const [x, r] of [[-0.42, 0.09], [-0.26, 0.13], [-0.1, 0.16], [0.06, 0.19]] as const) c.sphere([0.014, r, r * 1.05], [x, 0, 0], sheen); // segment rims
+  for (let i = 0; i < 7; i++) c.cone(0.02, 0.1 - i * 0.008, [0.1 - i * 0.11, 0.17 - i * 0.018, 0], chitin, [0, 0, 0.6], 4); // spines down its back
+  c.cone(0.03, 0.12, [-0.68, 0, 0], sheen, [0, 0, Math.PI / 2], 4); // the tail barb
+  // the head: a cluster of glossy eyes over a round maw ringed with teeth, the crystal spike thrust out of it
+  c.sphere([0.1, 0.085, 0.09], [0.3, 0, 0], chitin);
+  for (const [y, z] of [[0.05, 0.035], [0.05, -0.035], [0.07, 0], [0.03, 0.06], [0.03, -0.06], [0.08, 0.04], [0.08, -0.04]] as const) c.sphere(0.02, [0.35, y, z], eye);
+  c.sphere([0.024, 0.048, 0.048], [0.39, -0.025, 0], maw);
+  for (let k = 0; k < 8; k++) { const a = (k / 8) * TAU; c.cone(0.01, 0.04, [0.395, -0.025 + Math.cos(a) * 0.048, Math.sin(a) * 0.048], tooth, [a, 0, -Math.PI / 2 - 0.5], 4); }
+  if (p.armed) c.crystal(0.38, [0.4, -0.025, 0], [0, 0, -Math.PI / 2]);
+  // the scythes: from the shoulders up in two segments, then arcing over and down into clean curved blades
   for (const z of [1, -1]) {
     const raise = 0.3 + 0.7 * up; // (folded down beside it in the squat, high as it rises)
-    const swing = -slash * 1.4; // (the slash: down and forward)
-    c.joint([0.2, 0.22, z * 0.26], [z * 0.15, 0, 0.9 * raise + swing], (arm) => {
-      arm.limb([0, 0, 0], [0.46, 0, 0], 0.075, plate, 0.06); // upper arm
-      arm.sphere([0.085, 0.075, 0.075], [0.46, 0, 0], hide); // elbow
+    c.joint([0.12, 0.12, z * 0.17], [z * 0.15, 0, 0.9 * raise - slash * 1.4], (arm) => {
+      arm.limb([0, 0, 0], [0.46, 0, 0], 0.05, chitin, 0.04); // upper arm
+      arm.sphere(0.055, [0.46, 0, 0], sheen); // its joint
       arm.joint([0.46, 0, 0], [0, 0, -1.1 - 0.4 * raise], (fore) => {
-        fore.limb([0, 0, 0], [0.4, 0, 0], 0.06, plate, 0.045);
-        // the blade: a great arc, broad and serrated along its inner edge, curving back toward the body
+        fore.limb([0, 0, 0], [0.4, 0, 0], 0.04, chitin, 0.032);
+        fore.sphere(0.042, [0.4, 0, 0], sheen);
+        for (let x = 0.08; x < 0.38; x += 0.13) fore.cone(0.012, 0.06, [x, 0.035, 0], sheen, [0, 0, -0.5], 4); // spines, as the Vimmer's spars
         fore.joint([0.4, 0, 0], [0, 0, -0.5], (bl) => {
           const pts: V[] = Array.from({ length: 9 }, (_, i) => { const a = (i / 8) * 2.0; return [Math.sin(a) * 0.62, (1 - Math.cos(a)) * -0.34, 0]; });
-          for (let i = 0; i < 8; i++) {
-            const r = 0.05 * (1 - i / 9);
-            bl.limb(pts[i], pts[i + 1], r, edge, r * 0.85);
-            bl.cone(0.016, 0.09 - i * 0.007, [(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2 - 0.04, 0], edge, [0, 0, Math.PI], 4); // serrations
-          }
-          bl.loft(pts.map(([x, y], i) => ({ at: [x, y + 0.06 * (1 - i / 8), 0] as V, w: 0.016, up: 0.08 * (1 - i / 9) + 0.006, down: 0.012 })), plate); // the blade's broad back
-          if (p.armed) bl.crystal(0.2, pts[8], [0, 0, Math.PI * 0.8]); // crystal at its point
+          bl.loft(pts.map(([x, y], i) => ({ at: [x, y, 0] as V, w: 0.016 * (1 - i / 10), up: 0.06 * (1 - i / 9) + 0.005, down: 0.03 * (1 - i / 9) + 0.004 })), chitin); // the blade
+          for (let i = 0; i < 8; i++) bl.limb([pts[i][0], pts[i][1] - 0.03 * (1 - i / 9), 0], [pts[i + 1][0], pts[i + 1][1] - 0.03 * (1 - (i + 1) / 9), 0], 0.006, sheen); // its edge
+          if (p.armed) bl.crystal(0.18, pts[8], [0, 0, Math.PI * 0.8]); // crystal at its point
         });
       });
     });
@@ -697,7 +688,7 @@ const dragonFly = unit({ id: 'dragon-fly', name: 'Dragon Fly', mass: 500, physiq
   attack: { style: 'throw', crystalMass: 6, ammo: 10 }, // PLACEHOLDER: its fire (a conversion of crystal) is still to design
   description: 'T3: a fire-breathing dragon with butterfly wings, insectoid and reptilian.', model: (b, p) => drawDragonFly(b, p, 500) }, 'dragon');
 const groundAttacker3 = unit({ id: 'ground-attacker3', name: 'Goliath Charger', mass: 600, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 4,
-  attack: { style: 'strike', crystalMass: 8 }, description: 'T3: a hulking charger, low and wide on massive legs, armoured, great blades at its head.', model: (b, p) => drawCharger(b, p, 600, GOLIATH) }, 'goliath');
+  attack: { style: 'strike', crystalMass: 8 }, description: 'T3: a hulking charger, low and wide on massive legs, great scythes at its shoulders.', model: (b, p) => drawCharger(b, p, 600, GOLIATH) }, 'goliath');
 
 export const units: Unit[] = [
   motherOf(1, 80), motherOf(2, 120), motherOf(3, 190),
