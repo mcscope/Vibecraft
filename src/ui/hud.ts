@@ -432,7 +432,7 @@ export class Hud {
           ${own && !u.carter ? this.commandButtons([u]) : ''}
           ${own && u.carter ? '<div class="hint">Carts supply whichever building is shortest. Right-click a building to pin this cart to it; Stop to unpin.</div>' : ''}
         </div>
-        ${own && this.isWorker(u.specId) ? this.buildMenu() : statsTable(s.spec, s.stats, this.names().food.toLowerCase())}
+        ${(own && this.growthMenu([u])) || (own && this.isWorker(u.specId) ? this.buildMenu() : statsTable(s.spec, s.stats, this.names().food.toLowerCase()))}
       </div>`;
   }
 
@@ -451,8 +451,9 @@ export class Hud {
     const mine = units.filter((x) => x.owner === this.player);
     const workers = mine.some((u) => this.isWorker(u.specId));
     // workers: tiles and commands on the left, the build menu beside them (no formations: that's the build menu's room)
-    if (workers || mine.length < 2) return `<div class="group-panel"><div class="info"><div class="groups">${tiles.join('')}</div>${this.commandButtons(mine)}</div>
-      ${workers ? this.buildMenu() : ''}</div>`;
+    const growth = this.growthMenu(mine);
+    if (workers || mine.length < 2 || growth) return `<div class="group-panel"><div class="info"><div class="groups">${tiles.join('')}</div>${this.commandButtons(mine)}</div>
+      ${growth || (workers ? this.buildMenu() : '')}</div>`;
     // an army: the orders and formations take the panel
     return `<div class="group-panel"><div class="info"><div class="groups">${tiles.join('')}</div></div>${this.armyOrders(mine)}</div>`;
   }
@@ -493,32 +494,38 @@ export class Hud {
       ${btn('stop', 'Stop', km.stop, 'Stop')}
     </div>
     <div class="cmds small">
-      ${this.morphButtons(units)}
       ${btn('resupply', 'Resupply', km.resupply, 'Resupply at the nearest stocked building, then return. Hold the key and click the ground to send them there afterwards.')}
       ${btn('give', 'Give', km.give, 'Give surplus to a friendly unit (then click it)')}
       ${btn('garrison', 'Garrison', km.garrison, 'Shelter inside one of your buildings (then click it). Throwers inside throw from cover. Only bodies that fit through a door (up to 150 kg): no mounts or beasts.')}
     </div>`;
   }
 
-  /** A button for each form the selected units can change into (unit abilities live in this row). */
-  private morphButtons(units: Unit[]): string {
+  /** Where the build menu sits: what the selected units can lay (spawns) or change into (becomes), as picture tiles. */
+  private growthMenu(units: Unit[]): string {
     const w = this.world, forms = new Map<string, [Unit, boolean]>();
     for (const u of units) {
       const spec = w.specOf(u.owner, u.specId)?.spec, origin = w.specOf(u.owner, u.shellOf ?? u.specId)?.spec; // (a shell: what went into it)
-      for (const id of origin?.becomes ?? []) if (!forms.has(`${id}:0`)) forms.set(`${id}:0`, [u, false]);
       for (const id of spec?.spawns ?? []) if (!forms.has(`${id}:1`)) forms.set(`${id}:1`, [u, true]);
+      for (const id of origin?.becomes ?? []) if (!forms.has(`${id}:0`)) forms.set(`${id}:0`, [u, false]);
     }
-    return [...forms.entries()].map(([key, [u, spawn]]) => {
+    if (!forms.size) return '';
+    const food = this.names().food.toLowerCase();
+    const tile = ([key, [u, spawn]]: [string, [Unit, boolean]]) => {
       const id = key.slice(0, -2), to = w.specOf(u.owner, id), from = w.specOf(u.owner, spawn ? u.specId : u.shellOf ?? u.specId);
       if (!to || !from) return '';
-      const c = metamorphCost(from.stats, to.stats, spawn, spawn ? undefined : u.stats.mass), food = this.names().food.toLowerCase();
-      const what = spawn ? `Grow a ${to.spec.name} beside them` : `Change into ${to.spec.name} where they stand`;
+      const c = metamorphCost(from.stats, to.stats, spawn, spawn ? undefined : u.stats.mass);
       const queued = spawn ? units.reduce((t, x) => t + x.brood.filter((b) => b.into === id).length, 0) : 0;
+      const art = this.icon('unit', id, 160);
       const tip = spawn
-        ? `Train a ${to.spec.name} in its body, like a building: ${c.food} ${food} paid up front (from its pack, a food bearer in reach or a building beside it), ${c.sec.toFixed(0)} s, then laid beside it. It keeps moving meanwhile. Right-click: cancel the last.`
-        : `${what}: ${c.food} ${food} (from their packs, a food bearer in reach or a building beside them), ${c.sec.toFixed(0)} s. They can't move or fight meanwhile.`;
-      return `<button data-morph="${id}" data-spawn="${spawn ? 1 : 0}" title="${tip}">${ICONS.morph}<span>${spawn ? '+' : '→'} ${to.spec.name}${queued ? ` ×${queued}` : ''}</span><small>${c.food} · ${c.sec.toFixed(0)} s</small></button>`;
-    }).join('');
+        ? `Lay a ${to.spec.name}: ${c.food} ${food} paid up front (from its pack, a food bearer in reach or a building beside it), ${c.sec.toFixed(0)} s, grown in its body while it keeps moving. Right-click: cancel the last.`
+        : `Change into ${to.spec.name}: ${c.food} ${food} (from its pack, a food bearer in reach, a building beside it, or food Given to it), ${c.sec.toFixed(0)} s, inside a shell where it stands.`;
+      return `<button class="bld" data-morph="${id}" data-spawn="${spawn ? 1 : 0}" title="${tip}">
+        ${art ? `<img class="art" src="${art}" alt="">` : ''}
+        <b>${to.spec.name}${queued ? ` ×${queued}` : ''}</b><span>${c.food} ${food} · ${c.sec.toFixed(0)} s</span>
+      </button>`;
+    };
+    const lay = [...forms.entries()].filter(([, [, sp]]) => sp), grow = [...forms.entries()].filter(([, [, sp]]) => !sp);
+    return `<div class="build">${lay.length ? `<div class="label">Lay</div><div class="btns">${lay.map(tile).join('')}</div>` : ''}${grow.length ? `<div class="label">Change into</div><div class="btns">${grow.map(tile).join('')}</div>` : ''}</div>`;
   }
 
   /** A group of fighters: big order tiles, and each formation drawn with this group in it. */
@@ -541,7 +548,6 @@ export class Hud {
       </div>
       <div class="tiles forms">${FORMATIONS.map((f) => `<button data-formation="${f.id}" class="ftile ${f.id === formation ? 'on' : ''}" title="${f.tip}">${formationPicture(f.id, fus)}<span>${f.name}</span></button>`).join('')}</div>
       <div class="cmds small">
-        ${this.morphButtons(units)}
         ${(['resupply', 'give', 'garrison'] as const).map((c) => `<button data-cmd="${c}" title="${{ resupply: 'Resupply at the nearest stocked building, then come back.', give: 'Give surplus to a friendly unit (then click it).', garrison: 'Shelter inside one of your buildings (then click it). Only bodies that fit through a door (up to 150 kg): no mounts or beasts.' }[c]}">${ICONS[c]}<span>${c[0].toUpperCase() + c.slice(1)}</span><kbd>${km[c].toUpperCase()}</kbd></button>`).join('')}
       </div>
     </div>`;
