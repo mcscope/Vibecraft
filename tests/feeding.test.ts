@@ -8,7 +8,7 @@ describe('feeding', () => {
   test('a flier born without crystal, with no building to reload at, picks crystal up itself', () => {
     const w = new World({ seed: 1000, scenario: { ...skirmish('woodlands'), victory: false, wildlife: false }, players: [{ name: 'A', faction: newFaction }, { name: 'B', faction: meadowfolk }] });
     const heap = [...w.nodes.values()].find((n) => n.type === 'crystal' && n.shard)!; // the starting crystal
-    const d = w.spawnAt(0, 'dragon-fly', heap.x + 3, heap.y)!;
+    const d = w.spawnAt(0, 'dragon-fly', heap.x + 3, heap.y)!; // (spawned on the ground)
     d.ammo = 0;
     for (let i = 0; i < 20 * 30; i++) w.step();
     expect(d.ammo).toBeGreaterThan(0);

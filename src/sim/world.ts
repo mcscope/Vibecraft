@@ -1390,7 +1390,7 @@ export class World {
     // thrower its stones, a striker the crystal it strikes with (one born without any goes and gets it)
     // (not fliers: for them topping up means flying home, and an idle bird told to stop should stay put)
     // (holding ground: it stays put)
-    // (a flier only when it has nothing to fight with: an idle bird told to stop otherwise stays put)
+    // (a flier only when it's landed and has nothing to fight with: an idle bird told to stop otherwise stays put)
     const short = u.stats.flight ? u.ammo < u.crystalMass - 1e-6 : u.ammo < u.stats.loadoutCrystal - 1e-6;
     if (u.stats.canAttack && short && u.stance !== 'hold' && (this.tick + u.id) % 20 === 0) this.seekAmmo(u, false);
     return false;
@@ -1885,6 +1885,7 @@ export class World {
         if (detour) this.detour(u, order); else u.order = order;
         return true;
       }
+      if (u.airborne) return false; // only on the ground does it go picking crystal up
     }
     const shard = this.nearestNode(u, 'crystal', u.stats.sight, true);
     const bearer = bearerAbility.nearestBearer(this, u);
