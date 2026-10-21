@@ -1,7 +1,7 @@
 // Five concepts for the T3 mother (2026-10-21, for the user to choose from): five answers to how a 500 kg brood
 // mother bears her weight. Dev only, rendered as units 'concept-1' … 'concept-5'.
 import type { Mat, ModelBuilder, Pose, Vec3 } from '../../kits/bake3d/types';
-import { footAt, jointBetween } from '../../kits/bake3d/gait';
+import { footAt, jointBetween, shapedLimb } from '../../kits/bake3d/gait';
 
 const TAU = Math.PI * 2;
 const plate: Mat = { color: '#5e4a3a', tex: 'leather', rough: 0.35 };
@@ -172,3 +172,115 @@ export const LOWER_MOTHERS = [
   [80, { legs: 4, pitch: -0.3, curl: 0.05, abdomen: 0.8, crest: 0, detail: 0.2, crawl: 0.9 }],
   [80, { legs: 6, pitch: -0.15, curl: 0, abdomen: 0.85, girth: 1.2, crest: 0.3, detail: 0.2, crawl: 1 }],
 ] as const;
+
+// ── Goliath concepts (2026-10-21, from scratch): five ways to carry 600 kg and charge ────────────────────────────────
+
+const chitin: Mat = { color: '#1c2224', tex: 'leather', rough: 0.2, metal: 0.45 };
+const rim: Mat = { color: '#9a3aa6', tex: 'leather', rough: 0.3, metal: 0.4 };
+const claw: Mat = { color: '#0c0e0e', tex: 'none', rough: 0.4 };
+const G = 2.4;
+
+/** A leg from hip to a planted foot, the knee bending toward `bend`, shaped and tapering. */
+function gLeg(c: ModelBuilder, hip: Vec3, rest: Vec3, phase: number, walking: boolean, l1: number, l2: number, r: number, bend: Vec3, reach = 0.08): void {
+  const foot = walking ? footAt(rest, phase, reach, 0.05) : rest;
+  const knee = jointBetween(hip, foot, l1, l2, bend);
+  shapedLimb(c, hip, knee, r, [1.2, 1.3, 1.1, 0.85], chitin, { flat: 0.25 });
+  c.sphere(r * 0.9, knee, chitin);
+  shapedLimb(c, knee, foot, r * 0.8, [1.0, 0.85, 0.7, 0.6], chitin, { flat: 0.3, keel: 0.4 });
+  c.cone(r * 0.5, r * 1.6, [foot[0] + r * 0.6, foot[1] + r * 0.2, foot[2]], claw, [0, 0, -Math.PI / 2 - 0.4], 4);
+}
+
+/** G1. Rhinoceros-beetle tank: a true six-legged insect, low and wide under a great smooth domed shell; a crystal-tipped horn. */
+export function gRhino(b: ModelBuilder, p: Pose): void {
+  const walking = p.anim === 'walk';
+  b.joint([0, 0, 0], [0, 0, 0], (c) => {
+    const y = 0.3;
+    c.loft([[0.3, 0.1, 0.08, 0.06], [0.12, 0.34, 0.26, 0.1], [-0.18, 0.4, 0.3, 0.1], [-0.48, 0.32, 0.22, 0.08], [-0.66, 0.1, 0.08, 0.05]].map(([x, w, u, d]) => ({ at: [x, y, 0] as Vec3, w, up: u, down: d, flat: 0.15 })), { color: '#1c2224', tex: 'none', rough: 0.1, metal: 0.6 });
+    c.limb([0.25, y + 0.2, 0], [-0.62, y + 0.12, 0], 0.008, rim, 0.006); // the seam
+    c.loft([[0.28, 0.14, 0.1, 0.07], [0.42, 0.12, 0.08, 0.06], [0.5, 0.06, 0.05, 0.04]].map(([x, w, u, d]) => ({ at: [x, y - 0.02, 0] as Vec3, w, up: u, down: d })), chitin); // the head
+    let prev: Vec3 = [0.46, y + 0.02, 0];
+    for (let i = 1; i <= 5; i++) { const k = i / 5, nx: Vec3 = [0.46 + 0.22 * k, y + 0.02 + 0.42 * k * k, 0]; c.limb(prev, nx, 0.05 * (1 - k * 0.7), chitin, 0.05 * (1 - (k + 0.2) * 0.7)); prev = nx; } // the horn, rising
+    if (p.armed) c.crystal(0.14, prev, [0, 0, -0.4]);
+    for (const [x, ph] of [[0.2, 0], [0.0, 0.5], [-0.22, 0]] as const) for (const z of [1, -1]) gLeg(c, [x, y - 0.02, z * 0.28], [x + 0.08, 0, z * 0.62], p.phase + ph + (z > 0 ? 0 : 0.5), walking, 0.28, 0.32, 0.05, [0, 1, z]);
+  }, G);
+}
+
+/** G2. Pangolin roller: overlapping armoured scales over an arched back, short powerful legs, a heavy tail; it tucks its head to ram. */
+export function gPangolin(b: ModelBuilder, p: Pose): void {
+  const walking = p.anim === 'walk', ram = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0;
+  b.joint([0, 0, 0], [0, 0, 0], (c) => {
+    const y = 0.38;
+    c.loft([[0.4, 0.08, 0.07, 0.06], [0.22, 0.24, 0.22, 0.14], [-0.05, 0.3, 0.3, 0.16], [-0.35, 0.26, 0.24, 0.13], [-0.6, 0.14, 0.12, 0.08], [-0.95, 0.04, 0.04, 0.03]].map(([x, w, u, d]) => ({ at: [x, y - (x < -0.5 ? (x + 0.5) * -0.4 : 0), 0] as Vec3, w, up: u, down: d })), chitin);
+    for (let i = 0; i < 9; i++) for (const z of [-1, 0, 1]) { // the scales, overlapping rows over the back and down the tail
+      const x = 0.25 - i * 0.12, arch = Math.sin(((i + 0.5) / 9) * Math.PI) * 0.3, s = 0.11 - Math.abs(i - 3) * 0.008;
+      if (s > 0.03) c.cone(s, s * 0.7, [x, y + 0.08 + arch * 0.6 - (z ? 0.08 : 0), z * (0.16 - i * 0.008)], i % 3 ? chitin : rim, [z * 0.6, 0, 1.75], 5);
+    }
+    c.joint([0.42, y - 0.04 - ram * 0.08, 0], [0, 0, -0.5 * ram], (h) => { h.sphere([0.1, 0.07, 0.07], [0.04, 0, 0], chitin); h.cone(0.05, 0.14, [0.16, -0.01, 0], chitin, [0, 0, -Math.PI / 2], 6); if (p.armed) h.crystal(0.1, [0.22, -0.01, 0], [0, 0, -Math.PI / 2]); });
+    for (const [x, ph] of [[0.18, 0], [-0.32, 0.5]] as const) for (const z of [1, -1]) gLeg(c, [x, y - 0.1, z * 0.2], [x + 0.04, 0, z * 0.32], p.phase + ph + (z > 0 ? 0 : 0.5), walking, 0.17, 0.19, 0.065, [x > 0 ? -0.5 : 0.5, 0.6, 0]);
+  }, G);
+}
+
+/** G3. Stag bull: hunched and front-heavy on two massive knuckle-walking forelegs, smaller hind legs, huge stag-beetle mandibles clamping a crystal. */
+export function gStag(b: ModelBuilder, p: Pose): void {
+  const walking = p.anim === 'walk', clamp = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0;
+  b.joint([0, 0, 0], [0, 0, 0], (c) => {
+    const y = 0.5;
+    c.loft([[0.3, 0.14, 0.12, 0.1], [0.12, 0.3, 0.3, 0.2], [-0.12, 0.26, 0.24, 0.16], [-0.38, 0.18, 0.14, 0.1], [-0.52, 0.06, 0.05, 0.04]].map(([x, w, u, d]) => ({ at: [x, y - (0.3 - x) * 0.25, 0] as Vec3, w, up: u, down: d, keel: 0.3 })), chitin); // hunched: high shoulders, falling away
+    c.sphere([0.14, 0.1, 0.13], [0.36, y + 0.0, 0], chitin); // the head
+    for (const z of [1, -1]) { // the mandibles: great curving antlers, closing on a blow
+      const open = 0.35 - clamp * 0.3;
+      c.joint([0.44, y + 0.02, z * 0.08], [0, z * open, 0.15], (m) => {
+        shapedLimb(m, [0, 0, 0], [0.24, 0.04, 0], 0.05, [1.1, 1.0, 0.9, 0.8], chitin, { flat: 0.4 });
+        shapedLimb(m, [0.24, 0.04, 0], [0.42, 0.0, -z * 0.1], 0.04, [0.9, 0.7, 0.5, 0.3], chitin, { flat: 0.4 });
+        m.cone(0.015, 0.06, [0.2, 0.0, -z * 0.04], claw, [z * Math.PI / 2, 0, 0], 4);
+      });
+    }
+    if (p.armed) c.crystal(0.12, [0.66, y - 0.02, 0], [0, 0, -Math.PI / 2]);
+    for (const z of [1, -1]) {
+      gLeg(c, [0.16, y + 0.08, z * 0.26], [0.36, 0, z * 0.42], p.phase + (z > 0 ? 0 : 0.5), walking, 0.36, 0.38, 0.085, [-0.3, 0.6, z], 0.1); // the great forelegs, knuckling
+      gLeg(c, [-0.36, y - 0.12, z * 0.14], [-0.4, 0, z * 0.3], p.phase + 0.5 + (z > 0 ? 0 : 0.5), walking, 0.2, 0.2, 0.045, [0.5, 0.6, z]);
+    }
+  }, G);
+}
+
+/** G4. Trilobite ram: a long, low armoured body of overlapping segments on ten short legs rippling in a wave, a broad ramming head plate. */
+export function gTrilobite(b: ModelBuilder, p: Pose): void {
+  const walking = p.anim === 'walk';
+  b.joint([0, 0, 0], [0, 0, 0], (c) => {
+    const y = 0.2;
+    for (let i = 0; i < 7; i++) { // the segments, each a little arched plate overlapping the next
+      const x = 0.3 - i * 0.15, w = 0.36 - Math.abs(i - 2) * 0.03;
+      c.loft([0, 1, 2].map((k) => ({ at: [x - k * 0.08, y, 0] as Vec3, w: w * (k === 1 ? 1 : 0.9), up: 0.12, down: 0.05, flat: 0.5 })), i % 2 ? chitin : { color: '#232a2c', tex: 'leather', rough: 0.2, metal: 0.45 });
+      c.cone(0.02, 0.06, [x - 0.08, y + 0.13, 0], rim, [0, 0, 0.4], 4); // a ridge spine
+    }
+    c.loft([[0.5, 0.2, 0.06, 0.03], [0.42, 0.42, 0.1, 0.04], [0.3, 0.4, 0.12, 0.05]].map(([x, w, u, d]) => ({ at: [x, y + 0.02, 0] as Vec3, w, up: u, down: d, flat: 0.6 })), chitin); // the head plate
+    for (const z of [1, -1]) c.sphere([0.03, 0.03, 0.04], [0.42, y + 0.1, z * 0.18], { color: '#0a0a0a', rough: 0.1 });
+    if (p.armed) c.crystal(0.14, [0.52, y + 0.02, 0], [0, 0, -Math.PI / 2]);
+    for (let i = 0; i < 5; i++) for (const z of [1, -1]) { // ten short legs, stepping in a wave
+      const x = 0.2 - i * 0.18;
+      gLeg(c, [x, y - 0.02, z * 0.24], [x + 0.02, 0, z * 0.46], p.phase + i * 0.2 + (z > 0 ? 0 : 0.5), walking, 0.14, 0.16, 0.03, [0, 1, z], 0.05);
+    }
+  }, G);
+}
+
+/** G5. Mole-cricket digger: a fat body behind a heavy armoured head, great shovel forelegs with toothed blades it smashes with. */
+export function gMole(b: ModelBuilder, p: Pose): void {
+  const walking = p.anim === 'walk', smash = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0;
+  b.joint([0, 0, 0], [0, 0, 0], (c) => {
+    const y = 0.32;
+    c.loft([[0.38, 0.16, 0.16, 0.1], [0.24, 0.24, 0.24, 0.14], [0.05, 0.22, 0.2, 0.14], [-0.2, 0.3, 0.26, 0.18], [-0.5, 0.26, 0.22, 0.16], [-0.72, 0.1, 0.1, 0.08]].map(([x, w, u, d]) => ({ at: [x, y, 0] as Vec3, w, up: u, down: d })), chitin);
+    c.loft([[0.42, 0.18, 0.2, 0.06], [0.26, 0.26, 0.28, 0.08], [0.12, 0.2, 0.22, 0.06]].map(([x, w, u, d]) => ({ at: [x, y + 0.02, 0] as Vec3, w, up: u, down: d, flat: 0.3 })), rim); // the armoured head shield
+    for (const z of [1, -1]) {
+      // a shovel foreleg: a thick arm ending in a broad flat toothed blade, raised and brought down to smash
+      c.joint([0.34, y - 0.04, z * 0.2], [0, 0, -0.3 + smash * 1.0 - (walking ? Math.sin(p.phase * Math.PI * 2 + (z > 0 ? 0 : Math.PI)) * 0.2 : 0)], (a) => {
+        shapedLimb(a, [0, 0, 0], [0.18, -0.18, z * 0.08], 0.07, [1.2, 1.25, 1.0, 0.85], chitin, { flat: 0.3 });
+        a.joint([0.18, -0.18, z * 0.08], [0, 0, -0.6], (s) => {
+          s.loft([0, 0.5, 1].map((k) => ({ at: [k * 0.2, 0, 0] as Vec3, w: 0.09 + k * 0.03, up: 0.02, down: 0.02, flat: 0.8 })), chitin); // the blade
+          for (let t = 0; t < 4; t++) s.cone(0.015, 0.05, [0.22, 0, (t - 1.5) * 0.05], claw, [0, 0, -Math.PI / 2], 4); // its teeth
+        });
+      });
+    }
+    if (p.armed) c.crystal(0.12, [0.48, y + 0.04, 0], [0, 0, -Math.PI / 2]);
+    for (const [x, ph] of [[0.0, 0.5], [-0.3, 0]] as const) for (const z of [1, -1]) gLeg(c, [x, y - 0.1, z * 0.2], [x - 0.06, 0, z * 0.44], p.phase + ph + (z > 0 ? 0 : 0.5), walking, 0.2, 0.24, 0.05, [-0.3, 1, z]);
+  }, G);
+}
