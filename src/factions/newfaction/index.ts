@@ -246,21 +246,26 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number): void {
     // thorax at the origin, plated
     c.sphere([0.2, 0.16, 0.17], [0, y0, 0], plate);
     c.sphere([0.16, 0.08, 0.13], [0, y0 - 0.1, 0], under);
-    // the abdomen, long, plated in segments, cavities on its sides
-    for (let i = 1; i <= 4; i++) {
-      const x = -i * 0.2, r = 0.17 - i * 0.008;
-      c.sphere([0.14, r, r * 1.1], [x, y0 - i * 0.015, 0], i % 2 ? plate : under);
-      if (i === 2 || i === 3) for (const z of [1, -1]) {
-        c.sphere([0.06, 0.055, 0.025], [x, y0 - i * 0.015, z * r * 1.08], dark);
-        c.cylinder(0.065, 0.065, 0.018, [x, y0 - i * 0.015, z * r * 1.05], { team: 'primary', tex: 'skin' }, [Math.PI / 2, 0, 0], 12);
-      }
+    // the abdomen: huge against her thin neck and legs. A deep, broad barrel of a chest like a ratite's, keeled
+    // underneath, swelling into a second great lobe behind; plated over the top, cavities on its sides
+    const body = (at: [number, number, number], r: [number, number, number], m: Mat) => c.sphere(r, at, m);
+    body([-0.22, y0 - 0.02, 0], [0.36, 0.3, 0.34], under); // the chest barrel
+    body([-0.22, y0 + 0.04, 0], [0.34, 0.27, 0.33], plate); // its plated top
+    body([-0.18, y0 - 0.3, 0], [0.24, 0.07, 0.05], plate); // the keel, down the breastbone
+    body([-0.62, y0 + 0.02, 0], [0.32, 0.27, 0.3], under); // the rear lobe
+    body([-0.62, y0 + 0.07, 0], [0.3, 0.24, 0.29], plate);
+    body([-0.88, y0 - 0.02, 0], [0.16, 0.15, 0.16], plate); // narrowing into the tail
+    for (const x of [-0.08, -0.36, -0.5, -0.76]) body([x, y0 + 0.08, 0], [0.025, 0.25, 0.3], under); // the seams between plates
+    for (const [x, rz] of [[-0.3, 0.34], [-0.6, 0.31]] as const) for (const z of [1, -1]) {
+      c.sphere([0.07, 0.065, 0.025], [x, y0, z * rz], dark);
+      c.cylinder(0.075, 0.075, 0.018, [x, y0, z * (rz - 0.005)], { team: 'primary', tex: 'skin' }, [Math.PI / 2, 0, 0], 12);
     }
     // the tail, segmented and tapering, held out behind
-    let prev: [number, number, number] = [-0.9, y0 - 0.06, 0];
+    let prev: [number, number, number] = [-1.0, y0 - 0.04, 0];
     for (let i = 1; i <= 6; i++) {
       const sway = walking ? Math.sin(t + i * 0.6) * 0.03 * i : 0;
-      const next: [number, number, number] = [-0.9 - i * 0.15, y0 - 0.06 - i * 0.02, sway];
-      c.limb(prev, next, 0.1 * (1 - i * 0.13), plate, 0.1 * (1 - (i + 1) * 0.13));
+      const next: [number, number, number] = [-1.0 - i * 0.15, y0 - 0.04 - i * 0.02, sway];
+      c.limb(prev, next, 0.08 * (1 - i * 0.13), plate, 0.08 * (1 - (i + 1) * 0.13));
       prev = next;
     }
     // neck, head and its crest: the long tube sweeping back
