@@ -101,40 +101,48 @@ function winged(b: ModelBuilder, p: Pose, color: string, wing: string, mass: num
 }
 
 /**
- * The mother: a big grub built around her thorax (the model's origin, so she turns from there), with a head in front,
- * a long abdomen behind with two cavities on its back either side, and eggs clustered at the thorax.
+ * The mother, built around her thorax (the model's origin, so she turns from there): a hard thorax carrying all six
+ * legs and a cluster of eggs, a head in front, and a swollen abdomen dragging behind with a cavity on each side.
  */
 function mother(b: ModelBuilder, p: Pose, mass: number): void {
-  const skin: Mat = { color: '#c9b48a', tex: 'skin', rough: 0.6 };
-  const dark: Mat = { color: '#3a2a22', tex: 'skin', rough: 0.9 };
-  const eggMat: Mat = { color: '#f2efe6', tex: 'none', rough: 0.85 };
+  const shell: Mat = { color: '#7a5a3a', tex: 'leather', rough: 0.4 }; // thorax, head, legs: hard
+  const belly: Mat = { color: '#e8d8b0', tex: 'skin', rough: 0.6 }; // the abdomen: soft, swollen
+  const band: Mat = { color: '#c4ac80', tex: 'skin', rough: 0.6 };
+  const dark: Mat = { color: '#2e1e18', tex: 'skin', rough: 0.95 };
+  const eggMat: Mat = { color: '#f4f1e8', tex: 'none', rough: 0.85 };
   const t = p.phase * TAU, walking = p.anim === 'walk';
-  const ripple = (i: number) => (walking ? Math.max(0, Math.sin(t - i)) * 0.03 : 0);
+  const sway = walking ? Math.sin(t) * 0.06 : 0;
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
     // thorax at the origin
-    c.sphere([0.2, 0.19, 0.22], [0, 0.22 + ripple(0), 0], skin);
-    // head, in front
-    c.sphere(0.13, [0.28, 0.2 + ripple(-1), 0], skin);
-    for (const z of [1, -1]) c.sphere(0.02, [0.38, 0.24 + ripple(-1), z * 0.06], { color: '#111111' });
-    // the abdomen, trailing behind
-    for (let i = 1; i <= 4; i++) c.sphere([0.17, 0.17 - i * 0.012, 0.2 - i * 0.008], [-i * 0.2, 0.2 + ripple(i), 0], skin);
-    // two cavities on her back, either side
+    c.sphere([0.17, 0.14, 0.16], [0, 0.3, 0], shell);
+    // head, in front, with mandibles
+    c.sphere([0.11, 0.1, 0.11], [0.22, 0.3, 0], shell);
     for (const z of [1, -1]) {
-      c.sphere([0.07, 0.03, 0.06], [-0.32, 0.36 + ripple(2), z * 0.11], dark);
-      c.cylinder(0.075, 0.075, 0.02, [-0.32, 0.355 + ripple(2), z * 0.11], skin, [0, 0, 0], 12); // the rim
+      c.sphere(0.022, [0.3, 0.34, z * 0.07], { color: '#111111' });
+      c.cone(0.025, 0.09, [0.34, 0.25, z * 0.04], shell, [0, z * 0.5, -Math.PI / 2], 6);
     }
-    // eggs clustered at the thorax
-    for (let k = 0; k < 9; k++) {
-      const a = (k / 9) * TAU, r = k === 0 ? 0 : 0.11;
-      c.cylinder(0, 0.055, 0.09, [Math.cos(a) * r * 0.8, 0.43 + (k === 0 ? 0.05 : 0) + ripple(0), Math.sin(a) * r], eggMat, [0, a, 0], 5);
-      c.cylinder(0.055, 0, 0.05, [Math.cos(a) * r * 0.8, 0.365 + (k === 0 ? 0.05 : 0) + ripple(0), Math.sin(a) * r], eggMat, [0, a, 0], 5);
+    // six legs, all off the thorax: a tripod gait
+    for (const [x, ph] of [[0.08, 0], [0, Math.PI], [-0.08, 0]] as const) for (const z of [1, -1]) {
+      const swing = walking ? Math.sin(t + ph + (z > 0 ? 0 : Math.PI)) : 0, up = Math.max(0, swing) * 0.05;
+      const knee: [number, number, number] = [x + swing * 0.04, 0.42, z * 0.3];
+      c.limb([x, 0.28, z * 0.12], knee, 0.03, shell, 0.025);
+      c.limb(knee, [x + 0.06 + swing * 0.1, up, z * 0.42], 0.025, shell, 0.014);
     }
-    c.box([0.05, 0.04, 0.3], [-0.6, 0.36 + ripple(3), 0], { team: 'primary', tex: 'cloth' }); // team band, on the abdomen
-    // legs along thorax and abdomen
-    for (let i = 0; i < 5; i++) for (const z of [1, -1]) {
-      const x = 0.08 - i * 0.2, lift = walking ? Math.max(0, Math.sin(t + i + (z > 0 ? 0 : Math.PI))) * 0.04 : 0;
-      c.limb([x, 0.1, z * 0.16], [x + 0.03, lift, z * 0.25], 0.022, skin);
+    // eggs clustered on the thorax
+    for (let k = 0; k < 7; k++) {
+      const a = (k / 7) * TAU, r = k === 0 ? 0 : 0.08, up = k === 0 ? 0.04 : 0;
+      c.sphere([0.045, 0.06, 0.045], [Math.cos(a) * r - 0.02, 0.47 + up, Math.sin(a) * r], eggMat);
     }
+    // the swollen abdomen, dragging behind, banded, a cavity on each side
+    c.joint([-0.12, 0.26, 0], [0, sway, 0], (ab) => {
+      ab.sphere([0.4, 0.25, 0.28], [-0.36, 0, 0], belly);
+      for (const x of [-0.14, -0.32, -0.5]) ab.sphere([0.025, 0.26, 0.29], [x, 0, 0], band);
+      for (const z of [1, -1]) {
+        ab.sphere([0.08, 0.07, 0.03], [-0.34, 0.02, z * 0.27], dark);
+        ab.cylinder(0.085, 0.085, 0.02, [-0.34, 0.02, z * 0.265], belly, [Math.PI / 2, 0, 0], 14); // the rim
+      }
+      ab.box([0.05, 0.03, 0.3], [-0.42, 0.25, 0], { team: 'primary', tex: 'cloth' }); // team band across its top
+    });
   }, sizeFor(mass, 40) * 1.4);
 }
 

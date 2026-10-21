@@ -200,6 +200,7 @@ async function run(g: GameSetup): Promise<void> {
     formationOf: () => input.formationOf(),
     morph: (into, spawn) => local.issue({ type: 'metamorph', units: input.selectedUnits(), into, spawn: spawn || undefined }),
     cancelSpawn: (index) => local.issue({ type: 'cancelSpawn', units: input.selectedUnits(), index }),
+    autoSpawn: (unit, specId) => local.issue({ type: 'autoSpawn', units: [unit], specId }),
     ungarrison: (building) => local.issue({ type: 'ungarrison', building }),
   });
 

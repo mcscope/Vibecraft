@@ -188,6 +188,8 @@ export interface Unit {
   shellOf?: string;
   /** Units it's training in its own body (spawns: sim/abilities/metamorph.ts), front first. */
   brood: Array<{ into: string; t: number; paid: number }>;
+  /** Like a building's auto-train: queue another of this whenever its queue is empty (or null). */
+  autoBrood: string | null;
   /** How it's actually been moving lately (tiles/s, smoothed over ~½ s): what an onlooker can see, and leads a throw by. */
   ovx: number; ovy: number;
   /** Which way a flier went this tick: +1 climbing, -1 coming down, 0 level. */
@@ -706,6 +708,7 @@ export class World {
         if (cmd.spawn) { for (const u of mine(cmd.units)) queueBrood(this, u, cmd.into); return; } // trained in its body: it carries on
         for (const u of mine(cmd.units)) if (canBecome(this, u, cmd.into)) { refundMetamorph(u); beginMetamorph(this, u, cmd.into); }
         return;
+      case 'autoSpawn': for (const u of mine(cmd.units)) if (!cmd.specId || canBecome(this, u, cmd.specId, true)) u.autoBrood = cmd.specId; return;
       case 'cancelSpawn': for (const u of mine(cmd.units)) cancelBrood(u, cmd.index); return;
       case 'attack': {
         const tgt = this.units.get(cmd.target) ?? this.buildings.get(cmd.target);
@@ -986,7 +989,7 @@ export class World {
       food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
       order: { kind: 'idle' }, resume: null, queue: [], engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
-      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', cutting: false, facing: Math.PI / 4, turnTick: -1, turnLeft: 0, faceTo: null, brood: [],
+      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', cutting: false, facing: Math.PI / 4, turnTick: -1, turnLeft: 0, faceTo: null, brood: [], autoBrood: null,
       dummy: !!spec.dummy,
       carter: spec.role === 'carter',
       gatherAcc: 0,

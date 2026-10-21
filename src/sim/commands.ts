@@ -15,6 +15,8 @@ export type CommandBody =
   | { type: 'metamorph'; units: number[]; into: string; spawn?: boolean }
   /** Units that digest trees walk to this tree and turn it into food (sim/abilities/digest.ts). */
   | { type: 'digest'; units: number[]; node: number }
+  /** Like a building's auto-train: keep queuing this spawn whenever their queue is empty (null = off). */
+  | { type: 'autoSpawn'; units: number[]; specId: string | null }
   /** Cancel the last spawn queued in each of them (what it had paid goes back into its pack). */
   | { type: 'cancelSpawn'; units: number[]; index?: number }
   /** Walk back and forth between where they are now and (x, y), fighting anything met on the way. */

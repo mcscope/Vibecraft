@@ -27,6 +27,8 @@ export interface HudActions {
   morph(into: string, spawn: boolean): void;
   /** Cancel a spawn queued in the selected units (default: the last). */
   cancelSpawn(index?: number): void;
+  /** A parent's auto-train (null = off), like a building's. */
+  autoSpawn(unitId: number, specId: string | null): void;
   ungarrison(buildingId: number): void;
   place(specId: string): void;
   idleWorker(): void;
@@ -112,8 +114,10 @@ export class Hud {
       hold = {
         el,
         timer: window.setTimeout(() => {
-          const b = this.world.buildings.get(+el.dataset.building!);
+          // a building, or a unit that trains in its body (spawns): the same toggle
+          const b = this.world.buildings.get(+el.dataset.building!), u = this.world.units.get(+el.dataset.unit!);
           if (b) this.actions.autoTrain(b.id, b.autoTrain === el.dataset.train ? null : el.dataset.train!);
+          else if (u) this.actions.autoSpawn(u.id, u.autoBrood === el.dataset.train ? null : el.dataset.train!);
           this.suppressClick = true;
           el.classList.remove('holding');
           hold = null;
@@ -126,7 +130,8 @@ export class Hud {
     this.panel.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       const el = (e.target as HTMLElement).closest('[data-train],[data-research],[data-morph]') as HTMLElement | null;
-      if (el?.dataset.morph) { if (el.dataset.spawn === '1') this.actions.cancelSpawn(); return; }
+      if (el?.dataset.unit) { this.actions.cancelSpawn(); return; } // a unit's training: cancel its last
+      if (el?.dataset.morph) return;
       if (el) this.actions.cancelTrain(+el.dataset.building!);
     });
     this.panel.addEventListener('mousemove', (e) => this.onHover(e));
@@ -153,7 +158,8 @@ export class Hud {
       this.actions.setSowing(b.id, b.sowing.includes(r) ? b.sowing.filter((x) => x !== r) : [...b.sowing, r]);
       return;
     }
-    if (el.dataset.train) this.actions.train(+el.dataset.building!, el.dataset.train);
+    if (el.dataset.train && el.dataset.unit) this.actions.morph(el.dataset.train, true); // a unit training in its body
+    else if (el.dataset.train) this.actions.train(+el.dataset.building!, el.dataset.train);
     else if (el.dataset.research) this.actions.research(+el.dataset.building!, el.dataset.research);
     else if (el.dataset.cancel) this.actions.cancelTrain(+el.dataset.cancel, el.dataset.index ? +el.dataset.index : undefined);
     else if (el.dataset.select) this.actions.select(el.dataset.select.split(',').map(Number));
@@ -170,7 +176,9 @@ export class Hud {
     const w = this.world;
     if (el.dataset.train) {
       const s = w.specOf(this.player, el.dataset.train)!;
-      this.tooltip.innerHTML = `<h3>${s.spec.name}</h3><p>${s.spec.description}</p>${statsTable(s.spec, s.stats, this.names().food.toLowerCase())}<p class="hint">${fmt(s.stats.trainTime)} s · paid from this building's stock · Click: train · Hold: auto-train on/off · Right-click: cancel last</p>`;
+      const parent = el.dataset.unit ? w.units.get(+el.dataset.unit) : undefined, ps = parent && w.specOf(parent.owner, parent.specId);
+      const paid = ps ? `${fmt(metamorphCost(ps.stats, s.stats, true).sec)} s · paid from its pack, a food bearer in reach or a building beside it` : `${fmt(s.stats.trainTime)} s · paid from this building's stock`;
+      this.tooltip.innerHTML = `<h3>${s.spec.name}</h3><p>${s.spec.description}</p>${statsTable(s.spec, s.stats, this.names().food.toLowerCase())}<p class="hint">${paid} · Click: train · Hold: auto-train on/off · Right-click: cancel last</p>`;
     } else if (el.dataset.research) {
       const t = w.techOf(this.player, el.dataset.research)!;
       const b = w.buildings.get(+el.dataset.building!);
@@ -296,6 +304,16 @@ export class Hud {
         ammo.innerHTML = `<span>Crystals ${have}/${max}</span>` + Array.from({ length: max }, (_, i) => `<i class="${i < have ? 'on' : ''}"></i>`).join('');
       }
     }
+    // its training buttons (spawns), as a building's: queue full, can't cover it from its pack, auto-train on
+    this.panel.querySelectorAll<HTMLElement>('[data-train][data-unit]').forEach((btn) => {
+      const to = w.specOf(u.owner, btn.dataset.train!), from = w.specOf(u.owner, u.specId);
+      btn.classList.toggle('poor', u.brood.length >= MAX_QUEUE);
+      const owed = to && from ? Math.max(0, metamorphCost(from.stats, to.stats, true).food - u.food) : 0;
+      btn.classList.toggle('short', owed > 0.05);
+      const note = btn.querySelector<HTMLElement>('.need');
+      if (note) note.textContent = owed > 0.05 ? `needs ${need(owed)} more in its pack` : '';
+      btn.classList.toggle('auto', u.autoBrood === btn.dataset.train);
+    });
     // laying or changing: the front of the queue, like a building's training bar
     const grow = this.panel.querySelector<HTMLElement>('[data-bar="grow"]');
     if (grow) {
@@ -538,10 +556,11 @@ export class Hud {
       const tip = spawn
         ? `Lay a ${to.spec.name}: ${c.food} ${food} paid up front (from its pack, a food bearer in reach or a building beside it), ${c.sec.toFixed(0)} s, grown in its body while it keeps moving.`
         : `Change into ${to.spec.name}: ${c.food} ${food} (from its pack, a food bearer in reach, a building beside it, or food Given to it), ${c.sec.toFixed(0)} s, inside a shell where it stands.`;
-      return `<button class="train" data-morph="${id}" data-spawn="${spawn ? 1 : 0}" title="${tip}">
+      return `<button class="train" ${spawn ? `data-train="${id}" data-unit="${u.id}"` : `data-morph="${id}" title="${tip}"`}>
         <canvas class="portrait" data-portrait="${u.owner}:${id}"></canvas>
         <span class="name">${spawn ? '' : '→ '}${to.spec.name}</span>
         <span class="cost">${c.food} ${food} · ${c.sec.toFixed(0)} s</span>
+        <span class="need"></span>
         <span class="ref" title="Refinement ${fmt(to.stats.refinement, 2)}×">${fmt(to.stats.refinement, 2)}×</span>
       </button>`;
     }).join('');

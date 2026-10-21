@@ -59,6 +59,11 @@ describe('metamorphosis', () => {
     expect(t.x).toBeGreaterThan(x0 + 3); // it kept moving
     expect(w.unitsOf(0).filter((u) => u.specId === 'fenling').length).toBe(before + 2); // two paid for and laid
     expect(t.brood.length).toBe(1); // the third waits for its price
+    // auto-train, as a building's: it queues another whenever its queue is empty
+    w.enqueue({ player: 0, cmd: { type: 'autoSpawn', units: [t.id], specId: 'fenling' } });
+    w.step();
+    expect(t.autoBrood).toBe('fenling');
+    w.enqueue({ player: 0, cmd: { type: 'autoSpawn', units: [t.id], specId: null } });
     w.enqueue({ player: 0, cmd: { type: 'cancelSpawn', units: [t.id] } });
     w.step();
     expect(t.brood.length).toBe(0);

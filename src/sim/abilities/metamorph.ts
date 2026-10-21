@@ -178,6 +178,7 @@ export function cancelBrood(u: Unit, index = u.brood.length - 1): void {
 
 /** Each tick, whatever the parent is doing: the front of its spawn queue, paid up front, grows and is laid beside it. */
 export function tickBrood(w: World, u: Unit, dt: number): void {
+  if (!u.brood.length && u.autoBrood) queueBrood(w, u, u.autoBrood); // auto-train, as a building does
   const b = u.brood[0];
   if (!b) return;
   const from = w.specOf(u.owner, u.specId), to = w.specOf(u.owner, b.into);
