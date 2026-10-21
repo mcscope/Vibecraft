@@ -17,9 +17,10 @@ export interface Pose {
   cargo: 'food' | 'wood' | 'crystal' | null;
   /**
    * A whole-body style on top of `anim` (the baker leans/tilts the model for it; a model may do more):
-   * 'charge' runs the walk flat out, leaning in; 'stagger' stumbles off balance; 'brace' sets low, point ready.
+   * 'charge' runs the walk flat out, leaning in; 'stagger' stumbles off balance; 'brace' sets low, point ready;
+   * 'bankL'/'bankR' soar (wings still) rolled into a turn (L: turning toward its +z side).
    */
-  style?: 'charge' | 'stagger' | 'brace';
+  style?: 'charge' | 'stagger' | 'brace' | 'bankL' | 'bankR';
 }
 
 export type Vec3 = [number, number, number];

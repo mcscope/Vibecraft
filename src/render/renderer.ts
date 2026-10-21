@@ -42,8 +42,10 @@ export interface RenderOptions {
 /** Which animation a unit is showing, and how far into it (seconds for loops, progress for one-shots). */
 export function unitFrame(u: Unit): { anim: ArtAnim; time?: number; progress?: number } {
   switch (u.anim) {
-    case 'fly': return { anim: 'fly', time: u.animT };
-    case 'leap': case 'climb': case 'soar': case 'glide': case 'land': return { anim: u.anim, time: u.animT };
+    case 'fly': case 'leap': case 'climb': case 'soar': case 'glide': case 'land':
+      // turning hard in level flight or climbing: banked into the turn
+      if ((u.anim === 'soar' || u.anim === 'climb' || u.anim === 'fly') && Math.abs(u.bank) > 0.5) return { anim: u.bank > 0 ? 'bankL' : 'bankR', time: u.animT };
+      return { anim: u.anim, time: u.animT };
     case 'walk': {
       const most = Math.max(u.food, u.wood, u.crystal); // what the cargo pack mostly holds
       const anim: ArtAnim = most <= 0.5 ? 'walk' : most === u.food ? 'carryFood' : most === u.wood ? 'carryWood' : 'carryCrystal';

@@ -9,7 +9,7 @@
 // larva) follow the user's description. The Dragon Fly is the user's; its fire (from crystal) is still to design.
 // Self-contained: only engine types and kits, never another faction.
 import type { FactionSpec, UnitSpec } from '../types';
-import type { ModelBuilder, Pose } from '../../kits/bake3d/types';
+import type { Section, ModelBuilder, Pose } from '../../kits/bake3d/types';
 import type { Mat } from '../../kits/bake3d/types';
 
 type Unit = UnitSpec & { model: (b: ModelBuilder, p: Pose) => void };
@@ -28,11 +28,108 @@ const LOOK = {
   caterpillar: { scale: (m: number) => 1.2 * Math.cbrt(m / 15), length: 0.24 }, // (a long body: its collision circle is its width)
   egg: { scale: (m: number) => Math.cbrt(m / 15), length: 0.42 },
   bug: { scale: (m: number) => Math.cbrt(m / 40), length: 0.85 },
-  winged: { scale: (m: number) => Math.cbrt(m / 40), length: 0.85 },
   mother: { scale: (m: number) => 1.4 * Math.cbrt(m / 40), length: 1.25 },
+  vee: { scale: (m: number) => 1.3 * Math.cbrt(m / 120), length: 0.75 }, // (collision: its body; wings overlap others, as fliers' do)
   dragon: { scale: (m: number) => 2.0 * Math.cbrt(m / 500), length: 0.9 }, // 500 kg: ~4.5 m snout to tail-tip (collision: its body; wings overlap others, as fliers' do)
 } as const;
 const footprint = (look: keyof typeof LOOK, mass: number) => LOOK[look].scale(mass) * LOOK[look].length;
+
+/**
+ * The T2 flier, a dive bomber (the user's design): an insectoid flying-V. In flight its two long jointed wings sweep
+ * back from the point where its head and crystal spike lead; diving, they fold tight along its body; on the ground it
+ * stands on them like a spider (each wing's wrist and tip on the ground, the joint between arched high) and stabs down
+ * with the spike from its maw. Chitin and ribbed, scalloped membrane, a cluster of eyes, a ring of teeth.
+ */
+function drawVee(b: ModelBuilder, p: Pose, mass: number): void {
+  const chitin: Mat = { color: '#1a2628', tex: 'leather', rough: 0.3, metal: 0.35 };
+  const sheen: Mat = { color: '#2a9aa6', tex: 'leather', rough: 0.3, metal: 0.4 };
+  const membrane: Mat = { color: '#4f6e6c', tex: 'skin', rough: 0.7 };
+  const rib: Mat = { color: '#121818', tex: 'none', rough: 0.6 };
+  const eye: Mat = { color: '#050608', tex: 'none', rough: 0.05, metal: 0.5 };
+  const tooth: Mat = { color: '#d8d4c0', tex: 'none', rough: 0.5 };
+  const maw: Mat = { color: '#3a0e10', tex: 'skin', rough: 0.8 };
+  const flying = p.anim === 'fly' || p.anim === 'climb' || p.anim === 'soar' || p.anim === 'glide' || p.anim === 'leap' || p.anim === 'land';
+  const diving = p.anim === 'glide' || p.anim === 'land';
+  const t = p.phase * TAU;
+  const stab = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0;
+  type V = [number, number, number];
+  const norm = (v: V): V => { const l = Math.hypot(...v) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
+  const along = (a: V, d: V, len: number): V => [a[0] + d[0] * len, a[1] + d[1] * len, a[2] + d[2] * len];
+  // one wing bone from a to b: a spined spar along its leading edge, the membrane trailing behind it (ribbed, its
+  // edge scalloped), `chord` wide at a and `chord2` at b
+  const bone = (c: ModelBuilder, a: V, bb: V, chord: number, chord2: number) => {
+    const d: V = [bb[0] - a[0], bb[1] - a[1], bb[2] - a[2]], len = Math.hypot(...d);
+    if (len < 1e-3) return;
+    const n = norm(d), yaw = Math.atan2(-n[2], n[0]), pitch = Math.asin(n[1]);
+    const back = Math.sin(yaw) < 0 ? 1 : -1; // (local z toward its trailing side)
+    c.joint(a, [0, yaw, pitch], (w) => {
+      w.limb([0, 0, 0], [len, 0, 0], 0.03, chitin, 0.022);
+      for (let x = 0.08; x < len - 0.04; x += 0.13) w.cone(0.012, 0.06, [x, 0.03, 0], sheen, [0, 0, -0.5], 4); // spines
+      if (chord > 0.01 || chord2 > 0.01) {
+        const steps = 6;
+        w.loft(Array.from({ length: steps + 1 }, (_, i) => {
+          const k = i / steps, cw = (chord + (chord2 - chord) * k) * (i % 2 ? 0.72 : 1); // ribs at the full width: scalloped between
+          return { at: [k * len, 0, back * cw * 0.9] as V, w: Math.max(0.01, cw), up: 0.008, down: 0.008 };
+        }), membrane);
+        for (let i = 0; i <= steps; i += 2) { const k = i / steps, cw = chord + (chord2 - chord) * k; if (cw > 0.03) w.limb([k * len, 0, 0], [k * len - 0.03, 0, back * cw * 1.8], 0.009, rib, 0.005); }
+      }
+    });
+  };
+  const body = (c: ModelBuilder) => {
+    // a slim segmented body, tapering back to a barbed tail
+    c.loft([[-0.58, 0.02, 0.02, 0.02], [-0.44, 0.06, 0.05, 0.05], [-0.28, 0.08, 0.07, 0.08], [-0.12, 0.1, 0.085, 0.1], [0.02, 0.11, 0.1, 0.1], [0.14, 0.08, 0.075, 0.075], [0.2, 0.055, 0.055, 0.055]]
+      .map(([x, w, up, down]) => ({ at: [x, 0, 0] as V, w, up, down, keel: 0.4 })), chitin);
+    for (const x of [-0.4, -0.26, -0.12, 0.02]) c.sphere([0.012, 0.09, 0.1], [x, 0, 0], sheen); // segment rims
+    for (let i = 0; i < 6; i++) c.cone(0.015, 0.07, [0.08 - i * 0.12, 0.08 - i * 0.004, 0], chitin, [0, 0, 0.6], 4); // spines down its back
+    c.cone(0.025, 0.1, [-0.62, 0, 0], sheen, [0, 0, Math.PI / 2], 4); // the tail barb
+    // the head: a cluster of glossy eyes over a round maw ringed with teeth, the crystal spike thrust out of it
+    c.sphere([0.08, 0.07, 0.075], [0.25, 0, 0], chitin);
+    for (const [y, z] of [[0.045, 0.03], [0.045, -0.03], [0.06, 0], [0.025, 0.05], [0.025, -0.05], [0.07, 0.035], [0.07, -0.035]] as const) c.sphere(0.017, [0.29, y, z], eye);
+    c.sphere([0.02, 0.04, 0.04], [0.325, -0.02, 0], maw);
+    for (let k = 0; k < 8; k++) { const a = (k / 8) * TAU; c.cone(0.008, 0.035, [0.33, -0.02 + Math.cos(a) * 0.04, Math.sin(a) * 0.04], tooth, [a, 0, -Math.PI / 2 - 0.5], 4); }
+    if (p.armed) c.crystal(0.32, [0.33, -0.02, 0], [0, 0, -Math.PI / 2]);
+  };
+  b.joint([0, 0, 0], [0, 0, 0], (o) => {
+    if (flying) {
+      // the V: wings swept back from its shoulders, beating (big strokes climbing, a shiver soaring); diving, folded
+      // tight back along its body, nose down
+      const flap = p.anim === 'fly' ? Math.sin(t) * 0.45 : p.anim === 'climb' || p.anim === 'leap' ? Math.sin(t) * 0.7 : p.anim === 'soar' ? Math.sin(t) * 0.05 : 0;
+      o.joint([0, 0.6, 0], [0, 0, diving ? -0.45 : 0], (c) => {
+        body(c);
+        for (const S of [1, -1]) {
+          const dir = (sweep: number, up: number): V => norm([-Math.sin(sweep), up, S * Math.cos(sweep)]);
+          const sh: V = [0.06, 0.04, S * 0.08];
+          const s1 = diving ? 1.2 : 0.45, s2 = diving ? 1.35 : 0.7, s3 = diving ? 1.45 : 0.95;
+          const e = (k: number) => (diving ? 0.25 - k * 0.08 : 0.12 + flap * (0.6 + k * 0.4));
+          const wrist = along(sh, dir(s1, e(0)), 0.42), knuckle = along(wrist, dir(s2, e(1)), 0.42), tip = along(knuckle, dir(s3, e(2)), 0.46);
+          const f = diving ? 0.35 : 1;
+          bone(c, sh, wrist, 0.18 * f, 0.22 * f);
+          bone(c, wrist, knuckle, 0.22 * f, 0.18 * f);
+          bone(c, knuckle, tip, 0.18 * f, 0.02);
+          c.cone(0.02, 0.08, tip, chitin, [0, 0, -Math.PI / 2], 4);
+        }
+      });
+      return;
+    }
+    // on the ground: standing on its wings, each wing's wrist (in front) and tip (behind) planted, the joint between
+    // arched high; walking, the four points step in turn
+    const y0 = 0.5;
+    for (const S of [1, -1]) {
+      const ph = (k: number) => (p.anim === 'walk' ? Math.sin(t + k * Math.PI / 2 + (S > 0 ? 0 : Math.PI)) : 0);
+      const lift = (k: number) => Math.max(0, -ph(k)) * 0.06;
+      const sh: V = [0.06, y0 + 0.04, S * 0.08];
+      const wrist: V = [0.34 + ph(0) * 0.08, lift(0), S * 0.4];
+      const knuckle: V = [-0.06, y0 + 0.42, S * 0.6];
+      const tip: V = [-0.5 + ph(1) * 0.08, lift(1), S * 0.7];
+      bone(o, sh, wrist, 0.05, 0.03);
+      bone(o, wrist, knuckle, 0.06, 0.1);
+      bone(o, knuckle, tip, 0.1, 0.01);
+      for (const foot of [wrist, tip]) for (const dz of [-0.025, 0.025]) o.cone(0.012, 0.06, [foot[0] + 0.03, 0.01, foot[2] + dz], rib, [0, 0, -Math.PI / 2], 4); // claws
+    }
+    // the body slung between them; striking, it lunges down and forward, the spike first
+    o.joint([0.12 * stab, y0 - 0.12 * stab, 0], [0, 0, -0.55 * stab], body);
+  }, LOOK.vee.scale(mass));
+}
 
 /** A caterpillar: a row of segments that ripple as it crawls, stubby legs, a round head (the user's larvae). */
 function caterpillar(b: ModelBuilder, p: Pose, color: string, mass: number): void {
@@ -91,25 +188,6 @@ function bug(b: ModelBuilder, p: Pose, color: string, mass: number, weapon: 'str
   }, LOOK.bug.scale(mass));
 }
 
-/** PLACEHOLDER flier: a bug with two pairs of broad butterfly-like wings that beat in flight. */
-function winged(b: ModelBuilder, p: Pose, color: string, wing: string, mass: number, reptile = false): void {
-  const shell: Mat = { color, tex: reptile ? 'skin' : 'leather', rough: 0.45 };
-  const wingMat: Mat = { color: wing, tex: 'none', rough: 0.7 };
-  const flying = p.anim === 'fly' || p.anim === 'climb' || p.anim === 'soar' || p.anim === 'glide' || p.anim === 'leap' || p.anim === 'land';
-  const beat = flying ? Math.sin(p.phase * TAU) * 0.7 : -0.9; // folded up on the ground
-  b.joint([0, 0, 0], [0, 0, 0], (c) => {
-    c.sphere([0.32, 0.1, 0.1], [-0.15, 0.35, 0], shell);
-    c.sphere([0.14, 0.12, 0.12], [0.15, 0.37, 0], shell);
-    c.sphere(0.1, [0.32, 0.4, 0], shell);
-    if (reptile) c.cone(0.06, 0.18, [0.44, 0.4, 0], shell, [0, 0, -Math.PI / 2], 6); // snout
-    c.box([0.04, 0.03, 0.22], [0.15, 0.48, 0], { team: 'primary', tex: 'cloth' });
-    for (const z of [1, -1]) {
-      c.joint([0.18, 0.44, z * 0.08], [z * beat, 0, 0], (wg) => wg.sphere([0.22, 0.012, 0.42], [0, 0, z * 0.4], wingMat));
-      c.joint([0.02, 0.44, z * 0.08], [z * beat * 0.85, 0, 0], (wg) => wg.sphere([0.18, 0.012, 0.32], [-0.05, 0, z * 0.32], wingMat));
-      if (!flying) for (const x of [0.2, 0.05, -0.1]) c.limb([x, 0.32, z * 0.07], [x + 0.06, 0, z * 0.18], 0.016, shell);
-    }
-  }, LOOK.winged.scale(mass));
-}
 
 /**
  * The Dragon Fly (the user's): a reptilian dragon's body (a long neck, a horned head, scaly, a long tail, four clawed
@@ -133,9 +211,24 @@ function drawDragonFly(b: ModelBuilder, p: Pose, mass: number): void {
   b.joint([0, 0, 0], [0, 0, 0], (o) => {
   // the body canted up, nose high
   o.joint([0, y0, 0], [0, 0, 0.42], (c) => {
-    // thorax
-    c.sphere([0.26, 0.17, 0.16], [0, 0, 0], scale);
-    c.sphere([0.2, 0.1, 0.12], [0.02, -0.08, 0], belly);
+    // thorax and abdomen: one sculpted body, a deep rounded thorax pinching to a waist, the abdomen long and
+    // tapering behind it, segmented, banded and rippling (claspers at its tip)
+    const body: Section[] = [
+      { at: [0.24, 0.02, 0], w: 0.08, up: 0.08, down: 0.07 },
+      { at: [0.1, 0, 0], w: 0.17, up: 0.17, down: 0.18, keel: 0.25 },
+      { at: [-0.08, 0, 0], w: 0.16, up: 0.16, down: 0.16, keel: 0.2 },
+      { at: [-0.24, 0.01, 0], w: 0.1, up: 0.1, down: 0.1 },
+    ];
+    let tp: [number, number, number] = [-0.24, 0.01, 0];
+    for (let i = 1; i <= 10; i++) {
+      tp = [tp[0] - 0.12, tp[1] + 0.05 - i * 0.004 + wave(-i * 0.6, 1, 0.02), wave(-i * 0.55, 1, 0.02 * i)];
+      const r = 0.11 * (1 - i * 0.075) * (i === 1 ? 1.05 : 1);
+      body.push({ at: tp, w: r, up: r, down: r });
+      if (i % 2 === 0) c.sphere([0.014, r * 1.06, r * 1.06], tp, band); // a band at each segment
+    }
+    body.push({ at: [tp[0] - 0.05, tp[1], tp[2]], w: 0.02, up: 0.02, down: 0.02 });
+    c.loft(body, scale);
+    c.sphere([0.16, 0.09, 0.12], [0.04, -0.1, 0], belly);
     // the long mantis neck, segmented and swaying, rising from the thorax
     let n: [number, number, number] = [0.22, 0.05, 0];
     for (let i = 1; i <= 6; i++) {
@@ -150,21 +243,12 @@ function drawDragonFly(b: ModelBuilder, p: Pose, mass: number): void {
     c.joint(n, [tilt, look, -0.6 - bite * 0.3 + nod], (h) => {
       h.sphere([0.07, 0.06, 0.07], [0.05, 0, 0], scale); // face
       for (const z of [1, -1]) {
-        h.sphere([0.095, 0.1, 0.09], [0.04, 0.05, z * 0.085], eyeMat); // compound eye
+        h.sphere([0.062, 0.066, 0.06], [0.05, 0.04, z * 0.06], eyeMat); // compound eye
         h.cone(0.012, 0.09, [0.08, 0.1, z * 0.025], horn, [z * 0.35, 0, -0.5], 5); // antenna
         h.cone(0.02, 0.06 + bite * 0.02, [0.12, -0.04, z * 0.025], horn, [0, z * (0.4 - bite * 0.3), -Math.PI / 2], 5); // mandible
       }
       if (bite > 0.3) h.sphere(0.04, [0.18, -0.02, 0], { color: '#ff8a20', emissive: '#ff5a00' }); // (its fire: placeholder until the mechanic is designed)
     });
-    // the abdomen: long and slender, segmented, banded, rippling, claspers at its tip
-    let tp: [number, number, number] = [-0.24, 0, 0];
-    for (let i = 1; i <= 10; i++) {
-      const next: [number, number, number] = [tp[0] - 0.12, tp[1] + 0.05 - i * 0.004 + wave(-i * 0.6, 1, 0.02), wave(-i * 0.55, 1, 0.02 * i)];
-      const r = 0.065 * (1 - i * 0.055);
-      c.limb(tp, next, r, i % 2 ? scale : belly, r * 0.95);
-      if (i % 2 === 0) c.sphere([0.012, r * 1.08, r * 1.08], tp, band); // a band at each segment
-      tp = next;
-    }
     for (const z of [1, -1]) c.cone(0.02, 0.1, [tp[0] - 0.04, tp[1], tp[2] + z * 0.025], horn, [0, z * 0.4, Math.PI / 2], 4); // claspers
   });
   // six thin insect legs under the thorax (tucked in flight), and the wings, set on the canted thorax
@@ -385,7 +469,7 @@ const charger = unit({ id: 'charger', name: 'Charger', mass: 38, physique: { mus
 const micropike = unit({ id: 'micropike', name: 'Micropike', mass: 35, physique: { muscle: 0.45, frame: 0.4, reserve: 0.15 }, refinement: 2,
   attack: { style: 'strike', crystalMass: 0.8, shaft: 1.5 }, description: 'T1: micropikes.', model: (b, p) => bug(b, p, '#6aa84a', 35, 'pike') }, 'bug');
 const flier = unit({ id: 'flier', name: 'Flier', mass: 120, physique: { muscle: 0.5, frame: 0.25, reserve: 0.25 }, refinement: 3, flight: true,
-  attack: { style: 'strike', crystalMass: 2 }, description: 'T2: a dive bomber: it swoops down onto its target to strike, its dive behind the blow, and climbs away again.', model: (b, p) => winged(b, p, '#2a9aa6', '#9fe6ee', 120) }, 'winged');
+  attack: { style: 'strike', crystalMass: 2 }, description: 'T2: a dive bomber: it swoops down onto its target to strike, its dive behind the blow, and climbs away again.', model: (b, p) => drawVee(b, p, 120) }, 'vee');
 const groundAttacker2 = unit({ id: 'ground-attacker2', name: 'T2 Ground Attacker', mass: 150, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 3,
   attack: { style: 'strike', crystalMass: 4 }, description: 'T2: a ground attacker.', model: (b, p) => bug(b, p, '#2a8a96', 150, 'strike') }, 'bug');
 const slinger = unit({ id: 'slinger', name: 'Slinger', mass: 60, physique: { muscle: 0.5, frame: 0.3, reserve: 0.2 }, refinement: 3,
