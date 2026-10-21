@@ -163,3 +163,12 @@ export const MOTHER_FORMS_2 = [
   { legs: 2, pitch: -0.9, curl: 0.6, abdomen: 1.2, neck: 1.3, head: 1.5 },
   { pitch: -1.1, curl: 0.5, abdomen: 1.6, girth: 1.2, legs: 4, neck: 0.6, head: 1.8, crest: 1.4 },
 ] as const;
+
+/** Lower-tier mother concepts (2026-10-21): the T3 mother simplified and made smaller (index.ts motherT3, at the tier's
+ *  weight): T2a, T2b (120 kg), T1a, T1b (80 kg). */
+export const LOWER_MOTHERS = [
+  [120, { legs: 4, pitch: -0.9, curl: 0.4, abdomen: 1.0, crest: 0.6, detail: 0.6 }],
+  [120, { legs: 6, pitch: -0.7, curl: 0.2, abdomen: 0.9, girth: 1.1, crest: 0.5, detail: 0.4 }],
+  [80, { legs: 4, pitch: -0.5, curl: 0.1, abdomen: 0.8, crest: 0, detail: 0.2 }],
+  [80, { legs: 6, pitch: -0.3, curl: 0, abdomen: 0.85, girth: 1.2, crest: 0.3, detail: 0.2 }],
+] as const;
