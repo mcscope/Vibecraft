@@ -14,7 +14,7 @@ export interface KeyMap {
   stop: string;
   resupply: string;
   give: string;
-  /** Garrison: shelter inside a building (then click it). */
+  /** Garrison: shelter inside a building (then right-click it). */
   garrison: string;
   /** Stance: hold ground / charge (press again for automatic). */
   hold: string;
@@ -114,17 +114,17 @@ export function mountSettingsDialog(): void {
       <h3>Keys</h3>
       <table class="keys">
         <tr><td>Scroll</td><td>${[km.pan.up, km.pan.left, km.pan.down, km.pan.right].map((k) => k.map(keyName).join('/')).join(' · ')}</td></tr>
-        <tr><td>Attack-move</td><td><kbd>${keyName(km.attackMove)}</kbd> then click</td></tr>
-        <tr><td>Move (ignore enemies)</td><td><kbd>${keyName(km.move)}</kbd> then click</td></tr>
+        <tr><td>Attack-move</td><td><kbd>${keyName(km.attackMove)}</kbd> then right-click</td></tr>
+        <tr><td>Move (ignore enemies)</td><td><kbd>${keyName(km.move)}</kbd> then right-click</td></tr>
         <tr><td>Form up facing a line</td><td>right-drag the front line</td></tr>
         <tr><td>Tend the nest</td><td><kbd>${keyName(km.tend)}</kbd>: carry food to eggs, cocoons and mothers</td></tr>
-        <tr><td>Patrol</td><td><kbd>${keyName(km.patrol)}</kbd> then click: back and forth</td></tr>
+        <tr><td>Patrol</td><td><kbd>${keyName(km.patrol)}</kbd> then right-click: back and forth</td></tr>
         <tr><td>Stop</td><td><kbd>${keyName(km.stop)}</kbd></td></tr>
         <tr><td>Resupply</td><td>tap <kbd>${keyName(km.resupply)}</kbd> to return after · hold + click to go elsewhere</td></tr>
-        <tr><td>Give</td><td><kbd>${keyName(km.give)}</kbd> then click a friendly unit</td></tr>
-        <tr><td>Garrison</td><td><kbd>${keyName(km.garrison)}</kbd> then click one of your buildings</td></tr>
+        <tr><td>Give</td><td><kbd>${keyName(km.give)}</kbd> then right-click a friendly unit</td></tr>
+        <tr><td>Garrison</td><td><kbd>${keyName(km.garrison)}</kbd> then right-click one of your buildings</td></tr>
         <tr><td>Hold ground</td><td><kbd>${keyName(km.hold)}</kbd> (again: let them decide)</td></tr>
-        <tr><td>Charge</td><td><kbd>${keyName(km.charge)}</kbd> then click an enemy or a spot</td></tr>
+        <tr><td>Charge</td><td><kbd>${keyName(km.charge)}</kbd> then right-click an enemy or a spot</td></tr>
         <tr><td>Home base</td><td><kbd>${keyName(km.home)}</kbd>, then train with ${km.train.slice(0, 5).map((k) => `<kbd>${keyName(k)}</kbd>`).join(' ')}</td></tr>
         <tr><td>Groups</td><td><kbd>Ctrl</kbd>+<kbd>1–8</kbd> set · <kbd>1–8</kbd> select · double-tap to jump</td></tr>
         <tr><td>Other</td><td><kbd>Space</kbd> center · <kbd>P</kbd> pause · <kbd>[</kbd> <kbd>]</kbd> speed · <kbd>9</kbd> cart debug · <kbd>F10</kbd> settings</td></tr>

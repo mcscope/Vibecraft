@@ -104,6 +104,7 @@ export class Input {
     cam.pan(dx * cam.zoom, dy * cam.zoom);
     cam.clampTo(this.world.grid.width, this.world.grid.height);
     this.rs.formation = this.previewSlots();
+    this.showArmed();
     // hover shows what a right-click would target
     this.rs.hoverId = this.mouse.inside ? this.renderer.pick(this.mouse.x, this.mouse.y, this.alpha, this.orderPicker()) : 0;
     this.canvas.style.cursor = this.mode === 'attackMove' ? 'crosshair' : this.mode === 'move' ? 'pointer' : this.mode === 'give' ? 'copy' : this.mode === 'resupplyDest' ? 'alias' : this.mode === 'place' ? 'cell' : 'default';
@@ -116,7 +117,7 @@ export class Input {
         this.rs.ghost = { specId: spec.id, ox, oy, size: spec.size, ok: this.world.placeable(ox, oy, spec.size) && !this.world.buildBlocker(this.player, spec.id) };
         // dragging a wall, canal or road lays a line of it
         const d = this.drag;
-        if (d && d.button === 0 && d.moved && spec.size === 1 && isWall(spec)) {
+        if (d && d.button === 2 && d.moved && spec.size === 1 && isWall(spec)) {
           const [sx, sy] = cam.toWorld(d.x, d.y);
           this.rs.ghost.line = this.lineTiles(Math.floor(sx), Math.floor(sy), ox, oy).map(([x, y]) => [x, y, this.world.placeable(x, y, 1)]);
         }
@@ -137,7 +138,7 @@ export class Input {
     if (d.button === 1) {
       this.renderer.cam.pan(d.x - e.clientX, d.y - e.clientY);
       d.x = e.clientX; d.y = e.clientY;
-    } else if (d.button === 0 && d.moved && !this.mode) {
+    } else if (d.button === 0 && d.moved) {
       this.rs.box = { x0: d.x, y0: d.y, x1: e.clientX, y1: e.clientY };
     }
   }
@@ -148,19 +149,20 @@ export class Input {
     if (!d) return;
     const box = this.rs.box;
     this.rs.box = null;
-    if (d.button === 2 && d.moved && this.mode !== 'place') {
-      // a right-drag lays out the front line: the group forms up along it, facing away from you
-      const front = this.dragFront(d, e.clientX, e.clientY);
-      if (front) { this.queueing = e.shiftKey; this.formationOrder('move', this.selectedUnits(), ...front); this.queueing = false; }
-      return;
-    }
-    if (d.button === 2 && !d.moved) {
-      if (this.mode === 'place') { this.mode = null; return; }
-      if (this.mode === 'resupplyDest') this.mode = null;
-      // aiming a command (charge, move, attack, patrol, give, garrison): a right-click does that command, as a left would
-      if (this.mode) {
-        this.queueing = e.shiftKey;
+    // one rule: left-click always selects, right-click always does. A hotkey or tile (C, A, E, Q, a building to place)
+    // only sets what the next right-click does.
+    if (d.button === 2) {
+      if (this.mode && (!d.moved || this.mode === 'place')) { // the armed command (placing: a right-drag lays a wall line)
+        this.queueing = e.shiftKey && this.mode !== 'place';
         try { this.modeClick(e, d); } finally { this.queueing = false; }
+        return;
+      }
+      if (d.moved) { // a right-drag lays out the front line: the group forms up along it, facing away from you
+        // (with Attack, Charge or Patrol armed, that's how they go there; otherwise a move)
+        const front = this.dragFront(d, e.clientX, e.clientY);
+        const kind = this.mode === 'attackMove' || this.mode === 'charge' || this.mode === 'patrol' ? this.mode : 'move';
+        if (front) { this.queueing = e.shiftKey; this.formationOrder(kind, this.selectedUnits(), ...front); this.queueing = false; }
+        if (!e.shiftKey) this.mode = null;
         return;
       }
       const [wx, wy] = this.renderer.cam.toWorld(e.clientX, e.clientY);
@@ -170,11 +172,7 @@ export class Input {
       return;
     }
     if (d.button !== 0) return;
-    if (this.mode) {
-      this.queueing = e.shiftKey && this.mode !== 'place';
-      try { this.modeClick(e, d); } finally { this.queueing = false; }
-      return;
-    }
+    this.mode = null; // a left-click selects (and drops whatever was armed)
     this.selectClick(e, d, box);
   }
 
@@ -437,12 +435,30 @@ export class Input {
     for (const s of slots) one([s.id], s.x, s.y, s.face);
   }
 
+  /** A command armed: say which by the cursor, and how to use or call it off (one rule for all of them). */
+  private armedEl: HTMLElement | null = null;
+  private showArmed(): void {
+    const what: Partial<Record<NonNullable<Mode>, string>> = {
+      attackMove: 'Attack: right-click a spot or an enemy', move: 'Move: right-click where to go', charge: 'Charge: right-click an enemy or a spot',
+      patrol: 'Patrol: right-click the far end', give: 'Give: right-click a unit or building of yours', garrison: 'Garrison: right-click one of your buildings',
+      place: 'Place: right-click where to build (right-drag: a line)', resupplyDest: 'Resupply, then: right-click where to go after',
+    };
+    const text = this.mode && this.mouse.inside ? what[this.mode] : undefined;
+    if (!text) { if (this.armedEl) this.armedEl.style.display = 'none'; return; }
+    if (!this.armedEl) { this.armedEl = document.createElement('div'); this.armedEl.className = 'armed-hint'; document.body.appendChild(this.armedEl); }
+    const full = `${text} · left-click or Esc to cancel${this.mode === 'place' || this.mode === 'resupplyDest' ? '' : ' · Shift: do it again'}`;
+    if (this.armedEl.textContent !== full) this.armedEl.textContent = full;
+    this.armedEl.style.display = 'block';
+    this.armedEl.style.left = `${this.mouse.x + 18}px`;
+    this.armedEl.style.top = `${this.mouse.y + 18}px`;
+  }
+
   /** The formation to draw under the cursor: while choosing where to send the group, or dragging out its front. */
   private previewSlots(): Slot[] | null {
     const units = this.selectedUnits();
     if (units.length < 2 || !this.mouse.inside) return null;
     const d = this.drag;
-    if (d?.button === 2 && d.moved) { const f = this.dragFront(d, this.mouse.x, this.mouse.y); return f ? this.slotsAt(units, ...f) : null; }
+    if (d?.button === 2 && d.moved && this.mode !== 'place') { const f = this.dragFront(d, this.mouse.x, this.mouse.y); return f ? this.slotsAt(units, ...f) : null; }
     if (this.mode !== 'move' && this.mode !== 'attackMove' && this.mode !== 'patrol' && this.mode !== 'charge') return null;
     const [wx, wy] = this.renderer.cam.toWorld(this.mouse.x, this.mouse.y);
     return this.slotsAt(units, wx, wy);

@@ -422,7 +422,7 @@ export const buildings: FenBuilding[] = [
     size: 2, materials: 220, requires: ['reed-hut'], trains: ['bog-toad', 'pack-tortoise'], model: models.toadWallow,
   },
   {
-    id: 'canal', name: 'Canal', description: 'A dug channel of fen water: nothing walks through it. Cheap; shift-click to dig a line of them.',
+    id: 'canal', name: 'Canal', description: 'A dug channel of fen water: nothing walks through it. Cheap; right-drag to dig a line of them.',
     size: 1, materials: 12, wall: true, model: models.canal,
   },
   {

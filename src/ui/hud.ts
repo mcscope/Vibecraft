@@ -527,15 +527,15 @@ export class Hud {
     return `<div class="cmds">
       ${btn('move', 'Move', km.move, 'Move there, ignoring enemies on the way (pull units out of a fight). Right-drag to lay out where the front line stands.')}
       ${btn('attackMove', 'Attack', km.attackMove, 'Attack-move: go there, fighting whatever they meet on the way.')}
-      ${btn('patrol', 'Patrol', km.patrol, 'Patrol: then click a spot: they walk back and forth between here and there, fighting whatever they meet.')}
-      ${btn('charge', 'Charge', km.charge, 'Charge: then click an enemy or a spot: they sprint at it and run on through, smashing into what\'s in the way. Pikes don\'t stop to brace. Sprinting burns calories fast.')}
+      ${btn('patrol', 'Patrol', km.patrol, 'Patrol: then right-click a spot: they walk back and forth between here and there, fighting whatever they meet.')}
+      ${btn('charge', 'Charge', km.charge, 'Charge: then right-click an enemy or a spot: they sprint at it and run on through, smashing into what\'s in the way. Pikes don\'t stop to brace. Sprinting burns calories fast.')}
       ${btn('hold', 'Hold', km.hold, 'Hold ground here: stand still and strike whatever comes into reach. Pikes and spears plant their points and brace for a charge. Any other order (or Hold again) ends it.')}
       ${btn('stop', 'Stop', km.stop, 'Stop')}
     </div>
     <div class="cmds small">
       ${this.hasBuildings() ? btn('resupply', 'Resupply', km.resupply, 'Resupply at the nearest stocked building, then return. Hold the key and click the ground to send them there afterwards.') : ''}
-      ${btn('give', 'Give', km.give, 'Give surplus to a friendly unit (then click it)')}
-      ${this.hasBuildings() ? btn('garrison', 'Garrison', km.garrison, 'Shelter inside one of your buildings (then click it). Throwers inside throw from cover. Only bodies that fit through a door (up to 150 kg): no mounts or beasts.') : ''}
+      ${btn('give', 'Give', km.give, 'Give surplus to a friendly unit (then right-click it)')}
+      ${this.hasBuildings() ? btn('garrison', 'Garrison', km.garrison, 'Shelter inside one of your buildings (then right-click it). Throwers inside throw from cover. Only bodies that fit through a door (up to 150 kg): no mounts or beasts.') : ''}
       ${this.tends(units) ? `<button data-cmd="tend" title="Tend the nest until told otherwise: carry food to whoever's waiting on it (an egg, a cocoon, a mother with an egg queued), gathering more in between.">${ICONS.tend}<span>Tend</span><kbd>${km.tend.toUpperCase()}</kbd></button>` : ''}
     </div>`;
   }
@@ -597,16 +597,16 @@ export class Hud {
     const fus = units.map(formationUnit);
     return `<div class="army">
       <div class="tiles">
-        ${tile('move', km.move, 'Click where to go. They ignore enemies on the way. Right-drag on the ground to draw where their front line stands.')}
-        ${tile('attackMove', km.attackMove, 'Click where to go. They fight whatever they meet on the way.')}
-        ${tile('patrol', km.patrol, 'Click a spot. They walk back and forth between here and there, fighting whatever they meet.')}
-        ${tile('charge', km.charge, 'Click an enemy or a spot. They sprint at it and run on through, smashing into what\'s in the way. Pikes charge with their points down; they don\'t stop to brace. Sprinting burns calories fast.')}
+        ${tile('move', km.move, 'Right-click where to go. They ignore enemies on the way. Right-drag on the ground to draw where their front line stands.')}
+        ${tile('attackMove', km.attackMove, 'Right-click where to go. They fight whatever they meet on the way.')}
+        ${tile('patrol', km.patrol, 'Right-click a spot. They walk back and forth between here and there, fighting whatever they meet.')}
+        ${tile('charge', km.charge, 'Right-click an enemy or a spot. They sprint at it and run on through, smashing into what\'s in the way. Pikes charge with their points down; they don\'t stop to brace. Sprinting burns calories fast.')}
         ${tile('hold', km.hold, 'Hold ground here: they stand still and strike whatever comes into reach. Pikes and spears plant their points and brace for a charge. Any other order (or Hold again) ends it.')}
         ${tile('stop', km.stop, 'Stop where they are.')}
       </div>
       <div class="tiles forms">${FORMATIONS.map((f) => `<button data-formation="${f.id}" class="ftile ${f.id === formation ? 'on' : ''}" title="${f.tip}">${formationPicture(f.id, fus)}<span>${f.name}</span></button>`).join('')}</div>
       <div class="cmds small">
-        ${(this.hasBuildings() ? ['resupply', 'give', 'garrison'] as const : ['give'] as const).map((c) => `<button data-cmd="${c}" title="${{ resupply: 'Resupply at the nearest stocked building, then come back.', give: 'Give surplus to a friendly unit (then click it).', garrison: 'Shelter inside one of your buildings (then click it). Only bodies that fit through a door (up to 150 kg): no mounts or beasts.' }[c]}">${ICONS[c]}<span>${c[0].toUpperCase() + c.slice(1)}</span><kbd>${km[c].toUpperCase()}</kbd></button>`).join('')}
+        ${(this.hasBuildings() ? ['resupply', 'give', 'garrison'] as const : ['give'] as const).map((c) => `<button data-cmd="${c}" title="${{ resupply: 'Resupply at the nearest stocked building, then come back.', give: 'Give surplus to a friendly unit (then right-click it).', garrison: 'Shelter inside one of your buildings (then right-click it). Only bodies that fit through a door (up to 150 kg): no mounts or beasts.' }[c]}">${ICONS[c]}<span>${c[0].toUpperCase() + c.slice(1)}</span><kbd>${km[c].toUpperCase()}</kbd></button>`).join('')}
       </div>
     </div>`;
   }
