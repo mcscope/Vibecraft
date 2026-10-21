@@ -2,7 +2,7 @@ import { isTamer, tameable } from '../sim/abilities/herding';
 import { isUnderfoot } from '../sim/abilities/underfoot';
 import { isWall } from '../sim/abilities/wall';
 import { digestsTrees } from '../sim/abilities/digest';
-import { foodOwed } from '../sim/abilities/metamorph';
+import { canBecome, foodOwed } from '../sim/abilities/metamorph';
 // Mouse + keyboard → selection, camera, and Commands.
 import type { Command } from '../sim/commands';
 import type { World } from '../sim/world';
@@ -367,6 +367,18 @@ export class Input {
   }
 
   /** Put the selection in a formation: they form up in it where they stand, and keep it for their next moves. */
+  /**
+   * One click of a lay/change tile is one order, to one of the selection (as a building trains one per click): to lay,
+   * the parent with the shortest queue; to change, one not already changing, the one with the most food towards it.
+   */
+  oneFor(into: string, spawn: boolean): number[] {
+    const w = this.world;
+    const able = this.selectedUnits().map((id) => w.units.get(id)!).filter((u) => u && canBecome(w, u, into, spawn) && (spawn || u.order.kind !== 'metamorph'));
+    if (!able.length) return [];
+    able.sort(spawn ? (a, b) => a.brood.length - b.brood.length || a.id - b.id : (a, b) => b.food - a.food || a.id - b.id);
+    return [able[0].id];
+  }
+
   setFormation(f: Formation): void {
     const units = this.selectedUnits();
     for (const id of this.formations.keys()) if (!this.world.units.has(id)) this.formations.delete(id); // (the fallen)

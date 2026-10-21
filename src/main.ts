@@ -198,7 +198,7 @@ async function run(g: GameSetup): Promise<void> {
     command: (kind) => input.hudCommand(kind),
     formation: (f) => input.setFormation(f),
     formationOf: () => input.formationOf(),
-    morph: (into, spawn) => local.issue({ type: 'metamorph', units: input.selectedUnits(), into, spawn: spawn || undefined }),
+    morph: (into, spawn) => local.issue({ type: 'metamorph', units: input.oneFor(into, spawn), into, spawn: spawn || undefined }),
     cancelSpawn: (index) => local.issue({ type: 'cancelSpawn', units: input.selectedUnits(), index }),
     autoSpawn: (unit, specId) => local.issue({ type: 'autoSpawn', units: [unit], specId }),
     ungarrison: (building) => local.issue({ type: 'ungarrison', building }),
