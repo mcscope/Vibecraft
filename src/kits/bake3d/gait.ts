@@ -2,7 +2,7 @@
 // it (the baker measures how far a walk's planted feet slide back a loop, and the game plays the walk by distance
 // walked, so they hold still on the ground), then lifts and swings forward to plant again. A leg's middle joint
 // falls where its hip and foot put it.
-import type { Vec3 } from './types';
+import type { Mat, ModelBuilder, Vec3 } from './types';
 
 /**
  * Where a walking foot is at `phase` (0 … 1) of its own step: for the first `duty` of it (half, walking) it's planted,
@@ -44,6 +44,22 @@ export function aim(x: Vec3, zToward: Vec3): Vec3 {
   const m13 = Math.max(-1, Math.min(1, Z[0]));
   const ry = Math.asin(m13);
   return Math.abs(m13) < 0.9999999 ? [Math.atan2(-Z[1], Z[2]), ry, Math.atan2(-Y[0], X[0])] : [Math.atan2(Y[2], Y[1]), ry, 0];
+}
+
+/**
+ * A shaped bone from `a` to `b` (not a plain tube): lofted through `profile`, its girth at even steps along it (× `r`),
+ * so it can swell where muscle sits and taper away; `flat` squashes it (wider than deep, 0 … 0.8), `keel` gives it a
+ * ridge underneath, and `up` is the way its top faces.
+ */
+export function shapedLimb(c: ModelBuilder, a: Vec3, b: Vec3, r: number, profile: number[], mat: Mat, o: { flat?: number; keel?: number; up?: Vec3 } = {}): void {
+  const d: Vec3 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], len = Math.hypot(...d);
+  if (len < 1e-4) return;
+  const up = o.up ?? [0, 1, 0];
+  // (aim's z leans toward `up`: the section's z is its height, so swap for a frame whose y is up)
+  c.joint(a, aim(d, up), (j) => j.joint([0, 0, 0], [Math.PI / 2, 0, 0], (s) => {
+    const n = profile.length - 1, f = o.flat ?? 0;
+    s.loft(profile.map((g, i) => ({ at: [(i / n) * len, 0, 0] as Vec3, w: r * g * (1 + f * 0.5), up: r * g * (1 - f * 0.5), down: r * g * (1 - f * 0.5), keel: o.keel })), mat);
+  }));
 }
 
 /** The length from one point to another (a bone's, from its rest pose). */
