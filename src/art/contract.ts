@@ -33,6 +33,11 @@ export interface AnimArt {
    * toward +y (screen: down-right, then down, down-left, ...).
    */
   frames: Sprite[][];
+  /**
+   * In the air: each frame's shadow alone, as it falls on the ground (same layout as `frames`). The frames are drawn
+   * lifted to the flier's height; its shadow is drawn on the ground, falling away from the sun as it climbs.
+   */
+  shadows?: Sprite[][];
   /** Playback rate for looping animations (attack and die play once over their duration). */
   fps?: number;
 }
@@ -136,10 +141,19 @@ export function anim(art: UnitArt, a: ArtAnim): AnimArt {
 
 /** The frame to show for a unit facing map octant 0..7. `progress` (0..1) for one-shot anims, else `time` in seconds. */
 export function unitSprite(art: UnitArt, a: ArtAnim, octant: number, t: { time?: number; progress?: number }): Sprite {
+  return frameOf(anim(art, a), anim(art, a).frames, octant, t);
+}
+
+/** The shadow of the frame unitSprite picks (an animation in the air), if it has one. */
+export function unitShadow(art: UnitArt, a: ArtAnim, octant: number, t: { time?: number; progress?: number }): Sprite | undefined {
   const an = anim(art, a);
-  const facings = an.frames.length;
+  return an.shadows ? frameOf(an, an.shadows, octant, t) : undefined;
+}
+
+function frameOf(an: AnimArt, set: Sprite[][], octant: number, t: { time?: number; progress?: number }): Sprite {
+  const facings = set.length;
   const f = facings === 1 ? 0 : Math.round(((((octant % 8) + 8) % 8) * facings) / 8) % facings;
-  const frames = an.frames[f];
+  const frames = set[f];
   const n = frames.length;
   const i = t.progress !== undefined ? Math.min(n - 1, Math.floor(t.progress * n)) : Math.floor((t.time ?? 0) * (an.fps ?? 8)) % n;
   return frames[Math.max(0, i)];

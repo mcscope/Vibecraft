@@ -61,6 +61,20 @@ describe('charging at a spot', () => {
 });
 
 describe('hold', () => {
+  test('holding ground, it stays put with an enemy building in sight (and waits when out of crystal)', () => {
+    const [a, b] = PLAYABLE;
+    const w = new World({ seed: 1, scenario: { ...skirmish(), setup: () => {}, victory: false, wildlife: false }, players: [{ name: 'A', faction: a }, { name: 'B', faction: b }] });
+    const thrower = a.units.find((u) => u.attack?.style === 'throw')!, striker = a.units.find((u) => u.attack?.style === 'strike' && u.id !== a.workerId)!;
+    const hut = b.buildings!.find((x) => !x.unbuildable && x.size === 1)!;
+    w.addBuilding(1, hut.id, 30, 20);
+    const us = [w.spawnAt(0, striker.id, 24.5, 20.5)!, w.spawnAt(0, thrower.id, 24.5, 22.5)!];
+    us[1].ammo = 0;
+    w.enqueue({ player: 0, cmd: { type: 'stance', units: us.map((u) => u.id), stance: 'hold' } });
+    const at = us.map((u) => [u.x, u.y]);
+    for (let i = 0; i < 20 * 10; i++) w.step();
+    us.forEach((u, k) => expect(Math.hypot(u.x - at[k][0], u.y - at[k][1]), u.specId).toBeLessThan(0.2));
+  });
+
   test('stops them where they stand, and the next order ends it', () => {
     const f = PLAYABLE[0];
     const w = new World({ seed: 1, scenario: { ...skirmish(), setup: (ww) => { ww.spawnAt(0, f.workerId, 10.5, 10.5); }, victory: false, wildlife: false }, players: [{ name: 'A', faction: f }, { name: 'B', faction: PLAYABLE[1] }] });

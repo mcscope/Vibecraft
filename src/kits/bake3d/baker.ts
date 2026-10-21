@@ -106,6 +106,11 @@ const BAKED_DIRS = [0, 1, 2, 3, 4, 5, 6, 7];
 
 interface Extent { left: number; right: number; top: number; bottom: number }
 
+/** Poses drawn in the air (lifted to the flier's height): baked without a ground shadow, their shadows baked alone. */
+const AIR_POSES = new Set<string>(['fly', 'leap', 'climb', 'soar', 'glide', 'land']);
+/** The layer a body goes on to cast its shadow unseen (the camera draws layer 0 only). */
+const SHADOW_ONLY = 1;
+
 export class Baker {
   readonly q: number;
   private renderer: THREE.WebGLRenderer;
@@ -134,6 +139,7 @@ export class Baker {
     this.scene.add(new THREE.HemisphereLight('#cfdcff', '#4a3f2a', 0.75));
     this.sun = new THREE.DirectionalLight('#ffe6c4', 3.1);
     this.sun.position.set(-7, 9, -2.2);
+    this.sun.shadow.camera.layers.enable(SHADOW_ONLY); // (a body on this layer casts a shadow the camera never sees it make)
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.bias = -0.0003;
@@ -333,8 +339,12 @@ export class Baker {
     type Crop = { src: HTMLCanvasElement; x: number; y: number; w: number; h: number; ax: number; ay: number; dx: number; dy: number; page?: number };
     const crops = new Map<BakedAnim, Crop[]>();
     this.aim(ext, r, h);
-    for (const anim of anims) {
+    const shadowCrops = new Map<BakedAnim, Crop[]>();
+    for (const [anim, shadowPass] of anims.flatMap((a) => (AIR_POSES.has(a) ? [[a, false], [a, true]] : [[a, false]]) as Array<[BakedAnim, boolean]>)) {
       const n = FRAMES[anim];
+      // in the air the body is baked without its shadow (it's drawn lifted to its height) and, in a second pass, its
+      // shadow alone: the renderer lays that on the ground, falling away from the sun as it climbs
+      this.ground.visible = !AIR_POSES.has(anim) || shadowPass;
       const grid = document.createElement('canvas');
       grid.width = fw * n;
       grid.height = fh * rows;
@@ -373,6 +383,7 @@ export class Baker {
             body.rotation.x = k * 1.5;
             body.position.y = -0.04 * k;
           }
+          if (shadowPass) body.traverse((o) => o.layers.set(SHADOW_ONLY));
           this.stage.rotation.y = -theta;
           const vx = (f - f0) * cw, vy = (rowsPer - 1 - (di - r0)) * chh; // GL viewports start bottom-left
           this.renderer.setViewport(vx, vy, cw, chh);
@@ -384,7 +395,7 @@ export class Baker {
       this.renderer.setScissorTest(false);
       ctx.drawImage(this.renderer.domElement, 0, 0, nc * cw, nr * chh, f0 * fw, r0 * fh, nc * fw, nr * fh);
       }
-      polish(ctx, grid.width, grid.height);
+      if (!shadowPass) polish(ctx, grid.width, grid.height);
       // crop each cell to its alpha bounds
       const data = ctx.getImageData(0, 0, grid.width, grid.height).data;
       const list: Crop[] = [];
@@ -404,13 +415,14 @@ export class Baker {
         if (x1 < 0) { x0 = 0; y0 = 0; x1 = 0; y1 = 0; }
         list.push({ src: grid, x: f * fw + x0, y: di * fh + y0, w: x1 - x0 + 1, h: y1 - y0 + 1, ax: ax0 - x0, ay: ay0 - y0, dx: 0, dy: 0 });
       }
-      crops.set(anim, list);
+      (shadowPass ? shadowCrops : crops).set(anim, list);
       await new Promise((res) => setTimeout(res, 0));
     }
+    this.ground.visible = true;
 
     // shelf-pack all crops, tallest first, onto pages no bigger than a GPU texture
     // can hold (a huge body's frames overflow one page and would draw as a black box)
-    const all = [...crops.values()].flat();
+    const all = [...crops.values(), ...shadowCrops.values()].flat();
     const MAXW = 2048, MAXH = 4096, PAD = 2;
     const pages: Array<{ w: number; h: number }> = [{ w: 0, h: 0 }];
     let cx = 0, cy = 0, shelf = 0;
@@ -436,11 +448,14 @@ export class Baker {
     }
     const q = this.q;
     const out: Partial<Record<BakedAnim, AnimArt>> = {};
-    for (const [anim, list] of crops) {
-      const n = FRAMES[anim];
-      const frames: Sprite[][] = [];
+    const sprites = (anim: BakedAnim, list: Crop[]): Sprite[][] => {
+      const n = FRAMES[anim], frames: Sprite[][] = [];
       for (let di = 0; di < rows; di++) frames.push(list.slice(di * n, di * n + n).map((c) => ({ img: imgs[c.page ?? 0], sx: c.dx, sy: c.dy, sw: c.w, sh: c.h, ax: c.ax, ay: c.ay, q })));
-      out[anim] = { frames, fps: FPS[anim] };
+      return frames;
+    };
+    for (const [anim, list] of crops) {
+      const sh = shadowCrops.get(anim);
+      out[anim] = { frames: sprites(anim, list), fps: FPS[anim], ...(sh ? { shadows: sprites(anim, sh) } : {}) };
     }
     return { height: (h * Math.cos(Math.PI / 6)) * PX_PER_UNIT, anims: out as UnitArt['anims'] };
   }
@@ -452,7 +467,7 @@ export class Baker {
     let n = FRAMES.idle + FRAMES.walk + FRAMES.attack + FRAMES.gather + FRAMES.eat + FRAMES.tired + FRAMES.die;
     if (withCarry) n += FRAMES.carryFood + FRAMES.carryWood + FRAMES.carryCrystal;
     if (opts.sidearm) n += FRAMES.cut;
-    if (opts.fly) n += FRAMES.fly + FRAMES.leap + FRAMES.climb + FRAMES.soar + FRAMES.glide + FRAMES.land;
+    if (opts.fly) n += 2 * (FRAMES.fly + FRAMES.leap + FRAMES.climb + FRAMES.soar + FRAMES.glide + FRAMES.land); // (and their shadows)
     return n * BAKED_DIRS.length;
   }
 }

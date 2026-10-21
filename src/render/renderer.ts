@@ -5,7 +5,7 @@ import { Application, Container, ImageSource, Matrix, Rectangle, Sprite as PixiS
 import { type Building, type Order, type ResourceNode, type Unit, type World, type WorldEvent } from '../sim/world';
 import { Camera, isoX, isoY, TILE_H, TILE_W } from './camera';
 import { isUnderfoot, parcelPos } from '../sim/abilities/underfoot';
-import { buildingSprite, unitSprite, type ArtAnim, type Sprite } from '../art/contract';
+import { buildingSprite, unitShadow, unitSprite, type ArtAnim, type Sprite } from '../art/contract';
 import { gpuTexture, setFrameReader } from '../art/gpu';
 import { TEAM_COLORS, type ArtBank } from './artbank';
 import { buildGround } from './ground';
@@ -67,6 +67,8 @@ export function unitFrame(u: Unit): { anim: ArtAnim; time?: number; progress?: n
 }
 
 const hexNum = (c: string) => parseInt(c.slice(1), 16);
+/** Where a flier's shadow falls, per px of its screen lift: right and down, away from the bake's sun (upper left). */
+const SUN_SHADOW: [number, number] = [0.436, 0.417];
 
 /**
  * Reusable sprites for per-frame overlays (bars, rings, shadows). Rebuilding
@@ -665,13 +667,22 @@ export class Renderer {
         this.ghostSprite.visible = true;
       }
     } else if (this.ghostSprite) this.ghostSprite.visible = false;
-    // fliers' shadows on the ground below them
+    // fliers' shadows: their own silhouette (baked with the art), on the ground, falling away from the sun the higher
+    // they fly: the bake's sun (upper left) puts a body h up h·(0.436, 0.417) of its screen lift right and down
     for (const u of w.units.values()) {
       const lift = this.lift(u.id);
-      if (lift < 2 || !this.seen(u.owner, u.x, u.y)) continue;
+      if (lift < 1 || !this.seen(u.owner, u.x, u.y)) continue;
       const x = u.px + (u.x - u.px) * alpha, y = u.py + (u.y - u.py) * alpha;
-      const r = u.stats.radius * 40 * Math.max(0.45, 1 - lift / Renderer.FLY_PX * 0.3);
-      ellipse(this.discTex, isoX(x, y), isoY(x, y), r, r * 0.5, 0x000000, 0.3);
+      const art = this.bank.unit(u.owner, u.specId);
+      const f = u.stats.flight && !u.airborne && lift > 6 ? { anim: 'fly' as const, time: this.time } : unitFrame(u);
+      const sh = art && unitShadow(art, f.anim, u.heading, f);
+      const gx = isoX(x, y) + lift * SUN_SHADOW[0], gy = isoY(x, y) + lift * SUN_SHADOW[1];
+      if (!sh) { const r = u.stats.radius * 40; ellipse(this.discTex, gx, gy, r, r * 0.5, 0x000000, 0.3); continue; } // (art without baked shadows)
+      const sp = P.get(this.texture(sh));
+      sp.anchor.set(sh.ax / sh.sw, sh.ay / sh.sh);
+      sp.position.set(gx, gy);
+      const spec = w.specOf(u.owner, u.specId), k = spec && spec.stats.mass !== u.stats.mass ? Math.cbrt(u.stats.mass / spec.stats.mass) : 1;
+      sp.scale.set(k / sh.q); sp.tint = 0xffffff; sp.alpha = 1;
     }
     P.end();
     // rally flag

@@ -97,6 +97,8 @@ export type Order =
   | { kind: 'metamorph'; into: string; paid: number; t: number; from?: string }
   /** Walk to a tree and digest it (sim/abilities/digest.ts). */
   | { kind: 'digest'; node: number }
+  /** Hungry with nowhere else to eat: eating straight from a food source until full. */
+  | { kind: 'graze'; node: number }
   /** Attack-move to (x, y), then back to (bx, by), and so on. */
   | { kind: 'patrol'; x: number; y: number; bx: number; by: number }
   | { kind: 'attack'; target: number; charge?: boolean }
@@ -1267,7 +1269,7 @@ export class World {
     else if (!moved && st.canPlant && (u.engage || u.order.kind === 'attack' || u.order.kind === 'attackMove' || u.order.kind === 'patrol' || u.stance === 'hold')) anim = 'brace';
     if (reeling) anim = 'stagger';
     else if (((u.order.kind === 'gather' && u.order.phase === 'harvest') || (u.order.kind === 'build' && u.order.phase === 'chop')) && !moved && u.busy) anim = 'gather';
-    else if ((u.order.kind === 'eatPack' || u.order.kind === 'resupply') && !moved && u.busy) anim = 'eat';
+    else if ((u.order.kind === 'eatPack' || u.order.kind === 'resupply' || u.order.kind === 'graze') && !moved && u.busy) anim = 'eat';
     else if (u.order.kind === 'metamorph') anim = 'eat'; // feeding its change
     else if (u.exhausted && !moved) anim = 'tired';
     // in the air: a flight pose pitched to how it's moving: leaping off the ground, climbing, soaring level, or gliding down
@@ -1299,6 +1301,7 @@ export class World {
       case 'eatFrom': return bearerAbility.runEatFrom(this, u, o.unit);
       case 'garrison': return runGarrison(this, u, o.building);
       case 'digest': return runDigest(this, u, o.node);
+      case 'graze': return this.runGraze(u, o.node);
       case 'metamorph': return runMetamorph(this, u, o, DT);
       case 'move': {
         const pass = u.queue.length > 0; // more orders after this one: ride on through the waypoint, don't pull up
@@ -1358,6 +1361,24 @@ export class World {
     const dB = b ? (b.ox + b.size / 2 - u.x) ** 2 + (b.oy + b.size / 2 - u.y) ** 2 : Infinity;
     if (fb && dFb < dB) { this.detour(u, { kind: 'eatFrom', unit: fb.id }); return true; }
     if (b) { this.detour(u, { kind: 'resupply', building: b.id }); return true; }
+    // nothing else: a gatherer of food grazes at the nearest food it can see, eating straight from it till it's full
+    if (this.gathers(u, 'food')) {
+      const n = this.nearestNode(u, 'food', u.stats.sight * 2, false);
+      if (n) { this.detour(u, { kind: 'graze', node: n.id }); return true; }
+    }
+    return false;
+  }
+
+  /** Order kind 'graze': eat straight from a food source until full (or it's gone). Returns whether it moved. */
+  private runGraze(u: Unit, nodeId: number): boolean {
+    const n = this.nodes.get(nodeId);
+    const room = u.stats.maxCalories - u.cal;
+    if (!n || n.amount <= 0.001 || room < 1) { this.finish(u); return false; }
+    if (!this.moveToNear(u, n.x, n.y, 0.85 + u.stats.radius, true)) return u.x !== u.px || u.y !== u.py;
+    this.face(u, n.x - u.x, n.y - u.y);
+    const kg = Math.min(n.amount, u.stats.gatherRate * DT, (u.stats.eatRate * DT) / K.calPerFood, room / K.calPerFood);
+    n.amount -= kg; u.cal += kg * K.calPerFood; u.busy = true;
+    if (n.amount <= 0.001) this.removeNode(n);
     return false;
   }
 
@@ -1370,9 +1391,11 @@ export class World {
       if (Math.abs(Math.atan2(Math.sin(u.faceTo - u.facing), Math.cos(u.faceTo - u.facing))) < 0.05) u.faceTo = null;
     }
     if (bearerAbility.sweep(this, u)) return false; // idle bearers sweep up spent crystals nearby
-    // idle throwers top their packs up from spent crystals (or a bearer) nearby, not just when empty
+    // idle armed units top their weapon packs up from spent crystals (or a bearer) nearby, not just when empty: a
+    // thrower its stones, a striker the crystal it strikes with (one born without any goes and gets it)
     // (not fliers: for them topping up means flying home, and an idle bird told to stop should stay put)
-    if (u.throws && !u.stats.flight && u.ammo < u.stats.loadoutCrystal - 1e-6 && (this.tick + u.id) % 20 === 0) this.seekAmmo(u, false);
+    // (holding ground: it stays put)
+    if (u.stats.canAttack && !u.stats.flight && u.stance !== 'hold' && u.ammo < u.stats.loadoutCrystal - 1e-6 && (this.tick + u.id) % 20 === 0) this.seekAmmo(u, false);
     return false;
   }
 
@@ -1453,8 +1476,11 @@ export class World {
     const tb = tu ? undefined : this.buildings.get(targetId);
     if (!tu && !tb) return false;
     const wpn = this.weapon(u);
+    // holding ground: it doesn't go anywhere for a fight (an explicit attack order still sends it)
+    const holding = u.stance === 'hold' && u.order.kind !== 'attack';
     if (!wpn) {
-      if (u.throws) {
+      if (holding) return true; // no crystal to fight with: it stands and waits
+      if (u.stats.canAttack) { // no crystal to fight with: a thrower's stones, or a striker's own crystal
         if (this.seekAmmo(u, true)) return true; // spent crystals or a bearer close by
         const b = this.nearestCache(u, (x) => x.stock.crystal >= u.crystalMass);
         if (b) { this.detour(u, { kind: 'resupply', building: b.id }); return true; }
@@ -1494,10 +1520,9 @@ export class World {
       return true;
     }
     if (edge > range - 0.05) {
+      if (holding) { this.face(u, tx - u.x, ty - u.y); return true; } // out of reach: it faces it and waits (units, buildings, flying or not)
       if (u.airborne) { this.moveTo(u, tx, ty, 0.05); return true; }
       if (tu) {
-        // holding ground: it doesn't go to meet anything (an explicit attack order still sends it)
-        if (u.stance === 'hold' && u.order.kind !== 'attack') { this.face(u, tx - u.x, ty - u.y); return true; }
         // a long shaft with something coming at it fast doesn't go to meet it: it plants and lets it come onto the point
         if (u.stance !== 'hold' && !charging && u.stats.canPlant && !wpn.throws && edge < range + 3) {
           const d = Math.hypot(u.x - tx, u.y - ty) || 1;

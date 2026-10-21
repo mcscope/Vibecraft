@@ -701,6 +701,7 @@ export function describeOrder(w: World, u: Unit): string {
     case 'patrol': return u.engage ? 'Fighting' : 'Patrolling';
     case 'tend': return !o.g ? (u.food >= 0.5 ? 'Tending: bringing food' : 'Tending: waiting') : o.g.phase === 'toDrop' ? 'Tending: bringing food' : 'Tending: gathering food';
     case 'digest': return 'Going to digest a tree';
+    case 'graze': return 'Eating';
     case 'metamorph': {
       const name = w.specOf(u.owner, o.into)?.spec.name ?? o.into;
       return o.t > 0 ? `Changing into ${name}` : `Waiting for food to change into ${name}`;

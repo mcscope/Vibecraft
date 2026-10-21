@@ -157,6 +157,12 @@ export class Input {
     if (d.button === 2 && !d.moved) {
       if (this.mode === 'place') { this.mode = null; return; }
       if (this.mode === 'resupplyDest') this.mode = null;
+      // aiming a command (charge, move, attack, patrol, give, garrison): a right-click does that command, as a left would
+      if (this.mode) {
+        this.queueing = e.shiftKey;
+        try { this.modeClick(e, d); } finally { this.queueing = false; }
+        return;
+      }
       const [wx, wy] = this.renderer.cam.toWorld(e.clientX, e.clientY);
       this.queueing = e.shiftKey;
       this.contextCommand(wx, wy, this.renderer.pick(e.clientX, e.clientY, this.alpha, this.orderPicker()), e.shiftKey);

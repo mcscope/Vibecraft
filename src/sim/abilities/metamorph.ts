@@ -18,7 +18,8 @@
 // Spawning: `spawns: [unit ids]`. The parent trains them in its own body, like a building: a queue of up to MAX_QUEUE,
 // each paid up front (its whole price, once that much is on hand) and grown over METAMORPH_SEC × its refinement plus
 // its whole body's growing time, then laid beside it. It goes on moving, gathering and fighting meanwhile. A parent
-// can't spawn anything more refined than itself (refinement climbs only by changing). A unit laid with exactly one
+// can't spawn anything more refined than itself (refinement climbs only by changing). Changed or laid, a unit is
+// born without crystal in its weapon pack: it gets its own (sim/world.ts: an empty armed unit seeks crystal). A unit laid with exactly one
 // form it `becomes` (an egg) starts changing into it at once.
 import type { UnitSpec } from '../../factions/types';
 import { derive, K, type DerivedStats } from '../physics';
@@ -98,6 +99,7 @@ export function swapInto(w: World, u: Unit, into: string, mass?: number): Unit |
   n.x = n.px = u.x; n.y = n.py = u.y; n.facing = u.facing;
   n.hp = n.stats.maxHp * hpShare; n.cal = n.stats.maxCalories * calShare;
   n.food = u.food; n.wood = u.wood; n.crystal = u.crystal;
+  n.ammo = 0; // born without crystal: it gets its own (what it was carrying arms it first)
   w.events.push({ type: 'metamorph', id: u.id, into: n.id, owner: u.owner, x: n.x, y: n.y, specId: u.specId, intoSpec: into, heading: u.heading });
   return n;
 }
@@ -206,6 +208,7 @@ export function tickBrood(w: World, u: Unit, dt: number): void {
   const spot = w.grid.nearestOpen(u.x + Math.cos(back) * (u.stats.radius + 0.6), u.y + Math.sin(back) * (u.stats.radius + 0.6), 3) ?? [u.x, u.y];
   const n = w.spawnAt(u.owner, b.into, spot[0], spot[1], u.heading);
   if (!n) return;
+  n.ammo = 0; // laid without crystal: it gets its own
   w.events.push({ type: 'trained', id: n.id, owner: u.owner });
   // laid with one form to become (an egg): it starts changing into it at once
   const next = w.specOf(n.owner, n.specId)?.spec.becomes;

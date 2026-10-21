@@ -30,6 +30,7 @@ const LOOK = {
   bug: { scale: (m: number) => Math.cbrt(m / 40), length: 0.85 },
   winged: { scale: (m: number) => Math.cbrt(m / 40), length: 0.85 },
   mother: { scale: (m: number) => 1.4 * Math.cbrt(m / 40), length: 1.25 },
+  dragon: { scale: (m: number) => Math.cbrt(m / 500), length: 1.6 }, // (its body and tail; the wings overlap others, as fliers' do)
 } as const;
 const footprint = (look: keyof typeof LOOK, mass: number) => LOOK[look].scale(mass) * LOOK[look].length;
 
@@ -111,10 +112,81 @@ function winged(b: ModelBuilder, p: Pose, color: string, wing: string, mass: num
 }
 
 /**
+ * The Dragon Fly (the user's): a reptilian dragon's body (a long neck, a horned head, scaly, a long tail, four clawed
+ * legs) on two pairs of big, decorated butterfly wings (veined and edged dark, banded, eyespots on the forewings),
+ * beating in flight, folded up over its back on the ground.
+ */
+function drawDragonFly(b: ModelBuilder, p: Pose, mass: number): void {
+  const scale: Mat = { color: '#6a2a6e', tex: 'leather', rough: 0.35 };
+  const belly: Mat = { color: '#c69ab0', tex: 'skin', rough: 0.5 };
+  const horn: Mat = { color: '#e8dcc0', tex: 'none', rough: 0.4 };
+  const wing: Mat = { color: '#f0a040', tex: 'none', rough: 0.6 };
+  const vein: Mat = { color: '#1e1418', tex: 'none', rough: 0.7 };
+  const band: Mat = { color: '#fff2d8', tex: 'none', rough: 0.6 };
+  const eyeOut: Mat = { color: '#18101a', tex: 'none' }, eyeMid: Mat = { color: '#3fa8e0', tex: 'none' }, eyeIn: Mat = { color: '#fbfbf4', tex: 'none' };
+  const flying = p.anim === 'fly' || p.anim === 'climb' || p.anim === 'soar' || p.anim === 'glide' || p.anim === 'leap' || p.anim === 'land';
+  const t = p.phase * TAU, beat = flying ? Math.sin(t) * 0.75 : 0;
+  const bite = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0;
+  b.joint([0, 0, 0], [0, 0, 0], (c) => {
+    const y0 = flying ? 0.5 : 0.42;
+    // body, neck, head
+    c.sphere([0.4, 0.22, 0.22], [0, y0, 0], scale);
+    c.sphere([0.32, 0.14, 0.17], [0.02, y0 - 0.09, 0], belly);
+    for (let i = 0; i < 6; i++) c.cone(0.035, 0.09, [0.22 - i * 0.09, y0 + 0.16, 0], horn, undefined, 4); // spines down its back
+    const neck: [number, number, number] = [0.5, y0 + 0.28 + bite * 0.05, 0];
+    c.limb([0.24, y0 + 0.05, 0], neck, 0.09, scale, 0.065);
+    c.joint(neck, [0, 0, -0.2 - bite * 0.3], (h) => {
+      h.sphere([0.14, 0.08, 0.08], [0.08, 0, 0], scale); // head
+      h.cone(0.06, 0.16, [0.24, -0.01, 0], scale, [0, 0, -Math.PI / 2], 8); // snout
+      h.box([0.16, 0.025, 0.07], [0.17, -0.06 - bite * 0.04, 0], belly); // jaw
+      for (const z of [1, -1]) {
+        h.cone(0.022, 0.16, [-0.02, 0.08, z * 0.05], horn, [z * 0.3, 0, 0.9], 6); // horns sweeping back
+        h.sphere(0.022, [0.12, 0.035, z * 0.06], { color: '#ffd23f', emissive: '#7a5a00' });
+      }
+      if (bite > 0.3) h.sphere(0.05, [0.36, -0.03, 0], { color: '#ff8a20', emissive: '#ff5a00' }); // (its fire: placeholder until the mechanic is designed)
+    });
+    // tail, tapering
+    let prev: [number, number, number] = [-0.28, y0, 0];
+    for (let i = 1; i <= 5; i++) {
+      const sway = Math.sin(t + i * 0.7) * 0.05 * i;
+      const next: [number, number, number] = [-0.28 - i * 0.17, y0 - i * 0.03, sway];
+      c.limb(prev, next, 0.08 * (1 - i * 0.15), scale, 0.08 * (1 - (i + 1) * 0.15));
+      prev = next;
+    }
+    // four clawed legs (tucked in flight)
+    for (const [x, ph] of [[0.18, 0], [-0.18, Math.PI]] as const) for (const z of [1, -1]) {
+      const step = !flying && p.anim === 'walk' ? Math.sin(t + ph + (z > 0 ? 0 : Math.PI)) * 0.1 : 0;
+      const knee: [number, number, number] = [x + step * 0.3, flying ? y0 - 0.12 : 0.22, z * 0.2];
+      c.limb([x, y0 - 0.05, z * 0.12], knee, 0.05, scale, 0.04);
+      c.limb(knee, flying ? [x - 0.12, y0 - 0.2, z * 0.18] : [x + 0.05 + step, 0.02, z * 0.24], 0.04, scale, 0.025);
+    }
+    // butterfly wings: forewings and hindwings, decorated
+    for (const z of [1, -1]) {
+      const fold = flying ? 0 : 0.35, sweep = flying ? 0.15 : 1.1; // on the ground: folded flat back along its spine
+      c.joint([0.08, y0 + 0.15, z * 0.12], [z * (beat + fold), z * (flying ? 0 : 1.1), sweep], (wg) => wg.joint([0, 0, 0], [0, 0, 0], (wg) => {
+        wg.sphere([0.34, 0.012, 0.62], [0.08, 0, z * 0.6], wing); // forewing
+        wg.sphere([0.36, 0.008, 0.66], [0.08, -0.002, z * 0.6], vein); // its dark edge
+        wg.sphere([0.06, 0.016, 0.5], [0.2, 0.002, z * 0.62], band); // a pale band
+        for (const [r, m, dy] of [[0.13, eyeOut, 0.008], [0.09, eyeMid, 0.012], [0.04, eyeIn, 0.016]] as const) wg.sphere([r, 0.006, r], [0.02, dy, z * 0.78], m); // eyespot
+        for (let k = 0; k < 4; k++) wg.limb([0.0, 0.012, z * 0.05], [-0.1 + k * 0.1, 0.012, z * (0.9 + (k % 2) * 0.1)], 0.006, vein); // veins
+      }, 0.65));
+      c.joint([-0.14, y0 + 0.13, z * 0.12], [z * (beat * 0.85 + fold), z * (flying ? 0 : 1.1), flying ? -0.1 : 1.0], (wg) => wg.joint([0, 0, 0], [0, 0, 0], (wg) => {
+        wg.sphere([0.3, 0.012, 0.48], [-0.12, 0, z * 0.46], wing); // hindwing
+        wg.sphere([0.32, 0.008, 0.51], [-0.12, -0.002, z * 0.46], vein);
+        for (const [r, m, dy] of [[0.07, eyeOut, 0.008], [0.04, eyeIn, 0.014]] as const) wg.sphere([r, 0.006, r], [-0.18, dy, z * 0.62], m);
+        wg.limb([-0.3, 0.008, z * 0.5], [-0.62, 0.008, z * 0.55], 0.02, vein, 0.006); // a swallowtail
+      }, 0.65));
+    }
+  }, LOOK.dragon.scale(mass));
+}
+
+/**
  * The mother, built around her thorax (the model's origin, so she turns from there): a hard thorax carrying all six
  * legs and a cluster of eggs, a head in front, and a swollen abdomen dragging behind with a cavity on each side.
  */
-function mother(b: ModelBuilder, p: Pose, mass: number): void {
+function mother(b: ModelBuilder, p: Pose, mass: number, tier: 1 | 2 | 3 = 1): void {
+  if (tier === 3) { motherT3(b, p, mass); return; }
+  const W = tier === 2 ? 1.25 : 1, H = tier === 2 ? 1.2 : 1, legR = tier === 2 ? 1.3 : 1; // T2: wider, taller, heavier legs
   const shell: Mat = { color: '#7a5a3a', tex: 'leather', rough: 0.4 }; // thorax, head, legs: hard
   const belly: Mat = { color: '#e8d8b0', tex: 'skin', rough: 0.6 }; // the abdomen: soft, swollen
   const band: Mat = { color: '#c4ac80', tex: 'skin', rough: 0.6 };
@@ -135,23 +207,91 @@ function mother(b: ModelBuilder, p: Pose, mass: number): void {
     for (const [x, ph, fx] of [[0.08, 0, 0.16], [0, Math.PI, 0], [-0.08, 0, -0.16]] as const) for (const z of [1, -1]) {
       const swing = walking ? Math.sin(t + ph + (z > 0 ? 0 : Math.PI)) : 0, up = Math.max(0, swing) * 0.04;
       const knee: [number, number, number] = [x + fx * 0.5 + swing * 0.03, 0.26, z * 0.3];
-      c.limb([x, 0.2, z * 0.12], knee, 0.032, shell, 0.027);
-      c.limb(knee, [x + fx + swing * 0.08, up, z * 0.46], 0.027, shell, 0.016);
+      c.limb([x, 0.2 * H, z * 0.12 * W], [knee[0], knee[1] * H, knee[2] * W], 0.032 * legR, shell, 0.027 * legR);
+      c.limb([knee[0], knee[1] * H, knee[2] * W], [x + fx + swing * 0.08, up, z * 0.46 * W], 0.027 * legR, shell, 0.016 * legR);
     }
     // eggs clustered on the thorax
-    for (let k = 0; k < 7; k++) {
-      const a = (k / 7) * TAU, r = k === 0 ? 0 : 0.08, up = k === 0 ? 0.04 : 0;
-      c.sphere([0.045, 0.06, 0.045], [Math.cos(a) * r - 0.02, 0.39 + up, Math.sin(a) * r], eggMat);
+    const eggs = tier === 2 ? 11 : 7;
+    for (let k = 0; k < eggs; k++) {
+      const a = (k / eggs) * TAU, r = k === 0 ? 0 : 0.08 * W, up = k === 0 ? 0.04 : 0;
+      c.sphere([0.045, 0.06, 0.045], [Math.cos(a) * r - 0.02, 0.39 * H + up, Math.sin(a) * r], eggMat);
     }
     // the swollen abdomen, dragging behind, banded, a cavity on each side
-    c.joint([-0.12, 0.23, 0], [0, sway, 0], (ab) => { // its belly on the ground
-      ab.sphere([0.4, 0.25, 0.28], [-0.36, 0, 0], belly);
-      for (const x of [-0.14, -0.32, -0.5]) ab.sphere([0.025, 0.26, 0.29], [x, 0, 0], band);
-      for (const z of [1, -1]) {
-        ab.sphere([0.08, 0.07, 0.03], [-0.34, 0.02, z * 0.27], dark);
-        ab.cylinder(0.085, 0.085, 0.02, [-0.34, 0.02, z * 0.265], { team: 'primary', tex: 'skin' }, [Math.PI / 2, 0, 0], 14); // the rim, in her side's colour
+    c.joint([-0.12, 0.23 * H, 0], [0, sway, 0], (ab) => { // its belly on the ground
+      ab.sphere([0.4, 0.25 * H, 0.28 * W], [-0.36, 0, 0], belly);
+      for (const x of [-0.14, -0.32, -0.5]) ab.sphere([0.025, 0.26 * H, 0.29 * W], [x, 0, 0], band);
+      // a cavity on each side (T2: two on each side)
+      for (const cx of tier === 2 ? [-0.2, -0.48] : [-0.34]) for (const z of [1, -1]) {
+        ab.sphere([0.08, 0.07, 0.03], [cx, 0.02, z * 0.27 * W], dark);
+        ab.cylinder(0.085, 0.085, 0.02, [cx, 0.02, z * 0.265 * W], { team: 'primary', tex: 'skin' }, [Math.PI / 2, 0, 0], 14); // the rim, in her side's colour
       }
     });
+  }, LOOK.mother.scale(mass));
+}
+
+
+/**
+ * The T3 mother (the user's): an insectoid parasaurolophus. Up on big jointed insect hind legs, smaller forelegs, a
+ * long chitin-plated body running back into a segmented tail, a raised neck and a head with the long tube crest
+ * sweeping back; cavities on the sides of the abdomen, eggs on the thorax. Built around the thorax.
+ */
+function motherT3(b: ModelBuilder, p: Pose, mass: number): void {
+  const plate: Mat = { color: '#5e4a3a', tex: 'leather', rough: 0.35 };
+  const under: Mat = { color: '#d8c49a', tex: 'skin', rough: 0.6 };
+  const dark: Mat = { color: '#241812', tex: 'skin', rough: 0.95 };
+  const eggMat: Mat = { color: '#f4f1e8', tex: 'none', rough: 0.85 };
+  const t = p.phase * TAU, walking = p.anim === 'walk';
+  b.joint([0, 0, 0], [0, 0, 0], (c) => {
+    const y0 = 0.55;
+    // thorax at the origin, plated
+    c.sphere([0.2, 0.16, 0.17], [0, y0, 0], plate);
+    c.sphere([0.16, 0.08, 0.13], [0, y0 - 0.1, 0], under);
+    // the abdomen, long, plated in segments, cavities on its sides
+    for (let i = 1; i <= 4; i++) {
+      const x = -i * 0.2, r = 0.17 - i * 0.008;
+      c.sphere([0.14, r, r * 1.1], [x, y0 - i * 0.015, 0], i % 2 ? plate : under);
+      if (i === 2 || i === 3) for (const z of [1, -1]) {
+        c.sphere([0.06, 0.055, 0.025], [x, y0 - i * 0.015, z * r * 1.08], dark);
+        c.cylinder(0.065, 0.065, 0.018, [x, y0 - i * 0.015, z * r * 1.05], { team: 'primary', tex: 'skin' }, [Math.PI / 2, 0, 0], 12);
+      }
+    }
+    // the tail, segmented and tapering, held out behind
+    let prev: [number, number, number] = [-0.9, y0 - 0.06, 0];
+    for (let i = 1; i <= 6; i++) {
+      const sway = walking ? Math.sin(t + i * 0.6) * 0.03 * i : 0;
+      const next: [number, number, number] = [-0.9 - i * 0.15, y0 - 0.06 - i * 0.02, sway];
+      c.limb(prev, next, 0.1 * (1 - i * 0.13), plate, 0.1 * (1 - (i + 1) * 0.13));
+      prev = next;
+    }
+    // neck, head and its crest: the long tube sweeping back
+    const head: [number, number, number] = [0.42, y0 + 0.42, 0];
+    c.limb([0.14, y0 + 0.05, 0], head, 0.09, plate, 0.06);
+    c.sphere([0.12, 0.07, 0.07], [head[0] + 0.06, head[1], 0], plate);
+    c.cone(0.05, 0.12, [head[0] + 0.2, head[1] - 0.02, 0], plate, [0, 0, -Math.PI / 2], 8); // beak
+    for (const z of [1, -1]) {
+      c.sphere(0.02, [head[0] + 0.1, head[1] + 0.03, z * 0.055], { color: '#111111' });
+      c.cone(0.018, 0.07, [head[0] + 0.2, head[1] - 0.06, z * 0.03], plate, [0, z * 0.4, -Math.PI / 2], 5); // mandibles
+    }
+    c.limb([head[0] + 0.04, head[1] + 0.06, 0], [head[0] - 0.42, head[1] + 0.28, 0], 0.04, plate, 0.03); // the crest
+    // eggs on the thorax
+    for (let k = 0; k < 9; k++) {
+      const a = (k / 9) * TAU, r = k === 0 ? 0 : 0.09;
+      c.sphere([0.045, 0.06, 0.045], [Math.cos(a) * r - 0.04, y0 + 0.2 + (k === 0 ? 0.04 : 0), Math.sin(a) * r], eggMat);
+    }
+    // big jointed hind legs, small forelegs: insect legs
+    for (const z of [1, -1]) {
+      const step = walking ? Math.sin(t + (z > 0 ? 0 : Math.PI)) : 0;
+      const hip: [number, number, number] = [-0.12, y0 - 0.05, z * 0.14];
+      const knee: [number, number, number] = [-0.02 + step * 0.06, y0 + 0.18, z * 0.3];
+      const ankle: [number, number, number] = [-0.2 + step * 0.1, 0.18, z * 0.32];
+      c.limb(hip, knee, 0.06, plate, 0.05);
+      c.limb(knee, ankle, 0.045, plate, 0.035);
+      c.limb(ankle, [-0.1 + step * 0.16, Math.max(0, step) * 0.05, z * 0.34], 0.03, plate, 0.018);
+      const fstep = walking ? Math.sin(t + Math.PI + (z > 0 ? 0 : Math.PI)) : 0;
+      const fk: [number, number, number] = [0.22 + fstep * 0.04, y0 - 0.02, z * 0.22];
+      c.limb([0.1, y0 - 0.06, z * 0.1], fk, 0.03, plate, 0.025);
+      c.limb(fk, [0.3 + fstep * 0.08, Math.max(0, fstep) * 0.04, z * 0.26], 0.025, plate, 0.014);
+    }
   }, LOOK.mother.scale(mass));
 }
 
@@ -193,7 +333,7 @@ const cocoon = unit({ id: 'cocoon', name: 'Cocoon', mass: 15, physique: SHELL, c
 // mothers: lay anything up to their own refinement (a mother carries at least her cheapest egg's price)
 const motherOf = (r: 1 | 2 | 3, mass: number) => unit({ id: `mother${r}`, name: `Mother (r${r})`, mass, physique: MOTHER, refinement: r,
   spawns: ['egg1', 'egg2', 'egg3'].slice(0, r), attack: { style: 'strike', crystalMass: 1 }, // PLACEHOLDER attack (a side with no buildings needs something that can fight)
-  description: `Lays eggs up to T${r}, and carries food to them.`, model: (b, p) => mother(b, p, mass) }, 'mother');
+  description: `Lays eggs up to T${r}, and carries food to them.`, model: (b, p) => mother(b, p, mass, r) }, 'mother');
 
 // offshoots, one refinement up (PLACEHOLDER bodies, attacks and names)
 const charger = unit({ id: 'charger', name: 'Charger', mass: 38, physique: { muscle: 0.6, frame: 0.25, reserve: 0.15 }, refinement: 2,
@@ -210,7 +350,7 @@ const slinger = unit({ id: 'slinger', name: 'Slinger', mass: 60, physique: { mus
   attack: { style: 'throw', crystalMass: 0.5, ammo: 8, sling: 0.6 }, description: 'T2: a slinger.', model: (b, p) => bug(b, p, '#3ab0bc', 60, 'sling') }, 'bug');
 const dragonFly = unit({ id: 'dragon-fly', name: 'Dragon Fly', mass: 500, physique: { muscle: 0.5, frame: 0.3, reserve: 0.2 }, refinement: 4, flight: true,
   attack: { style: 'throw', crystalMass: 6, ammo: 10 }, // PLACEHOLDER: its fire (a conversion of crystal) is still to design
-  description: 'T3: a fire-breathing dragon with butterfly wings, insectoid and reptilian.', model: (b, p) => winged(b, p, '#8a3a6a', '#e0a0d8', 500, true) }, 'winged');
+  description: 'T3: a fire-breathing dragon with butterfly wings, insectoid and reptilian.', model: (b, p) => drawDragonFly(b, p, 500) }, 'dragon');
 const groundAttacker3 = unit({ id: 'ground-attacker3', name: 'T3 Ground Attacker', mass: 600, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 4,
   attack: { style: 'strike', crystalMass: 8 }, description: 'T3: a ground attacker.', model: (b, p) => bug(b, p, '#9a3aa6', 600, 'strike') }, 'bug');
 
