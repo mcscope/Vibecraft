@@ -30,6 +30,16 @@ Things noticed while building the tutorial and the computer players that could i
 
 - **Herons took some damage from macemen** (94 HP in 30 s of bombing). That may be from landing or flying low, or maces reaching low fliers. Worth checking that it's intended.
 
+## The new faction may be overpowered (noted 2026-10-21, not acted on)
+
+The new faction feels overpowered in play. Not investigated yet. What we know:
+
+- **The whip isn't meant as a buff.** On the T2 Whipweld (2 m whip), equal 1200-food fights against every combat unit averaged +0.52 with the whip and +0.46 without. The whip adds reach (1.69 tiles instead of 0.69) and speed (9.7 m/s instead of 5.9), but not damage, which is capped by muscle. It recovers 0.2 s slower. Leave it as physics gives it.
+- **Refinement is likely the main reason.** Its fighters are refined 2–4 (the Dragon Fly is 4), so a budget buys more of them than of mostly-refinement-1 Meadowfolk. Refined units are meant to win equal-budget fights, since the arena doesn't count what reaching that refinement cost. For this faction that cost is time: laying, changing, and the mother tiers that gate it.
+- **The arena's food cost is right.** Each change pays only the price difference, so a chain's payments add up to the final unit's own price. The arena leaves out the time.
+- **Most of its bodies are placeholders.** Their muscle, frame and reserve are guesses, not the user's choices. They are the honest levers if a unit proves too strong; stats stay physics-derived.
+- **Next step, when wanted:** run the full arena matrix (`npm run arena`) to find the outliers.
+
 ## Parked ideas
 
 - **Riders separate from mounts.** A generic `rider: { mass }` on any unit spec: a body riding another one. The rider's body swings hand weapons (sidearms), and its weight loads the mount's legs, while the mount's own body still drives charges, bites and couched lances. Right now a mount and its rider are one fused body, so a lynx lancer's sword swings with all 320 kg of lynx (96 damage, as much as the lance), and mounts run at unladen speeds (the lynx sprints at 20.6 m/s). Any faction's design would hit this, not just the lancer.
