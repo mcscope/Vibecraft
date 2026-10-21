@@ -443,7 +443,12 @@ export class Renderer {
       if (art) {
         // a bird still off the ground (taking off, gliding in to land) keeps its wings spread
         const f = u.stats.flight && !u.airborne && this.lift(u.id) > 6 ? { anim: 'fly' as const, time: this.time } : unitFrame(u);
-        this.setFrame(sp, unitSprite(art, f.anim, u.heading, f));
+        const frame = unitSprite(art, f.anim, u.heading, f);
+        this.setFrame(sp, frame);
+        // a body at another mass than its spec's (a shell takes what went into it) is drawn to its size: ∛ of the mass
+        const spec = this.world.specOf(u.owner, u.specId);
+        const k = spec && spec.stats.mass !== u.stats.mass ? Math.cbrt(u.stats.mass / spec.stats.mass) : 1;
+        if (Math.abs(sp.scale.x * frame.q - k) > 1e-3) sp.scale.set(k / frame.q);
       }
       // no crystal to fight with: visibly greyed out
       const disarmed = !u.dummy && !u.carter && !this.world.armed(u) && u.specId !== this.world.factionOf(u.owner).workerId;

@@ -20,8 +20,12 @@ const TAU = Math.PI * 2;
 /** The larvae's colours by tier (the user's). */
 const TIER = { 1: '#5fae3a', 2: '#2fb8c4', 3: '#b04fb8' } as const;
 
-/** Drawn size from mass: models are about life size, a body's length grows with the cube root of its mass. */
-const sizeFor = (mass: number, ref: number) => Math.cbrt(mass / ref);
+/**
+ * How much to scale a model so it's drawn the size of its body: as long as its collision circle is wide (the engine's
+ * radius for that mass: 0.25 × ∛(m / 70) tiles, 0.15 to 0.8, 2 m a tile), so bodies the sim keeps apart don't overlap
+ * on screen. `length`: the model's length at scale 1 (metres).
+ */
+const sizeFor = (mass: number, length: number) => (4 * Math.min(0.8, Math.max(0.15, 0.25 * Math.cbrt(mass / 70)))) / length;
 
 /** A caterpillar: a row of segments that ripple as it crawls, stubby legs, a round head (the user's larvae). */
 function caterpillar(b: ModelBuilder, p: Pose, color: string, mass: number): void {
@@ -41,7 +45,7 @@ function caterpillar(b: ModelBuilder, p: Pose, color: string, mass: number): voi
     c.sphere(0.11, [0.56, 0.12 + eat, 0], skin); // head
     for (const z of [1, -1]) c.sphere(0.018, [0.65, 0.15 + eat, z * 0.05], { color: '#111111' });
     if (p.cargo) c.sphere([0.08, 0.06, 0.08], [0.3, 0.24, 0], { color: p.cargo === 'food' ? '#a83a4a' : p.cargo === 'wood' ? '#7a5634' : '#8fe6ff' });
-  }, sizeFor(mass, 15) * 1.2);
+  }, sizeFor(mass, 1.2));
 }
 
 /** An egg: a whitish, folded, faceted shell (origami-like), tinted toward its larva, sized by tier (the user's). */
@@ -53,7 +57,7 @@ function origamiEgg(b: ModelBuilder, p: Pose, tint: string, mass: number): void 
     e.cylinder(0.0, 0.2, 0.3, [0, 0.35, 0], paper, undefined, 5); // folded top
     e.cylinder(0.2, 0.0, 0.3, [0, 0.05 + 0.0, 0], fold, undefined, 5); // folded bottom
     e.cylinder(0.2, 0.2, 0.06, [0, 0.2, 0], paper, [0, Math.PI / 5, 0], 5); // the crease band
-  }, sizeFor(mass, 15) * breathe);
+  }, sizeFor(mass, 0.4) * breathe);
 }
 
 /** PLACEHOLDER body for the units the user hasn't described: a segmented bug on six legs, sized by mass. */
@@ -77,7 +81,7 @@ function bug(b: ModelBuilder, p: Pose, color: string, mass: number, weapon: 'str
       c.crystal(0.1, [1.0 + jab * 0.2, 0.42, 0.06], [0, 0, -Math.PI / 2]);
     }
     if (weapon === 'sling') c.limb([0.2, 0.38, 0.08], [0.2 + Math.cos(t * 2) * 0.15, 0.6, 0.08], 0.008, { color: '#5a4a3a' });
-  }, sizeFor(mass, 40));
+  }, sizeFor(mass, 0.8));
 }
 
 /** PLACEHOLDER flier: a bug with two pairs of broad butterfly-like wings that beat in flight. */
@@ -97,7 +101,7 @@ function winged(b: ModelBuilder, p: Pose, color: string, wing: string, mass: num
       c.joint([0.02, 0.44, z * 0.08], [z * beat * 0.85, 0, 0], (wg) => wg.sphere([0.18, 0.012, 0.32], [-0.05, 0, z * 0.32], wingMat));
       if (!flying) for (const x of [0.2, 0.05, -0.1]) c.limb([x, 0.32, z * 0.07], [x + 0.06, 0, z * 0.18], 0.016, shell);
     }
-  }, sizeFor(mass, 40));
+  }, sizeFor(mass, 0.8));
 }
 
 /**
@@ -139,11 +143,10 @@ function mother(b: ModelBuilder, p: Pose, mass: number): void {
       for (const x of [-0.14, -0.32, -0.5]) ab.sphere([0.025, 0.26, 0.29], [x, 0, 0], band);
       for (const z of [1, -1]) {
         ab.sphere([0.08, 0.07, 0.03], [-0.34, 0.02, z * 0.27], dark);
-        ab.cylinder(0.085, 0.085, 0.02, [-0.34, 0.02, z * 0.265], belly, [Math.PI / 2, 0, 0], 14); // the rim
+        ab.cylinder(0.085, 0.085, 0.02, [-0.34, 0.02, z * 0.265], { team: 'primary', tex: 'skin' }, [Math.PI / 2, 0, 0], 14); // the rim, in her side's colour
       }
-      ab.box([0.05, 0.03, 0.3], [-0.42, 0.25, 0], { team: 'primary', tex: 'cloth' }); // team band across its top
     });
-  }, sizeFor(mass, 40) * 1.4);
+  }, sizeFor(mass, 1.25));
 }
 
 function mix(a: string, b: string, k: number): string {
