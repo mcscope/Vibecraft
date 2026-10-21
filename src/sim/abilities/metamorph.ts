@@ -153,13 +153,16 @@ export function foodOwed(w: World, u: Unit): number {
   return b && from && to ? Math.max(0, metamorphCost(from.stats, to.stats, true).food - b.paid - u.food) : 0;
 }
 
-/** The nearest of `u`'s side (not itself) waiting on food, for a feeder to bring its load to. */
+/**
+ * Who of `u`'s side (not itself) a feeder brings its load to: the nearest changing (an egg, a cocoon) first, then the
+ * nearest parent with an unpaid spawn queued.
+ */
 export function nearestHungry(w: World, u: Unit): Unit | null {
-  let best: Unit | null = null, bestD = Infinity;
+  let best: Unit | null = null, bestD = Infinity, bestChanging = false;
   for (const x of w.units.values()) {
     if (x.owner !== u.owner || x === u || foodOwed(w, x) < 0.05) continue;
-    const d = (x.x - u.x) ** 2 + (x.y - u.y) ** 2;
-    if (d < bestD) { bestD = d; best = x; }
+    const changing = x.order.kind === 'metamorph', d = (x.x - u.x) ** 2 + (x.y - u.y) ** 2;
+    if ((changing && !bestChanging) || (changing === bestChanging && d < bestD)) { bestD = d; best = x; bestChanging = changing; }
   }
   return best;
 }
