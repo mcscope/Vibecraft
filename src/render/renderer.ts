@@ -5,6 +5,7 @@ import { Application, Container, ImageSource, Matrix, Rectangle, Sprite as PixiS
 import { type Building, type Order, type ResourceNode, type Unit, type World, type WorldEvent } from '../sim/world';
 import { Camera, isoX, isoY, TILE_H, TILE_W } from './camera';
 import { isUnderfoot, parcelPos } from '../sim/abilities/underfoot';
+import { LEAP_TIME } from '../sim/abilities/flight';
 import { buildingSprite, unitShadow, unitSprite, type ArtAnim, type Sprite } from '../art/contract';
 import { gpuTexture, setFrameReader } from '../art/gpu';
 import { TEAM_COLORS, type ArtBank } from './artbank';
@@ -42,7 +43,8 @@ export interface RenderOptions {
 /** Which animation a unit is showing, and how far into it (seconds for loops, progress for one-shots). */
 export function unitFrame(u: Unit): { anim: ArtAnim; time?: number; progress?: number } {
   switch (u.anim) {
-    case 'fly': case 'leap': case 'climb': case 'soar': case 'glide': case 'land':
+    case 'leap': return { anim: 'leap', progress: Math.min(0.999, u.launchT / LEAP_TIME) }; // crouch, spring, up
+    case 'fly': case 'climb': case 'soar': case 'glide': case 'land':
       // turning hard in level flight or climbing: banked into the turn
       if ((u.anim === 'soar' || u.anim === 'climb' || u.anim === 'fly') && Math.abs(u.bank) > 0.5) return { anim: u.bank > 0 ? 'bankL' : 'bankR', time: u.animT };
       return { anim: u.anim, time: u.animT };

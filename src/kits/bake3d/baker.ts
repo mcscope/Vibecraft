@@ -16,7 +16,7 @@ export const PX_PER_UNIT = 32 * Math.SQRT2 / UNITS_PER_TILE;
 export type BakedAnim = ArtAnim;
 
 const FRAMES: Record<BakedAnim, number> = {
-  idle: 4, walk: 8, charge: 8, brace: 2, stagger: 4, fly: 8, leap: 6, climb: 8, soar: 4, glide: 4, land: 4, bankL: 1, bankR: 1, attack: 8, cut: 8, gather: 6, eat: 4, tired: 2, die: 6, carryFood: 8, carryWood: 8, carryCrystal: 8,
+  idle: 4, walk: 8, charge: 8, brace: 2, stagger: 4, fly: 8, leap: 8, climb: 8, soar: 4, glide: 4, land: 4, bankL: 1, bankR: 1, attack: 8, cut: 8, gather: 6, eat: 4, tired: 2, die: 6, carryFood: 8, carryWood: 8, carryCrystal: 8,
 };
 const FPS: Partial<Record<BakedAnim, number>> = { idle: 2.5, walk: 8, charge: 8, brace: 1.5, stagger: 6, fly: 6, leap: 10, climb: 6, soar: 2, glide: 2, land: 4, gather: 7, eat: 4, tired: 1.5, carryFood: 8, carryWood: 8, carryCrystal: 8 };
 
@@ -31,6 +31,8 @@ export interface UnitBakeOptions {
   brace?: boolean;
   /** Carries a sidearm beside its main weapon: also bake its blow ('cut'). */
   sidearm?: boolean;
+  /** Its model draws its whole leap itself (no springy squash and tip from the baker). */
+  ownLeap?: boolean;
 }
 
 /**
@@ -369,6 +371,17 @@ export class Baker {
           if (anim === 'charge') { body.rotation.z = -0.2; body.position.x = 0.04; } // flat out, weight forward
           // banking: rolled into the turn, the inside wing down (L turns toward its +z side, which dips with +x roll)
           if (anim === 'bankL' || anim === 'bankR') body.rotation.x = anim === 'bankL' ? 0.5 : -0.5;
+          // a leap off the ground, springy: crouching (squashing down, tipping nose-up, weight back), then driving up
+          // (stretching tall, tipped further up), then easing into the climb
+          if (anim === 'leap' && !opts.ownLeap) {
+            const ease = (k: number) => k * k * (3 - 2 * k);
+            const [sy, tip, dx] = phase < 0.2 ? [1 - 0.22 * ease(phase / 0.2), 0.3 * ease(phase / 0.2), -0.04 * ease(phase / 0.2)]
+              : phase < 0.4 ? [0.78 + 0.37 * ease((phase - 0.2) / 0.2), 0.3 + 0.15 * ease((phase - 0.2) / 0.2), -0.04 + 0.06 * ease((phase - 0.2) / 0.2)]
+              : [1.15 - 0.15 * ease((phase - 0.4) / 0.6), 0.45 - 0.25 * ease((phase - 0.4) / 0.6), 0.02];
+            body.scale.set(1 / Math.sqrt(sy), sy, 1 / Math.sqrt(sy)); // (squash and stretch, keeping its volume)
+            body.rotation.z = tip;
+            body.position.x = dx;
+          }
           if (anim === 'brace') { body.rotation.z = -0.1; body.scale.set(1, 0.92, 1); } // set low, leaning into the point
           if (anim === 'stagger') { // knocked back off balance, swaying as it catches itself
             const s = Math.sin(phase * Math.PI * 2);

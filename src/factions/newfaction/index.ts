@@ -48,9 +48,11 @@ function drawVee(b: ModelBuilder, p: Pose, mass: number): void {
   const eye: Mat = { color: '#050608', tex: 'none', rough: 0.05, metal: 0.5 };
   const tooth: Mat = { color: '#d8d4c0', tex: 'none', rough: 0.5 };
   const maw: Mat = { color: '#3a0e10', tex: 'skin', rough: 0.8 };
-  const flying = p.anim === 'fly' || p.anim === 'climb' || p.anim === 'soar' || p.anim === 'glide' || p.anim === 'leap' || p.anim === 'land';
+  const leaping = p.anim === 'leap';
+  const flying = p.anim === 'fly' || p.anim === 'climb' || p.anim === 'soar' || p.anim === 'glide' || p.anim === 'land';
   const diving = p.anim === 'glide' || p.anim === 'land';
   const t = p.phase * TAU;
+  const ease = (k: number) => { const c = Math.max(0, Math.min(1, k)); return c * c * (3 - 2 * c); };
   const stab = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0;
   type V = [number, number, number];
   const norm = (v: V): V => { const l = Math.hypot(...v) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
@@ -90,30 +92,47 @@ function drawVee(b: ModelBuilder, p: Pose, mass: number): void {
     if (p.armed) c.crystal(0.32, [0.33, -0.02, 0], [0, 0, -Math.PI / 2]);
   };
   b.joint([0, 0, 0], [0, 0, 0], (o) => {
+    // the V, `open` from folded tight back along its body (0) to spread (1), beating by `flap`
+    const vee = (c: ModelBuilder, open: number, flap: number) => {
+      body(c);
+      const mixd = (a: number, b: number) => a + (b - a) * open;
+      for (const S of [1, -1]) {
+        const dir = (sweep: number, up: number): V => norm([-Math.sin(sweep), up, S * Math.cos(sweep)]);
+        const sh: V = [0.06, 0.04, S * 0.08];
+        const s1 = mixd(1.2, 0.45), s2 = mixd(1.35, 0.7), s3 = mixd(1.45, 0.95);
+        const e = (k: number) => mixd(0.25 - k * 0.08, 0.12 + flap * (0.6 + k * 0.4));
+        const wrist = along(sh, dir(s1, e(0)), 0.42), knuckle = along(wrist, dir(s2, e(1)), 0.42), tip = along(knuckle, dir(s3, e(2)), 0.46);
+        const f = mixd(0.35, 1);
+        bone(c, sh, wrist, 0.18 * f, 0.22 * f);
+        bone(c, wrist, knuckle, 0.22 * f, 0.18 * f);
+        bone(c, knuckle, tip, 0.18 * f, 0.02);
+        c.cone(0.02, 0.08, tip, chitin, [0, 0, -Math.PI / 2], 4);
+      }
+    };
     if (flying) {
-      // the V: wings swept back from its shoulders, beating (big strokes climbing, a shiver soaring); diving, folded
-      // tight back along its body, nose down
-      const flap = p.anim === 'fly' ? Math.sin(t) * 0.45 : p.anim === 'climb' || p.anim === 'leap' ? Math.sin(t) * 0.7 : p.anim === 'soar' ? Math.sin(t) * 0.05 : 0;
-      o.joint([0, 0.6, 0], [0, 0, diving ? -0.45 : 0], (c) => {
-        body(c);
-        for (const S of [1, -1]) {
-          const dir = (sweep: number, up: number): V => norm([-Math.sin(sweep), up, S * Math.cos(sweep)]);
-          const sh: V = [0.06, 0.04, S * 0.08];
-          const s1 = diving ? 1.2 : 0.45, s2 = diving ? 1.35 : 0.7, s3 = diving ? 1.45 : 0.95;
-          const e = (k: number) => (diving ? 0.25 - k * 0.08 : 0.12 + flap * (0.6 + k * 0.4));
-          const wrist = along(sh, dir(s1, e(0)), 0.42), knuckle = along(wrist, dir(s2, e(1)), 0.42), tip = along(knuckle, dir(s3, e(2)), 0.46);
-          const f = diving ? 0.35 : 1;
-          bone(c, sh, wrist, 0.18 * f, 0.22 * f);
-          bone(c, wrist, knuckle, 0.22 * f, 0.18 * f);
-          bone(c, knuckle, tip, 0.18 * f, 0.02);
-          c.cone(0.02, 0.08, tip, chitin, [0, 0, -Math.PI / 2], 4);
-        }
-      });
+      // beating (big strokes climbing, a shiver soaring); diving, folded tight back along its body, nose steeply down
+      const flap = p.anim === 'fly' ? Math.sin(t) * 0.45 : p.anim === 'climb' ? Math.sin(t) * 0.7 : p.anim === 'soar' ? Math.sin(t) * 0.05 : 0;
+      o.joint([0, 0.6, 0], [0, 0, diving ? -0.9 : 0], (c) => vee(c, diving ? 0 : 1, flap));
       return;
     }
-    // on the ground: standing on its wings, each wing's wrist (in front) and tip (behind) planted, the joint between
-    // arched high; walking, the four points step in turn
-    const y0 = 0.5;
+    if (leaping && p.phase >= 0.3) {
+      // its leap, an Immelmann: from its crouch facing back the way it came, it springs up and over in a half loop,
+      // unfolding into the V, and rolls upright at the top: away, the other way round from how it stood
+      const k = (p.phase - 0.3) / 0.7;
+      const loop = Math.PI * ease(k / 0.8), roll = Math.PI * ease((k - 0.45) / 0.55);
+      o.joint([0, 0.45 + 0.35 * Math.sin(loop / 2), 0], [0, Math.PI, 0], (yaw) => yaw.joint([0, 0, 0], [0, 0, loop], (pitch) =>
+        pitch.joint([0, 0, 0], [roll, 0, 0], (c) => vee(c, ease(k / 0.6), 0))));
+      return;
+    }
+    // on the ground: standing on its wings (below). Crouching to leap: facing back the way it'll come round from,
+    // squatting low on them
+    const crouch = leaping ? ease(p.phase / 0.3) : 0;
+    if (leaping) { o.joint([0, 0, 0], [0, Math.PI, 0], (c) => c.joint([0, 0, 0], [0, 0, 0.25 * crouch], (s) => stand(s, 0.5 - 0.2 * crouch))); return; }
+    stand(o, 0.5);
+  }, LOOK.vee.scale(mass));
+  // standing on its wings, each wing's wrist (in front) and tip (behind) planted, the joint between arched high;
+  // walking, the four points step in turn
+  function stand(o: ModelBuilder, y0: number): void {
     for (const S of [1, -1]) {
       const ph = (k: number) => (p.anim === 'walk' ? Math.sin(t + k * Math.PI / 2 + (S > 0 ? 0 : Math.PI)) : 0);
       const lift = (k: number) => Math.max(0, -ph(k)) * 0.06;
@@ -128,7 +147,7 @@ function drawVee(b: ModelBuilder, p: Pose, mass: number): void {
     }
     // the body slung between them; striking, it lunges down and forward, the spike first
     o.joint([0.12 * stab, y0 - 0.12 * stab, 0], [0, 0, -0.55 * stab], body);
-  }, LOOK.vee.scale(mass));
+  }
 }
 
 /** A caterpillar: a row of segments that ripple as it crawls, stubby legs, a round head (the user's larvae). */
@@ -203,7 +222,8 @@ function drawDragonFly(b: ModelBuilder, p: Pose, mass: number): void {
   const eyeMat: Mat = { color: '#28d8c8', tex: 'none', rough: 0.15, metal: 0.6, emissive: '#0a3a38' };
   const wing: Mat = { color: '#f0a040', tex: 'none', rough: 0.6 };
   const eyeOut: Mat = { color: '#18101a', tex: 'none' }, eyeMid: Mat = { color: '#3fa8e0', tex: 'none' }, eyeIn: Mat = { color: '#fbfbf4', tex: 'none' };
-  const flying = p.anim === 'fly' || p.anim === 'climb' || p.anim === 'soar' || p.anim === 'glide' || p.anim === 'leap' || p.anim === 'land';
+  // (a leap's first part is the crouch on the ground: legs bent, wings still folded; then it springs up into the air)
+  const flying = p.anim === 'fly' || p.anim === 'climb' || p.anim === 'soar' || p.anim === 'glide' || p.anim === 'land' || (p.anim === 'leap' && p.phase >= 0.3);
   const t = p.phase * TAU, beat = flying ? Math.sin(t) * 0.75 : 0;
   const bite = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0;
   const wave = (k: number, speed: number, amp: number) => Math.sin(t * speed + k) * amp;

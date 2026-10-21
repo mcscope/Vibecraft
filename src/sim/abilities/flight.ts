@@ -33,8 +33,10 @@ export const CLIMB_RATE = 1;
 export const LAUNCH_HEIGHT = 1.5;
 /** Extra climb rate (× CLIMB_RATE) right off the ground, easing away by 1.5 × LAUNCH_HEIGHT. 0: no burst. */
 export const LAUNCH_BURST = 0;
-/** Show the steep 'leap' pose for the first LAUNCH_HEIGHT metres (the sprites stay baked either way). */
-export const LEAP_POSE = false;
+/** Seconds it crouches, winding up, before its legs spring it off the ground. */
+export const LAUNCH_WINDUP = 0.35;
+/** Seconds of its 'leap' pose: the wind-up, then the spring up to LAUNCH_HEIGHT. */
+export const LEAP_TIME = LAUNCH_WINDUP + LAUNCH_HEIGHT / CLIMB_RATE;
 /** How close (tiles) a bomber gets over its target before it drops. */
 export const BOMB_REACH = 0.6;
 /** Seconds a crystal takes to fall `h` metres. */
@@ -112,8 +114,9 @@ export function flyTo(w: World, u: Unit, gx: number, gy: number, arrive: number,
  * or nearly at a place it has to reach on foot.
  */
 export function tickFlight(w: World, u: Unit, _moved: boolean, dt: number, face: (dx: number, dy: number) => void): void {
-  if (!u.airborne) { u.alt = 0; u.vert = 0; u.vz = 0; return; }
+  if (!u.airborne) { u.alt = 0; u.vert = 0; u.vz = 0; u.launchT = 0; return; }
   const alt0 = u.alt;
+  u.launchT += dt;
   const flew = u.flewTick === w.tick;
   const flaring = !flew && u.alt < FLARE_HEIGHT && (u.vert < 0 || u.alt < 0.5); // the last few metres down: straight in, airbrakes out
   if (!flew) { u.bank = flaring ? 0 : 1; if (!flaring) u.flyDir += turnRate(u) * dt; glide(w, u, (u.flySpeed || airSpeed(u)) * (flaring ? 0.5 : 1), dt, face); } // no stopping in the air: circle at its pace
@@ -133,7 +136,7 @@ export function tickFlight(w: World, u: Unit, _moved: boolean, dt: number, face:
     // a burst off the ground (wings pounding) for the first couple of metres, then a steady climb
     // (trying it without the take-off burst: set LAUNCH_BURST to 2 for 3 m/s off the ground, easing to 1)
     const rate = CLIMB_RATE * (1 + LAUNCH_BURST * Math.max(0, 1 - u.alt / (LAUNCH_HEIGHT * 1.5)));
-    const climb = Math.min(rate * dt, Math.max(0, u.stats.flyHeight - u.alt));
+    const climb = u.launchT <= LAUNCH_WINDUP ? 0 : Math.min(rate * dt, Math.max(0, u.stats.flyHeight - u.alt)); // (crouched, winding up: still on the ground)
     u.alt += climb;
     const soaring = u.alt >= u.stats.flyHeight - 1e-6; // up at its ceiling it rides the air
     u.cal -= (soaring ? soarBurn(u.stats) : flightBurn(u.stats)) * dt + u.stats.mass * CLIMB_CAL_PER_KG_M * climb;
