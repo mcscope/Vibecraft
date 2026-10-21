@@ -159,19 +159,22 @@ function drawVee(b: ModelBuilder, p: Pose, mass: number): void {
   }
 }
 
-/** A caterpillar: a row of segments that ripple as it crawls, stubby legs, a round head (the user's larvae). */
+/** A caterpillar (the user's larvae): three segments of two balls each, rippling segment by segment as it crawls,
+ *  stubby legs, a round head. */
 function caterpillar(b: ModelBuilder, p: Pose, color: string, mass: number): void {
   const skin: Mat = { color, tex: 'skin', rough: 0.55 };
   const belly: Mat = { color: '#e8e2c8', tex: 'skin' };
-  const n = 7, crawl = p.anim === 'walk' ? p.phase * TAU : 0;
+  const crawl = p.anim === 'walk' ? p.phase * TAU : 0;
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
-    for (let i = 0; i < n; i++) {
-      const x = 0.42 - i * 0.14, lift = p.anim === 'walk' ? Math.max(0, Math.sin(crawl - i * 0.9)) * 0.05 : 0;
-      const r = 0.1 - Math.abs(i - 2) * 0.006;
-      c.sphere([r * 1.05, r, r], [x, r + lift, 0], skin);
-      c.sphere([r * 0.7, r * 0.35, r * 0.75], [x, r * 0.45 + lift, 0], belly);
-      if (i > 0 && i < n - 1) for (const z of [1, -1]) c.limb([x, 0.06 + lift, z * r * 0.7], [x, 0.0, z * r * 1.0], 0.016, skin); // stubby legs
-      if (i % 2 === 0) c.sphere(0.022, [x - 0.02, r * 1.7 + lift, 0], { team: 'primary', tex: 'none' }); // a team dot down its back
+    for (let seg = 0; seg < 3; seg++) {
+      const lift = p.anim === 'walk' ? Math.max(0, Math.sin(crawl - seg * 2.1)) * 0.06 : 0; // (each segment heaves in turn)
+      for (let k = 0; k < 2; k++) {
+        const x = 0.4 - seg * 0.3 - k * 0.13, r = 0.1 - seg * 0.006 - k * 0.004;
+        c.sphere([r * 1.05, r, r], [x, r + lift, 0], skin);
+        c.sphere([r * 0.7, r * 0.35, r * 0.75], [x, r * 0.45 + lift, 0], belly);
+        for (const z of [1, -1]) c.limb([x, 0.06 + lift, z * r * 0.7], [x, 0.0, z * r * 1.0], 0.016, skin); // stubby legs
+      }
+      c.sphere(0.022, [0.33 - seg * 0.3, 0.2 + lift, 0], { team: 'primary', tex: 'none' }); // a team dot on each segment
     }
     const eat = p.anim === 'gather' || p.anim === 'eat' ? Math.sin(p.phase * TAU * 2) * 0.03 : 0;
     c.sphere(0.11, [0.56, 0.12 + eat, 0], skin); // head
