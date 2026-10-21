@@ -258,16 +258,30 @@ function drawDragonFly(b: ModelBuilder, p: Pose, mass: number): void {
       c.sphere(0.046 - i * 0.003, next, belly); // its joints
       n = next;
     }
-    // a dragonfly's head: two great compound eyes, a small face, mandibles, short antennae
+    // a mantis's head: a broad triangle, wide across the top where its eyes bulge at the corners, narrowing to its
+    // mouth; long fine antennae; and big hooked mandibles, toothed along their inner edges, gaping as it bites
     const nod = flying ? Math.sin(t) * 0.07 : 0, look = Math.sin(t * 0.5) * (flying ? 0.18 : 0.3), tilt = Math.sin(t * 0.7 + 1) * 0.2;
     c.joint(n, [tilt, look, -0.6 - bite * 0.3 + nod], (h) => {
-      h.sphere([0.07, 0.06, 0.07], [0.05, 0, 0], scale); // face
+      h.loft([
+        { at: [-0.02, 0.01, 0], w: 0.05, up: 0.04, down: 0.03 },
+        { at: [0.03, 0.01, 0], w: 0.11, up: 0.05, down: 0.04, flat: 0.3 },
+        { at: [0.1, 0, 0], w: 0.06, up: 0.035, down: 0.03 },
+        { at: [0.17, -0.01, 0], w: 0.025, up: 0.02, down: 0.02 },
+      ], scale);
       for (const z of [1, -1]) {
-        h.sphere([0.062, 0.066, 0.06], [0.05, 0.04, z * 0.06], eyeMat); // compound eye
-        h.cone(0.012, 0.09, [0.08, 0.1, z * 0.025], horn, [z * 0.35, 0, -0.5], 5); // antenna
-        h.cone(0.02, 0.06 + bite * 0.02, [0.12, -0.04, z * 0.025], horn, [0, z * (0.4 - bite * 0.3), -Math.PI / 2], 5); // mandible
+        h.sphere([0.04, 0.045, 0.04], [0.03, 0.025, z * 0.105], eyeMat); // compound eye, at the corner
+        h.limb([0.03, 0.05, z * 0.02], [-0.02, 0.2, z * 0.09], 0.006, horn, 0.003); // antenna
+        h.limb([-0.02, 0.2, z * 0.09], [-0.1, 0.3, z * 0.16], 0.003, horn, 0.002);
+        // a mandible: hooked, in two parts, swinging open as it bites
+        const open = 0.25 + bite * 0.5;
+        h.joint([0.16, -0.015, z * 0.025], [0, z * open, 0], (m) => {
+          m.limb([0, 0, 0], [0.08, 0, z * 0.025], 0.022, horn, 0.016);
+          m.limb([0.08, 0, z * 0.025], [0.14, -0.005, -z * 0.02], 0.016, horn, 0.005); // the hook
+          for (const k of [0.04, 0.08, 0.11]) m.cone(0.008, 0.03, [k, 0, -z * 0.005], horn, [z * Math.PI / 2, 0, 0], 4); // teeth on its inner edge
+        });
+        h.limb([0.15, -0.03, z * 0.02], [0.2, -0.07, z * 0.04], 0.008, belly, 0.005); // a palp
       }
-      if (bite > 0.3) h.sphere(0.04, [0.18, -0.02, 0], { color: '#ff8a20', emissive: '#ff5a00' }); // (its fire: placeholder until the mechanic is designed)
+      if (bite > 0.3) h.sphere(0.04, [0.24, -0.02, 0], { color: '#ff8a20', emissive: '#ff5a00' }); // (its fire: placeholder until the mechanic is designed)
     });
     for (const z of [1, -1]) c.cone(0.02, 0.1, [tp[0] - 0.04, tp[1], tp[2] + z * 0.025], horn, [0, z * 0.4, Math.PI / 2], 4); // claspers
   });
