@@ -1390,7 +1390,9 @@ export class World {
     // thrower its stones, a striker the crystal it strikes with (one born without any goes and gets it)
     // (not fliers: for them topping up means flying home, and an idle bird told to stop should stay put)
     // (holding ground: it stays put)
-    if (u.stats.canAttack && !u.stats.flight && u.stance !== 'hold' && u.ammo < u.stats.loadoutCrystal - 1e-6 && (this.tick + u.id) % 20 === 0) this.seekAmmo(u, false);
+    // (a flier only when it has nothing to fight with: an idle bird told to stop otherwise stays put)
+    const short = u.stats.flight ? u.ammo < u.crystalMass - 1e-6 : u.ammo < u.stats.loadoutCrystal - 1e-6;
+    if (u.stats.canAttack && short && u.stance !== 'hold' && (this.tick + u.id) % 20 === 0) this.seekAmmo(u, false);
     return false;
   }
 
@@ -1875,12 +1877,14 @@ export class World {
   /** A dry thrower's nearest crystal: a spent one on the ground, or a bearer to take from. Sets a detour/order; false if none. */
   private seekAmmo(u: Unit, detour: boolean): boolean {
     if (u.stats.flight) {
-      // a flier doesn't land among the enemy to pick crystals off the ground: it flies home to reload
+      // a flier doesn't land among the enemy to pick crystals off the ground: it flies home to reload (a side with no
+      // buildings: it picks crystal up like anyone, below)
       const home = this.nearestCache(u, (b) => b.stock.crystal >= u.crystalMass);
-      if (!home) return false;
-      const order: Order = { kind: 'resupply', building: home.id };
-      if (detour) this.detour(u, order); else u.order = order;
-      return true;
+      if (home) {
+        const order: Order = { kind: 'resupply', building: home.id };
+        if (detour) this.detour(u, order); else u.order = order;
+        return true;
+      }
     }
     const shard = this.nearestNode(u, 'crystal', u.stats.sight, true);
     const bearer = bearerAbility.nearestBearer(this, u);
