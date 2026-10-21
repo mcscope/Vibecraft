@@ -121,7 +121,7 @@ function mix(a: string, b: string, k: number): string {
 const LARVA = { muscle: 0.8, frame: 0.1, reserve: 0.1 };
 const EGG = { muscle: 0.1, frame: 0.1, reserve: 0.8 }; // cheap: an egg is fed after it's laid
 const SHELL = { muscle: 0.1, frame: 0.8, reserve: 0.1 };
-const MOTHER = { muscle: 0.5, frame: 0.3, reserve: 0.2 };
+const MOTHER = { muscle: 0.55, frame: 0.25, reserve: 0.2 }; // enough muscle to carry her dearest egg's price beside her weapon crystal
 
 const unit = (u: Omit<Unit, 'description'> & { description?: string }): Unit => ({ description: '', ...u }) as Unit;
 
