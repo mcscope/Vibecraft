@@ -148,6 +148,8 @@ export class Renderer {
   /** A body in trailing parts (UnitArt.segments): each part's sprite, and the path it has come along (newest first). */
   private segSprites = new Map<number, PixiSprite[]>();
   private trails = new Map<number, Array<[number, number]>>();
+  /** A unit that rests in a squat (its art has 'rise'): whether it's up, and when that last changed (render time). */
+  private posture = new Map<number, { up: boolean; at: number }>();
   private buildingSprites = new Map<number, PixiSprite>();
   private projSprites = new Map<number, PixiSprite>();
   private flagSprite: PixiSprite | null = null;
@@ -494,6 +496,7 @@ export class Renderer {
         const k = spec && spec.stats.mass !== u.stats.mass ? Math.cbrt(u.stats.mass / spec.stats.mass) : 1;
         const f: { anim: ArtAnim } & FrameTime = u.stats.flight && !u.airborne && this.lift(u.id) > 6 ? { anim: 'fly' as const, time: this.time } : unitFrame(u);
         if (f.walked !== undefined) f.walked /= k; // (drawn bigger, it strides further)
+        if (art.anims.rise) Object.assign(f, this.rising(u.id, f.anim));
         const frame = unitSprite(art, f.anim, u.heading, f);
         this.setFrame(sp, frame);
         if (Math.abs(sp.scale.x * frame.q - k) > 1e-3) sp.scale.set(k / frame.q);
@@ -506,6 +509,7 @@ export class Renderer {
     }
     for (const [id, sp] of this.unitSprites) if (!this.world.units.has(id)) { sp.destroy(); this.unitSprites.delete(id); this.alt.delete(id); }
     for (const [id, segs] of this.segSprites) if (!this.world.units.has(id)) { segs.forEach((s) => s.destroy()); this.segSprites.delete(id); this.trails.delete(id); }
+    for (const id of this.posture.keys()) if (!this.world.units.has(id)) this.posture.delete(id);
   }
 
   private syncProjectiles(alpha: number): void {
@@ -709,6 +713,21 @@ export class Renderer {
       this.flagSprite.zIndex = rally.rallyX + rally.rallyY;
       this.flagSprite.visible = true;
     } else if (this.flagSprite) this.flagSprite.visible = false;
+  }
+
+  /**
+   * One that rests in a squat gets up when it starts to move or strike (its 'rise', played forward) and sits back down
+   * when it stops (played backward), over RISE seconds, before its walk or after it.
+   */
+  private rising(id: number, anim: ArtAnim): Partial<{ anim: ArtAnim } & FrameTime> {
+    const RISE = 0.45;
+    const up = anim === 'walk' || anim === 'charge' || anim === 'attack' || anim.startsWith('carry');
+    const was = this.posture.get(id);
+    if (!was) { this.posture.set(id, { up, at: -Infinity }); return {}; }
+    if (was.up !== up) { was.up = up; was.at = this.time; }
+    const k = (this.time - was.at) / RISE;
+    if (k >= 1) return {};
+    return { anim: 'rise', progress: up ? k : 1 - k, time: undefined, walked: undefined };
   }
 
   /**

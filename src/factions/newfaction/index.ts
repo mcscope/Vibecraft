@@ -32,7 +32,7 @@ const LOOK = {
   mother: { scale: (m: number) => 1.4 * Math.cbrt(m / 40), length: 1.25 },
   vimmer: { scale: (m: number) => 1.3 * Math.cbrt(m / 120), length: 0.75 },
   charger: { scale: (m: number) => Math.cbrt(m / 38), length: 0.5 },
-  goliath: { scale: (m: number) => 1.6 * Math.cbrt(m / 600), length: 1.0 }, // (collision: its body; wings overlap others, as fliers' do)
+  goliath: { scale: (m: number) => 2.6 * Math.cbrt(m / 600), length: 0.9 }, // (collision: its body; wings overlap others, as fliers' do)
   dragon: { scale: (m: number) => 2.0 * Math.cbrt(m / 500), length: 0.9 }, // 500 kg: ~4.5 m snout to tail-tip (collision: its body; wings overlap others, as fliers' do)
 } as const;
 /** A caterpillar's trailing segments, as model units behind its front (for the baker). */
@@ -207,10 +207,10 @@ function spikeBody(c: ModelBuilder, armed: boolean, tint: string): void {
 
 /** A charger's build: its legs (hip height standing, thigh, shin, the foot bone from toes up to ankle), how wide it
  *  stands, how thick its legs, its body's size and colour, and how far it strides walking and running. */
-interface ChargerBuild { H: number; thigh: number; shin: number; foot: [number, number, number]; hipZ: number; footZ: number; thighR: number; shinR: number; body: number; tint: string; walk: number; run: number; armour?: boolean }
+interface ChargerBuild { H: number; thigh: number; shin: number; foot: [number, number, number]; hipZ: number; footZ: number; thighR: number; shinR: number; body: number; tint: string; walk: number; run: number; goliath?: boolean }
 const CHARGER: ChargerBuild = { H: 0.62, thigh: 0.3, shin: 0.32, foot: [-0.07, 0.21, 0], hipZ: 0.09, footZ: 0.11, thighR: 0.055, shinR: 0.035, body: 0.7, tint: '#7fbf4a', walk: 0.22, run: 0.34 };
 // the T3 goliath: hulking and low, wide on short massive legs, armoured (the user's: ultralisk vibes)
-const GOLIATH: ChargerBuild = { H: 0.44, thigh: 0.24, shin: 0.22, foot: [-0.05, 0.12, 0], hipZ: 0.2, footZ: 0.3, thighR: 0.1, shinR: 0.07, body: 1.15, tint: '#9a3aa6', walk: 0.16, run: 0.26, armour: true };
+const GOLIATH: ChargerBuild = { H: 0.44, thigh: 0.24, shin: 0.22, foot: [-0.05, 0.12, 0], hipZ: 0.2, footZ: 0.3, thighR: 0.1, shinR: 0.07, body: 1.15, tint: '#9a3aa6', walk: 0.16, run: 0.26, goliath: true };
 
 /**
  * The chargers (the user's design): the Vimmer's body plan on two legs instead of wings: its central body slung
@@ -226,14 +226,16 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
   const claw: Mat = { color: '#0e1210', tex: 'none', rough: 0.4 };
   const walking = p.anim === 'walk', running = walking && p.style === 'charge';
   const stab = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0;
-  // (squatting at rest: hips down so its body lies on the ground; up on its legs to walk, run or strike)
-  const up = walking || p.anim === 'attack';
-  const rest = 0.1 * k.body + 0.01, H = up ? k.H : rest - 0.04;
+  // (squatting at rest: hips down so its body lies on the ground; up on its legs to walk, run or strike; 'rise' gets
+  // up from the squat, its legs unfolding under it, the body lifting last)
+  const ease = (x: number) => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c); };
+  const upK = p.anim === 'rise' ? ease(p.phase) : walking || p.anim === 'attack' ? 1 : 0;
+  const rest = 0.1 * k.body + 0.01, H = rest - 0.04 + (k.H - rest + 0.04) * upK;
   // its body rides lowest over a planted foot, highest in the stride (running: up in the moment both feet are off)
   const bob = running ? -0.06 + 0.07 * Math.max(0, Math.sin((p.phase * 2 - 0.35) * TAU)) : walking ? -0.03 + Math.abs(Math.cos(p.phase * TAU)) * 0.025 : 0;
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
     for (const S of [1, -1]) {
-      const hip: V = [-0.02, H + bob, S * k.hipZ], restFoot: V = [up ? 0.02 : 0.1, 0.01, S * (k.footZ + (up ? 0 : 0.05))];
+      const hip: V = [-0.02, H + bob, S * k.hipZ], restFoot: V = [0.1 - 0.08 * upK, 0.01, S * (k.footZ + 0.05 * (1 - upK))];
       const ph = p.phase + (S > 0 ? 0 : 0.5);
       const foot = running ? footAt(restFoot, ph, k.run, 0.2, 0.35) : walking ? footAt(restFoot, ph, k.walk, 0.12, 0.55) : restFoot;
       const ankle: V = [foot[0] + k.foot[0], foot[1] + k.foot[1], foot[2]];
@@ -242,24 +244,70 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
       c.sphere([k.thighR * 1.4, k.thighR * 1.1, k.thighR], [(hip[0] + knee[0]) / 2, (hip[1] + knee[1]) / 2, (hip[2] + knee[2]) / 2], muscle);
       c.limb(knee, ankle, k.shinR, chitin, k.shinR * 0.7); // the shin
       c.limb(ankle, foot, k.shinR * 0.65, chitin, k.shinR * 0.5); // the foot bone
-      if (k.armour) c.sphere([k.shinR * 1.6, k.shinR * 2.2, k.shinR * 1.4], [(knee[0] + ankle[0]) / 2, (knee[1] + ankle[1]) / 2, (knee[2] + ankle[2]) / 2], plate); // a plate down the shin
+      if (k.goliath) c.sphere([k.shinR * 1.6, k.shinR * 2.2, k.shinR * 1.4], [(knee[0] + ankle[0]) / 2, (knee[1] + ankle[1]) / 2, (knee[2] + ankle[2]) / 2], plate); // a plate down the shin
       for (const dz of [-0.03, 0, 0.03]) c.cone(0.012 * k.body / 0.7, 0.07 * k.body / 0.7, [foot[0] + 0.05, 0.01, foot[2] + dz * k.body / 0.7], claw, [0, dz * 4, -Math.PI / 2], 4); // toes
       c.cone(0.01, 0.05, [foot[0] - 0.04, 0.01, foot[2]], claw, [0, 0, Math.PI / 2], 4); // the back claw
     }
     // the body, slung between the hips: leaning into a run; striking, it rams forward, the spike first
-    c.joint([0.22 * stab * k.body / 0.7, H + bob + 0.04 - 0.05 * stab, 0], [0, 0, (running ? -0.15 : 0) - 0.1 * stab], (t) => t.joint([0, 0, 0], [0, 0, 0], (q) => {
-      spikeBody(q, p.armed, k.tint);
-      if (!k.armour) return;
-      // armoured: overlapping carapace plates over its back, and great curved blades sweeping forward from its head
-      for (const [x0, x1] of [[0.18, -0.06], [0.02, -0.26], [-0.16, -0.46]] as const) {
-        q.loft([0, 0.5, 1].map((u) => { const x = x0 + (x1 - x0) * u, end = u === 0.5 ? 1 : 0.55; return { at: [x, 0.03, 0] as V, w: 0.12 * end, up: 0.1 * end, down: 0.02, flat: 0.2 }; }), plate);
-      }
-      for (const z of [1, -1]) {
-        q.limb([0.18, 0.04, z * 0.07], [0.3, 0.16, z * 0.16], 0.022, plate, 0.016);
-        q.limb([0.3, 0.16, z * 0.16], [0.5, 0.12, z * 0.12], 0.016, plate, 0.004); // a blade, hooked forward
-      }
-    }, k.body));
-  }, (k.armour ? LOOK.goliath : LOOK.charger).scale(mass));
+    c.joint([0.22 * stab * k.body / 0.7, H + bob + 0.04 - 0.05 * stab, 0], [0, 0, (running ? -0.15 : 0) - 0.1 * stab], (t) => t.joint([0, 0, 0], [0, 0, 0], (q) => (k.goliath ? goliathBody(q, p, k.tint, upK) : spikeBody(q, p.armed, k.tint)), k.body));
+  }, (k.goliath ? LOOK.goliath : LOOK.charger).scale(mass));
+}
+
+/**
+ * The Goliath's body (the user's: hulking, ultralisk vibes): massive and hunched, not uniform: a great armoured hump
+ * over its shoulders, the body falling away behind it, keeled and ridged, to a short heavy tail; a low, broad,
+ * armoured head between its shoulders; and its weapon, two huge scythe arms rising from the shoulders in segments and
+ * arcing up and over to great serrated blades, crystal set at their points. Walking, they're held high; striking,
+ * they slash down and forward. `up` 0 … 1 is how far it has risen from its squat (the scythes lift as it rises).
+ */
+function goliathBody(c: ModelBuilder, p: Pose, tint: string, up: number): void {
+  type V = [number, number, number];
+  const hide: Mat = { color: '#1c1820', tex: 'leather', rough: 0.35, metal: 0.3 };
+  const plate: Mat = { color: mix('#2a2430', tint, 0.35), tex: 'leather', rough: 0.22, metal: 0.5 };
+  const edge: Mat = { color: '#d8d2c8', tex: 'none', rough: 0.3, metal: 0.4 };
+  const eye: Mat = { color: '#ff5a3a', tex: 'none', rough: 0.1, emissive: '#801a08' };
+  const slash = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.55) * Math.PI) : 0;
+  // the body: deep and broad at the shoulders, falling away behind
+  const body: Array<[number, number, number, number, number]> = [ // x, half-width, up, down, keel
+    [0.34, 0.12, 0.1, 0.08, 0.2], [0.22, 0.24, 0.24, 0.16, 0.4], [0.06, 0.3, 0.32, 0.18, 0.5], [-0.12, 0.26, 0.24, 0.16, 0.4],
+    [-0.3, 0.2, 0.16, 0.13, 0.3], [-0.48, 0.12, 0.1, 0.09, 0.1], [-0.62, 0.06, 0.05, 0.05, 0], [-0.72, 0.02, 0.02, 0.02, 0],
+  ];
+  c.loft(body.map(([x, w, u, d, keel]) => ({ at: [x, (u - d) * 0.3, 0] as V, w, up: u, down: d, keel })), hide);
+  // the hump: overlapping plates over the shoulders and down its back, each standing proud, ridged
+  for (const [x0, x1, h] of [[0.32, 0.02, 1], [0.14, -0.2, 0.9], [-0.06, -0.38, 0.7], [-0.26, -0.56, 0.5], [-0.44, -0.7, 0.32]] as const) {
+    c.loft([0, 0.5, 1].map((u) => {
+      const x = x0 + (x1 - x0) * u, end = u === 0.5 ? 1 : 0.55;
+      return { at: [x, 0.06 + 0.08 * h, 0] as V, w: (0.16 + 0.16 * h) * end, up: (0.12 + 0.16 * h) * end, down: 0.04, flat: 0.25 };
+    }), plate);
+    c.cone(0.03 * h + 0.01, 0.12 * h, [(x0 + x1) / 2, 0.06 + 0.08 * h + (0.12 + 0.16 * h), 0], plate, [0, 0, 0.5], 4); // a ridge spine
+  }
+  // the head: low and broad between the shoulders, armoured, a row of small eyes, heavy mandibles
+  c.loft([{ at: [0.32, -0.04, 0], w: 0.14, up: 0.08, down: 0.08 }, { at: [0.44, -0.06, 0], w: 0.12, up: 0.07, down: 0.07, flat: 0.3 }, { at: [0.54, -0.08, 0], w: 0.06, up: 0.04, down: 0.05 }], plate);
+  for (const z of [-0.08, -0.04, 0.04, 0.08]) c.sphere(0.014, [0.5, -0.03, z], eye);
+  for (const z of [1, -1]) c.limb([0.52, -0.1, z * 0.05], [0.62 + slash * 0.04, -0.14, z * (0.02 + slash * 0.03)], 0.018, edge, 0.006);
+  // the scythes: from the shoulders up in two heavy segments, then arcing over and down into great blades
+  for (const z of [1, -1]) {
+    const raise = 0.3 + 0.7 * up; // (folded down beside it in the squat, high as it rises)
+    const swing = -slash * 1.4; // (the slash: down and forward)
+    c.joint([0.2, 0.22, z * 0.26], [z * 0.15, 0, 0.9 * raise + swing], (arm) => {
+      arm.limb([0, 0, 0], [0.46, 0, 0], 0.075, plate, 0.06); // upper arm
+      arm.sphere([0.085, 0.075, 0.075], [0.46, 0, 0], hide); // elbow
+      arm.joint([0.46, 0, 0], [0, 0, -1.1 - 0.4 * raise], (fore) => {
+        fore.limb([0, 0, 0], [0.4, 0, 0], 0.06, plate, 0.045);
+        // the blade: a great arc, broad and serrated along its inner edge, curving back toward the body
+        fore.joint([0.4, 0, 0], [0, 0, -0.5], (bl) => {
+          const pts: V[] = Array.from({ length: 9 }, (_, i) => { const a = (i / 8) * 2.0; return [Math.sin(a) * 0.62, (1 - Math.cos(a)) * -0.34, 0]; });
+          for (let i = 0; i < 8; i++) {
+            const r = 0.05 * (1 - i / 9);
+            bl.limb(pts[i], pts[i + 1], r, edge, r * 0.85);
+            bl.cone(0.016, 0.09 - i * 0.007, [(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2 - 0.04, 0], edge, [0, 0, Math.PI], 4); // serrations
+          }
+          bl.loft(pts.map(([x, y], i) => ({ at: [x, y + 0.06 * (1 - i / 8), 0] as V, w: 0.016, up: 0.08 * (1 - i / 9) + 0.006, down: 0.012 })), plate); // the blade's broad back
+          if (p.armed) bl.crystal(0.2, pts[8], [0, 0, Math.PI * 0.8]); // crystal at its point
+        });
+      });
+    });
+  }
 }
 
 /** How far apart a caterpillar's segments are along its path (model units, before its size). */
