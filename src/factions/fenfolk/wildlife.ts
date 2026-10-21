@@ -1,7 +1,8 @@
 // Fen wildlife: unit designs (same physics as any unit) plus temper.
 // Pure data and model functions, so the sim can read the specs without loading art.
+import { footAt, jointBetween } from '../../kits/bake3d/gait';
 import type { Mat, Vec3 } from '../../kits/bake3d/types';
-import { headPose, swing, TAU, type WildModel } from '../../kits/animals';
+import { headPose, TAU, type WildModel } from '../../kits/animals';
 
 // ── fen wildlife ──
 const heronGrey: Mat = { color: '#9aa0a4', tex: 'fur' };
@@ -20,14 +21,14 @@ export const heron: WildModel = {
   count: 4,
   meat: 25,
   model(b, p) {
-    const t = p.phase * TAU;
     const walking = p.anim === 'walk';
     for (const z of [1, -1]) {
-      const a = walking ? Math.sin(t + (z > 0 ? 0 : Math.PI)) * 0.4 : 0;
-      const hip: Vec3 = [0, 0.75, 0.06 * z];
-      const knee = swing(hip, 0.38, a);
+      // (walking, on planted feet, its ankles bending backward as a bird's do)
+      const hip: Vec3 = [0, 0.75, 0.06 * z], rest: Vec3 = [0, 0.01, 0.06 * z];
+      const foot = walking ? footAt(rest, p.phase + (z > 0 ? 0 : 0.5), 0.12, 0.08) : rest;
+      const knee = jointBetween(hip, foot, 0.38, 0.38, [-1, 0, 0]);
       b.limb(hip, knee, 0.015, beak);
-      b.limb(knee, swing(knee, 0.38, a * 0.3), 0.012, beak);
+      b.limb(knee, foot, 0.012, beak);
     }
     b.sphere([0.28, 0.14, 0.14], [0, 0.88, 0], heronGrey, [0, 0, 0.3]);
     b.sphere([0.18, 0.1, 0.12], [-0.05, 0.84, 0], heronPale);
@@ -56,9 +57,9 @@ export const bogLurker: WildModel = {
     const t = p.phase * TAU;
     const wiggle = p.anim === 'walk' ? Math.sin(t) * 0.12 : 0;
     const snap = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase * 1.4) * Math.PI) : 0;
-    for (const [x, z, ph] of [[0.35, 0.22, 0], [0.35, -0.22, Math.PI], [-0.35, 0.22, Math.PI], [-0.35, -0.22, 0]] as Array<[number, number, number]>) {
-      const a = p.anim === 'walk' ? Math.sin(t + ph) * 0.4 : 0;
-      b.limb([x, 0.2, z * 0.8], [x + Math.sin(a) * 0.15, 0.04, z * 1.3], 0.05, lurkerHide, 0.04);
+    for (const [x, z, ph] of [[0.35, 0.22, 0], [0.35, -0.22, 0.5], [-0.35, 0.22, 0.5], [-0.35, -0.22, 0]] as Array<[number, number, number]>) {
+      const rest: Vec3 = [x, 0.04, z * 1.3]; // (on planted feet, diagonal pairs together)
+      b.limb([x, 0.2, z * 0.8], p.anim === 'walk' ? footAt(rest, p.phase + ph, 0.08, 0.05) : rest, 0.05, lurkerHide, 0.04);
     }
     b.joint([snap * 0.15, 0, 0], [0, wiggle, 0], (c) => {
       c.sphere([0.6, 0.16, 0.26], [0, 0.22, 0], lurkerHide);
