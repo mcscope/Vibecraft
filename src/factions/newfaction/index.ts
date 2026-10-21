@@ -312,8 +312,8 @@ function goliathBody(c: ModelBuilder, p: Pose, tint: string): void {
 
 /**
  * The lasher's two whip arms (the user's design), from its shoulders: at rest held back along its torso in swaying S
- * curves, their tips curling up, a wave running down them; striking, the near one lashes out round its side to its
- * whole length straight ahead, unrolling segment by segment, rippling, its tip cracking over at full stretch, the
+ * curves, their tips curling up, a wave running down them; striking, the near one lashes out to its
+ * whole length straight ahead, up and over its back, unrolling segment by segment, rippling, its tip cracking over at full stretch, the
  * crystal at its tip, and is drawn back in. `len`: the lash's length in its body's frame.
  */
 function whipArms(c: ModelBuilder, p: Pose, len: number, tint: string): void {
@@ -338,7 +338,11 @@ function whipArms(c: ModelBuilder, p: Pose, len: number, tint: string): void {
       a += z * (Math.sin(t * speed - u * 5 + (z > 0 ? 0 : Math.PI)) * (0.42 * loose + 0.12) + loose * 0.25 * Math.sin(u * Math.PI * 1.5));
       // rising and falling as it goes: the tip curling up when held, cracking over at full stretch
       const e = 0.1 * Math.sin(t * speed * 1.3 - u * 4) + loose * Math.max(0, u - 0.6) * 2.2 + crack * (z > 0 ? 1 : 0) * Math.max(0, u - 0.65) * 4;
-      const dir: V = [Math.cos(a) * Math.cos(e), Math.sin(e), z * Math.sin(a) * Math.cos(e) * (lash > 0.02 ? 1 : 0.3)];
+      // (lashing, it whips up and over its back to straight ahead, rippling in its own plane, a little play side to side)
+      const v = Math.PI * (1 - ease(lash * 1.35 - u * 0.35)) + Math.sin(t * speed * 2 - u * 6) * 0.22 * lash;
+      const dir: V = lash > 0.02
+        ? [Math.cos(v), Math.sin(v) + crack * Math.max(0, u - 0.65) * 3, z * (0.08 + Math.sin(t * speed - u * 5) * 0.12)]
+        : [Math.cos(a) * Math.cos(e), Math.sin(e), z * Math.sin(a) * Math.cos(e) * 0.3];
       const l = Math.hypot(...dir), next: V = [at[0] + (dir[0] / l) * seg, at[1] + (dir[1] / l) * seg, at[2] + (dir[2] / l) * seg];
       const r = 0.032 * (1 - u * 0.75);
       c.limb(at, next, r, i % 3 === 2 ? sheen : chitin, 0.032 * (1 - (i + 1) / n * 0.75));
@@ -727,7 +731,7 @@ const micropike = unit({ id: 'micropike', name: 'Micropike', mass: 35, physique:
   attack: { style: 'strike', crystalMass: 0.8, shaft: 1.5 }, description: 'T1: micropikes.', model: (b, p) => bug(b, p, '#6aa84a', 35, 'pike') }, 'bug');
 const flier = unit({ id: 'flier', name: 'Vimmer', mass: 120, physique: { muscle: 0.5, frame: 0.25, reserve: 0.25 }, refinement: 3, flight: { launch: 'backward' },
   attack: { style: 'strike', crystalMass: 2 }, description: 'T2: a dive bomber: it swoops down onto its target to strike, its dive behind the blow, and climbs away again.', model: (b, p) => drawVimmer(b, p, 120) }, 'vimmer');
-const groundAttacker2 = unit({ id: 'ground-attacker2', name: 'T2 Ground Attacker', mass: 150, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 3,
+const groundAttacker2 = unit({ id: 'ground-attacker2', name: 'Whipweld', mass: 150, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 3,
   attack: { style: 'strike', crystalMass: 4, whip: 2 }, description: 'T2: on two running legs, two whip arms held back along its torso; it dips and lashes one out, its crystal at the tip, a long reach.', model: (b, p) => drawCharger(b, p, 150, LASHER) }, 'lasher');
 const slinger = unit({ id: 'slinger', name: 'Slinger', mass: 60, physique: { muscle: 0.5, frame: 0.3, reserve: 0.2 }, refinement: 3,
   attack: { style: 'throw', crystalMass: 0.5, ammo: 8, sling: 0.6 }, description: 'T2: a slinger.', model: (b, p) => bug(b, p, '#3ab0bc', 60, 'sling') }, 'bug');
