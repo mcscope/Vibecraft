@@ -214,8 +214,8 @@ const CHARGER: ChargerBuild = { H: 0.62, thigh: 0.3, shin: 0.32, foot: [-0.07, 0
 // metres of lash (its attack.whip)
 const LASHER: ChargerBuild = { H: 0.6, thigh: 0.29, shin: 0.31, foot: [-0.07, 0.2, 0], hipZ: 0.1, footZ: 0.12, thighR: 0.06, shinR: 0.038, body: 0.8, tint: '#2a8a96', walk: 0.21, run: 0.33, whip: 2 };
 // the T3 goliath: hulking and low, wide on short massive legs, armoured (the user's: ultralisk vibes)
-// (its legs mech-like: spindly, long segments folding along its length, knobbed joints, a knee riding high and back, footpads)
-const GOLIATH: ChargerBuild = { H: 0.44, thigh: 0.4, shin: 0.42, foot: [0.07, 0.12, 0], hipZ: 0.22, footZ: 0.26, thighR: 0.03, shinR: 0.026, body: 1.15, tint: '#9a3aa6', walk: 0.18, run: 0.28, goliath: true };
+// (its legs gnarled but organic, thick for its weight, splayed to a wide stance)
+const GOLIATH: ChargerBuild = { H: 0.44, thigh: 0.38, shin: 0.4, foot: [0.06, 0.14, 0], hipZ: 0.22, footZ: 0.36, thighR: 0.095, shinR: 0.075, body: 1.15, tint: '#9a3aa6', walk: 0.18, run: 0.28, goliath: true };
 
 /**
  * The chargers (the user's design): the Vimmer's body plan on two legs instead of wings: its central body slung
@@ -227,7 +227,6 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
   type V = [number, number, number];
   const chitin: Mat = { color: '#1a2628', tex: 'leather', rough: 0.3, metal: 0.35 };
   const muscle: Mat = { color: mix('#2a3a20', k.tint, 0.25), tex: 'leather', rough: 0.4, metal: 0.2 };
-  const plate: Mat = { color: '#1a2628', tex: 'leather', rough: 0.3, metal: 0.35 };
   const claw: Mat = { color: '#0e1210', tex: 'none', rough: 0.4 };
   const walking = p.anim === 'walk', running = walking && p.style === 'charge';
   const stab = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0;
@@ -245,15 +244,30 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
       const foot = running ? footAt(restFoot, ph, k.run, 0.2, 0.35) : walking ? footAt(restFoot, ph, k.walk, 0.12, 0.55) : restFoot;
       const ankle: V = [foot[0] + k.foot[0], foot[1] + k.foot[1], foot[2]];
       if (k.goliath) {
-        // mech-like: spindly segments folding along its length, the knee riding high and back, knobbed joints, a footpad
-        const knee = jointBetween(hip, ankle, k.thigh, k.shin, [-1, 1.4, 0]);
-        shapedLimb(c, hip, knee, k.thighR, [1.1, 0.95, 0.85, 0.8, 0.9], chitin, { flat: 0.4, keel: 0.5 });
-        shapedLimb(c, knee, ankle, k.shinR, [1.0, 0.85, 0.78, 0.74, 0.85], chitin, { flat: 0.4, keel: 0.5 });
-        shapedLimb(c, ankle, foot, k.shinR * 0.8, [1.0, 0.85, 0.8, 0.9], chitin, { flat: 0.3 });
-        for (const [j, r] of [[hip, 0.075], [knee, 0.06], [ankle, 0.045]] as const) { c.sphere(r, j, plate); c.sphere(r * 0.45, [j[0], j[1], j[2] + S * r * 0.8], muscle); } // knobbed joints, a cap on each
-        c.box([0.16, 0.035, 0.1], [foot[0] + 0.02, foot[1] + 0.018, foot[2]], plate); // the footpad
-        for (const dz of [-0.04, 0, 0.04]) c.cone(0.014, 0.06, [foot[0] + 0.12, foot[1] + 0.015, foot[2] + dz], claw, [0, dz * 3, -Math.PI / 2], 4); // toes
-        c.cone(0.014, 0.05, [foot[0] - 0.08, foot[1] + 0.015, foot[2]], claw, [0, 0, Math.PI / 2], 4); // the heel spur
+        // gnarled but organic, built for its weight (a great beetle's legs): the knee up and out, so the legs splay to
+        // a wide stance under the heavy body; thick, lumpy, bowed segments with burls along them; a spined shin; a
+        // tarsus of knotted segments ending in a pair of hooked claws spread on the ground
+        const knee = jointBetween(hip, ankle, k.thigh, k.shin, [0.2, 1, S * 1.2]);
+        const bow = (a: V, b: V, out: number): V => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + out * 0.6, (a[2] + b[2]) / 2 + S * out];
+        const mid1 = bow(hip, knee, 0.035), mid2 = bow(knee, ankle, 0.03);
+        shapedLimb(c, hip, mid1, k.thighR, [1.25, 1.05, 1.2, 1.0], chitin, { flat: 0.2 });
+        shapedLimb(c, mid1, knee, k.thighR, [1.0, 1.12, 0.92, 0.95], chitin, { flat: 0.2 });
+        shapedLimb(c, knee, mid2, k.shinR, [1.15, 0.92, 1.05, 0.9], chitin, { flat: 0.35, keel: 0.4 });
+        shapedLimb(c, mid2, ankle, k.shinR, [0.9, 0.98, 0.82, 0.78], chitin, { flat: 0.35, keel: 0.4 });
+        for (const [j, r] of [[hip, k.thighR * 1.3], [mid1, k.thighR * 1.05], [knee, k.thighR * 1.15], [mid2, k.shinR * 0.95], [ankle, k.shinR * 0.95]] as const) c.sphere(r, j, chitin); // its joints and burls
+        for (const f of [0.3, 0.55, 0.8]) { // spines down the back of the shin
+          const at: V = [knee[0] + (ankle[0] - knee[0]) * f - 0.03, knee[1] + (ankle[1] - knee[1]) * f, knee[2] + (ankle[2] - knee[2]) * f + S * 0.02];
+          c.cone(0.018, 0.08, at, claw, [0, 0, 2.0], 4);
+        }
+        // the tarsus: knotted segments down to the ground, two hooked claws spread to bear the weight
+        let tp: V = ankle;
+        for (let i = 1; i <= 3; i++) {
+          const nx: V = [ankle[0] + (foot[0] - ankle[0]) * (i / 3), ankle[1] + (foot[1] + 0.03 - ankle[1]) * (i / 3), ankle[2] + (foot[2] - ankle[2]) * (i / 3)];
+          shapedLimb(c, tp, nx, k.shinR * 0.6, [1.0, 0.8, 0.95], chitin);
+          c.sphere(k.shinR * 0.55, nx, chitin);
+          tp = nx;
+        }
+        for (const dz of [-1, 1]) c.cone(0.018, 0.11, [foot[0] + 0.07, 0.03, foot[2] + dz * 0.05], claw, [dz * 0.4, dz * 0.5, -Math.PI / 2 - 0.3], 4);
         continue;
       }
       const knee = jointBetween(hip, ankle, k.thigh, k.shin, [1, 0.3, S * 0.4]); // (its knee forward, its ankle bending back)

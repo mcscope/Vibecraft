@@ -113,8 +113,8 @@ const bogToad: FenUnit = {
     // haunches and forelegs
     for (const z of [1, -1]) {
       b.sphere([0.32, 0.28, 0.24], [-0.35, 0.3 + hop * 0.4, 0.42 * z], toadSkin);
-      shapedLimb(b, [-0.1, 0.12, 0.6 * z], [-0.55, 0.05, 0.72 * z], 0.07, [1.3, 1.2, 0.9, 0.7, 0.75], toadSkin, { flat: 0.3 }); // (a thick haunch tapering to the foot)
-      shapedLimb(b, [0.4 + lunge * 0.3, 0.45 + hop, 0.3 * z], [0.55 + lunge * 0.5, 0.05, 0.4 * z], 0.07, [1.15, 1.05, 0.85, 0.75, 0.9], toadSkin, { flat: 0.2 });
+      b.limb([-0.1, 0.12, 0.6 * z], [-0.55, 0.05, 0.72 * z], 0.07, toadSkin, 0.05);
+      b.limb([0.4 + lunge * 0.3, 0.45 + hop, 0.3 * z], [0.55 + lunge * 0.5, 0.05, 0.4 * z], 0.07, toadSkin, 0.06);
     }
     b.joint([lunge, hop, 0], [0, 0, -lunge * 0.3], (c) => {
       c.sphere([0.75, 0.48, 0.62], [0, 0.6, 0], toadSkin);
@@ -162,8 +162,7 @@ const packTortoise: FenUnit = {
       for (const [x, z, ph] of [[0.48, 0.42, 0], [0.48, -0.42, 0.5], [-0.48, 0.42, 0.5], [-0.48, -0.42, 0]] as Array<[number, number, number]>) {
         const rest: [number, number, number] = [x, 0.06, z * 1.18];
         const foot = walking ? footAt(rest, p.phase + ph, 0.09, 0.06) : rest;
-        shapedLimb(b, [x, 0.42, z], foot, 0.14, [1.1, 1.0, 0.92, 0.95, 1.05], hide); // (a pillar leg, pinched above the foot)
-        b.sphere(0.15, [x, 0.42, z], hide);
+        b.limb([x, 0.42, z], foot, 0.14, hide, 0.12);
         b.cylinder(0.15, 0.17, 0.2, [(x + foot[0]) / 2, 0.24, (z + foot[2]) / 2], IRON, undefined, 8); // greave
         b.cylinder(0.16, 0.16, 0.03, [(x + foot[0]) / 2, 0.35, (z + foot[2]) / 2], BRASS, undefined, 8);
         for (const c of [-0.06, 0, 0.06]) b.cone(0.03, 0.1, [foot[0] + 0.12, foot[1], foot[2] + c], BONE, [0, 0, -Math.PI / 2], 5); // claws
