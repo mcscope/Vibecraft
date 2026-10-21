@@ -349,18 +349,40 @@ export class Renderer {
       g.globalCompositeOperation = 'source-atop'; // only over the tree itself
       let seed = look * 9301 + 49297;
       const rnd = () => ((seed = (seed * 9301 + 49297) % 233280) / 233280);
-      const W = tree.sw, H = tree.sh, px = tree.q;
-      if (stage === 2) { g.fillStyle = 'rgba(235,235,230,0.35)'; g.fillRect(0, 0, W, H); } // a haze of web
-      g.strokeStyle = stage === 1 ? 'rgba(245,245,240,0.6)' : 'rgba(250,250,245,0.8)';
-      g.lineWidth = Math.max(1, px * 0.6);
-      for (let i = 0; i < (stage === 1 ? 14 : 34); i++) { // strands, and a few radial webs
-        const x0 = rnd() * W, y0 = rnd() * H * 0.8;
-        g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo(rnd() * W, rnd() * H * 0.8, rnd() * W, rnd() * H * 0.85); g.stroke();
-        if (i % 5 === 0) for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2, r = 6 * px + rnd() * 10 * px; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x0 + Math.cos(a) * r, y0 + Math.sin(a) * r); g.stroke(); }
+      const W = tree.sw, H = tree.sh, px = tree.q, heavy = stage === 2;
+      const top = () => rnd() * H * 0.72; // the canopy
+      // silk tents: milky masses swaddling the canopy (like tent-caterpillar nests)
+      for (let i = 0; i < (heavy ? 9 : 5); i++) {
+        const x = W * (0.15 + rnd() * 0.7), y = H * (0.08 + rnd() * 0.55), rx = (12 + rnd() * 18) * px * (heavy ? 1.3 : 1), ry = rx * (0.6 + rnd() * 0.5);
+        const g2 = g.createRadialGradient(x, y, 0, x, y, rx);
+        g2.addColorStop(0, `rgba(250,250,246,${heavy ? 0.92 : 0.8})`); g2.addColorStop(0.65, `rgba(236,236,230,${heavy ? 0.7 : 0.55})`); g2.addColorStop(1, 'rgba(230,230,224,0)');
+        g.fillStyle = g2; g.beginPath(); g.ellipse(x, y, rx, ry, (rnd() - 0.5) * 0.8, 0, Math.PI * 2); g.fill();
       }
-      if (stage === 2) { // weeping red
-        for (let i = 0; i < 12; i++) {
-          const x = rnd() * W, y = rnd() * H * 0.6, len = (8 + rnd() * 26) * px, w = (1.2 + rnd() * 1.6) * px;
+      if (heavy) { g.fillStyle = 'rgba(238,238,232,0.45)'; g.fillRect(0, 0, W, H); } // swaddled near through
+      // swaddling bands: thick wraps of silk round the branches and trunk
+      g.lineCap = 'round';
+      for (let i = 0; i < (heavy ? 22 : 12); i++) {
+        const y = rnd() * H * 0.92, x0 = rnd() * W * 0.4, x1 = W * (0.6 + rnd() * 0.4), sag = (rnd() - 0.3) * 10 * px;
+        g.strokeStyle = `rgba(246,246,240,${0.55 + rnd() * 0.3})`; g.lineWidth = (2.5 + rnd() * 3.5) * px;
+        g.beginPath(); g.moveTo(x0, y); g.quadraticCurveTo((x0 + x1) / 2, y + sag, x1, y + (rnd() - 0.5) * 8 * px); g.stroke();
+      }
+      // ropes: thick strands slung through it, a highlight down each
+      for (let i = 0; i < (heavy ? 16 : 10); i++) {
+        const x0 = rnd() * W, y0 = top(), x1 = rnd() * W, y1 = top() + 10 * px, cx = (x0 + x1) / 2, cy = Math.max(y0, y1) + (6 + rnd() * 16) * px;
+        g.strokeStyle = 'rgba(220,220,212,0.85)'; g.lineWidth = (2 + rnd() * 2) * px;
+        g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo(cx, cy, x1, y1); g.stroke();
+        g.strokeStyle = 'rgba(255,255,255,0.7)'; g.lineWidth = 0.8 * px;
+        g.beginPath(); g.moveTo(x0, y0); g.quadraticCurveTo(cx, cy, x1, y1); g.stroke();
+      }
+      // fine strands everywhere
+      g.strokeStyle = 'rgba(250,250,245,0.55)'; g.lineWidth = Math.max(1, px * 0.5);
+      for (let i = 0; i < (heavy ? 70 : 40); i++) {
+        const x0 = rnd() * W, y0 = rnd() * H * 0.9;
+        g.beginPath(); g.moveTo(x0, y0); g.lineTo(x0 + (rnd() - 0.5) * 40 * px, y0 + (rnd() - 0.3) * 30 * px); g.stroke();
+      }
+      if (heavy) { // weeping red
+        for (let i = 0; i < 16; i++) {
+          const x = rnd() * W, y = rnd() * H * 0.65, len = (10 + rnd() * 30) * px, w = (1.4 + rnd() * 1.8) * px;
           const grad = g.createLinearGradient(x, y, x, y + len);
           grad.addColorStop(0, 'rgba(150,10,20,0.95)'); grad.addColorStop(1, 'rgba(110,0,10,0.35)');
           g.fillStyle = grad; g.fillRect(x - w / 2, y, w, len);
