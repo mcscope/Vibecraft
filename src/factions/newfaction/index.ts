@@ -100,15 +100,42 @@ function winged(b: ModelBuilder, p: Pose, color: string, wing: string, mass: num
   }, sizeFor(mass, 40));
 }
 
-/** PLACEHOLDER mother: a broad, heavy grub on many legs, sized by mass. */
+/**
+ * The mother: a big grub built around her thorax (the model's origin, so she turns from there), with a head in front,
+ * a long abdomen behind with two cavities on its back either side, and eggs clustered at the thorax.
+ */
 function mother(b: ModelBuilder, p: Pose, mass: number): void {
   const skin: Mat = { color: '#c9b48a', tex: 'skin', rough: 0.6 };
+  const dark: Mat = { color: '#3a2a22', tex: 'skin', rough: 0.9 };
+  const eggMat: Mat = { color: '#f2efe6', tex: 'none', rough: 0.85 };
+  const t = p.phase * TAU, walking = p.anim === 'walk';
+  const ripple = (i: number) => (walking ? Math.max(0, Math.sin(t - i)) * 0.03 : 0);
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
-    for (let i = 0; i < 5; i++) c.sphere([0.16, 0.15 - i * 0.008, 0.18], [0.3 - i * 0.18, 0.18 + (p.anim === 'walk' ? Math.max(0, Math.sin(p.phase * TAU - i)) * 0.03 : 0), 0], skin);
-    c.sphere(0.12, [0.48, 0.2, 0], skin);
-    c.box([0.05, 0.04, 0.3], [0.1, 0.34, 0], { team: 'primary', tex: 'cloth' });
-    for (let i = 0; i < 4; i++) for (const z of [1, -1]) c.limb([0.25 - i * 0.18, 0.08, z * 0.14], [0.27 - i * 0.18, 0, z * 0.22], 0.02, skin);
-  }, sizeFor(mass, 40));
+    // thorax at the origin
+    c.sphere([0.2, 0.19, 0.22], [0, 0.22 + ripple(0), 0], skin);
+    // head, in front
+    c.sphere(0.13, [0.28, 0.2 + ripple(-1), 0], skin);
+    for (const z of [1, -1]) c.sphere(0.02, [0.38, 0.24 + ripple(-1), z * 0.06], { color: '#111111' });
+    // the abdomen, trailing behind
+    for (let i = 1; i <= 4; i++) c.sphere([0.17, 0.17 - i * 0.012, 0.2 - i * 0.008], [-i * 0.2, 0.2 + ripple(i), 0], skin);
+    // two cavities on her back, either side
+    for (const z of [1, -1]) {
+      c.sphere([0.07, 0.03, 0.06], [-0.32, 0.36 + ripple(2), z * 0.11], dark);
+      c.cylinder(0.075, 0.075, 0.02, [-0.32, 0.355 + ripple(2), z * 0.11], skin, [0, 0, 0], 12); // the rim
+    }
+    // eggs clustered at the thorax
+    for (let k = 0; k < 9; k++) {
+      const a = (k / 9) * TAU, r = k === 0 ? 0 : 0.11;
+      c.cylinder(0, 0.055, 0.09, [Math.cos(a) * r * 0.8, 0.43 + (k === 0 ? 0.05 : 0) + ripple(0), Math.sin(a) * r], eggMat, [0, a, 0], 5);
+      c.cylinder(0.055, 0, 0.05, [Math.cos(a) * r * 0.8, 0.365 + (k === 0 ? 0.05 : 0) + ripple(0), Math.sin(a) * r], eggMat, [0, a, 0], 5);
+    }
+    c.box([0.05, 0.04, 0.3], [-0.6, 0.36 + ripple(3), 0], { team: 'primary', tex: 'cloth' }); // team band, on the abdomen
+    // legs along thorax and abdomen
+    for (let i = 0; i < 5; i++) for (const z of [1, -1]) {
+      const x = 0.08 - i * 0.2, lift = walking ? Math.max(0, Math.sin(t + i + (z > 0 ? 0 : Math.PI))) * 0.04 : 0;
+      c.limb([x, 0.1, z * 0.16], [x + 0.03, lift, z * 0.25], 0.022, skin);
+    }
+  }, sizeFor(mass, 40) * 1.4);
 }
 
 function mix(a: string, b: string, k: number): string {
