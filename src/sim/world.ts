@@ -1377,6 +1377,9 @@ export class World {
   private runIdle(u: Unit): boolean {
     if (u.carter) { if ((this.tick + u.id) % 40 === 0) this.logistics.autoAssignCart(u); return false; }
     if (this.runEngage(u)) return u.x !== u.px || u.y !== u.py;
+    // an egg: nothing else to do (it doesn't gather or fight) and one thing it can become: it gets on with becoming it
+    const spec = this.specOf(u.owner, u.specId)?.spec;
+    if (spec?.becomes?.length === 1 && !u.stats.canAttack && !this.gathers(u) && (this.tick + u.id) % 10 === 0) { beginMetamorph(this, u, spec.becomes[0]); return false; }
     // standing in formation: turn to face its front
     if (u.faceTo !== null) {
       this.turnToward(u, u.faceTo);
