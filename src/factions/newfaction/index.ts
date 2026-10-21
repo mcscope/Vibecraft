@@ -31,7 +31,8 @@ const LOOK = {
   bug: { scale: (m: number) => Math.cbrt(m / 40), length: 0.85 },
   mother: { scale: (m: number) => 1.4 * Math.cbrt(m / 40), length: 1.25 },
   vimmer: { scale: (m: number) => 1.3 * Math.cbrt(m / 120), length: 0.75 },
-  charger: { scale: (m: number) => Math.cbrt(m / 38), length: 0.5 }, // (collision: its body; wings overlap others, as fliers' do)
+  charger: { scale: (m: number) => Math.cbrt(m / 38), length: 0.5 },
+  goliath: { scale: (m: number) => 1.6 * Math.cbrt(m / 600), length: 1.0 }, // (collision: its body; wings overlap others, as fliers' do)
   dragon: { scale: (m: number) => 2.0 * Math.cbrt(m / 500), length: 0.9 }, // 500 kg: ~4.5 m snout to tail-tip (collision: its body; wings overlap others, as fliers' do)
 } as const;
 /** A caterpillar's trailing segments, as model units behind its front (for the baker). */
@@ -204,39 +205,61 @@ function spikeBody(c: ModelBuilder, armed: boolean, tint: string): void {
   if (armed) c.crystal(0.32, [0.33, -0.02, 0], [0, 0, -Math.PI / 2]);
 }
 
+/** A charger's build: its legs (hip height standing, thigh, shin, the foot bone from toes up to ankle), how wide it
+ *  stands, how thick its legs, its body's size and colour, and how far it strides walking and running. */
+interface ChargerBuild { H: number; thigh: number; shin: number; foot: [number, number, number]; hipZ: number; footZ: number; thighR: number; shinR: number; body: number; tint: string; walk: number; run: number; armour?: boolean }
+const CHARGER: ChargerBuild = { H: 0.62, thigh: 0.3, shin: 0.32, foot: [-0.07, 0.21, 0], hipZ: 0.09, footZ: 0.11, thighR: 0.055, shinR: 0.035, body: 0.7, tint: '#7fbf4a', walk: 0.22, run: 0.34 };
+// the T3 goliath: hulking and low, wide on short massive legs, armoured (the user's: ultralisk vibes)
+const GOLIATH: ChargerBuild = { H: 0.44, thigh: 0.24, shin: 0.22, foot: [-0.05, 0.12, 0], hipZ: 0.2, footZ: 0.3, thighR: 0.1, shinR: 0.07, body: 1.15, tint: '#9a3aa6', walk: 0.16, run: 0.26, armour: true };
+
 /**
- * The T1 charger (the user's design): the Vimmer's body plan, small, on two legs instead of wings: its central body
- * slung between two long, muscular legs like a running bird's (a thick thigh, a shin, a long foot bone, the ankle
- * bending back), striding long on planted feet; charging, it runs, both feet off the ground between strides; it
- * strikes by ramming its whole body forward, the spike first.
+ * The chargers (the user's design): the Vimmer's body plan on two legs instead of wings: its central body slung
+ * between two muscular legs like a running bird's (a thick thigh, a shin, a long foot bone, the ankle bending back),
+ * striding long on planted feet; charging, it runs, both feet off the ground between strides; it strikes by ramming its
+ * whole body forward, the spike first. At rest it squats, its body down on the ground, its legs folded.
  */
-function drawCharger(b: ModelBuilder, p: Pose, mass: number): void {
+function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = CHARGER): void {
   type V = [number, number, number];
   const chitin: Mat = { color: '#1a2628', tex: 'leather', rough: 0.3, metal: 0.35 };
-  const muscle: Mat = { color: '#3e5a2a', tex: 'leather', rough: 0.4, metal: 0.2 };
+  const muscle: Mat = { color: mix('#2a3a20', k.tint, 0.25), tex: 'leather', rough: 0.4, metal: 0.2 };
+  const plate: Mat = { color: mix('#22262a', k.tint, 0.3), tex: 'leather', rough: 0.25, metal: 0.45 };
   const claw: Mat = { color: '#0e1210', tex: 'none', rough: 0.4 };
   const walking = p.anim === 'walk', running = walking && p.style === 'charge';
   const stab = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0;
-  const H = 0.62, THIGH = 0.3, SHIN = 0.32, FOOT: V = [-0.07, 0.21, 0]; // (the foot bone, ankle up and back from the toes)
+  // (squatting at rest: hips down so its body lies on the ground; up on its legs to walk, run or strike)
+  const up = walking || p.anim === 'attack';
+  const rest = 0.1 * k.body + 0.01, H = up ? k.H : rest - 0.04;
   // its body rides lowest over a planted foot, highest in the stride (running: up in the moment both feet are off)
   const bob = running ? -0.06 + 0.07 * Math.max(0, Math.sin((p.phase * 2 - 0.35) * TAU)) : walking ? -0.03 + Math.abs(Math.cos(p.phase * TAU)) * 0.025 : 0;
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
     for (const S of [1, -1]) {
-      const hip: V = [-0.02, H + bob, S * 0.09], rest: V = [0.02, 0.01, S * 0.11];
+      const hip: V = [-0.02, H + bob, S * k.hipZ], restFoot: V = [up ? 0.02 : 0.1, 0.01, S * (k.footZ + (up ? 0 : 0.05))];
       const ph = p.phase + (S > 0 ? 0 : 0.5);
-      const foot = running ? footAt(rest, ph, 0.34, 0.2, 0.35) : walking ? footAt(rest, ph, 0.22, 0.12, 0.55) : rest;
-      const ankle: V = [foot[0] + FOOT[0], foot[1] + FOOT[1], foot[2]];
-      const knee = jointBetween(hip, ankle, THIGH, SHIN, [1, 0.2, S * 0.3]); // (its knee forward, its ankle bending back)
-      c.limb(hip, knee, 0.055, muscle, 0.04); // the thigh, thick with muscle
-      c.sphere([0.075, 0.06, 0.055], [(hip[0] + knee[0]) / 2, (hip[1] + knee[1]) / 2, (hip[2] + knee[2]) / 2], muscle);
-      c.limb(knee, ankle, 0.035, chitin, 0.024); // the shin
-      c.limb(ankle, foot, 0.022, chitin, 0.018); // the long foot bone
-      for (const dz of [-0.03, 0, 0.03]) c.cone(0.012, 0.07, [foot[0] + 0.05, 0.01, foot[2] + dz], claw, [0, dz * 4, -Math.PI / 2], 4); // toes
+      const foot = running ? footAt(restFoot, ph, k.run, 0.2, 0.35) : walking ? footAt(restFoot, ph, k.walk, 0.12, 0.55) : restFoot;
+      const ankle: V = [foot[0] + k.foot[0], foot[1] + k.foot[1], foot[2]];
+      const knee = jointBetween(hip, ankle, k.thigh, k.shin, [1, 0.3, S * 0.4]); // (its knee forward, its ankle bending back)
+      c.limb(hip, knee, k.thighR, muscle, k.thighR * 0.75); // the thigh, thick with muscle
+      c.sphere([k.thighR * 1.4, k.thighR * 1.1, k.thighR], [(hip[0] + knee[0]) / 2, (hip[1] + knee[1]) / 2, (hip[2] + knee[2]) / 2], muscle);
+      c.limb(knee, ankle, k.shinR, chitin, k.shinR * 0.7); // the shin
+      c.limb(ankle, foot, k.shinR * 0.65, chitin, k.shinR * 0.5); // the foot bone
+      if (k.armour) c.sphere([k.shinR * 1.6, k.shinR * 2.2, k.shinR * 1.4], [(knee[0] + ankle[0]) / 2, (knee[1] + ankle[1]) / 2, (knee[2] + ankle[2]) / 2], plate); // a plate down the shin
+      for (const dz of [-0.03, 0, 0.03]) c.cone(0.012 * k.body / 0.7, 0.07 * k.body / 0.7, [foot[0] + 0.05, 0.01, foot[2] + dz * k.body / 0.7], claw, [0, dz * 4, -Math.PI / 2], 4); // toes
       c.cone(0.01, 0.05, [foot[0] - 0.04, 0.01, foot[2]], claw, [0, 0, Math.PI / 2], 4); // the back claw
     }
     // the body, slung between the hips: leaning into a run; striking, it rams forward, the spike first
-    c.joint([0.22 * stab, H + bob + 0.04 - 0.05 * stab, 0], [0, 0, (running ? -0.15 : 0) - 0.1 * stab], (t) => t.joint([0, 0, 0], [0, 0, 0], (q) => spikeBody(q, p.armed, '#7fbf4a'), 0.7));
-  }, LOOK.charger.scale(mass));
+    c.joint([0.22 * stab * k.body / 0.7, H + bob + 0.04 - 0.05 * stab, 0], [0, 0, (running ? -0.15 : 0) - 0.1 * stab], (t) => t.joint([0, 0, 0], [0, 0, 0], (q) => {
+      spikeBody(q, p.armed, k.tint);
+      if (!k.armour) return;
+      // armoured: overlapping carapace plates over its back, and great curved blades sweeping forward from its head
+      for (const [x0, x1] of [[0.18, -0.06], [0.02, -0.26], [-0.16, -0.46]] as const) {
+        q.loft([0, 0.5, 1].map((u) => { const x = x0 + (x1 - x0) * u, end = u === 0.5 ? 1 : 0.55; return { at: [x, 0.03, 0] as V, w: 0.12 * end, up: 0.1 * end, down: 0.02, flat: 0.2 }; }), plate);
+      }
+      for (const z of [1, -1]) {
+        q.limb([0.18, 0.04, z * 0.07], [0.3, 0.16, z * 0.16], 0.022, plate, 0.016);
+        q.limb([0.3, 0.16, z * 0.16], [0.5, 0.12, z * 0.12], 0.016, plate, 0.004); // a blade, hooked forward
+      }
+    }, k.body));
+  }, (k.armour ? LOOK.goliath : LOOK.charger).scale(mass));
 }
 
 /** How far apart a caterpillar's segments are along its path (model units, before its size). */
@@ -625,8 +648,8 @@ const slinger = unit({ id: 'slinger', name: 'Slinger', mass: 60, physique: { mus
 const dragonFly = unit({ id: 'dragon-fly', name: 'Dragon Fly', mass: 500, physique: { muscle: 0.5, frame: 0.3, reserve: 0.2 }, refinement: 4, flight: true,
   attack: { style: 'throw', crystalMass: 6, ammo: 10 }, // PLACEHOLDER: its fire (a conversion of crystal) is still to design
   description: 'T3: a fire-breathing dragon with butterfly wings, insectoid and reptilian.', model: (b, p) => drawDragonFly(b, p, 500) }, 'dragon');
-const groundAttacker3 = unit({ id: 'ground-attacker3', name: 'T3 Ground Attacker', mass: 600, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 4,
-  attack: { style: 'strike', crystalMass: 8 }, description: 'T3: a ground attacker.', model: (b, p) => bug(b, p, '#9a3aa6', 600, 'strike') }, 'bug');
+const groundAttacker3 = unit({ id: 'ground-attacker3', name: 'Goliath Charger', mass: 600, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 4,
+  attack: { style: 'strike', crystalMass: 8 }, description: 'T3: a hulking charger, low and wide on massive legs, armoured, great blades at its head.', model: (b, p) => drawCharger(b, p, 600, GOLIATH) }, 'goliath');
 
 export const units: Unit[] = [
   motherOf(1, 80), motherOf(2, 120), motherOf(3, 190),
