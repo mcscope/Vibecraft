@@ -21,6 +21,9 @@ export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
   if (!a.frames.length) { out.textContent = `${id} '${anim}' has no shadow frames`; return; }
   const facing = params.get('facing');
   if (facing !== null) a.frames.splice(0, a.frames.length, a.frames[+facing % a.frames.length]);
+  // &frames=1: only that many frames of each facing (one: a still, for contact sheets)
+  const keep = +(params.get('frames') ?? 0);
+  if (keep > 0) a.frames.splice(0, a.frames.length, ...a.frames.map((row) => row.slice(0, keep)));
   // &turn=4: a turn-around, that many facings side by side (one frame each)
   const turn = +(params.get('turn') ?? 0);
   if (turn > 0) { const all = a.frames, step = Math.max(1, Math.round(all.length / turn)); a.frames.splice(0, all.length, all.filter((_, i) => i % step === 0).map((row) => row[0])); }

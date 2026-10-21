@@ -689,7 +689,7 @@ function motherHead(h: ModelBuilder, style: MotherHead, crestK: number, plate: M
 
 /** A variation on the T3 mother's form (for concepts): how steeply her abdomen rises, how far it curls over, its size, a
  *  wasp's waist before it, how many legs she stands on (2: upright on her hind pair, forelegs as mantis arms), her head's size. */
-export interface MotherForm { pitch?: number; curl?: number; abdomen?: number; waist?: boolean; legs?: 2 | 4 | 6; head?: number; girth?: number; neck?: number; crest?: number; headStyle?: MotherHead; detail?: number }
+export interface MotherForm { pitch?: number; curl?: number; abdomen?: number; waist?: boolean; legs?: 2 | 4 | 6; head?: number; girth?: number; neck?: number; crest?: number; headStyle?: MotherHead; detail?: number; crawl?: number }
 export type MotherHead = 'duck' | 'hammer' | 'shovel' | 'helmet' | 'mantis' | 'frill' | 'mantisFrill' | 'shortShovel';
 
 function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): void {
@@ -700,7 +700,8 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
   const dark: Mat = { color: '#241812', tex: 'skin', rough: 0.95 };
   const t = p.phase * TAU, walking = p.anim === 'walk';
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
-    const y0 = 0.42; // (her body low)
+    // (her body low; crawling, lower still: 0 … 1, the body near the ground on wide-sprawled legs)
+    const cr = o.crawl ?? 0, y0 = 0.42 - 0.3 * cr;
     // thorax: a sculpted, keeled segment, plated over the top, a ridge of short spines down it
     c.loft([[-0.2, 0.09, 0.08, 0.08, 0.2], [-0.08, 0.17, 0.15, 0.13, 0.5], [0.06, 0.16, 0.15, 0.12, 0.5], [0.16, 0.1, 0.1, 0.08, 0.3], [0.22, 0.05, 0.05, 0.05, 0]]
       .map(([x, w, u, d, keel]) => ({ at: [x, y0, 0] as V3, w, up: u, down: d, keel })), under);
@@ -758,7 +759,8 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
     // weight, the forelegs just ahead; her weight balanced between them
     for (const z of [1, -1]) {
       const ph = p.phase + (z > 0 ? 0 : 0.5); // (each hind leg steps with the foreleg across from it)
-      const hip: V3 = [-0.1, y0 - 0.04, z * 0.16], kneeRest: V3 = [0.02, y0 + 0.12, z * 0.5], ankleRest: V3 = [-0.24, 0.2, z * 0.6], rest: V3 = [legs === 2 ? -0.04 : -0.16, 0, z * (legs === 2 ? 0.42 : 0.62)];
+      const sp = 1 + 0.9 * cr; // (sprawling, its feet far out to the sides)
+      const hip: V3 = [-0.1, y0 - 0.04, z * 0.16], kneeRest: V3 = [0.02, y0 + 0.12 + 0.3 * cr, z * 0.5 * sp], ankleRest: V3 = [-0.24, 0.2, z * 0.6 * sp], rest: V3 = [legs === 2 ? -0.04 : -0.16, 0, z * (legs === 2 ? 0.42 : 0.62) * sp];
       const foot = walking ? footAt(rest, legs === 2 ? p.phase + (z > 0 ? 0 : 0.5) : ph, 0.12, 0.06) : rest;
       const ankle: V3 = [foot[0] + ankleRest[0] - rest[0], foot[1] + ankleRest[1], foot[2] + ankleRest[2] - rest[2]];
       const knee = jointBetween(hip, ankle, span(hip, kneeRest), span(kneeRest, ankleRest), [0.3, 1, z]);
@@ -777,13 +779,13 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
         continue;
       }
       if (legs === 6) { // a middle pair between
-        const mhip: V3 = [0.0, y0 - 0.06, z * 0.15], mrest: V3 = [0.1, 0, z * 0.6], mkRest: V3 = [0.08, y0 + 0.08, z * 0.45];
+        const mhip: V3 = [0.0, y0 - 0.06, z * 0.15], mrest: V3 = [0.1, 0, z * 0.6 * sp], mkRest: V3 = [0.08, y0 + 0.08 + 0.3 * cr, z * 0.45 * sp];
         const mfoot = walking ? footAt(mrest, ph + 0.5, 0.12, 0.05) : mrest;
         const mk = jointBetween(mhip, mfoot, span(mhip, mkRest), span(mkRest, mrest), [0.2, 1, z]);
         shapedLimb(c, mhip, mk, 0.055, [0.8, 1.05, 1.0, 0.8, 0.6], plate, { flat: 0.3, up: [0, 0, z] });
         shapedLimb(c, mk, mfoot, 0.04, [0.85, 0.7, 0.6, 0.5, 0.4], plate, { flat: 0.5, keel: 0.5 });
       }
-      const fhip: V3 = [0.1, y0 - 0.06, z * 0.12], fkRest: V3 = [0.24, y0 + 0.02, z * 0.34], frest: V3 = [0.36, 0, z * 0.4];
+      const fhip: V3 = [0.1, y0 - 0.06, z * 0.12], fkRest: V3 = [0.24, y0 + 0.02 + 0.3 * cr, z * 0.34 * sp], frest: V3 = [0.36, 0, z * 0.4 * sp];
       const ffoot = walking ? footAt(frest, ph + 0.5, 0.12, 0.05) : frest;
       const fk = jointBetween(fhip, ffoot, span(fhip, fkRest), span(fkRest, frest), [0.5, 1, z]);
       shapedLimb(c, fhip, fk, 0.07, [0.6, 1.15, 1.25, 0.95, 0.55], plate, { flat: 0.35, up: [0, 0, z] });
