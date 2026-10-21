@@ -1,6 +1,6 @@
 // Reusable rigs for building unit models out of primitives.
 // Convention: unit faces +x, +y up, +z is its left. A person is ~1.7 tall.
-import { footAt, jointBetween } from '../../kits/bake3d/gait';
+import { footAt, jointBetween, shapedLimb } from '../../kits/bake3d/gait';
 import type { Mat, ModelBuilder, Pose, Vec3 } from '../../kits/bake3d/types';
 
 const TAU = Math.PI * 2;
@@ -123,8 +123,11 @@ export function human(
         knee = swing(hip, 0.44, a);
         ankle = swing(knee, 0.42, a - (lunge && side > 0 ? 0.9 : 0));
       }
-      b.limb(hip, knee, 0.075 * bulk, look.trousers, 0.06);
-      b.limb(knee, ankle, 0.06, look.boots, 0.05);
+      // shaped, not pipes: a thigh full at the top tapering to the knee, a calf swelling below it
+      shapedLimb(b, hip, knee, 0.075 * bulk, [1, 1.1, 1.02, 0.9, 0.8], look.trousers);
+      b.sphere(0.062 * bulk, knee, look.trousers);
+      shapedLimb(b, knee, ankle, 0.06, [0.95, 1.12, 1.0, 0.8, 0.78], look.boots);
+      b.sphere(0.048, ankle, look.boots);
       // boot top cuff and laces
       const cuff: Vec3 = [knee[0] + (ankle[0] - knee[0]) * 0.35, knee[1] + (ankle[1] - knee[1]) * 0.35, knee[2] + (ankle[2] - knee[2]) * 0.35];
       b.cylinder(0.066, 0.07, 0.05, cuff, look.boots, undefined, 10);
@@ -186,8 +189,11 @@ export function human(
         const elbow = swing(shoulder, 0.28, a);
         const wrist = swing(elbow, 0.26, a + 0.25);
         u.sphere(0.075 * bulk, shoulder, look.tunic);
-        u.limb(shoulder, elbow, 0.058 * bulk, look.tunic, 0.05);
-        u.limb(elbow, wrist, 0.048, skin, 0.042);
+        shapedLimb(u, shoulder, elbow, 0.058 * bulk, [1.05, 1.1, 0.98, 0.88], look.tunic); // (an upper arm full at the shoulder)
+        u.sphere(0.06 * bulk, shoulder, look.tunic);
+        u.sphere(0.047 * bulk, elbow, look.tunic);
+        shapedLimb(u, elbow, wrist, 0.048, [0.95, 1.08, 0.9, 0.78], skin); // (a forearm swelling below the elbow)
+        u.sphere(0.04, wrist, skin);
         u.sphere([0.052, 0.03, 0.052], [wrist[0] + (elbow[0] - wrist[0]) * 0.2, wrist[1] + (elbow[1] - wrist[1]) * 0.2, wrist[2]], { color: '#4a3424', tex: 'leather' }); // bracer
         if (look.pads) u.sphere([0.11 * bulk, 0.07, 0.1 * bulk], [shoulder[0], shoulder[1] + 0.03, shoulder[2]], { color: '#8d939a', tex: 'metal' });
         u.joint(wrist, [0, 0, a + 0.25], (h) => {
@@ -242,8 +248,11 @@ export function quadLegs(b: ModelBuilder, p: Pose, o: { fx: number; bx: number; 
     const foot = gallop ? footAt(rest, p.phase + order[`${Math.sign(x)},${Math.sign(z)}`], 0.45 * o.len, 0.25 * o.len, 0.32)
       : walking ? footAt(rest, p.phase + ph, 0.42 * o.len, 0.16 * o.len) : rest; // (long strides: a runner covers ground by reach, not by scurrying)
     const knee = jointBetween(hip, foot, o.len * 0.5, o.len * 0.5, [x > 0 ? 1 : -1, 0, 0]); // (a foreleg's knee forward, a hind leg's hock back)
-    b.limb(hip, knee, o.r, o.mat, o.r * 0.8);
-    b.limb(knee, foot, o.r * 0.75, o.mat, o.r * 0.65);
+    // a heavy, muscled upper leg tapering to a lean lower one (a horse's forearm over its cannon)
+    shapedLimb(b, hip, knee, o.r, [1.15, 1.3, 1.1, 0.85, 0.72], o.mat);
+    b.sphere(o.r * 1.05, hip, o.mat);
+    b.sphere(o.r * 0.72, knee, o.mat);
+    shapedLimb(b, knee, foot, o.r * 0.75, [0.95, 0.78, 0.72, 0.75, 0.82], o.mat);
     b.sphere([o.r * 1.05, o.r * 0.6, o.r * 0.95], [foot[0] + o.r * 0.3, Math.max(o.r * 0.5, foot[1]), foot[2]], o.paw);
   }
   return bob;

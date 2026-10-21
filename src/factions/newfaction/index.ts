@@ -71,7 +71,7 @@ function drawVimmer(b: ModelBuilder, p: Pose, mass: number): void {
     const d: V = [bb[0] - a[0], bb[1] - a[1], bb[2] - a[2]], len = Math.hypot(...d);
     if (len < 1e-3) return;
     c.joint(a, aim(d, aft), (w) => {
-      w.limb([0, 0, 0], [len, 0, 0], 0.03, chitin, 0.022);
+      shapedLimb(w, [0, 0, 0], [len, 0, 0], 0.03, [1.15, 1.0, 0.9, 0.8, 0.72], chitin, { flat: 0.3 }); // (the spar, tapering out)
       for (let x = 0.08; x < len - 0.04; x += 0.13) w.cone(0.012, 0.06, [x, 0.03, 0], sheen, [0, 0, -0.5], 4); // spines
       if (chord > 0.01 || chord2 > 0.01) {
         const steps = 6;
@@ -247,9 +247,9 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
       if (k.goliath) {
         // mech-like: spindly segments folding along its length, the knee riding high and back, knobbed joints, a footpad
         const knee = jointBetween(hip, ankle, k.thigh, k.shin, [-1, 1.4, 0]);
-        c.limb(hip, knee, k.thighR, chitin, k.thighR * 0.85);
-        c.limb(knee, ankle, k.shinR, chitin, k.shinR * 0.8);
-        c.limb(ankle, foot, k.shinR * 0.8, chitin, k.shinR * 0.7);
+        shapedLimb(c, hip, knee, k.thighR, [1.1, 0.95, 0.85, 0.8, 0.9], chitin, { flat: 0.4, keel: 0.5 });
+        shapedLimb(c, knee, ankle, k.shinR, [1.0, 0.85, 0.78, 0.74, 0.85], chitin, { flat: 0.4, keel: 0.5 });
+        shapedLimb(c, ankle, foot, k.shinR * 0.8, [1.0, 0.85, 0.8, 0.9], chitin, { flat: 0.3 });
         for (const [j, r] of [[hip, 0.075], [knee, 0.06], [ankle, 0.045]] as const) { c.sphere(r, j, plate); c.sphere(r * 0.45, [j[0], j[1], j[2] + S * r * 0.8], muscle); } // knobbed joints, a cap on each
         c.box([0.16, 0.035, 0.1], [foot[0] + 0.02, foot[1] + 0.018, foot[2]], plate); // the footpad
         for (const dz of [-0.04, 0, 0.04]) c.cone(0.014, 0.06, [foot[0] + 0.12, foot[1] + 0.015, foot[2] + dz], claw, [0, dz * 3, -Math.PI / 2], 4); // toes
@@ -257,10 +257,11 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
         continue;
       }
       const knee = jointBetween(hip, ankle, k.thigh, k.shin, [1, 0.3, S * 0.4]); // (its knee forward, its ankle bending back)
-      c.limb(hip, knee, k.thighR, muscle, k.thighR * 0.75); // the thigh, thick with muscle
-      c.sphere([k.thighR * 1.4, k.thighR * 1.1, k.thighR], [(hip[0] + knee[0]) / 2, (hip[1] + knee[1]) / 2, (hip[2] + knee[2]) / 2], muscle);
-      c.limb(knee, ankle, k.shinR, chitin, k.shinR * 0.7); // the shin
-      c.limb(ankle, foot, k.shinR * 0.65, chitin, k.shinR * 0.5); // the foot bone
+      shapedLimb(c, hip, knee, k.thighR, [1.1, 1.4, 1.35, 1.0, 0.7], muscle); // the thigh, thick with muscle, tapering to the knee
+      c.sphere(k.thighR * 0.75, knee, chitin);
+      shapedLimb(c, knee, ankle, k.shinR, [1.0, 0.85, 0.72, 0.66, 0.7], chitin, { flat: 0.3 }); // the shin
+      c.sphere(k.shinR * 0.68, ankle, chitin);
+      shapedLimb(c, ankle, foot, k.shinR * 0.65, [1.0, 0.85, 0.75, 0.8], chitin); // the foot bone
       for (const dz of [-0.03, 0, 0.03]) c.cone(0.012 * k.body / 0.7, 0.07 * k.body / 0.7, [foot[0] + 0.05, 0.01, foot[2] + dz * k.body / 0.7], claw, [0, dz * 4, -Math.PI / 2], 4); // toes
       c.cone(0.01, 0.05, [foot[0] - 0.04, 0.01, foot[2]], claw, [0, 0, Math.PI / 2], 4); // the back claw
     }
@@ -475,7 +476,7 @@ function drawDragonFly(b: ModelBuilder, p: Pose, mass: number): void {
     for (let i = 1; i <= 6; i++) {
       const rise = i <= 4 ? 0.09 : 0.0, fwd = i <= 4 ? 0.07 : 0.1;
       const next: [number, number, number] = [n[0] + fwd, n[1] + rise + wave(i, 1, 0.012), wave(i * 0.8, 1, 0.045) * (i / 6)];
-      c.limb(n, next, 0.042 - i * 0.003, scale, 0.039 - i * 0.003);
+      shapedLimb(c, n, next, 0.042 - i * 0.003, [1.0, 0.88, 0.85, 0.95], scale, { flat: 0.15 }); // (a segment pinched at its middle)
       c.sphere(0.046 - i * 0.003, next, belly); // its joints
       n = next;
     }
@@ -514,8 +515,9 @@ function drawDragonFly(b: ModelBuilder, p: Pose, mass: number): void {
       const hip: V3 = [x, y0 - 0.08 + x * 0.4, z * 0.08], kneeRest: V3 = [x + 0.05, 0.34, z * 0.22], rest: V3 = [x + 0.08, 0.01, z * 0.3];
       const foot: V3 = flying ? [x - 0.18, y0 - 0.16, z * 0.12] : p.anim === 'walk' ? footAt(rest, p.phase + ph + (z > 0 ? 0 : 0.5), 0.1, 0.06) : rest;
       const knee: V3 = flying ? [x - 0.08, y0 - 0.12, z * 0.14] : jointBetween(hip, foot, span(hip, kneeRest), span(kneeRest, rest), [0, 1, z]);
-      c.limb(hip, knee, 0.022, horn, 0.018);
-      c.limb(knee, foot, 0.018, horn, 0.01);
+      shapedLimb(c, hip, knee, 0.022, [1.15, 1.05, 0.9, 0.82], horn, { flat: 0.3 });
+      c.sphere(0.017, knee, horn);
+      shapedLimb(c, knee, foot, 0.018, [0.95, 0.8, 0.65, 0.5], horn);
     }
     // butterfly wings, a monarch's or a swallowtail's: a long swept forewing, bright at the base and deepening to a dark
     // tip, a black margin spotted white, black veins fanning from the body, a blue shimmer by the body; a rounded

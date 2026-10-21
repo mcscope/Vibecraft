@@ -1,6 +1,6 @@
 // Shared animal rig helpers for wildlife models (any homeworld may use them).
 import type { WildSpec } from '../factions/types';
-import { footAt, jointBetween } from './bake3d/gait';
+import { footAt, jointBetween, shapedLimb } from './bake3d/gait';
 import type { Mat, ModelBuilder, Pose, UnitModel, Vec3 } from './bake3d/types';
 
 /** A wild animal's design plus its 3D model. */
@@ -25,8 +25,11 @@ export function legs(b: ModelBuilder, p: Pose, o: { fx: number; bx: number; z: n
     const foot = gallop ? footAt(rest, p.phase + order, 0.45 * o.len, 0.25 * o.len, 0.32)
       : walking ? footAt(rest, p.phase + ph, 0.42 * o.len, 0.16 * o.len) : rest; // (long strides, not scurrying)
     const knee = jointBetween(hip, foot, o.len * 0.5, o.len * 0.5, [x > 0 ? 1 : -1, 0, 0]); // (a foreleg's knee forward, a hind leg's hock back)
-    b.limb(hip, knee, o.r, o.mat, o.r * 0.75);
-    b.limb(knee, foot, o.r * 0.7, o.mat, o.r * 0.55);
+    // a heavy, muscled upper leg tapering to a lean lower one
+    shapedLimb(b, hip, knee, o.r, [1.15, 1.3, 1.1, 0.85, 0.7], o.mat);
+    b.sphere(o.r * 1.05, hip, o.mat);
+    b.sphere(o.r * 0.7, knee, o.mat);
+    shapedLimb(b, knee, foot, o.r * 0.7, [0.95, 0.78, 0.7, 0.72, 0.8], o.mat);
     b.sphere([o.r * 0.8, o.r * 0.55, o.r * 0.75], [foot[0], Math.max(o.r * 0.4, foot[1]), foot[2]], o.hoof);
   }
   return bob;

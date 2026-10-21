@@ -2,6 +2,7 @@
 // Small, crouching, frog-like marsh folk: ~1.15 tall, wide heads with bulging eyes,
 // webbed feet, shaggy reed cloaks, lily-pad hats or fin crests.
 // Convention: faces +x, y up, +z is its left.
+import { shapedLimb } from '../../kits/bake3d/gait';
 import type { Mat, ModelBuilder, Pose, Vec3 } from '../../kits/bake3d/types';
 
 const TAU = Math.PI * 2;
@@ -83,8 +84,9 @@ export function fenling(
       const hip: Vec3 = [-0.04, 0.4 - (1 - e) * 0.03, z];
       const knee: Vec3 = [mix(0.12, -0.14) + h.squat * 0.07, mix(0.3, 0.22) + sq * 0.55, z * (mix(2.1, 1.3) + h.squat * 0.6)];
       const foot: Vec3 = [mix(-0.02, -0.42) - h.squat * 0.03, mix(0.03, 0.06) + sq, z * (mix(1.6, 1.1) + h.squat * 0.25)];
-      m.limb(hip, knee, 0.075, skin, 0.055);
-      m.limb(knee, foot, 0.05, skin, 0.035);
+      shapedLimb(m, hip, knee, 0.075, [1.1, 1.25, 1.05, 0.8, 0.72], skin); // (a frog's thick thigh)
+      m.sphere(0.055, knee, skin);
+      shapedLimb(m, knee, foot, 0.05, [1.0, 0.85, 0.75, 0.7, 0.75], skin);
       m.joint(foot, [0, 0, 0], (f) => {
         for (const tz of [-0.045, 0, 0.045]) f.sphere([0.06, 0.018, 0.022], [0.06, 0, tz * (1 + Math.abs(tz) * 8)], skin, [0, tz * 6, 0]);
         f.sphere([0.06, 0.012, 0.07], [0.03, -0.004, 0], belly); // webbing
@@ -140,8 +142,11 @@ export function fenling(
       const elbowR = swing(sr, 0.22, arm), handR = swing(elbowR, 0.22, arm + 0.25);
       const la = walking ? 0.35 - h.ext * 0.9 : 0.35; // arms sweep back as it leaps
       const elbowL = swing(sl, 0.22, la), handL = swing(elbowL, 0.22, la + 0.3);
-      u.limb(sr, elbowR, 0.04, skin, 0.034); u.limb(elbowR, handR, 0.032, skin, 0.026);
-      u.limb(sl, elbowL, 0.04, skin, 0.034); u.limb(elbowL, handL, 0.032, skin, 0.026);
+      for (const [sh, el, hd] of [[sr, elbowR, handR], [sl, elbowL, handL]] as const) {
+        shapedLimb(u, sh, el, 0.04, [1.05, 1.1, 0.95, 0.85], skin);
+        u.sphere(0.034, el, skin);
+        shapedLimb(u, el, hd, 0.032, [0.95, 1.05, 0.85, 0.8], skin);
+      }
       u.sphere([0.04, 0.03, 0.045], handR, skin);
       u.sphere([0.04, 0.03, 0.045], handL, skin);
       if (held) u.joint(handR, [0, 0, arm + 0.25], held);

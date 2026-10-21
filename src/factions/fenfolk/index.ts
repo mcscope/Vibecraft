@@ -11,7 +11,7 @@
 //   • great siege herons: enormous fliers that drop heavy crystals over walls and water,
 //     but so heavy they can only stay up for a few seconds' bombing run
 // Self-contained: only engine types and kits, never another faction.
-import { footAt, jointBetween } from '../../kits/bake3d/gait';
+import { footAt, jointBetween, shapedLimb } from '../../kits/bake3d/gait';
 import type { BuildingSpec, FactionSpec, TechSpec, UnitSpec } from '../types';
 import type { BuildingModel, Mat, ModelBuilder, UnitModel } from '../../kits/bake3d/types';
 import { fenWildlife } from './wildlife';
@@ -113,8 +113,8 @@ const bogToad: FenUnit = {
     // haunches and forelegs
     for (const z of [1, -1]) {
       b.sphere([0.32, 0.28, 0.24], [-0.35, 0.3 + hop * 0.4, 0.42 * z], toadSkin);
-      b.limb([-0.1, 0.12, 0.6 * z], [-0.55, 0.05, 0.72 * z], 0.07, toadSkin, 0.05);
-      b.limb([0.4 + lunge * 0.3, 0.45 + hop, 0.3 * z], [0.55 + lunge * 0.5, 0.05, 0.4 * z], 0.07, toadSkin, 0.06);
+      shapedLimb(b, [-0.1, 0.12, 0.6 * z], [-0.55, 0.05, 0.72 * z], 0.07, [1.3, 1.2, 0.9, 0.7, 0.75], toadSkin, { flat: 0.3 }); // (a thick haunch tapering to the foot)
+      shapedLimb(b, [0.4 + lunge * 0.3, 0.45 + hop, 0.3 * z], [0.55 + lunge * 0.5, 0.05, 0.4 * z], 0.07, [1.15, 1.05, 0.85, 0.75, 0.9], toadSkin, { flat: 0.2 });
     }
     b.joint([lunge, hop, 0], [0, 0, -lunge * 0.3], (c) => {
       c.sphere([0.75, 0.48, 0.62], [0, 0.6, 0], toadSkin);
@@ -162,7 +162,8 @@ const packTortoise: FenUnit = {
       for (const [x, z, ph] of [[0.48, 0.42, 0], [0.48, -0.42, 0.5], [-0.48, 0.42, 0.5], [-0.48, -0.42, 0]] as Array<[number, number, number]>) {
         const rest: [number, number, number] = [x, 0.06, z * 1.18];
         const foot = walking ? footAt(rest, p.phase + ph, 0.09, 0.06) : rest;
-        b.limb([x, 0.42, z], foot, 0.14, hide, 0.12);
+        shapedLimb(b, [x, 0.42, z], foot, 0.14, [1.1, 1.0, 0.92, 0.95, 1.05], hide); // (a pillar leg, pinched above the foot)
+        b.sphere(0.15, [x, 0.42, z], hide);
         b.cylinder(0.15, 0.17, 0.2, [(x + foot[0]) / 2, 0.24, (z + foot[2]) / 2], IRON, undefined, 8); // greave
         b.cylinder(0.16, 0.16, 0.03, [(x + foot[0]) / 2, 0.35, (z + foot[2]) / 2], BRASS, undefined, 8);
         for (const c of [-0.06, 0, 0.06]) b.cone(0.03, 0.1, [foot[0] + 0.12, foot[1], foot[2] + c], BONE, [0, 0, -Math.PI / 2], 5); // claws
@@ -287,8 +288,9 @@ const greatSiegeHeron: FenUnit = {
           // legs swung forward and down, toes spread to catch the ground
           const knee: [number, number, number] = [0.3, hip[1] - legLen * 0.45, hip[2]];
           const foot: [number, number, number] = [0.5, Math.max(0.05, hip[1] - legLen * 0.95), hip[2]];
-          b.limb(hip, knee, 0.045, heronLeg, 0.035);
-          b.limb(knee, foot, 0.035, heronLeg, 0.028);
+          shapedLimb(b, hip, knee, 0.045, [1.2, 1.0, 0.8, 0.75, 0.85], heronLeg); // (a feathered thigh thinning to the joint)
+          b.sphere(0.034, knee, heronLeg);
+          shapedLimb(b, knee, foot, 0.035, [0.95, 0.8, 0.72, 0.72, 0.8], heronLeg);
           for (const tz of [-0.08, 0, 0.08]) b.limb(foot, [foot[0] + 0.22, foot[1] - 0.03, foot[2] + tz * 1.6], 0.015, heronLeg);
         } else if (leaping) {
           // the foot planted under it till it springs clear, then swinging back to trail; the joint between (its
@@ -299,8 +301,9 @@ const greatSiegeHeron: FenUnit = {
           const h = Math.sqrt(Math.max(0, L * L - (d / 2) ** 2)), ux = dx / (Math.hypot(dx, dy) || 1), uy = dy / (Math.hypot(dx, dy) || 1);
           const [px, py] = -uy < 0 ? [-uy, ux] : [uy, -ux]; // (the perpendicular pointing back)
           const ankle: [number, number, number] = [hip[0] + ux * d / 2 + px * h, hip[1] + uy * d / 2 + py * h, hip[2]];
-          b.limb(hip, ankle, 0.045, heronLeg, 0.035);
-          b.limb(ankle, foot, 0.035, heronLeg, 0.028);
+          shapedLimb(b, hip, ankle, 0.045, [1.2, 1.0, 0.8, 0.75, 0.85], heronLeg);
+          b.sphere(0.034, ankle, heronLeg);
+          shapedLimb(b, ankle, foot, 0.035, [0.95, 0.8, 0.72, 0.72, 0.8], heronLeg);
           if (off < 0.5) for (const tz of [-0.08, 0, 0.08]) b.limb(foot, [foot[0] + 0.22 * (1 - off * 2), foot[1] - 0.02, foot[2] + tz * 1.5], 0.015, heronLeg);
         } else if (flying) {
           b.limb(hip, [-0.75, 1.2 + lift, 0.12 * z], 0.04, heronLeg, 0.03);
@@ -310,8 +313,9 @@ const greatSiegeHeron: FenUnit = {
           const rest: [number, number, number] = [-0.05, 0.04, hip[2]];
           const foot = walking ? footAt(rest, p.phase + (z > 0 ? 0 : 0.5), 0.3, 0.16) : rest;
           const knee = jointBetween(hip, foot, legLen * 0.55, legLen * 0.52, [-1, 0, 0]);
-          b.limb(hip, knee, 0.045, heronLeg, 0.035);
-          b.limb(knee, foot, 0.035, heronLeg, 0.028);
+          shapedLimb(b, hip, knee, 0.045, [1.2, 1.0, 0.8, 0.75, 0.85], heronLeg); // (a feathered thigh thinning to the joint)
+          b.sphere(0.034, knee, heronLeg);
+          shapedLimb(b, knee, foot, 0.035, [0.95, 0.8, 0.72, 0.72, 0.8], heronLeg);
           for (const tz of [-0.08, 0, 0.08]) b.limb(foot, [foot[0] + 0.22, 0.02, foot[2] + tz * 1.5], 0.015, heronLeg); // splayed toes
         }
       }
@@ -335,9 +339,12 @@ const greatSiegeHeron: FenUnit = {
         const n1: [number, number, number] = flying ? [0.6, 1.62, 0] : [0.62, 1.95 - dip * 0.3, 0];
         const n2: [number, number, number] = flying ? [0.45, 1.85, 0] : [0.5, 2.45 - dip * 0.5, 0];
         const head: [number, number, number] = flying ? [0.72, 1.92, 0] : [0.72 + dip * 0.3, 2.62 - dip * 0.7, 0];
-        c.limb(at(0.5, 1.55, 0), n1, 0.11, heronPale, 0.08); // the neck rises from the front of the breast
-        c.limb(n1, n2, 0.08, heronPale, 0.07);
-        c.limb(n2, head, 0.07, heronPale, 0.06);
+        // the neck rises from the front of the breast, swelling at its base and slimming to the head
+        shapedLimb(c, at(0.5, 1.55, 0), n1, 0.11, [1.15, 1.0, 0.85, 0.75], heronPale);
+        c.sphere(0.08, n1, heronPale);
+        shapedLimb(c, n1, n2, 0.08, [1.0, 0.92, 0.88, 0.9], heronPale);
+        c.sphere(0.07, n2, heronPale);
+        shapedLimb(c, n2, head, 0.07, [1.0, 0.9, 0.85, 0.9], heronPale);
         c.sphere([0.15, 0.12, 0.12], head, heronPale);
         // war helm: a bronze skull-cap with cheek guards, a team stripe of paint below the eye
         c.sphere([0.13, 0.08, 0.13], [head[0] - 0.02, head[1] + 0.06, 0], HERON_BRONZE);
