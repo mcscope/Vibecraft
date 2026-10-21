@@ -7,8 +7,6 @@ export interface KeyMap {
   attackMove: string;
   /** Move, ignoring whatever's under the cursor (pull units out of a fight). */
   move: string;
-  /** Patrol: back and forth between here and the spot clicked. */
-  patrol: string;
   /** Tend the nest: carry food to whoever's waiting on it (eggs, cocoons, mothers). */
   tend: string;
   stop: string;
@@ -29,14 +27,14 @@ export const SCHEMES: Record<string, KeyMap> = {
     label: 'WASD camera',
     description: 'Scroll with WASD (and arrows). Commands move off the WASD keys.',
     pan: { up: ['w', 'arrowup'], down: ['s', 'arrowdown'], left: ['a', 'arrowleft'], right: ['d', 'arrowright'] },
-    attackMove: 'f', move: 'q', patrol: 'e', tend: 't', stop: 'x', resupply: 'r', give: 'g', garrison: 'v', hold: 'b', charge: 'c', home: 'h',
+    attackMove: 'f', move: 'q', tend: 't', stop: 'x', resupply: 'r', give: 'g', garrison: 'v', hold: 'b', charge: 'c', home: 'h',
     train: ['z', 'x', 'c', 'v', 'b', 'n'],
   },
   classic: {
     label: 'Classic RTS',
     description: 'StarCraft/AoE style: arrows and screen edge scroll; A attack-move, S stop.',
     pan: { up: ['arrowup'], down: ['arrowdown'], left: ['arrowleft'], right: ['arrowright'] },
-    attackMove: 'a', move: 'q', patrol: 'e', tend: 't', stop: 's', resupply: 'r', give: 'g', garrison: 'v', hold: 'b', charge: 'c', home: 'h',
+    attackMove: 'a', move: 'q', tend: 't', stop: 's', resupply: 'r', give: 'g', garrison: 'v', hold: 'b', charge: 'c', home: 'h',
     train: ['q', 'w', 'e', 'r', 't', 'y'],
   },
 };
@@ -118,7 +116,6 @@ export function mountSettingsDialog(): void {
         <tr><td>Move (ignore enemies)</td><td><kbd>${keyName(km.move)}</kbd> then right-click</td></tr>
         <tr><td>Form up facing a line</td><td>right-drag the front line</td></tr>
         <tr><td>Tend the nest</td><td><kbd>${keyName(km.tend)}</kbd>: carry food to eggs, cocoons and mothers</td></tr>
-        <tr><td>Patrol</td><td><kbd>${keyName(km.patrol)}</kbd> then right-click: back and forth</td></tr>
         <tr><td>Stop</td><td><kbd>${keyName(km.stop)}</kbd></td></tr>
         <tr><td>Resupply</td><td>tap <kbd>${keyName(km.resupply)}</kbd> to return after · hold + click to go elsewhere</td></tr>
         <tr><td>Give</td><td><kbd>${keyName(km.give)}</kbd> then right-click a friendly unit</td></tr>

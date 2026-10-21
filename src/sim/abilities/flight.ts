@@ -116,8 +116,8 @@ export function tickFlight(w: World, u: Unit, _moved: boolean, dt: number, face:
   const flew = u.flewTick === w.tick;
   const flaring = !flew && u.alt < FLARE_HEIGHT && (u.vert < 0 || u.alt < 0.5); // the last few metres down: straight in, airbrakes out
   if (!flew) { if (!flaring) u.flyDir += turnRate(u) * dt; glide(w, u, (u.flySpeed || airSpeed(u)) * (flaring ? 0.5 : 1), dt, face); } // no stopping in the air: circle at its pace
-  const fighting = u.throws && (u.engage || u.order.kind === 'attack' || u.order.kind === 'attackMove' || u.order.kind === 'patrol');
-  const travelling = flew && (u.order.kind === 'move' || u.order.kind === 'attackMove' || u.order.kind === 'patrol' || u.order.kind === 'attack');
+  const fighting = u.throws && (u.engage || u.order.kind === 'attack' || u.order.kind === 'attackMove');
+  const travelling = flew && (u.order.kind === 'move' || u.order.kind === 'attackMove' || u.order.kind === 'attack');
   const nearFootGoal = flew && !travelling && Math.hypot(u.goalX - u.x, u.goalY - u.y) < LAND_APPROACH;
   const low = u.cal <= u.stats.maxCalories * LAND_FRACTION || u.exhausted;
   const comingIn = low || (!fighting && (!flew || nearFootGoal));

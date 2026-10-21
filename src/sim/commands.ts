@@ -19,8 +19,6 @@ export type CommandBody =
   | { type: 'autoSpawn'; units: number[]; specId: string | null }
   /** Cancel the last spawn queued in each of them (what it had paid goes back into its pack). */
   | { type: 'cancelSpawn'; units: number[]; index?: number }
-  /** Walk back and forth between where they are now and (x, y), fighting anything met on the way. */
-  | { type: 'patrol'; units: number[]; x: number; y: number }
   | { type: 'attack'; units: number[]; target: number; charge?: boolean }
   | { type: 'gather'; units: number[]; node: number }
   /** Tend the nest: carry food to whoever of their side is waiting on it, gathering more in between, until told otherwise. */

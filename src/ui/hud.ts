@@ -19,7 +19,7 @@ export interface HudActions {
   research(buildingId: number, techId: string): void;
   cancelTrain(buildingId: number, index?: number): void;
   select(ids: number[]): void;
-  command(kind: 'stop' | 'attackMove' | 'move' | 'patrol' | 'resupply' | 'give' | 'garrison' | 'hold' | 'charge' | 'tend'): void;
+  command(kind: 'stop' | 'attackMove' | 'move' | 'resupply' | 'give' | 'garrison' | 'hold' | 'charge' | 'tend'): void;
   /** Put the selection in a formation, and which one it's in now. */
   formation(f: Formation): void;
   formationOf(): Formation;
@@ -527,7 +527,6 @@ export class Hud {
     return `<div class="cmds">
       ${btn('move', 'Move', km.move, 'Move there, ignoring enemies on the way (pull units out of a fight). Right-drag to lay out where the front line stands.')}
       ${btn('attackMove', 'Attack', km.attackMove, 'Attack-move: go there, fighting whatever they meet on the way.')}
-      ${btn('patrol', 'Patrol', km.patrol, 'Patrol: then right-click a spot: they walk back and forth between here and there, fighting whatever they meet.')}
       ${btn('charge', 'Charge', km.charge, 'Charge: then right-click an enemy or a spot: they sprint at it and run on through, smashing into what\'s in the way. Pikes don\'t stop to brace. Sprinting burns calories fast.')}
       ${btn('hold', 'Hold', km.hold, 'Hold ground here: stand still and strike whatever comes into reach. Pikes and spears plant their points and brace for a charge. Any other order (or Hold again) ends it.')}
       ${btn('stop', 'Stop', km.stop, 'Stop')}
@@ -599,7 +598,6 @@ export class Hud {
       <div class="tiles">
         ${tile('move', km.move, 'Right-click where to go. They ignore enemies on the way. Right-drag on the ground to draw where their front line stands.')}
         ${tile('attackMove', km.attackMove, 'Right-click where to go. They fight whatever they meet on the way.')}
-        ${tile('patrol', km.patrol, 'Right-click a spot. They walk back and forth between here and there, fighting whatever they meet.')}
         ${tile('charge', km.charge, 'Right-click an enemy or a spot. They sprint at it and run on through, smashing into what\'s in the way. Pikes charge with their points down; they don\'t stop to brace. Sprinting burns calories fast.')}
         ${tile('hold', km.hold, 'Hold ground here: they stand still and strike whatever comes into reach. Pikes and spears plant their points and brace for a charge. Any other order (or Hold again) ends it.')}
         ${tile('stop', km.stop, 'Stop where they are.')}
@@ -698,7 +696,6 @@ export function describeOrder(w: World, u: Unit): string {
     case 'hunt': return 'Hunting';
     case 'move': return 'Moving';
     case 'attackMove': return u.engage ? 'Fighting' : 'Attack-moving';
-    case 'patrol': return u.engage ? 'Fighting' : 'Patrolling';
     case 'tend': return !o.g ? (u.food >= 0.5 ? 'Tending: bringing food' : 'Tending: waiting') : o.g.phase === 'toDrop' ? 'Tending: bringing food' : 'Tending: gathering food';
     case 'digest': return 'Going to digest a tree';
     case 'graze': return 'Eating';
@@ -735,7 +732,7 @@ export function describeOrder(w: World, u: Unit): string {
 const svg = (body: string) => `<svg viewBox="0 0 24 24" aria-hidden="true">${body}</svg>`;
 /** Each order tile's name, and what it says while they're under that order. */
 const ORDERS: Record<string, [string, string]> = {
-  move: ['Move', 'Moving'], attackMove: ['Attack', 'Attacking'], patrol: ['Patrol', 'Patrolling'],
+  move: ['Move', 'Moving'], attackMove: ['Attack', 'Attacking'],
   charge: ['Charge', 'Charging'], hold: ['Hold', 'Holding'], stop: ['Stop', 'Stop'],
 };
 
@@ -744,7 +741,7 @@ function doing(units: Unit[]): string {
   const n = new Map<string, number>();
   for (const u of units) {
     const o = u.order;
-    const k = o.kind === 'move' ? 'move' : o.kind === 'patrol' ? 'patrol' : (o.kind === 'attackMove' || o.kind === 'attack') ? (o.charge ? 'charge' : 'attackMove') : u.stance === 'hold' ? 'hold' : '';
+    const k = o.kind === 'move' ? 'move' : (o.kind === 'attackMove' || o.kind === 'attack') ? (o.charge ? 'charge' : 'attackMove') : u.stance === 'hold' ? 'hold' : '';
     n.set(k, (n.get(k) ?? 0) + 1);
   }
   return [...n.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
@@ -754,7 +751,6 @@ const ICONS: Record<string, string> = {
   morph: svg('<path d="M12 4c-3 0-5 2.5-5 6 0 4 2.5 8 5 10 2.5-2 5-6 5-10 0-3.5-2-6-5-6z"/><path d="M9 10.5h6M9.5 14h5"/>'),
   move: svg('<path d="M3 12h15M13 6l6 6-6 6"/>'),
   attackMove: svg('<path d="M19 5 8.5 15.5M6 13l5 5M7.5 16.5 4 20"/><path d="M19 5h-3M19 5v3"/>'),
-  patrol: svg('<path d="M4 8.5h14l-3.5-3.5M20 15.5H6l3.5 3.5"/>'),
   charge: svg('<path d="M9 12h11M15.5 7.5 20 12l-4.5 4.5M3 7.5h5M2 12h4M3 16.5h5"/>'),
   stop: svg('<rect x="6" y="6" width="12" height="12" rx="1.5"/>'),
   hold: svg('<path d="M12 3v14M7 21h10M12 17l-4 4M12 17l4 4"/><path d="M8 8h8"/>'),

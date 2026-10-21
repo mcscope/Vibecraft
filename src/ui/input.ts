@@ -13,7 +13,7 @@ import { keymap, settings, settingsOpen, updateSettings } from './settings';
 import { formationSlots, formationUnit, type Formation, type Slot } from './formations';
 
 /** resupplyDest: units were just sent to resupply; a ground click picks where they go afterwards. */
-type Mode = 'attackMove' | 'charge' | 'move' | 'patrol' | 'give' | 'garrison' | 'resupplyDest' | 'place' | null;
+type Mode = 'attackMove' | 'charge' | 'move' | 'give' | 'garrison' | 'resupplyDest' | 'place' | null;
 
 export class Input {
   readonly rs: RenderState = { selected: new Set(), hoverId: 0, box: null, ping: null, ghost: null };
@@ -158,9 +158,9 @@ export class Input {
         return;
       }
       if (d.moved) { // a right-drag lays out the front line: the group forms up along it, facing away from you
-        // (with Attack, Charge or Patrol armed, that's how they go there; otherwise a move)
+        // (with Attack or Charge armed, that's how they go there; otherwise a move)
         const front = this.dragFront(d, e.clientX, e.clientY);
-        const kind = this.mode === 'attackMove' || this.mode === 'charge' || this.mode === 'patrol' ? this.mode : 'move';
+        const kind = this.mode === 'attackMove' || this.mode === 'charge' ? this.mode : 'move';
         if (front) { this.queueing = e.shiftKey; this.formationOrder(kind, this.selectedUnits(), ...front); this.queueing = false; }
         if (!e.shiftKey) this.mode = null;
         return;
@@ -218,10 +218,6 @@ export class Input {
         const t = this.world.units.get(target) ?? this.world.buildings.get(target);
         if (t && t.owner !== this.player) this.issue({ type: 'attack', units, target });
         else this.formationOrder('attackMove', units, wx, wy);
-        this.ping(wx, wy, '#ff6b5a');
-      } else if (this.mode === 'patrol') {
-        // back and forth between here and there, in formation, fighting what they meet
-        this.formationOrder('patrol', units, wx, wy);
         this.ping(wx, wy, '#ff6b5a');
       } else if (this.mode === 'resupplyDest') {
         const tc = this.supplyBuilding(units);
@@ -424,13 +420,12 @@ export class Input {
   }
 
   /** Send a group somewhere in its formation: each unit to its own spot, facing the formation's front on arrival. */
-  private formationOrder(kind: 'move' | 'attackMove' | 'charge' | 'patrol', units: number[], x: number, y: number, angle?: number, width?: number, front = false): void {
+  private formationOrder(kind: 'move' | 'attackMove' | 'charge', units: number[], x: number, y: number, angle?: number, width?: number, front = false): void {
     const slots = this.slotsAt(units, x, y, angle, width, front);
     const one = (ids: number[], sx: number, sy: number, face?: number) => this.issue(
       kind === 'move' ? { type: 'move', units: ids, x: sx, y: sy, face }
         : kind === 'attackMove' ? { type: 'attackMove', units: ids, x: sx, y: sy, face }
-        : kind === 'charge' ? { type: 'attackMove', units: ids, x: sx, y: sy, charge: true } // (a charge runs on through: no forming up)
-        : { type: 'patrol', units: ids, x: sx, y: sy });
+        : { type: 'attackMove', units: ids, x: sx, y: sy, charge: true }); // (a charge runs on through: no forming up)
     if (!slots.length) { one(units, x, y); return; }
     for (const s of slots) one([s.id], s.x, s.y, s.face);
   }
@@ -440,7 +435,7 @@ export class Input {
   private showArmed(): void {
     const what: Partial<Record<NonNullable<Mode>, string>> = {
       attackMove: 'Attack: right-click a spot or an enemy', move: 'Move: right-click where to go', charge: 'Charge: right-click an enemy or a spot',
-      patrol: 'Patrol: right-click the far end', give: 'Give: right-click a unit or building of yours', garrison: 'Garrison: right-click one of your buildings',
+      give: 'Give: right-click a unit or building of yours', garrison: 'Garrison: right-click one of your buildings',
       place: 'Place: right-click where to build (right-drag: a line)', resupplyDest: 'Resupply, then: right-click where to go after',
     };
     const text = this.mode && this.mouse.inside ? what[this.mode] : undefined;
@@ -459,7 +454,7 @@ export class Input {
     if (units.length < 2 || !this.mouse.inside) return null;
     const d = this.drag;
     if (d?.button === 2 && d.moved && this.mode !== 'place') { const f = this.dragFront(d, this.mouse.x, this.mouse.y); return f ? this.slotsAt(units, ...f) : null; }
-    if (this.mode !== 'move' && this.mode !== 'attackMove' && this.mode !== 'patrol' && this.mode !== 'charge') return null;
+    if (this.mode !== 'move' && this.mode !== 'attackMove' && this.mode !== 'charge') return null;
     const [wx, wy] = this.renderer.cam.toWorld(this.mouse.x, this.mouse.y);
     return this.slotsAt(units, wx, wy);
   }
@@ -506,7 +501,6 @@ export class Input {
     if (units.length) {
       if (k === km.attackMove) { this.mode = 'attackMove'; return; }
       if (k === km.move) { this.mode = 'move'; return; }
-      if (k === km.patrol) { this.mode = 'patrol'; return; }
       if (k === km.tend) { this.hudCommand('tend'); return; }
       if (k === km.give) { this.mode = 'give'; return; }
       if (k === km.garrison) { this.mode = 'garrison'; return; }
@@ -611,7 +605,7 @@ export class Input {
   }
 
   /** Commands triggered from HUD buttons. */
-  hudCommand(kind: 'stop' | 'attackMove' | 'move' | 'patrol' | 'resupply' | 'give' | 'garrison' | 'hold' | 'charge' | 'tend'): void {
+  hudCommand(kind: 'stop' | 'attackMove' | 'move' | 'resupply' | 'give' | 'garrison' | 'hold' | 'charge' | 'tend'): void {
     const units = this.selectedUnits();
     if (!units.length) return;
     if (kind === 'tend') { this.issue({ type: 'tend', units }); return; }

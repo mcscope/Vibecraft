@@ -26,7 +26,7 @@ describe('formations', () => {
     }
   });
 
-  test('a unit sent somewhere with a facing turns to it there, and a patrol turns back at each end', () => {
+  test('a unit sent somewhere with a facing turns to it there', () => {
     const f = PLAYABLE[0];
     const w = new World({ seed: 1, scenario: { ...skirmish(), setup: (ww) => { ww.spawnAt(0, f.workerId, 10.5, 10.5); } , victory: false, wildlife: false }, players: [{ name: 'A', faction: f }, { name: 'B', faction: PLAYABLE[1] }] });
     const u = w.unitsOf(0)[0];
@@ -34,12 +34,6 @@ describe('formations', () => {
     for (let i = 0; i < 200; i++) w.step();
     expect(Math.hypot(u.x - 13.5, u.y - 10.5)).toBeLessThan(0.6);
     expect(Math.cos(u.facing - Math.PI / 2)).toBeGreaterThan(0.99);
-    w.enqueue({ player: 0, cmd: { type: 'patrol', units: [u.id], x: 17.5, y: 10.5 } });
-    let far = 0, back = 0;
-    for (let i = 0; i < 600; i++) { w.step(); far = Math.max(far, u.x); if (far > 17 && u.x < 14) back++; }
-    expect(far).toBeGreaterThan(17);
-    expect(back).toBeGreaterThan(0);
-    expect(u.order.kind).toBe('patrol');
   });
 });
 

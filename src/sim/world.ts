@@ -99,8 +99,6 @@ export type Order =
   | { kind: 'digest'; node: number }
   /** Hungry with nowhere else to eat: eating straight from a food source until full. */
   | { kind: 'graze'; node: number }
-  /** Attack-move to (x, y), then back to (bx, by), and so on. */
-  | { kind: 'patrol'; x: number; y: number; bx: number; by: number }
   | { kind: 'attack'; target: number; charge?: boolean }
   | { kind: 'gather'; node: number; nodeType: ResourceKind; phase: 'toNode' | 'harvest' | 'toDrop'; stopWhenArmed: boolean }
   /**
@@ -711,7 +709,6 @@ export class World {
     switch (cmd.type) {
       case 'move': return set(mineAll(cmd.units), { kind: 'move', x: cmd.x, y: cmd.y, face: cmd.face });
       case 'attackMove': return set(mine(cmd.units), { kind: 'attackMove', x: cmd.x, y: cmd.y, charge: cmd.charge || undefined, face: cmd.face });
-      case 'patrol': for (const u of mine(cmd.units)) set([u], { kind: 'patrol', x: cmd.x, y: cmd.y, bx: u.x, by: u.y }); return;
       case 'metamorph':
         if (cmd.spawn) { for (const u of mine(cmd.units)) queueBrood(this, u, cmd.into); return; } // trained in its body: it carries on
         for (const u of mine(cmd.units)) if (canBecome(this, u, cmd.into)) { refundMetamorph(u); beginMetamorph(this, u, cmd.into); }
@@ -747,7 +744,7 @@ export class World {
           const prev = u.order.kind === 'resupply' ? u.resume : u.order;
           let back: Order;
           if (cmd.thenX !== undefined && cmd.thenY !== undefined) back = { kind: 'move', x: cmd.thenX, y: cmd.thenY };
-          else if (prev && (prev.kind === 'gather' || prev.kind === 'attackMove' || prev.kind === 'patrol' || prev.kind === 'move' || prev.kind === 'attack' || prev.kind === 'build')) back = prev;
+          else if (prev && (prev.kind === 'gather' || prev.kind === 'attackMove' || prev.kind === 'move' || prev.kind === 'attack' || prev.kind === 'build')) back = prev;
           else back = { kind: 'move', x: u.x, y: u.y };
           if (back.kind === 'gather') back = { ...back, phase: 'toNode' };
           // a thrower restocks from a friendly ammo bearer if one is nearer than the building
@@ -766,7 +763,7 @@ export class World {
           if (!u.throws || u === bearer) continue;
           const prev = u.order;
           set([u], { kind: 'rearm', unit: bearer.id });
-          u.resume = prev.kind === 'gather' || prev.kind === 'attackMove' || prev.kind === 'patrol' || prev.kind === 'attack' ? prev : null;
+          u.resume = prev.kind === 'gather' || prev.kind === 'attackMove' || prev.kind === 'attack' ? prev : null;
         }
         return;
       }
@@ -1266,7 +1263,7 @@ export class World {
     if (moved) anim = atEnemy || Math.hypot(u.vx, u.vy) > st.speed * 1.15 ? 'charge' : 'walk'; // flat out: a sprint, a charge
     if (u.swing > 0) anim = u.cutting ? 'cut' : 'attack';
     // point set, waiting (between its jabs too: the point stays on the enemy)
-    else if (!moved && st.canPlant && (u.engage || u.order.kind === 'attack' || u.order.kind === 'attackMove' || u.order.kind === 'patrol' || u.stance === 'hold')) anim = 'brace';
+    else if (!moved && st.canPlant && (u.engage || u.order.kind === 'attack' || u.order.kind === 'attackMove' || u.stance === 'hold')) anim = 'brace';
     if (reeling) anim = 'stagger';
     else if (((u.order.kind === 'gather' && u.order.phase === 'harvest') || (u.order.kind === 'build' && u.order.phase === 'chop')) && !moved && u.busy) anim = 'gather';
     else if ((u.order.kind === 'eatPack' || u.order.kind === 'resupply' || u.order.kind === 'graze') && !moved && u.busy) anim = 'eat';
@@ -1288,7 +1285,7 @@ export class World {
   private runOrder(u: Unit): boolean {
     const o = u.order;
     // Hunger interrupts work and wandering (not explicit fights or feeding).
-    if ((o.kind === 'idle' || o.kind === 'gather' || o.kind === 'tend' || o.kind === 'attackMove' || o.kind === 'patrol' || o.kind === 'build' || o.kind === 'cart') && u.engage === 0) {
+    if ((o.kind === 'idle' || o.kind === 'gather' || o.kind === 'tend' || o.kind === 'attackMove' || o.kind === 'build' || o.kind === 'cart') && u.engage === 0) {
       if (u.cal < u.stats.maxCalories * K.hungryFraction && this.autoFeed(u)) return false;
     }
     switch (o.kind) {
@@ -1311,11 +1308,6 @@ export class World {
       case 'attackMove': {
         if (this.runEngage(u)) return u.x !== u.px || u.y !== u.py;
         if (this.moveTo(u, o.x, o.y, u.queue.length ? 0.8 : 0.5, !!o.charge, u.queue.length > 0 || !!o.charge)) { this.finish(u); u.faceTo = o.face ?? null; } // a charge sprints there and runs on
-        return u.x !== u.px || u.y !== u.py;
-      }
-      case 'patrol': {
-        if (this.runEngage(u)) return u.x !== u.px || u.y !== u.py;
-        if (this.moveTo(u, o.x, o.y, 0.5, false, false)) { u.order = { kind: 'patrol', x: o.bx, y: o.by, bx: o.x, by: o.y }; u.path = []; u.repathIn = 0; } // there: turn back
         return u.x !== u.px || u.y !== u.py;
       }
       case 'attack': {
@@ -1463,7 +1455,7 @@ export class World {
       u.engage = 0;
     }
     if ((this.tick + u.id) % 5 !== 0) return false;
-    const e = this.nearestEnemy(u, through ? reach : u.stats.sight, u.order.kind === 'attackMove' || u.order.kind === 'patrol');
+    const e = this.nearestEnemy(u, through ? reach : u.stats.sight, u.order.kind === 'attackMove');
     if (e) { u.engage = e; return this.attackTarget(u, e); }
     return false;
   }

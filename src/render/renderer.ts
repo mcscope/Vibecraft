@@ -609,7 +609,7 @@ export class Renderer {
       let p: [number, number] | null = null, color = 0xffffff;
       switch (o.kind) {
         case 'move': p = [o.x, o.y]; break;
-        case 'attackMove': case 'patrol': p = [o.x, o.y]; color = 0xff6b5a; break;
+        case 'attackMove': p = [o.x, o.y]; color = 0xff6b5a; break;
         case 'attack': p = ent(o.target); color = 0xff6b5a; break;
         case 'gather': p = ent(o.node); color = 0xe0457a; break;
         case 'build': p = ent(o.site); color = 0x7aff7a; break;
