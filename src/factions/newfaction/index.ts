@@ -249,56 +249,43 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
       c.cone(0.01, 0.05, [foot[0] - 0.04, 0.01, foot[2]], claw, [0, 0, Math.PI / 2], 4); // the back claw
     }
     // the body, slung between the hips: leaning into a run; striking, it rams forward, the spike first
-    c.joint([0.22 * stab * k.body / 0.7, H + bob + 0.04 - 0.05 * stab, 0], [0, 0, (running ? -0.15 : 0) - 0.1 * stab], (t) => t.joint([0, 0, 0], [0, 0, 0], (q) => (k.goliath ? goliathBody(q, p, k.tint, upK) : spikeBody(q, p.armed, k.tint)), k.body));
+    c.joint([0.22 * stab * k.body / 0.7, H + bob + 0.04 - 0.05 * stab, 0], [0, 0, (running ? -0.15 : 0) - 0.1 * stab], (t) => t.joint([0, 0, 0], [0, 0, 0], (q) => (k.goliath ? goliathBody(q, p, k.tint) : spikeBody(q, p.armed, k.tint)), k.body));
   }, (k.goliath ? LOOK.goliath : LOOK.charger).scale(mass));
 }
 
 /**
- * The Goliath's body: the Vimmer and charger family's body (dark chitin, tinted segment rims, spines down its back, a
- * barbed tail, a cluster of glossy eyes over a toothed maw, the crystal spike), made big and heavy, deep and broad at
- * the shoulders and falling away behind; and two great scythe arms from its shoulders, in the same chitin as the
- * Vimmer's wing spars, spined along their backs, arcing over into clean curved blades. Walking, they're held high;
- * striking, they slash down and forward. `up` 0 … 1 is how far it has risen from its squat (the scythes lift as it rises).
+ * The Goliath's body, a Hercules beetle's (the user's): a great smooth glossy domed shell over its back, split by its
+ * seam, a domed shield over its shoulders, and from it a long horn sweeping forward and curving down over a smaller
+ * horn rising from its head: a pincer, the crystal set at the great horn's tip. Striking, it rams forward and the
+ * horns close. In the family's dark chitin, glossy.
  */
-function goliathBody(c: ModelBuilder, p: Pose, tint: string, up: number): void {
+function goliathBody(c: ModelBuilder, p: Pose, tint: string): void {
   type V = [number, number, number];
+  const shell: Mat = { color: '#1c2224', tex: 'none', rough: 0.12, metal: 0.55 };
   const chitin: Mat = { color: '#1a2628', tex: 'leather', rough: 0.3, metal: 0.35 };
   const sheen: Mat = { color: tint, tex: 'leather', rough: 0.3, metal: 0.4 };
   const eye: Mat = { color: '#050608', tex: 'none', rough: 0.05, metal: 0.5 };
-  const tooth: Mat = { color: '#d8d4c0', tex: 'none', rough: 0.5 };
-  const maw: Mat = { color: '#3a0e10', tex: 'skin', rough: 0.8 };
-  const slash = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.55) * Math.PI) : 0;
-  // the body: the family's, heavier, deepest at the shoulders
-  const body: Array<[number, number, number, number]> = [[-0.62, 0.03, 0.03, 0.03], [-0.46, 0.08, 0.07, 0.07], [-0.3, 0.12, 0.1, 0.11], [-0.12, 0.16, 0.14, 0.14], [0.04, 0.19, 0.18, 0.15], [0.16, 0.15, 0.13, 0.11], [0.24, 0.09, 0.08, 0.07]];
-  c.loft(body.map(([x, w, u, d]) => ({ at: [x, 0, 0] as V, w, up: u, down: d, keel: 0.4 })), chitin);
-  for (const [x, r] of [[-0.42, 0.09], [-0.26, 0.13], [-0.1, 0.16], [0.06, 0.19]] as const) c.sphere([0.014, r, r * 1.05], [x, 0, 0], sheen); // segment rims
-  for (let i = 0; i < 7; i++) c.cone(0.02, 0.1 - i * 0.008, [0.1 - i * 0.11, 0.17 - i * 0.018, 0], chitin, [0, 0, 0.6], 4); // spines down its back
-  c.cone(0.03, 0.12, [-0.68, 0, 0], sheen, [0, 0, Math.PI / 2], 4); // the tail barb
-  // the head: a cluster of glossy eyes over a round maw ringed with teeth, the crystal spike thrust out of it
-  c.sphere([0.1, 0.085, 0.09], [0.3, 0, 0], chitin);
-  for (const [y, z] of [[0.05, 0.035], [0.05, -0.035], [0.07, 0], [0.03, 0.06], [0.03, -0.06], [0.08, 0.04], [0.08, -0.04]] as const) c.sphere(0.02, [0.35, y, z], eye);
-  c.sphere([0.024, 0.048, 0.048], [0.39, -0.025, 0], maw);
-  for (let k = 0; k < 8; k++) { const a = (k / 8) * TAU; c.cone(0.01, 0.04, [0.395, -0.025 + Math.cos(a) * 0.048, Math.sin(a) * 0.048], tooth, [a, 0, -Math.PI / 2 - 0.5], 4); }
-  if (p.armed) c.crystal(0.38, [0.4, -0.025, 0], [0, 0, -Math.PI / 2]);
-  // the scythes: from the shoulders up in two segments, then arcing over and down into clean curved blades
-  for (const z of [1, -1]) {
-    const raise = 0.3 + 0.7 * up; // (folded down beside it in the squat, high as it rises)
-    c.joint([0.12, 0.12, z * 0.17], [z * 0.15, 0, 0.9 * raise - slash * 1.4], (arm) => {
-      arm.limb([0, 0, 0], [0.46, 0, 0], 0.05, chitin, 0.04); // upper arm
-      arm.sphere(0.055, [0.46, 0, 0], sheen); // its joint
-      arm.joint([0.46, 0, 0], [0, 0, -1.1 - 0.4 * raise], (fore) => {
-        fore.limb([0, 0, 0], [0.4, 0, 0], 0.04, chitin, 0.032);
-        fore.sphere(0.042, [0.4, 0, 0], sheen);
-        for (let x = 0.08; x < 0.38; x += 0.13) fore.cone(0.012, 0.06, [x, 0.035, 0], sheen, [0, 0, -0.5], 4); // spines, as the Vimmer's spars
-        fore.joint([0.4, 0, 0], [0, 0, -0.5], (bl) => {
-          const pts: V[] = Array.from({ length: 9 }, (_, i) => { const a = (i / 8) * 2.0; return [Math.sin(a) * 0.62, (1 - Math.cos(a)) * -0.34, 0]; });
-          bl.loft(pts.map(([x, y], i) => ({ at: [x, y, 0] as V, w: 0.016 * (1 - i / 10), up: 0.06 * (1 - i / 9) + 0.005, down: 0.03 * (1 - i / 9) + 0.004 })), chitin); // the blade
-          for (let i = 0; i < 8; i++) bl.limb([pts[i][0], pts[i][1] - 0.03 * (1 - i / 9), 0], [pts[i + 1][0], pts[i + 1][1] - 0.03 * (1 - (i + 1) / 9), 0], 0.006, sheen); // its edge
-          if (p.armed) bl.crystal(0.18, pts[8], [0, 0, Math.PI * 0.8]); // crystal at its point
-        });
-      });
-    });
-  }
+  const pinch = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0;
+  // the shell over its back: broad, domed, smooth, rounded off behind; the seam down its middle
+  c.loft([[0.06, 0.16, 0.12, 0.05], [-0.06, 0.24, 0.22, 0.08], [-0.24, 0.26, 0.25, 0.09], [-0.42, 0.23, 0.21, 0.08], [-0.56, 0.15, 0.13, 0.06], [-0.64, 0.05, 0.05, 0.03]]
+    .map(([x, w, u, d]) => ({ at: [x, 0, 0] as V, w, up: u, down: d, flat: 0.15 })), shell);
+  c.limb([0.02, 0.15, 0], [-0.6, 0.08, 0], 0.008, sheen, 0.006); // the seam
+  c.loft([[0.0, 0.18, 0.1, 0.12], [-0.3, 0.22, 0.12, 0.14], [-0.55, 0.12, 0.08, 0.1]].map(([x, w, u, d]) => ({ at: [x, -0.02, 0] as V, w, up: u, down: d, keel: 0.2 })), chitin); // its underside
+  // the shield over its shoulders, domed, and the head beneath its front
+  c.loft([[0.04, 0.14, 0.1, 0.06], [0.14, 0.17, 0.15, 0.07], [0.26, 0.13, 0.12, 0.06], [0.32, 0.06, 0.06, 0.04]].map(([x, w, u, d]) => ({ at: [x, 0.02, 0] as V, w, up: u, down: d })), shell);
+  c.sphere([0.08, 0.06, 0.08], [0.34, -0.04, 0], chitin); // head
+  for (const z of [1, -1]) c.sphere(0.018, [0.37, -0.01, z * 0.065], eye);
+  // the horns: the great one sweeping forward from the shield and curving down, the small one rising from the head
+  const curve = (from: V, pts: number, f: (k: number) => V, r0: number, r1: number, mat: Mat): V => {
+    let prev = from;
+    for (let i = 1; i <= pts; i++) { const k = i / pts, next = f(k); c.limb(prev, next, r0 + (r1 - r0) * (k - 1 / pts), mat, r0 + (r1 - r0) * k); prev = next; }
+    return prev;
+  };
+  const dip = 0.06 * pinch; // (closing on a blow)
+  const tip = curve([0.22, 0.17, 0], 8, (k) => [0.22 + 0.62 * k, 0.17 + 0.1 * Math.sin(k * Math.PI * 0.9) - 0.2 * k * k - dip * k, 0], 0.05, 0.012, shell);
+  for (const k of [0.35, 0.55]) { const x = 0.22 + 0.62 * k, y = 0.17 + 0.1 * Math.sin(k * Math.PI * 0.9) - 0.2 * k * k - dip * k; c.cone(0.014, 0.05, [x, y - 0.04, 0], chitin, [0, 0, Math.PI], 4); } // teeth under it
+  curve([0.4, -0.05, 0], 6, (k) => [0.4 + 0.28 * k, -0.05 + 0.15 * k * k + dip * k, 0], 0.035, 0.01, shell);
+  if (p.armed) c.crystal(0.16, tip, [0, 0, -Math.PI * 0.62]);
 }
 
 /** How far apart a caterpillar's segments are along its path (model units, before its size). */
@@ -688,7 +675,7 @@ const dragonFly = unit({ id: 'dragon-fly', name: 'Dragon Fly', mass: 500, physiq
   attack: { style: 'throw', crystalMass: 6, ammo: 10 }, // PLACEHOLDER: its fire (a conversion of crystal) is still to design
   description: 'T3: a fire-breathing dragon with butterfly wings, insectoid and reptilian.', model: (b, p) => drawDragonFly(b, p, 500) }, 'dragon');
 const groundAttacker3 = unit({ id: 'ground-attacker3', name: 'Goliath Charger', mass: 600, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 4,
-  attack: { style: 'strike', crystalMass: 8 }, description: 'T3: a hulking charger, low and wide on massive legs, great scythes at its shoulders.', model: (b, p) => drawCharger(b, p, 600, GOLIATH) }, 'goliath');
+  attack: { style: 'strike', crystalMass: 8 }, description: 'T3: a hulking charger like a Hercules beetle, low and wide on massive legs, a great horn over a small one.', model: (b, p) => drawCharger(b, p, 600, GOLIATH) }, 'goliath');
 
 export const units: Unit[] = [
   motherOf(1, 80), motherOf(2, 120), motherOf(3, 190),
