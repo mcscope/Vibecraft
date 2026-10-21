@@ -109,6 +109,39 @@ const BAKED_DIRS = [0, 1, 2, 3, 4, 5, 6, 7];
 interface Extent { left: number; right: number; top: number; bottom: number }
 
 /** Poses drawn in the air (lifted to the flier's height): baked without a ground shadow, their shadows baked alone. */
+/**
+ * Dying, any body collapses like a marionette with its strings cut, not tipping over whole: every part drops under
+ * its own weight (the low ones landing first, the high ones falling furthest and last), heaping on the ground; upright
+ * parts (legs, necks, shafts) topple outward, and the heap splays out a little from where it stood. `k` 0 … 1.
+ */
+function collapse(body: THREE.Object3D, k: number): void {
+  if (k <= 0) return;
+  body.updateMatrixWorld(true);
+  const meshes: THREE.Mesh[] = [];
+  body.traverse((o) => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh); });
+  const all = new THREE.Box3().setFromObject(body), mid = all.getCenter(new THREE.Vector3()), top = Math.max(0.05, all.max.y);
+  for (const m of meshes) body.attach(m); // (each part on its own now, where it was)
+  const box = new THREE.Box3(), c = new THREE.Vector3(), size = new THREE.Vector3();
+  meshes.forEach((m, i) => {
+    box.setFromObject(m); box.getCenter(c); box.getSize(size);
+    const h = c.y / top; // 0 … 1, how high it was
+    const fall = Math.min(1, k / (0.35 + 0.65 * Math.sqrt(h))); // (falling from higher takes longer)
+    const f = fall * fall * (3 - 2 * fall);
+    const rest = Math.min(size.x, size.y, size.z) * 0.5 + top * 0.18 * h; // lying flat, heaped on what fell first
+    m.position.y += (rest - c.y) * f;
+    // splaying out from where it stood (a part right over the middle goes a way of its own)
+    let ox = c.x - mid.x, oz = c.z - mid.z;
+    const d = Math.hypot(ox, oz);
+    if (d < 0.02) { const a = i * 2.4; ox = Math.cos(a); oz = Math.sin(a); } else { ox /= d; oz /= d; }
+    // (and the whole heap slumps a little to one side, as a body falls)
+    m.position.x += ox * f * top * 0.18 * h;
+    m.position.z += oz * f * top * 0.18 * h + f * top * 0.25 * h;
+    // upright parts topple flat, outward; the rest tilt as they land
+    const upright = size.y > Math.max(size.x, size.z) * 0.8;
+    m.rotateOnWorldAxis(new THREE.Vector3(oz, 0, -ox), f * (upright ? Math.PI / 2 : 0.5));
+  });
+}
+
 const AIR_POSES = new Set<string>(['fly', 'leap', 'climb', 'soar', 'glide', 'land', 'bankL', 'bankR', 'swoop']);
 
 export class Baker {
@@ -389,12 +422,7 @@ export class Baker {
             body.rotation.x = s * 0.14;
             body.position.x = -0.05;
           }
-          if (anim === 'die') {
-            // generic topple onto the left side
-            const k = phase * phase;
-            body.rotation.x = k * 1.5;
-            body.position.y = -0.04 * k;
-          }
+          if (anim === 'die') collapse(body, phase);
           // its shadow alone: the body draws nothing (its own copies of its materials write no colour or depth) but
           // still casts its shadow (the shadow map is drawn apart, from the light)
           if (shadowPass) body.traverse((o) => {
