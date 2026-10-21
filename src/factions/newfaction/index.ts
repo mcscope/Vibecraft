@@ -339,7 +339,7 @@ function whipArms(c: ModelBuilder, p: Pose, len: number, tint: string): void {
       // rising and falling as it goes: the tip curling up when held, cracking over at full stretch
       const e = 0.1 * Math.sin(t * speed * 1.3 - u * 4) + loose * Math.max(0, u - 0.6) * 2.2 + crack * (z > 0 ? 1 : 0) * Math.max(0, u - 0.65) * 4;
       // (lashing, it whips up and over its back to straight ahead, rippling in its own plane, a little play side to side)
-      const v = Math.PI * (1 - ease(lash * 1.35 - u * 0.35)) + Math.sin(t * speed * 2 - u * 6) * 0.22 * lash;
+      const v = Math.PI * (1 - ease(lash * 1.35 - u * 0.35)) + Math.sin(u * TAU - s * TAU * 1.5) * (0.3 + 1.6 * lash * (1 - lash)) * lash; // (a pronounced S, travelling down it, strongest mid-lash)
       const dir: V = lash > 0.02
         ? [Math.cos(v), Math.sin(v) + crack * Math.max(0, u - 0.65) * 3, z * (0.08 + Math.sin(t * speed - u * 5) * 0.12)]
         : [Math.cos(a) * Math.cos(e), Math.sin(e), z * Math.sin(a) * Math.cos(e) * 0.3];
