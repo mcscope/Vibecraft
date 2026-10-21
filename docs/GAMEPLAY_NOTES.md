@@ -39,6 +39,7 @@ The new faction feels overpowered in play. Not investigated yet. What we know:
 - **The arena's food cost is right.** Each change pays only the price difference, so a chain's payments add up to the final unit's own price. The arena leaves out the time.
 - **Most of its bodies are placeholders.** Their muscle, frame and reserve are guesses, not the user's choices. They are the honest levers if a unit proves too strong; stats stay physics-derived.
 - **Next step, when wanted:** run the full arena matrix (`npm run arena`) to find the outliers.
+- **Found (2026-10-21): refinement is nearly free for this faction.** Its fighters get 1.0–2.6 HP per food (Goliath 2.55, Dragon Fly 2.27); Meadowfolk and Fenfolk fighters get 0.5–1.4. Elsewhere, high refinement is paid for in capital (a Hurlhorn at 2.5 needs the Great Hall and everything beneath it). Here it's reached by changing, which costs only time (6 s per point), so the faction gets refinement's cheapness without paying for it. That holds in real games, not just the arena. The fix would make those refinement steps cost something real. Not decided.
 
 ## Charges, counters and strategic depth (the user's thoughts, 2026-10-21; wait for playtesting)
 
