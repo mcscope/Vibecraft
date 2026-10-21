@@ -5,14 +5,15 @@
 import type { Vec3 } from './types';
 
 /**
- * Where a walking foot is at `phase` (0 … 1) of its own step: for the first half it's planted, sliding back an even
- * `reach` either side of `rest` (the body going over it); for the second it lifts `lift` and swings forward again.
- * Legs that step together share a phase; the others are half a step out.
+ * Where a walking foot is at `phase` (0 … 1) of its own step: for the first `duty` of it (half, walking) it's planted,
+ * sliding back an even `reach` either side of `rest` (the body going over it); for the rest it lifts `lift` and swings
+ * forward again. Legs that step together share a phase; the others are out of step. A run or a gallop has a short duty
+ * (each foot down briefly, all of them off the ground for a moment).
  */
-export function footAt(rest: Vec3, phase: number, reach: number, lift: number): Vec3 {
+export function footAt(rest: Vec3, phase: number, reach: number, lift: number, duty = 0.5): Vec3 {
   const p = ((phase % 1) + 1) % 1;
-  if (p < 0.5) return [rest[0] + reach - 4 * reach * p, rest[1], rest[2]];
-  const k = (p - 0.5) * 2, e = k * k * (3 - 2 * k);
+  if (p < duty) return [rest[0] + reach - (2 * reach * p) / duty, rest[1], rest[2]];
+  const k = (p - duty) / (1 - duty), e = k * k * (3 - 2 * k);
   return [rest[0] - reach + 2 * reach * e, rest[1] + Math.sin(Math.PI * k) * lift, rest[2]];
 }
 

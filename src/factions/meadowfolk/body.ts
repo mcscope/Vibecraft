@@ -220,7 +220,10 @@ export function cargoPack(b: ModelBuilder, p: Pose, scale = 1): void {
   }, 1);
 }
 
-/** Four-legged gait. Returns the body bob. Legs at (±fx, *, ±z). */
+/** A gallop's rise and fall: low gathering over the planted feet, up in the moment all four are off the ground. */
+const galBob = (phase: number, len: number): number => -0.1 * len + Math.max(0, Math.sin((phase - 0.15) * Math.PI * 2)) * 0.08 * len;
+
+/** Four-legged gait (a gallop when charging). Returns the body bob. Legs at (±fx, *, ±z). */
 export function quadLegs(b: ModelBuilder, p: Pose, o: { fx: number; bx: number; z: number; hip: number; len: number; r: number; mat: Mat; paw: Mat }): number {
   const walking = p.anim === 'walk';
   const t = p.phase * TAU;
@@ -230,10 +233,14 @@ export function quadLegs(b: ModelBuilder, p: Pose, o: { fx: number; bx: number; 
   const legs: Array<[number, number, number]> = [
     [o.fx, o.z, 0], [o.fx, -o.z, 0.5], [o.bx, o.z, 0.5], [o.bx, -o.z, 0],
   ];
+  // galloping (a charge): hind feet strike, then the forefeet, each down only briefly, all four off the ground between
+  const gallop = walking && p.style === 'charge';
+  const order: Record<string, number> = { '1,1': 0.5, '1,-1': 0.6, '-1,1': 0, '-1,-1': 0.1 };
   for (const [x, z, ph] of legs) {
-    const hip: Vec3 = [x, o.hip + bob, z];
+    const hip: Vec3 = [x, o.hip + (gallop ? galBob(p.phase, o.len) : bob), z];
     const rest: Vec3 = [x + (p.anim === 'tired' ? 0.04 * o.len : 0), Math.min(o.r * 0.5, o.hip - o.len * 0.98), z];
-    const foot = walking ? footAt(rest, p.phase + ph, 0.42 * o.len, 0.16 * o.len) : rest; // (long strides: a runner covers ground by reach, not by scurrying)
+    const foot = gallop ? footAt(rest, p.phase + order[`${Math.sign(x)},${Math.sign(z)}`], 0.45 * o.len, 0.25 * o.len, 0.32)
+      : walking ? footAt(rest, p.phase + ph, 0.42 * o.len, 0.16 * o.len) : rest; // (long strides: a runner covers ground by reach, not by scurrying)
     const knee = jointBetween(hip, foot, o.len * 0.5, o.len * 0.5, [x > 0 ? 1 : -1, 0, 0]); // (a foreleg's knee forward, a hind leg's hock back)
     b.limb(hip, knee, o.r, o.mat, o.r * 0.8);
     b.limb(knee, foot, o.r * 0.75, o.mat, o.r * 0.65);

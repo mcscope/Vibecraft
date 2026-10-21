@@ -533,10 +533,11 @@ export class Baker {
     };
     // the walk's stride (the charge and the loaded walks are the same legs): played by distance, feet stay planted
     const stride = opts.dummy ? undefined : this.stride(model, team, (ph) => poseFor('walk', ph), FRAMES.walk);
-    const WALKS: BakedAnim[] = ['walk', 'charge', 'carryFood', 'carryWood', 'carryCrystal'];
+    const runStride = opts.dummy ? undefined : this.stride(model, team, (ph) => poseFor('charge', ph), FRAMES.charge); // (a gallop's, if it gallops)
+    const WALKS: BakedAnim[] = ['walk', 'carryFood', 'carryWood', 'carryCrystal'];
     for (const [anim, list] of crops) {
       const sh = shadowCrops.get(anim);
-      out[anim] = { frames: sprites(anim, list), fps: FPS[anim], ...(sh ? { shadows: sprites(anim, sh) } : {}), ...(stride && WALKS.includes(anim) ? { stride } : {}) };
+      out[anim] = { frames: sprites(anim, list), fps: FPS[anim], ...(sh ? { shadows: sprites(anim, sh) } : {}), ...(stride && WALKS.includes(anim) ? { stride } : {}), ...(anim === 'charge' && (runStride ?? stride) ? { stride: runStride ?? stride } : {}) };
     }
     return { height: (h * Math.cos(Math.PI / 6)) * PX_PER_UNIT, anims: out as UnitArt['anims'] };
   }

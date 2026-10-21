@@ -6,6 +6,7 @@ import { type Building, type Order, type ResourceNode, type Unit, type World, ty
 import { Camera, isoX, isoY, TILE_H, TILE_W } from './camera';
 import { isUnderfoot, parcelPos } from '../sim/abilities/underfoot';
 import { LEAP_TIME } from '../sim/abilities/flight';
+import { M_PER_TILE } from '../sim/physics';
 import { buildingSprite, unitShadow, unitSprite, UNITS_PER_TILE, type ArtAnim, type FrameTime, type Sprite } from '../art/contract';
 import { gpuTexture, setFrameReader } from '../art/gpu';
 import { TEAM_COLORS, type ArtBank } from './artbank';
@@ -56,6 +57,8 @@ export function unitFrame(u: Unit): { anim: ArtAnim } & FrameTime {
       const anim: ArtAnim = most <= 0.5 ? 'walk' : most === u.food ? 'carryFood' : most === u.wood ? 'carryWood' : 'carryCrystal';
       // a bounding gait plays the walk by stride, in step with the sim; otherwise stride rate follows speed
       if (u.stats.gait) return { anim, progress: u.stride }; // sim/abilities/gait.ts
+      // moving fast (over ~4.5 m/s), it runs: the charge pose (a gallop, on four legs)
+      if (anim === 'walk' && Math.hypot(u.ovx, u.ovy) * M_PER_TILE > 4.5) return { anim: 'charge', time: u.animT, walked: u.walked * UNITS_PER_TILE };
       return { anim, time: u.animT * Math.max(0.5, u.stats.speed) / 1.7, walked: u.walked * UNITS_PER_TILE }; // (by distance, if its art knows its stride)
     }
     case 'charge': // flat out: the legs turn over as fast as it's going
