@@ -168,6 +168,8 @@ export interface Unit {
   airborne: boolean;
   /** Metres up (fliers climb slowly toward their ceiling while airborne; 0 on the ground). */
   alt: number;
+  /** m/s a melee flier's dive gave it, carried into its next blow (√(2·g·h) from the height it came down from); fades. */
+  diveSpeed: number;
   /** Heading in the air (radians); a flier turns toward its goal at a limited rate. */
   flyDir: number;
   /** Tick a flier last steered toward a goal (otherwise it circles). */
@@ -345,7 +347,7 @@ const leadAlt = (u: Unit, t: number): number => Math.max(0.3, Math.min(u.stats.f
 function collisionEnergy(u: Unit, t: Unit | null, tx: number, ty: number, shaft = true): { delivered: number; mu: number; grounded: boolean } {
   const dx = tx - u.x, dy = ty - u.y, d = Math.hypot(dx, dy) || 1;
   const rvx = u.vx - (t?.vx ?? 0), rvy = u.vy - (t?.vy ?? 0);
-  const closing = ((rvx * dx + rvy * dy) / d) * M_PER_TILE; // m/s
+  const closing = ((rvx * dx + rvy * dy) / d) * M_PER_TILE + u.diveSpeed; // m/s (and a swooping flier's dive)
   if (closing <= 0) return { delivered: 0, mu: 0, grounded: false };
   const mu = t ? (u.stats.mass * t.stats.mass) / (u.stats.mass + t.stats.mass) : u.stats.mass;
   const energy = 0.5 * mu * closing * closing;
@@ -1000,7 +1002,7 @@ export class World {
       food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
       order: { kind: 'idle' }, resume: null, queue: [], engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
-      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', cutting: false, facing: Math.PI / 4, turnTick: -1, turnLeft: 0, faceTo: null, brood: [], autoBrood: null,
+      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, diveSpeed: 0, flyDir: 0, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', cutting: false, facing: Math.PI / 4, turnTick: -1, turnLeft: 0, faceTo: null, brood: [], autoBrood: null,
       dummy: !!spec.dummy,
       carter: spec.role === 'carter',
       gatherAcc: 0,
@@ -1249,6 +1251,7 @@ export class World {
     const st = u.stats;
     if (u.wild || u.tame) u.cal = st.maxCalories; // they graze
     if (u.cooldown > 0) u.cooldown -= DT;
+    if (u.diveSpeed > 0) u.diveSpeed = Math.max(0, u.diveSpeed - 20 * DT); // (a dive not struck with is gone in about a second)
     tickBrood(this, u, DT); // spawns grow in it whatever it's doing
     if (u.swing > 0) u.swing -= DT;
     if (u.repathIn > 0) u.repathIn--;
@@ -1567,7 +1570,9 @@ export class World {
       this.step1(u, u.vx * DT, u.vy * DT, Math.hypot(u.vx, u.vy) * DT, false);
       return true;
     }
-    if (u.airborne && !wpn.throws) u.airborne = false; // a melee flier lands to strike
+    // a melee flier swoops down onto it to strike, its dive carried into the blow (√(2·g·h) from the height it came
+    // down from), and climbs away again after
+    if (u.airborne && !wpn.throws) { u.diveSpeed = Math.max(u.diveSpeed, Math.sqrt(2 * K.gravity * Math.max(0, u.alt))); u.airborne = false; }
     // in reach at a run: a striker doesn't stop on a dime, it keeps its line and strikes in passing, carried on past
     // alongside; at a walk it just pulls up (coasts to a stop). Riding out to come round again is the player's call
     if (!u.airborne && !wpn.throws && tu && Math.hypot(u.vx, u.vy) > u.stats.speed * 1.1) { const [px, py] = passBeside(u, tu, 4); this.moveTo(u, px, py, 0, true, true); }
@@ -1606,6 +1611,7 @@ export class World {
   /** A blow of `damage` lands on `targetId` at (tx, ty), carrying the collision (`shaft`: struck with its shaft, which may be set). */
   private land(u: Unit, targetId: number, tu: Unit | null, tx: number, ty: number, damage: number, shaft: boolean): void {
     const hit = collisionEnergy(u, tu, tx, ty, shaft);
+    u.diveSpeed = 0; // (the dive is spent on the blow)
     // two bodies meeting share the crush; a point planted in the ground puts all of it on whoever runs onto it
     this.damage(targetId, damage + hit.delivered * (hit.grounded ? 1 : K.crushShare) * K.damageScale, tx, ty);
     if (tu && hit.delivered > 0) {
