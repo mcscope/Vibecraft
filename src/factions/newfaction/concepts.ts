@@ -141,3 +141,15 @@ export function gasBag(b: ModelBuilder, p: Pose): void {
     }
   }, SCALE);
 }
+
+/**
+ * Concepts 6–10 (2026-10-21): variations on the T3 mother's arched form (index.ts motherT3, its MotherForm): 6 scorpion
+ * curl, 7 ant queen, 8 upright theropod, 9 wasp-waisted, 10 great arch.
+ */
+export const MOTHER_FORMS = [
+  { pitch: -1.25, curl: 0.75, abdomen: 0.95, legs: 4, head: 1.3 },
+  { pitch: -1.0, curl: 0.1, abdomen: 0.85, legs: 6, head: 1.2 },
+  { pitch: -0.45, curl: 0.15, abdomen: 0.9, legs: 2, head: 1.4 },
+  { waist: true, pitch: -0.9, curl: 0.35, abdomen: 0.9, legs: 6, head: 1.25 },
+  { pitch: -1.1, curl: 0.5, abdomen: 1.1, legs: 4, head: 1.5 },
+] as const;

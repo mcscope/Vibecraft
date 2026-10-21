@@ -604,7 +604,12 @@ function mother(b: ModelBuilder, p: Pose, mass: number, tier: 1 | 2 | 3 = 1): vo
  * long chitin-plated body running back into a segmented tail, a raised neck and a head with the long tube crest
  * sweeping back; cavities on the sides of the abdomen, eggs on the thorax. Built around the thorax.
  */
-function motherT3(b: ModelBuilder, p: Pose, mass: number): void {
+/** A variation on the T3 mother's form (for concepts): how steeply her abdomen rises, how far it curls over, its size, a
+ *  wasp's waist before it, how many legs she stands on (2: upright on her hind pair, forelegs as mantis arms), her head's size. */
+export interface MotherForm { pitch?: number; curl?: number; abdomen?: number; waist?: boolean; legs?: 2 | 4 | 6; head?: number }
+
+function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): void {
+  const pitch = o.pitch ?? -0.75, curl = o.curl ?? 0.22, legs = o.legs ?? 4;
   const plate: Mat = { color: '#5e4a3a', tex: 'leather', rough: 0.35 };
   const under: Mat = { color: '#d8c49a', tex: 'skin', rough: 0.6 };
   const dark: Mat = { color: '#241812', tex: 'skin', rough: 0.95 };
@@ -630,9 +635,11 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number): void {
     // (its curl: rising behind her, its end curling over and down; swaying a little as she walks)
     const centre = (x: number, up: number, dy = 0): [number, number, number] => {
       const k = -x / 0.88;
-      return [x, up * 0.15 - 0.22 * k * k + dy, walking ? Math.sin(t + x * 3) * 0.04 * k * k : 0];
+      return [x, up * 0.15 - curl * k * k + dy, walking ? Math.sin(t + x * 3) * 0.04 * k * k : 0];
     };
-    c.joint([-0.12, y0 + 0.08, 0], [0, 0, -0.75 + (walking ? Math.sin(t * 2) * 0.03 : 0)], (ab) => {
+    const abAt: V3 = o.waist ? [-0.3, y0 + 0.12, 0] : [-0.12, y0 + 0.08, 0];
+    if (o.waist) c.limb([-0.12, y0 + 0.04, 0], abAt, 0.06, plate, 0.05); // a wasp's waist
+    c.joint(abAt, [0, 0, pitch + (walking ? Math.sin(t * 2) * 0.03 : 0)], (abs) => abs.joint([0, 0, 0], [0, 0, 0], (ab) => {
       ab.loft(shape.map(([x, w, up, down, keel]) => ({ at: centre(x, up), w, up, down, keel })), under);
       for (const [from, to] of [[0, 3], [2, 5], [4, 6]] as const) {
         ab.loft(shape.slice(from, to + 1).map(([x, w, up, , keel], i, all) => {
@@ -645,12 +652,12 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number): void {
         ab.sphere([0.065, 0.06, 0.03], [x, at[1], z * rz], dark);
         ab.cylinder(0.07, 0.07, 0.018, [x, at[1], z * (rz - 0.005)], { team: 'primary', tex: 'skin' }, [Math.PI / 2, 0, 0], 12);
       }
-    });
+    }, o.abdomen ?? 1));
     // neck, and a big head with its great crest sweeping back
     const head: [number, number, number] = [0.46, y0 + 0.5, 0];
     c.limb([0.14, y0 + 0.05, 0], [0.3, y0 + 0.3, 0], 0.1, plate, 0.08);
     c.limb([0.3, y0 + 0.3, 0], head, 0.08, plate, 0.07);
-    c.joint(head, [0, 0, 0], (h) => {
+    c.joint(head, [0, 0, 0], (hs) => hs.joint([0, 0, 0], [0, 0, 0], (h) => {
       h.sphere([0.2, 0.11, 0.11], [0.08, 0, 0], plate);
       h.cone(0.08, 0.2, [0.34, -0.03, 0], plate, [0, 0, -Math.PI / 2], 8); // beak
       for (const z of [1, -1]) {
@@ -661,7 +668,7 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number): void {
       h.limb([0.06, 0.09, 0], [-0.3, 0.3, 0], 0.07, plate, 0.06);
       h.limb([-0.3, 0.3, 0], [-0.66, 0.42, 0], 0.06, plate, 0.045);
       h.sphere(0.05, [-0.66, 0.42, 0], under);
-    });
+    }, o.head ?? 1));
     // eggs on the thorax
     for (let k = 0; k < 9; k++) {
       const a = (k / 9) * TAU, r = k === 0 ? 0 : 0.09;
@@ -671,8 +678,8 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number): void {
     // weight, the forelegs just ahead; her weight balanced between them
     for (const z of [1, -1]) {
       const ph = p.phase + (z > 0 ? 0 : 0.5); // (each hind leg steps with the foreleg across from it)
-      const hip: V3 = [-0.1, y0 - 0.04, z * 0.16], kneeRest: V3 = [0.02, y0 + 0.12, z * 0.5], ankleRest: V3 = [-0.24, 0.2, z * 0.6], rest: V3 = [-0.16, 0, z * 0.62];
-      const foot = walking ? footAt(rest, ph, 0.12, 0.06) : rest;
+      const hip: V3 = [-0.1, y0 - 0.04, z * 0.16], kneeRest: V3 = [0.02, y0 + 0.12, z * 0.5], ankleRest: V3 = [-0.24, 0.2, z * 0.6], rest: V3 = [legs === 2 ? -0.04 : -0.16, 0, z * (legs === 2 ? 0.42 : 0.62)];
+      const foot = walking ? footAt(rest, legs === 2 ? p.phase + (z > 0 ? 0 : 0.5) : ph, 0.12, 0.06) : rest;
       const ankle: V3 = [foot[0] + ankleRest[0] - rest[0], foot[1] + ankleRest[1], foot[2] + ankleRest[2] - rest[2]];
       const knee = jointBetween(hip, ankle, span(hip, kneeRest), span(kneeRest, ankleRest), [0.3, 1, z]);
       c.limb(hip, knee, 0.11, plate, 0.085);
@@ -680,6 +687,18 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number): void {
       c.limb(knee, ankle, 0.075, plate, 0.06);
       c.limb(ankle, foot, 0.06, plate, 0.045);
       c.sphere([0.09, 0.04, 0.1], [foot[0] + 0.02, 0.03, foot[2]], plate); // a broad foot
+      if (legs === 2) { // upright on her hind pair: her forelegs folded up as mantis arms
+        c.limb([0.12, y0 - 0.02, z * 0.12], [0.3, y0 + 0.22, z * 0.16], 0.05, plate, 0.04);
+        c.limb([0.3, y0 + 0.22, z * 0.16], [0.32, y0 - 0.12, z * 0.14], 0.04, plate, 0.015);
+        continue;
+      }
+      if (legs === 6) { // a middle pair between
+        const mhip: V3 = [0.0, y0 - 0.06, z * 0.15], mrest: V3 = [0.1, 0, z * 0.6], mkRest: V3 = [0.08, y0 + 0.08, z * 0.45];
+        const mfoot = walking ? footAt(mrest, ph + 0.5, 0.12, 0.05) : mrest;
+        const mk = jointBetween(mhip, mfoot, span(mhip, mkRest), span(mkRest, mrest), [0.2, 1, z]);
+        c.limb(mhip, mk, 0.07, plate, 0.055);
+        c.limb(mk, mfoot, 0.055, plate, 0.035);
+      }
       const fhip: V3 = [0.1, y0 - 0.06, z * 0.12], fkRest: V3 = [0.24, y0 + 0.02, z * 0.34], frest: V3 = [0.36, 0, z * 0.4];
       const ffoot = walking ? footAt(frest, ph + 0.5, 0.12, 0.05) : frest;
       const fk = jointBetween(fhip, ffoot, span(fhip, fkRest), span(fkRest, frest), [0.5, 1, z]);
