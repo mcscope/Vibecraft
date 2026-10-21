@@ -1,5 +1,6 @@
 // Reusable rigs for building unit models out of primitives.
 // Convention: unit faces +x, +y up, +z is its left. A person is ~1.7 tall.
+import { footAt, jointBetween } from '../../kits/bake3d/gait';
 import type { Mat, ModelBuilder, Pose, Vec3 } from '../../kits/bake3d/types';
 
 const TAU = Math.PI * 2;
@@ -223,16 +224,17 @@ export function cargoPack(b: ModelBuilder, p: Pose, scale = 1): void {
 export function quadLegs(b: ModelBuilder, p: Pose, o: { fx: number; bx: number; z: number; hip: number; len: number; r: number; mat: Mat; paw: Mat }): number {
   const walking = p.anim === 'walk';
   const t = p.phase * TAU;
-  const bob = walking ? Math.abs(Math.sin(t)) * 0.04 * o.len : 0;
+  // (walking, on planted feet: diagonal pairs step together, a foot holding where it stands as the body goes over it;
+  // the legs a touch bent, the body highest over its planted feet)
+  const bob = walking ? -0.05 * o.len + Math.abs(Math.cos(t * 2)) * 0.02 * o.len : 0;
   const legs: Array<[number, number, number]> = [
-    [o.fx, o.z, 0], [o.fx, -o.z, Math.PI], [o.bx, o.z, Math.PI], [o.bx, -o.z, 0],
+    [o.fx, o.z, 0], [o.fx, -o.z, 0.5], [o.bx, o.z, 0.5], [o.bx, -o.z, 0],
   ];
   for (const [x, z, ph] of legs) {
-    const a = walking ? Math.sin(t + ph) * 0.45 : p.anim === 'tired' ? 0.1 : 0;
     const hip: Vec3 = [x, o.hip + bob, z];
-    const knee = swing(hip, o.len * 0.5, a);
-    const lift = walking ? Math.max(0, Math.sin(t + ph + Math.PI / 2)) * 0.6 : 0;
-    const foot = swing(knee, o.len * 0.5, a * 0.3 - (x > 0 ? lift : -lift));
+    const rest: Vec3 = [x + (p.anim === 'tired' ? 0.04 * o.len : 0), Math.min(o.r * 0.5, o.hip - o.len * 0.98), z];
+    const foot = walking ? footAt(rest, p.phase + ph, 0.22 * o.len, 0.12 * o.len) : rest;
+    const knee = jointBetween(hip, foot, o.len * 0.5, o.len * 0.5, [x > 0 ? 1 : -1, 0, 0]); // (a foreleg's knee forward, a hind leg's hock back)
     b.limb(hip, knee, o.r, o.mat, o.r * 0.8);
     b.limb(knee, foot, o.r * 0.75, o.mat, o.r * 0.65);
     b.sphere([o.r * 1.05, o.r * 0.6, o.r * 0.95], [foot[0] + o.r * 0.3, Math.max(o.r * 0.5, foot[1]), foot[2]], o.paw);
