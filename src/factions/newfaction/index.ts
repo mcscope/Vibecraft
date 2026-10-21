@@ -323,11 +323,13 @@ function whipArms(c: ModelBuilder, p: Pose, len: number, tint: string): void {
   const ease = (x: number) => { const k = Math.max(0, Math.min(1, x)); return k * k * (3 - 2 * k); };
   const n = 14, seg = len / n, s = p.anim === 'attack' ? p.phase : 0, t = p.phase * TAU;
   // out and back: lashing out over the first half, drawn in over the rest; at full stretch the tip cracks over
-  const out = s < 0.45 ? ease(s / 0.45) : 1 - ease((s - 0.45) / 0.55);
+  // (first it winds up: the arm lifting up behind it, coiling into a deep S; then the lash, and drawn back in)
+  const wind = p.anim === 'attack' ? (s < 0.3 ? ease(s / 0.3) : 1 - ease((s - 0.3) / 0.15)) : 0;
+  const out = s < 0.25 ? 0 : s < 0.55 ? ease((s - 0.25) / 0.3) : 1 - ease((s - 0.55) / 0.45);
   const crack = p.anim === 'attack' ? Math.sin(Math.max(0, Math.min(1, (s - 0.3) / 0.35)) * Math.PI) : 0;
   const speed = p.anim === 'walk' ? 1 : 0.5; // (a wave runs down them, quicker on the move)
   for (const z of [1, -1]) {
-    const lash = z > 0 ? out : 0; // (the near arm strikes; the other stays back)
+    const lash = z > 0 ? out : 0, coil = z > 0 ? wind : 0; // (the near arm strikes; the other stays back)
     const loose = 1 - lash; // (held back they curve and sway freely; lashing out they straighten, rippling)
     let at: V = [0.12, 0.03, z * 0.1];
     for (let i = 0; i < n; i++) {
@@ -339,8 +341,9 @@ function whipArms(c: ModelBuilder, p: Pose, len: number, tint: string): void {
       // rising and falling as it goes: the tip curling up when held, cracking over at full stretch
       const e = 0.1 * Math.sin(t * speed * 1.3 - u * 4) + loose * Math.max(0, u - 0.6) * 2.2 + crack * (z > 0 ? 1 : 0) * Math.max(0, u - 0.65) * 4;
       // (lashing, it whips up and over its back to straight ahead, rippling in its own plane, a little play side to side)
-      const v = Math.PI * (1 - ease(lash * 1.35 - u * 0.35)) + Math.sin(u * TAU - s * TAU * 1.5) * (0.3 + 1.6 * lash * (1 - lash)) * lash; // (a pronounced S, travelling down it, strongest mid-lash)
-      const dir: V = lash > 0.02
+      const v = Math.PI * (1 - ease(lash * 1.35 - u * 0.35)) + Math.sin(u * TAU - s * TAU * 1.5) * (0.3 + 1.6 * lash * (1 - lash)) * lash // (a pronounced S, travelling down it, strongest mid-lash)
+        - coil * (0.9 + Math.sin(u * TAU * 1.1 + 0.6) * 1.0); // (winding up: raised behind it, coiled in a deep S)
+      const dir: V = lash > 0.02 || coil > 0.02
         ? [Math.cos(v), Math.sin(v) + crack * Math.max(0, u - 0.65) * 3, z * (0.08 + Math.sin(t * speed - u * 5) * 0.12)]
         : [Math.cos(a) * Math.cos(e), Math.sin(e), z * Math.sin(a) * Math.cos(e) * 0.3];
       const l = Math.hypot(...dir), next: V = [at[0] + (dir[0] / l) * seg, at[1] + (dir[1] / l) * seg, at[2] + (dir[2] / l) * seg];
