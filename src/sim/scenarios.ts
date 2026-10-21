@@ -3,7 +3,8 @@
 import { generateMap, mapSize, Grid, TERRAIN_SAND, TERRAIN_WATER, type GeneratedMap, type MapFeature } from './map';
 import { Rng } from './rng';
 import { startStock, startWorkers } from './fairness';
-import { TICK_RATE, type World } from './world';
+import { TICK_RATE, type ResourceNode, type World } from './world';
+import type { FactionSpec } from '../factions/types';
 
 export interface Scenario {
   id: string;
@@ -31,13 +32,29 @@ export function skirmish(mapId = 'woodlands'): Scenario {
         const [ox, oy] = map.starts[i % map.starts.length];
         const f = w.factionOf(p.id);
         const tc = w.addBuilding(i, f.townCenterId ?? '', ox, oy);
-        if (!tc) return;
+        if (!tc) { startInTheField(w, i, f, ox + 1.5, oy + 1.5); return; }
         // everyone starts from the same pool; the base and workers are paid from it
         tc.stock = startStock(f);
         for (let n = 0; n < startWorkers(f); n++) w.spawnUnit(i, f.workerId, tc);
       });
     },
   };
+}
+
+/**
+ * A faction with no starting base starts in the field: its starting units, and the rest of the starting pool laid on
+ * the ground beside them to gather (a pile of food, a felled tree, a heap of crystal).
+ */
+function startInTheField(w: World, owner: number, f: FactionSpec, x: number, y: number): void {
+  for (let n = 0; n < startWorkers(f); n++) w.spawnAt(owner, f.workerId, x + (n % 3) - 1, y + Math.floor(n / 3));
+  const stock = startStock(f);
+  const put = (dx: number, dy: number, node: Omit<ResourceNode, 'id' | 'maxAmount' | 'x' | 'y'>) => {
+    const spot = w.grid.nearestOpen(x + dx, y + dy, 6);
+    if (spot) w.addNode({ ...node, x: spot[0], y: spot[1] });
+  };
+  if (stock.food > 0) put(2.5, 0, { type: 'food', amount: stock.food, shard: false, tree: false });
+  if (stock.wood > 0) put(0, 2.5, { type: 'wood', amount: stock.wood, shard: false, tree: true });
+  if (stock.crystal > 0) put(-2.5, 0, { type: 'crystal', amount: stock.crystal, shard: true, tree: false });
 }
 
 /**

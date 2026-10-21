@@ -15,9 +15,9 @@ export type Army = Record<string, number>;
 /** A block of one unit type, deployed around (x, y). */
 export interface Block { specId: string; n: number; x: number; y: number }
 
-/** The units a side can draft: anything that fights (workers too), but no carts or bearers. */
+/** The units a side can draft: anything that fights (workers too) that it can get (trained, laid or grown into), but no carts or bearers. */
 export const draftable = (f: FactionSpec): UnitSpec[] => {
-  const trained = new Set((f.buildings ?? []).flatMap((b) => b.trains ?? []));
+  const trained = new Set([...(f.buildings ?? []).flatMap((b) => b.trains ?? []), ...f.units.flatMap((u) => [...(u.spawns ?? []), ...(u.becomes ?? [])]), f.workerId]);
   return f.units.filter((u) => u.attack && trained.has(u.id) && u.id !== f.carterId && u.role !== 'carter' && !u.bearer);
 };
 

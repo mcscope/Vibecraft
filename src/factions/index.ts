@@ -3,5 +3,6 @@
 import type { FactionSpec } from './types';
 import { meadowfolk } from './meadowfolk';
 import { fenfolk } from './fenfolk';
+import { newFaction } from './newfaction';
 
-export const PLAYABLE: FactionSpec[] = [meadowfolk, fenfolk];
+export const PLAYABLE: FactionSpec[] = [meadowfolk, fenfolk, newFaction];

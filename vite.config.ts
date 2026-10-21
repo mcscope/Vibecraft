@@ -10,7 +10,8 @@ export default defineConfig({
   // the arena's module worker imports shared chunks, which the default iife format can't do
   worker: { format: 'es' },
   // tests play on smaller maps: the same rules, faster games (tests/setup.ts)
-  test: { setupFiles: ['tests/setup.ts'] },
+  // (worktrees under .claude/ are other sessions' checkouts: their copies of the tests aren't ours to run)
+  test: { setupFiles: ['tests/setup.ts'], exclude: ['**/node_modules/**', '.claude/**'] },
   build: {
     rollupOptions: {
       input: { main: resolve(__dirname, 'index.html'), lab: resolve(__dirname, 'lab.html'), codex: resolve(__dirname, 'codex.html'), make: resolve(__dirname, 'make.html') },

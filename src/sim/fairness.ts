@@ -48,8 +48,9 @@ export function checkFairness(f: FactionSpec): string[] {
   for (const t of f.techs ?? []) if (!units.has(t.unit)) e.push(`${t.id}: improves unknown unit ${t.unit}`);
   // the start: base and workers are paid from the shared pool
   const base = f.townCenterId !== undefined ? buildings.get(f.townCenterId) : undefined;
-  if (!base) e.push(`townCenterId "${f.townCenterId}" is not one of its buildings`);
-  else if (base.living) e.push(`${base.id}: the starting base can't be a living building`);
+  // (no townCenterId: it starts in the field, its starting units with the pool on the ground beside them: sim/scenarios.ts)
+  if (f.townCenterId !== undefined && !base) e.push(`townCenterId "${f.townCenterId}" is not one of its buildings`);
+  else if (base?.living) e.push(`${base.id}: the starting base can't be a living building`);
   const n = startWorkers(f);
   if (!(Number.isInteger(n) && n >= 1)) e.push(`startWorkers must be a whole number, at least 1`);
   const cost = startCost(f);
