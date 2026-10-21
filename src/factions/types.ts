@@ -70,7 +70,7 @@ export interface UnitSpec {
    * scales it by ∛ of the mass.
    */
   size?: number;
-  /** Soft-bodied: it crawls over and under others that crawl (two crawlers never push each other apart). */
+  /** Soft-bodied: it crawls under (and over) its own side's units: it never pushes or is pushed by them, only by enemies. */
   crawls?: boolean;
   /** It flies: walks short hops, takes off to go further, straight over everything; burns calories aloft (∝ mass, so endurance comes from its reserve); lands when it stops or runs low. Melee fliers land to strike. */
   flight?: boolean | { height: number };

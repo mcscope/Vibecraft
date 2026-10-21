@@ -2351,7 +2351,7 @@ export class World {
       for (let j = i + 1; j < arr.length; j++) {
         const b = arr[j];
         if (a.airborne !== b.airborne) continue; // fliers pass overhead
-        if (this.crawls(a) && this.crawls(b)) continue; // soft bodies crawl over each other
+        if ((this.crawls(a) || this.crawls(b)) && a.owner === b.owner) continue; // a crawler goes under its own side's bodies
         const dx = b.x - a.x, dy = b.y - a.y;
         // two fliers keep a little room for their wings (a quarter span apart: wings may overlap, one passing
         // above the other), aloft or landed; in the air that's all there is (no bodies to collide)
