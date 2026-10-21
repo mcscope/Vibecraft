@@ -265,13 +265,18 @@ const greatSiegeHeron: FenUnit = {
       // in the air, pitched to its climb: ~11° up climbing, level soaring, ~17° nose-down gliding in
       const landing = p.anim === 'land'; // flaring to touch down: body up, wings cupped forward as airbrakes, feet out
       const held = p.anim === 'soar' || p.anim === 'glide' || landing; // wings held out, not beating
-      const pitch = landing ? 0.6 : leaping ? 0.38 : p.anim === 'climb' ? 0.2 : p.anim === 'glide' ? -0.3 : 0;
+      // a leap, as a heron really goes up: it crouches (the backward-bending joint, its ankle, folding down behind,
+      // feet planted under it), neck drawn in and wings raised; springs, legs driving straight, as the wings come down
+      // hard; and lifts away, legs folding back to trail behind
+      const ease = (k: number) => { const c = Math.max(0, Math.min(1, k)); return c * c * (3 - 2 * c); };
+      const lp = p.phase, crouch = leaping ? ease(lp / 0.2) * (1 - ease((lp - 0.2) / 0.2)) : 0, off = leaping ? ease((lp - 0.38) / 0.3) : 0;
+      const pitch = landing ? 0.6 : leaping ? 0.3 * ease((lp - 0.2) / 0.25) : p.anim === 'climb' ? 0.2 : p.anim === 'glide' ? -0.3 : 0;
       const flying = p.anim === 'fly' || leaping || p.anim === 'climb' || held;
       const walking = p.anim === 'walk';
       const attacking = p.anim === 'attack';
       // flight: body level and up off the ground, wings beating slow and deep
       // in the air the body rides low in its own frame (the game lifts the whole bird by its altitude)
-      const lift = landing ? -0.15 : leaping ? -0.45 : flying ? -0.8 + Math.sin(t) * 0.05 : 0;
+      const lift = landing ? -0.15 : leaping ? -0.4 * crouch + 0.2 * ease((lp - 0.2) / 0.2) * (1 - off) - 0.8 * off : flying ? -0.8 + Math.sin(t) * 0.05 : 0;
       const legLen = 1.15;
       // stilt legs: striding when walking, trailing behind in flight
       for (const z of [1, -1]) {
@@ -285,10 +290,17 @@ const greatSiegeHeron: FenUnit = {
           b.limb(knee, foot, 0.035, heronLeg, 0.028);
           for (const tz of [-0.08, 0, 0.08]) b.limb(foot, [foot[0] + 0.22, foot[1] - 0.03, foot[2] + tz * 1.6], 0.015, heronLeg);
         } else if (leaping) {
-          // springing forward: legs thrust back and down, feet still pushing off the ground behind
-          const knee: [number, number, number] = [-0.35, Math.max(0.3, hip[1] * 0.45), hip[2]];
-          b.limb(hip, knee, 0.045, heronLeg, 0.035);
-          b.limb(knee, [-0.85, 0.04, hip[2]], 0.035, heronLeg, 0.028);
+          // the foot planted under it till it springs clear, then swinging back to trail; the joint between (its
+          // ankle) always bends backward, as a bird's does
+          const planted: [number, number] = [0.05, 0.04], trail: [number, number] = [-1.35, 1.15 + lift];
+          const foot: [number, number, number] = [planted[0] + (trail[0] - planted[0]) * off, planted[1] + (trail[1] - planted[1]) * off, hip[2]];
+          const L = legLen * 0.52, dx = foot[0] - hip[0], dy = foot[1] - hip[1], d = Math.min(2 * L - 1e-3, Math.hypot(dx, dy));
+          const h = Math.sqrt(Math.max(0, L * L - (d / 2) ** 2)), ux = dx / (Math.hypot(dx, dy) || 1), uy = dy / (Math.hypot(dx, dy) || 1);
+          const [px, py] = -uy < 0 ? [-uy, ux] : [uy, -ux]; // (the perpendicular pointing back)
+          const ankle: [number, number, number] = [hip[0] + ux * d / 2 + px * h, hip[1] + uy * d / 2 + py * h, hip[2]];
+          b.limb(hip, ankle, 0.045, heronLeg, 0.035);
+          b.limb(ankle, foot, 0.035, heronLeg, 0.028);
+          if (off < 0.5) for (const tz of [-0.08, 0, 0.08]) b.limb(foot, [foot[0] + 0.22 * (1 - off * 2), foot[1] - 0.02, foot[2] + tz * 1.5], 0.015, heronLeg);
         } else if (flying) {
           b.limb(hip, [-0.75, 1.2 + lift, 0.12 * z], 0.04, heronLeg, 0.03);
           b.limb([-0.75, 1.2 + lift, 0.12 * z], [-1.35, 1.15 + lift, 0.1 * z], 0.03, heronLeg, 0.025);
@@ -301,11 +313,11 @@ const greatSiegeHeron: FenUnit = {
         }
       }
       // the body pitches about the hip (so the legs stay attached however it tilts)
-      b.joint([leaping ? 0.3 : 0, lift + 1.3, 0], [0, 0, flying ? pitch : 0], (cp) => cp.joint([0, -1.3, 0], [0, 0, 0], (c) => {
+      b.joint([0, lift + 1.3, 0], [0, 0, flying ? pitch : 0], (cp) => cp.joint([0, -1.3, 0], [0, 0, 0], (c) => {
         // body, pale breast plumes and a long tail
         // body: an egg, slim and rounded, fuller at the breast and tapering to the tail. On the ground a heron holds
         // it tilted steeply up (tail low), leaning forward more as it walks; in the air it lies level.
-        const tilt = flying ? 0 : walking ? 0.45 : 0.8;
+        const tilt = leaping ? 0.8 * (1 - ease((lp - 0.12) / 0.35)) : flying ? 0 : walking ? 0.45 : 0.8;
         const hip: [number, number] = [0, 1.45];
         const at = (x: number, y: number, z: number): [number, number, number] => {
           const dx = x - hip[0], dy = y - hip[1];
@@ -342,7 +354,9 @@ const greatSiegeHeron: FenUnit = {
         // wings: folded along the flanks on the ground, spread and beating in the air
         for (const side of [1, -1]) {
           const spread = flying ? 1 : attacking ? 0.35 : 0;
-          const beat = landing ? -0.55 : held ? 0.1 : leaping ? -0.9 + Math.sin(t) * 1.1 : flying ? Math.sin(t) * 0.75 : 0; // a leap hauls the wings high then down hard; soaring holds them out, tips up a touch
+          // a leap raises the wings high as it crouches, brings them down hard as it springs, then beats on; soaring
+          // holds them out, tips up a touch
+          const beat = landing ? -0.55 : held ? 0.1 : leaping ? (lp < 0.2 ? -1.1 * ease(lp / 0.2) : lp < 0.42 ? -1.1 + 1.9 * ease((lp - 0.2) / 0.22) : 0.8 * Math.cos(((lp - 0.42) / 0.58) * Math.PI * 2)) : flying ? Math.sin(t) * 0.75 : 0;
           if (spread === 0) {
             // folded: the wing lies back along the flank, tilted with the body, dark primaries crossed over the tail
             c.sphere([0.62, 0.24, 0.07], at(-0.22, 1.5, 0.27 * side), heronGrey, [0, 0, tilt]);

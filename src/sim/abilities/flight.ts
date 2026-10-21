@@ -141,7 +141,7 @@ export function flyTo(w: World, u: Unit, gx: number, gy: number, arrive: number,
   if (d <= arrive) { u.path = []; return true; }
   const want = Math.atan2(dy, dx);
   let turn = Math.atan2(Math.sin(want - u.flyDir), Math.cos(want - u.flyDir));
-  const max = turnRate(u) * dt;
+  const max = u.launchT < LEAP_TIME ? 0 : turnRate(u) * dt; // (it finishes its leap before it wheels round)
   turn = Math.max(-max, Math.min(max, turn));
   u.flyDir += turn;
   u.bank = max > 0 ? turn / max : 0;
@@ -172,7 +172,7 @@ export function tickFlight(w: World, u: Unit, _moved: boolean, dt: number, face:
   }
   const flew = u.flewTick === w.tick;
   const flaring = !flew && u.alt < FLARE_HEIGHT && (u.vert < 0 || u.alt < 0.5); // the last few metres down: straight in, airbrakes out
-  if (!flew) { u.bank = flaring ? 0 : 1; if (!flaring) u.flyDir += turnRate(u) * dt; glide(w, u, (u.flySpeed || airSpeed(u)) * (flaring ? 0.5 : 1), dt, face); } // no stopping in the air: circle at its pace
+  if (!flew) { u.bank = flaring || u.launchT < LEAP_TIME ? 0 : 1; if (!flaring && u.launchT >= LEAP_TIME) u.flyDir += turnRate(u) * dt; glide(w, u, (u.flySpeed || airSpeed(u)) * (flaring ? 0.5 : 1), dt, face); } // no stopping in the air: circle at its pace
   const fighting = u.throws && (u.engage || u.order.kind === 'attack' || u.order.kind === 'attackMove');
   const travelling = flew && (u.order.kind === 'move' || u.order.kind === 'attackMove' || u.order.kind === 'attack');
   const nearFootGoal = flew && !travelling && Math.hypot(u.goalX - u.x, u.goalY - u.y) < LAND_APPROACH;
