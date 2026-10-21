@@ -49,3 +49,9 @@ The user's decisions so far, as given. Nothing here is designed beyond what they
 ## Still open
 - The roster details, buildings, names.
 - Does the mother change inside a shell, or in place?
+
+## Art status (the user's view, 2026-10-21)
+
+- **Most complete:** the Vimmer, then the Dragon Fly.
+- **Next:** the Goliath Charger and the Whipweld.
+- **Prototype art that won't ship:** the mothers and everything else. These need big changes before they're ready.

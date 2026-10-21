@@ -40,6 +40,16 @@ The new faction feels overpowered in play. Not investigated yet. What we know:
 - **Most of its bodies are placeholders.** Their muscle, frame and reserve are guesses, not the user's choices. They are the honest levers if a unit proves too strong; stats stay physics-derived.
 - **Next step, when wanted:** run the full arena matrix (`npm run arena`) to find the outliers.
 
+## Charges, counters and strategic depth (the user's thoughts, 2026-10-21; wait for playtesting)
+
+- **Charges are probably too strong, but wait for playtests before changing them.** Combat swings on who charges: whoever charges almost always wins, a tiny unit into a huge one or a huge one into a tiny one, and a charge does far more damage than a normal blow. Fights take on a dogfight feel of who will charge, but the controls may not be precise enough to dogfight well. Frogs bump each other for small damage just hopping around.
+- **What's good about it:** nobody is helpless. Villagers can charge a maceman and smash him with their bodies, which gives a fun early villager defence. That isn't Age of Empires, where a 10-damage maceman crushes 4-damage villagers. It also makes pikes, the strong anti-charge unit, matter a lot. Some counters are extreme ("enormous boulder, giant razor blades, gossamer newspaper"), which may be fine. The user hopes to surprise playtesters with small units charging big ones to death.
+- **Macemen may have no point** (see above). This is a balance question.
+- **The new faction may have the highest skill ceiling.** Depending on play, it's either very vulnerable or unbeatable. Like the Fenfolk, it rewards careful micro: what changes into what, being ready to change and to tend, eggs that can't take a new order. Done well, the payoff is explosive production. It should feel fragile in a good way; **larvae should be very fragile.**
+- **The computer players are weak,** so whichever faction you play feels overpowered. The arena helps with unit-against-unit balance, but not with build orders, rushes or cheese.
+- **Strategic depth is lower than Age of Empires or StarCraft:** fewer units, and less commitment to a tech tree. A T3 mother can make anything in T3, with no flier-or-ground choice. To build a Great Hall you need every building beneath it, so there's little branching. Scouting what an opponent is building matters less, and builds are mostly "build the next thing, as many villagers as you can". There are some choices: reedguard or bog toads, fenlings and pack bearers, lancers or pikemen.
+- **That's acceptable for a small browser RTS:** shorter games, a bit swingy and cheesy, is fun. Still worth thinking about where it could gain depth, and about a meta with room for many good strategies against it.
+
 ## Parked ideas
 
 - **Riders separate from mounts.** A generic `rider: { mass }` on any unit spec: a body riding another one. The rider's body swings hand weapons (sidearms), and its weight loads the mount's legs, while the mount's own body still drives charges, bites and couched lances. Right now a mount and its rider are one fused body, so a lynx lancer's sword swings with all 320 kg of lynx (96 damage, as much as the lance), and mounts run at unladen speeds (the lynx sprints at 20.6 m/s). Any faction's design would hit this, not just the lancer.
