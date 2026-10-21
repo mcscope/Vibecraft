@@ -43,6 +43,9 @@ The user's decisions so far, as given. Nothing here is designed beyond what they
   - medium, cyan;
   - big, purple/pink.
 
+## Their world
+- **Maybe a bug-native world:** the faction may get its own homeworld, the look of its half of the map (ground, trees, bushes, clutter, wildlife), like the Fenfolk's fen. For now it uses the default land.
+
 ## Still open
 - The roster details, buildings, names.
 - Does the mother change inside a shell, or in place?
