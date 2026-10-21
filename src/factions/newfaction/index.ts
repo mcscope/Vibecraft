@@ -9,7 +9,8 @@
 // larva) follow the user's description. The Dragon Fly is the user's; its fire (from crystal) is still to design.
 // Self-contained: only engine types and kits, never another faction.
 import type { FactionSpec, UnitSpec } from '../types';
-import type { Section, ModelBuilder, Pose } from '../../kits/bake3d/types';
+import type { Section, ModelBuilder, Pose, Vec3 as V3 } from '../../kits/bake3d/types';
+import { footAt, jointBetween, span } from '../../kits/bake3d/gait';
 import type { Mat } from '../../kits/bake3d/types';
 
 type Unit = UnitSpec & { model: (b: ModelBuilder, p: Pose) => void };
@@ -143,12 +144,12 @@ function drawVee(b: ModelBuilder, p: Pose, mass: number): void {
   // walking, the four points step in turn
   function stand(o: ModelBuilder, y0: number): void {
     for (const S of [1, -1]) {
-      const ph = (k: number) => (p.anim === 'walk' ? Math.sin(t + k * Math.PI / 2 + (S > 0 ? 0 : Math.PI)) : 0);
-      const lift = (k: number) => Math.max(0, -ph(k)) * 0.06;
+      // (walking, its four points step in turn on planted feet, the high joints riding between)
+      const step = (rest: V, k: number): V => (p.anim === 'walk' ? footAt(rest, p.phase + k * 0.25 + (S > 0 ? 0 : 0.5), 0.1, 0.06) : rest);
       const sh: V = [0.06, y0 + 0.04, S * 0.08];
-      const wrist: V = [0.34 + ph(0) * 0.08, lift(0), S * 0.4];
-      const knuckle: V = [-0.06, y0 + 0.42, S * 0.6];
-      const tip: V = [-0.5 + ph(1) * 0.08, lift(1), S * 0.7];
+      const wrist = step([0.34, 0, S * 0.4], 0);
+      const tip = step([-0.5, 0, S * 0.7], 1);
+      const knuckle: V = [-0.06 + (wrist[0] + tip[0] + 0.16) * 0.3, y0 + 0.42, S * 0.6];
       bone(o, sh, wrist, 0.05, 0.03);
       bone(o, wrist, knuckle, 0.06, 0.1);
       bone(o, knuckle, tip, 0.1, 0.01);
@@ -205,10 +206,13 @@ function bug(b: ModelBuilder, p: Pose, color: string, mass: number, weapon: 'str
     c.sphere([0.13, 0.11, 0.11], [0.12, 0.32, 0], shell); // thorax
     c.sphere(0.09, [0.28 + jab * 0.08, 0.36, 0], shell); // head
     c.box([0.04, 0.03, 0.2], [0.12, 0.42, 0], { team: 'primary', tex: 'cloth' }); // team band
-    for (const [x, ph] of [[0.16, 0], [0.06, Math.PI], [-0.04, 0]] as const) for (const z of [1, -1]) {
-      const a = walking ? Math.sin(t + ph + (z > 0 ? 0 : Math.PI)) * 0.35 : 0;
-      c.limb([x, 0.28, z * 0.08], [x + 0.08 + a * 0.1, 0.18, z * 0.22], 0.018, shell);
-      c.limb([x + 0.08 + a * 0.1, 0.18, z * 0.22], [x + 0.1 + a * 0.18, 0, z * 0.26], 0.014, shell);
+    // six legs, a tripod gait on planted feet (front and back on one side with the middle on the other)
+    for (const [x, ph] of [[0.16, 0], [0.06, 0.5], [-0.04, 0]] as const) for (const z of [1, -1]) {
+      const hip: V3 = [x, 0.28, z * 0.08], kneeRest: V3 = [x + 0.08, 0.18, z * 0.22], rest: V3 = [x + 0.1, 0, z * 0.26];
+      const foot = walking ? footAt(rest, p.phase + ph + (z > 0 ? 0 : 0.5), 0.07, 0.05) : rest;
+      const knee = jointBetween(hip, foot, span(hip, kneeRest), span(kneeRest, rest), [0, 1, z]);
+      c.limb(hip, knee, 0.018, shell);
+      c.limb(knee, foot, 0.014, shell);
     }
     if (weapon === 'strike' && p.armed) c.crystal(0.16, [0.42 + jab * 0.12, 0.34, 0], [0, 0, -Math.PI / 2]);
     if (weapon === 'pike' && p.armed) {
@@ -300,11 +304,11 @@ function drawDragonFly(b: ModelBuilder, p: Pose, mass: number): void {
   // six thin insect legs under the thorax (tucked in flight), and the wings, set on the canted thorax
   const c = o;
   {
-    for (const [x, ph] of [[0.14, 0], [0.04, Math.PI], [-0.06, 0]] as const) for (const z of [1, -1]) {
-      const step = !flying && p.anim === 'walk' ? Math.sin(t + ph + (z > 0 ? 0 : Math.PI)) * 0.08 : 0;
-      const hip: [number, number, number] = [x, y0 - 0.08 + x * 0.4, z * 0.08];
-      const knee: [number, number, number] = flying ? [x - 0.08, y0 - 0.12, z * 0.14] : [x + 0.05 + step * 0.4, 0.34, z * 0.22];
-      const foot: [number, number, number] = flying ? [x - 0.18, y0 - 0.16, z * 0.12] : [x + 0.08 + step, 0.01, z * 0.3];
+    for (const [x, ph] of [[0.14, 0], [0.04, 0.5], [-0.06, 0]] as const) for (const z of [1, -1]) {
+      // (on the ground, a tripod on planted feet; in flight, tucked)
+      const hip: V3 = [x, y0 - 0.08 + x * 0.4, z * 0.08], kneeRest: V3 = [x + 0.05, 0.34, z * 0.22], rest: V3 = [x + 0.08, 0.01, z * 0.3];
+      const foot: V3 = flying ? [x - 0.18, y0 - 0.16, z * 0.12] : p.anim === 'walk' ? footAt(rest, p.phase + ph + (z > 0 ? 0 : 0.5), 0.1, 0.06) : rest;
+      const knee: V3 = flying ? [x - 0.08, y0 - 0.12, z * 0.14] : jointBetween(hip, foot, span(hip, kneeRest), span(kneeRest, rest), [0, 1, z]);
       c.limb(hip, knee, 0.022, horn, 0.018);
       c.limb(knee, foot, 0.018, horn, 0.01);
     }
@@ -362,11 +366,13 @@ function mother(b: ModelBuilder, p: Pose, mass: number, tier: 1 | 2 | 3 = 1): vo
       c.cone(0.025, 0.09, [0.34, 0.16, z * 0.04], shell, [0, z * 0.5, -Math.PI / 2], 6);
     }
     // six legs, all off the thorax: short and spread wide, a tripod gait
-    for (const [x, ph, fx] of [[0.08, 0, 0.16], [0, Math.PI, 0], [-0.08, 0, -0.16]] as const) for (const z of [1, -1]) {
-      const swing = walking ? Math.sin(t + ph + (z > 0 ? 0 : Math.PI)) : 0, up = Math.max(0, swing) * 0.04;
-      const knee: [number, number, number] = [x + fx * 0.5 + swing * 0.03, 0.26, z * 0.3];
-      c.limb([x, 0.2 * H, z * 0.12 * W], [knee[0], knee[1] * H, knee[2] * W], 0.032 * legR, shell, 0.027 * legR);
-      c.limb([knee[0], knee[1] * H, knee[2] * W], [x + fx + swing * 0.08, up, z * 0.46 * W], 0.027 * legR, shell, 0.016 * legR);
+    for (const [x, ph, fx] of [[0.08, 0, 0.16], [0, 0.5, 0], [-0.08, 0, -0.16]] as const) for (const z of [1, -1]) {
+      // (on planted feet: a tripod, each foot holding where it stands while she goes over it)
+      const hip: V3 = [x, 0.2 * H, z * 0.12 * W], kneeRest: V3 = [x + fx * 0.5, 0.26 * H, z * 0.3 * W], rest: V3 = [x + fx, 0, z * 0.46 * W];
+      const foot = walking ? footAt(rest, p.phase + ph + (z > 0 ? 0 : 0.5), 0.05, 0.04) : rest;
+      const knee = jointBetween(hip, foot, span(hip, kneeRest), span(kneeRest, rest), [0, 1, z]);
+      c.limb(hip, knee, 0.032 * legR, shell, 0.027 * legR);
+      c.limb(knee, foot, 0.027 * legR, shell, 0.016 * legR);
     }
     // eggs clustered on the thorax
     const eggs = tier === 2 ? 11 : 7;
@@ -458,17 +464,20 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number): void {
     }
     // big jointed hind legs, small forelegs: insect legs
     for (const z of [1, -1]) {
-      const step = walking ? Math.sin(t + (z > 0 ? 0 : Math.PI)) : 0;
-      const hip: [number, number, number] = [0.02, y0 - 0.04, z * 0.14];
-      const knee: [number, number, number] = [0.1 + step * 0.06, y0 + 0.16, z * 0.42];
-      const ankle: [number, number, number] = [-0.04 + step * 0.1, 0.18, z * 0.48];
+      // (on planted feet: each hind leg steps with the foreleg across from it)
+      const ph = p.phase + (z > 0 ? 0 : 0.5);
+      const hip: V3 = [0.02, y0 - 0.04, z * 0.14], kneeRest: V3 = [0.1, y0 + 0.16, z * 0.42], ankleRest: V3 = [-0.04, 0.18, z * 0.48], rest: V3 = [0.06, 0, z * 0.5];
+      const foot = walking ? footAt(rest, ph, 0.1, 0.06) : rest;
+      const ankle: V3 = [foot[0] + ankleRest[0] - rest[0], foot[1] + ankleRest[1], foot[2] + ankleRest[2] - rest[2]];
+      const knee = jointBetween(hip, ankle, span(hip, kneeRest), span(kneeRest, ankleRest), [0.3, 1, z]);
       c.limb(hip, knee, 0.06, plate, 0.05);
       c.limb(knee, ankle, 0.045, plate, 0.035);
-      c.limb(ankle, [0.06 + step * 0.16, Math.max(0, step) * 0.05, z * 0.5], 0.03, plate, 0.018);
-      const fstep = walking ? Math.sin(t + Math.PI + (z > 0 ? 0 : Math.PI)) : 0;
-      const fk: [number, number, number] = [0.22 + fstep * 0.04, y0 - 0.02, z * 0.22];
-      c.limb([0.1, y0 - 0.06, z * 0.1], fk, 0.03, plate, 0.025);
-      c.limb(fk, [0.3 + fstep * 0.08, Math.max(0, fstep) * 0.04, z * 0.26], 0.025, plate, 0.014);
+      c.limb(ankle, foot, 0.03, plate, 0.018);
+      const fhip: V3 = [0.1, y0 - 0.06, z * 0.1], fkRest: V3 = [0.22, y0 - 0.02, z * 0.22], frest: V3 = [0.3, 0, z * 0.26];
+      const ffoot = walking ? footAt(frest, ph + 0.5, 0.1, 0.04) : frest;
+      const fk = jointBetween(fhip, ffoot, span(fhip, fkRest), span(fkRest, frest), [0.5, 1, z]);
+      c.limb(fhip, fk, 0.03, plate, 0.025);
+      c.limb(fk, ffoot, 0.025, plate, 0.014);
     }
   }, LOOK.mother.scale(mass));
 }
