@@ -122,7 +122,7 @@ export type Order =
    */
   | { kind: 'cart'; base: number; home: number; from?: number; pinned: boolean; phase: 'load' | 'deliver'; res: ResourceKind };
 
-export type UnitAnim = 'idle' | 'walk' | 'charge' | 'brace' | 'stagger' | 'fly' | 'leap' | 'climb' | 'soar' | 'glide' | 'land' | 'attack' | 'cut' | 'gather' | 'eat' | 'tired';
+export type UnitAnim = 'idle' | 'walk' | 'charge' | 'brace' | 'stagger' | 'fly' | 'leap' | 'climb' | 'soar' | 'glide' | 'land' | 'swoop' | 'attack' | 'cut' | 'gather' | 'eat' | 'tired';
 
 export interface Unit {
   id: number;
@@ -178,6 +178,8 @@ export interface Unit {
   launchT: number;
   /** Diving on a target (sim/abilities/flight.ts diveAt), and how steeply (radians below level). */
   diving: boolean; diveAngle: number;
+  /** Pulled out of a dive, running in level on its target at the dive's speed. */
+  diveRun: boolean;
   /** Tick a flier last steered toward a goal (otherwise it circles). */
   flewTick: number;
   /** Its air speed (tiles/s) when it last flew somewhere, kept while it coasts. */
@@ -1008,7 +1010,7 @@ export class World {
       food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
       order: { kind: 'idle' }, resume: null, queue: [], engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
-      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, diveSpeed: 0, flyDir: 0, bank: 0, launchT: 0, diving: false, diveAngle: 0, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', cutting: false, facing: Math.PI / 4, turnTick: -1, turnLeft: 0, faceTo: null, brood: [], autoBrood: null,
+      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, diveSpeed: 0, flyDir: 0, bank: 0, launchT: 0, diving: false, diveAngle: 0, diveRun: false, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', cutting: false, facing: Math.PI / 4, turnTick: -1, turnLeft: 0, faceTo: null, brood: [], autoBrood: null,
       dummy: !!spec.dummy,
       carter: spec.role === 'carter',
       gatherAcc: 0,
@@ -1284,7 +1286,8 @@ export class World {
     else if (u.order.kind === 'metamorph') anim = 'eat'; // feeding its change
     else if (u.exhausted && !moved) anim = 'tired';
     // in the air: a flight pose pitched to how it's moving: leaping off the ground, climbing, soaring level, or gliding down
-    if (u.airborne) anim = u.launchT < LEAP_TIME && u.alt < LAUNCH_HEIGHT && u.vert >= 0 ? 'leap' : u.vert > 0 ? 'climb' : u.vert < 0 ? (u.alt < FLARE_HEIGHT ? 'land' : 'glide') : 'soar'; // the last few metres down: flaring to land
+    if (u.airborne && u.diveRun) anim = 'swoop';
+    else if (u.airborne) anim = u.launchT < LEAP_TIME && u.alt < LAUNCH_HEIGHT && u.vert >= 0 ? 'leap' : u.vert > 0 ? 'climb' : u.vert < 0 ? (u.alt < FLARE_HEIGHT ? 'land' : 'glide') : 'soar'; // the last few metres down: flaring to land
     if (anim !== u.anim) { u.anim = anim; u.animT = 0; } else u.animT += DT;
 
     if (!u.busy && !moved && u.order.kind !== 'resupply' && u.order.kind !== 'eatPack') {

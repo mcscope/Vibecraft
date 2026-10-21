@@ -41,36 +41,48 @@ const DRAG = K.gravity / 45 ** 2;
 /** Climbing away after a dive, it zooms up at this angle, trading its extra speed for height. */
 const ZOOM_ANGLE = 0.5;
 
+/** Metres short of its target it aims its dive to bottom out, to run in level the rest of the way (a charge). */
+const RUN_IN = 6;
+
 /**
  * A striker in the air going for something on the ground dives on it, honestly: it flies over at its height till the
- * target lies steeply below (DIVE_START), then noses over, gathering speed as it drops (g·sinθ, less drag), steering
- * at it; it can strike only once it's down within reach of it (the target's shoulders plus its own reach). True then:
- * the strike, with the dive's downward speed behind it (its forward speed is already in its motion). Pulling out of
- * a dive it keeps its speed, and zooms up on it (tickFlight).
+ * spot RUN_IN short of the target lies steeply below (DIVE_START), then noses over and dives at it, gathering speed as
+ * it drops (g·sinθ, less drag); down at striking height (the target's shoulders plus its own reach) it pulls out level
+ * and runs in on it like a charge, fast, slowing only to drag, and strikes passing through (its speed is in the blow,
+ * as a charger's is). True while it can strike. Past it, it keeps its speed and zooms back up on it (tickFlight).
  */
 export function diveAt(w: World, u: Unit, t: Unit, dt: number, face: (dx: number, dy: number) => void): boolean {
   const strikeAlt = 0.8 * bodyHeight(t.stats.mass) + Math.max(0, u.stats.range - u.stats.radius) * M_PER_TILE;
   const reach = u.stats.range + t.stats.radius + u.stats.radius;
-  const dm = Math.max(0, Math.hypot(t.x - u.x, t.y - u.y) - reach * 0.5) * M_PER_TILE; // metres to go, across
-  const drop = u.alt - strikeAlt;
-  if (drop <= 0.05) { // down at it
-    if (u.diving) { u.diveSpeed = u.flySpeed * M_PER_TILE * Math.sin(u.diveAngle); u.diving = false; }
-    if (Math.hypot(t.x - u.x, t.y - u.y) <= reach) return true;
-    flyTo(w, u, t.x, t.y, 0.05, u.flySpeed / FLY_SPEED, dt, face); // (missed: on round, low)
-    return false;
+  const dist = Math.hypot(t.x - u.x, t.y - u.y);
+  let v = Math.max(u.flySpeed, airSpeed(u)) * M_PER_TILE;
+  if (u.diveRun) {
+    // the run in: level, straight at it, slowing only to drag; past it (it's behind), the run is over
+    const ahead = Math.cos(Math.atan2(t.y - u.y, t.x - u.x) - u.flyDir);
+    if (ahead < -0.2 && dist > reach) { u.diveRun = false; return false; }
+    v = Math.max(airSpeed(u) * M_PER_TILE, v - DRAG * v * v * dt);
+    u.alt = strikeAlt;
+    flyTo(w, u, t.x, t.y, 0.01, v / M_PER_TILE / FLY_SPEED, dt, face);
+    u.flySpeed = v / M_PER_TILE;
+    return dist <= reach;
   }
+  const drop = u.alt - strikeAlt;
+  const dm = Math.max(0.5, dist * M_PER_TILE - RUN_IN); // metres across to where it bottoms out
   const angle = Math.atan2(drop, dm);
   // (it dives only from high enough to gather speed: after a dive it climbs back up first)
-  if (!u.diving && (angle < DIVE_START || drop < u.stats.flyHeight * 0.5)) { flyTo(w, u, t.x, t.y, 0.05, Math.max(u.flySpeed / FLY_SPEED, u.stats.speed), dt, face); return false; } // over to it
-  // diving: speed from the drop, the angle steepening to bring it down onto the target
+  if (!u.diving && (angle < DIVE_START || drop < u.stats.flyHeight * 0.5)) {
+    if (drop <= 0.05 && dist <= reach) return true; // low and on it anyway: it strikes in passing
+    flyTo(w, u, t.x, t.y, 0.05, Math.max(u.flySpeed / FLY_SPEED, u.stats.speed), dt, face);
+    return false;
+  }
   u.diving = true;
   const th = Math.min(DIVE_MAX, Math.max(0.2, angle));
-  let v = Math.max(u.flySpeed, airSpeed(u)) * M_PER_TILE;
   v = Math.max(0, v + (K.gravity * Math.sin(th) - DRAG * v * v) * dt);
   u.diveAngle = th;
   u.alt = Math.max(strikeAlt, u.alt - v * Math.sin(th) * dt);
   flyTo(w, u, t.x, t.y, 0.01, (v * Math.cos(th)) / M_PER_TILE / FLY_SPEED, dt, face);
   u.flySpeed = v / M_PER_TILE;
+  if (u.alt <= strikeAlt + 1e-6) { u.diving = false; u.diveRun = true; } // bottomed out: pulling out level for the run in
   return false;
 }
 
@@ -161,8 +173,9 @@ export function tickFlight(w: World, u: Unit, _moved: boolean, dt: number, face:
   if (!u.airborne) { u.alt = 0; u.vert = 0; u.vz = 0; u.launchT = 0; return; }
   const alt0 = u.alt;
   u.launchT += dt;
-  if (u.diving && u.flewTick !== w.tick) u.diving = false; // (it broke off: its target gone, or new orders)
+  if ((u.diving || u.diveRun) && u.flewTick !== w.tick) u.diving = u.diveRun = false; // (it broke off: its target gone, or new orders)
   if (u.diving) { u.vert = -1; u.vz = 0; return; } // (a dive moves it itself: diveAt)
+  if (u.diveRun) { u.vert = 0; u.vz = 0; return; }
   // faster than it flies, after a dive: it zooms up, trading the extra speed for height
   const cruise = airSpeed(u) * M_PER_TILE, v = u.flySpeed * M_PER_TILE;
   if (v > cruise + 0.01) {

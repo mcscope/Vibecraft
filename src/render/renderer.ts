@@ -44,6 +44,7 @@ export interface RenderOptions {
 export function unitFrame(u: Unit): { anim: ArtAnim; time?: number; progress?: number } {
   switch (u.anim) {
     case 'leap': return { anim: 'leap', progress: Math.min(0.999, u.launchT / LEAP_TIME) }; // crouch, spring, up
+    case 'swoop': return { anim: 'swoop', time: u.animT };
     case 'fly': case 'climb': case 'soar': case 'glide': case 'land':
       // turning hard in level flight or climbing: banked into the turn
       if ((u.anim === 'soar' || u.anim === 'climb' || u.anim === 'fly') && Math.abs(u.bank) > 0.5) return { anim: u.bank > 0 ? 'bankL' : 'bankR', time: u.animT };

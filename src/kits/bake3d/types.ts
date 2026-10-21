@@ -18,9 +18,10 @@ export interface Pose {
   /**
    * A whole-body style on top of `anim` (the baker leans/tilts the model for it; a model may do more):
    * 'charge' runs the walk flat out, leaning in; 'stagger' stumbles off balance; 'brace' sets low, point ready;
-   * 'bankL'/'bankR' soar (wings still) rolled into a turn (L: turning toward its +z side).
+   * 'bankL'/'bankR' soar (wings still) rolled into a turn (L: turning toward its +z side); 'swoop' is a glide pulled
+   * out level, running in fast low over the ground after a dive (a model may level its glide for it).
    */
-  style?: 'charge' | 'stagger' | 'brace' | 'bankL' | 'bankR';
+  style?: 'charge' | 'stagger' | 'brace' | 'bankL' | 'bankR' | 'swoop';
 }
 
 export type Vec3 = [number, number, number];
