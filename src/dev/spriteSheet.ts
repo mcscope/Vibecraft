@@ -31,7 +31,7 @@ export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
     g.strokeStyle = 'rgba(0,0,0,0.25)'; g.strokeRect(i * cell, fi * cell, cell, cell);
     g.drawImage(s.img, s.sx, s.sy, s.sw, s.sh, x - s.ax * k, y - s.ay * k, s.sw * k, s.sh * k);
   }));
-  out.textContent = `${id} · ${anim} · ${a.frames.length} facings × ${cols} frames`;
+  out.textContent = `${id} · ${anim} · ${a.frames.length} facings × ${cols} frames${found.stride ? ` · stride ${found.stride.toFixed(2)} units a loop` : ''}`;
   out.appendChild(document.createElement('br'));
   out.appendChild(c);
   document.title = 'sprites ready';

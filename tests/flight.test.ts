@@ -1,12 +1,14 @@
 import { describe, expect, test } from 'vitest';
 import { meadowfolk } from '../src/factions/meadowfolk';
+import { bodyHeight } from '../src/sim/physics';
+import { skirmish } from '../src/sim/scenarios';
 import { World } from '../src/sim/world';
 import { eagle, withExtras } from './kit';
 
 const fliers = withExtras(meadowfolk, { units: [eagle] });
 
 const fresh = () => {
-  const w = new World({ seed: 7, players: [{ name: 'H', faction: fliers }, { name: 'M', faction: meadowfolk }] });
+  const w = new World({ seed: 7, scenario: { ...skirmish('woodlands'), victory: false }, players: [{ name: 'H', faction: fliers }, { name: 'M', faction: meadowfolk }] }); // (no winner: the fights here run on)
   for (const u of [...w.units.values()]) if (w.players[u.owner].neutral) w.units.delete(u.id);
   return w;
 };
@@ -49,7 +51,7 @@ describe('flight', () => {
     expect(e.hp).toBeLessThan(hp); // a metre up: within a mace's reach
   });
 
-  test('melee can\'t reach a flier high up; a melee flier lands to strike', () => {
+  test('melee can\'t reach a flier high up; a melee flier dives and strikes only once it\'s down within reach', () => {
     const w = fresh();
     const hall = w.baseOf(0)!;
     const e = w.spawnAt(0, 'eagle', hall.ox + 8, hall.oy + 12)!;
@@ -59,11 +61,16 @@ describe('flight', () => {
     m.order = { kind: 'attack', target: e.id };
     for (let i = 0; i < 10; i++) w.step();
     expect(e.hp).toBe(hp); // 10 m up: out of a mace's reach
-    // the eagle attacks the maceman: it comes down to strike
-    e.order = { kind: 'attack', target: m.id };
-    let landed = false;
-    for (let i = 0; i < 20 * 4; i++) { w.step(); if (!e.airborne && e.swing > 0) landed = true; }
-    expect(landed).toBe(true);
+    // the eagle attacks a villager (one that won't strike back): it dives on it, and strikes only once it's down
+    // within reach of it
+    w.units.delete(m.id);
+    const v = w.spawnAt(1, 'villager', hall.ox + 8.6, hall.oy + 12)!;
+    v.order = { kind: 'idle' };
+    e.order = { kind: 'attack', target: v.id };
+    const vhp = v.hp;
+    let struckFrom = Infinity;
+    for (let i = 0; i < 20 * 20 && struckFrom === Infinity; i++) { const alt = e.alt; w.step(); if (v.hp < vhp) struckFrom = alt; }
+    expect(struckFrom).toBeLessThan(0.8 * bodyHeight(v.stats.mass) + 1.5); // (its shoulders, plus a beak's reach)
   });
   test('a flier walks a short hop instead of taking off', () => {
     const w = fresh();

@@ -6,7 +6,7 @@ import { type Building, type Order, type ResourceNode, type Unit, type World, ty
 import { Camera, isoX, isoY, TILE_H, TILE_W } from './camera';
 import { isUnderfoot, parcelPos } from '../sim/abilities/underfoot';
 import { LEAP_TIME } from '../sim/abilities/flight';
-import { buildingSprite, unitShadow, unitSprite, type ArtAnim, type Sprite } from '../art/contract';
+import { buildingSprite, unitShadow, unitSprite, UNITS_PER_TILE, type ArtAnim, type FrameTime, type Sprite } from '../art/contract';
 import { gpuTexture, setFrameReader } from '../art/gpu';
 import { TEAM_COLORS, type ArtBank } from './artbank';
 import { buildGround } from './ground';
@@ -41,7 +41,7 @@ export interface RenderOptions {
 }
 
 /** Which animation a unit is showing, and how far into it (seconds for loops, progress for one-shots). */
-export function unitFrame(u: Unit): { anim: ArtAnim; time?: number; progress?: number } {
+export function unitFrame(u: Unit): { anim: ArtAnim } & FrameTime {
   switch (u.anim) {
     case 'leap': return { anim: 'leap', progress: Math.min(0.999, u.launchT / LEAP_TIME) }; // crouch, spring, up
     case 'swoop': return { anim: 'swoop', time: u.animT };
@@ -56,11 +56,11 @@ export function unitFrame(u: Unit): { anim: ArtAnim; time?: number; progress?: n
       const anim: ArtAnim = most <= 0.5 ? 'walk' : most === u.food ? 'carryFood' : most === u.wood ? 'carryWood' : 'carryCrystal';
       // a bounding gait plays the walk by stride, in step with the sim; otherwise stride rate follows speed
       if (u.stats.gait) return { anim, progress: u.stride }; // sim/abilities/gait.ts
-      return { anim, time: u.animT * Math.max(0.5, u.stats.speed) / 1.7 };
+      return { anim, time: u.animT * Math.max(0.5, u.stats.speed) / 1.7, walked: u.walked * UNITS_PER_TILE }; // (by distance, if its art knows its stride)
     }
     case 'charge': // flat out: the legs turn over as fast as it's going
       if (u.stats.gait) return { anim: 'charge', progress: u.stride };
-      return { anim: 'charge', time: (u.animT * Math.hypot(u.vx, u.vy)) / 1.7 };
+      return { anim: 'charge', time: (u.animT * Math.hypot(u.vx, u.vy)) / 1.7, walked: u.walked * UNITS_PER_TILE };
     case 'attack': {
       const dur = Math.min(0.45, u.stats.cooldown * 0.8);
       return { anim: 'attack', progress: 1 - u.swing / dur };
@@ -483,12 +483,13 @@ export class Renderer {
       const art = this.bank.unit(u.owner, u.specId);
       if (art) {
         // a bird still off the ground (taking off, gliding in to land) keeps its wings spread
-        const f = u.stats.flight && !u.airborne && this.lift(u.id) > 6 ? { anim: 'fly' as const, time: this.time } : unitFrame(u);
-        const frame = unitSprite(art, f.anim, u.heading, f);
-        this.setFrame(sp, frame);
         // a body at another mass than its spec's (a shell takes what went into it) is drawn to its size: ∛ of the mass
         const spec = this.world.specOf(u.owner, u.specId);
         const k = spec && spec.stats.mass !== u.stats.mass ? Math.cbrt(u.stats.mass / spec.stats.mass) : 1;
+        const f: { anim: ArtAnim } & FrameTime = u.stats.flight && !u.airborne && this.lift(u.id) > 6 ? { anim: 'fly' as const, time: this.time } : unitFrame(u);
+        if (f.walked !== undefined) f.walked /= k; // (drawn bigger, it strides further)
+        const frame = unitSprite(art, f.anim, u.heading, f);
+        this.setFrame(sp, frame);
         if (Math.abs(sp.scale.x * frame.q - k) > 1e-3) sp.scale.set(k / frame.q);
       }
       // no crystal to fight with: visibly greyed out

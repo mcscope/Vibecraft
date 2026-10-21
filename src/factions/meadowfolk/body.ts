@@ -9,6 +9,14 @@ export function swing(from: Vec3, len: number, a: number): Vec3 {
   return [from[0] + Math.sin(a) * len, from[1] - Math.cos(a) * len, from[2]];
 }
 
+/** Where a knee goes between a hip and an ankle (thigh `l1`, shin `l2`), bending forward. */
+export function kneeBetween(hip: Vec3, ankle: Vec3, l1: number, l2: number): Vec3 {
+  const dx = ankle[0] - hip[0], dy = ankle[1] - hip[1], len = Math.hypot(dx, dy) || 1;
+  const d = Math.min(l1 + l2 - 1e-3, len), ux = dx / len, uy = dy / len;
+  const a = (l1 * l1 - l2 * l2 + d * d) / (2 * d), h = Math.sqrt(Math.max(0, l1 * l1 - a * a));
+  return [hip[0] + ux * a - uy * h, hip[1] + uy * a + ux * h, hip[2]];
+}
+
 /**
  * Weapon-arm angle for the pose. Strike: wind up overhead, chop forward.
  * Throw: whirl overhead and release. Gather: chop at the ground. Eat: hand to mouth.
@@ -80,8 +88,8 @@ export function human(
   const t = p.phase;
   const lunge = look.stance === 'lunge' && !look.mounted;
   const walking = p.anim === 'walk' && !look.mounted && !lunge;
-  const stride = walking ? Math.sin(t * TAU) * 0.5 : 0;
-  const bob = lunge ? -LUNGE.drop : walking ? Math.abs(Math.sin(t * TAU)) * 0.035 : p.anim === 'idle' ? Math.sin(t * TAU) * 0.008 : 0;
+  const bob = lunge ? -LUNGE.drop : walking ? -0.08 + Math.abs(Math.sin(t * TAU)) * 0.035 : // (walking, knees a touch bent: highest over a planted foot)
+    p.anim === 'idle' ? Math.sin(t * TAU) * 0.008 : 0;
   const lean = torsoLean(p, look);
   const skin: Mat = { color: look.skin, tex: 'skin', rough: 0.7 };
   const hipY = 0.9;
@@ -100,11 +108,20 @@ export function human(
         b.cylinder(0.068, 0.068, 0.05, [knee[0] + (ankle[0] - knee[0]) * 0.3, knee[1] + (ankle[1] - knee[1]) * 0.3, knee[2] + (ankle[2] - knee[2]) * 0.3], look.boots, undefined, 10);
         continue;
       }
-      // a lunge: the near (left) leg forward with its knee bent over the foot, the other straight out behind
-      const a = lunge ? (side > 0 ? 0.7 : -0.55) : stride * side;
-      const knee = swing(hip, 0.44, a);
-      const lift = lunge ? (side > 0 ? 0.9 : 0) : walking ? Math.max(0, Math.sin(t * TAU + (side > 0 ? 0 : Math.PI))) * 0.5 : 0;
-      const ankle = swing(knee, 0.42, a - lift);
+      let knee: Vec3, ankle: Vec3;
+      if (walking) {
+        // walking, a foot is planted: on the ground it slides back under the body at an even pace (as the body goes
+        // over it), then lifts and swings forward to plant again; the knee falls where hip and foot put it
+        const ph = (t + (side > 0 ? 0 : 0.5)) % 1, S = 0.3;
+        const k = ph < 0.5 ? ph / 0.5 : (ph - 0.5) / 0.5, e = k * k * (3 - 2 * k);
+        ankle = ph < 0.5 ? [S - 2 * S * k, 0.055, z] : [-S + 2 * S * e, 0.055 + Math.sin(Math.PI * k) * 0.12, z];
+        knee = kneeBetween(hip, ankle, 0.44, 0.42);
+      } else {
+        // a lunge: the near (left) leg forward with its knee bent over the foot, the other straight out behind
+        const a = lunge ? (side > 0 ? 0.7 : -0.55) : 0;
+        knee = swing(hip, 0.44, a);
+        ankle = swing(knee, 0.42, a - (lunge && side > 0 ? 0.9 : 0));
+      }
       b.limb(hip, knee, 0.075 * bulk, look.trousers, 0.06);
       b.limb(knee, ankle, 0.06, look.boots, 0.05);
       // boot top cuff and laces

@@ -25,6 +25,9 @@ export interface Sprite {
 }
 
 /** Animations the engine asks for. Only `idle` is required; others fall back to it. */
+/** Model units a map tile spans (art is modelled in units of ~1 m; a tile is 2 m). */
+export const UNITS_PER_TILE = 2;
+
 export type ArtAnim = 'idle' | 'walk' | 'charge' | 'brace' | 'stagger' | 'fly' | 'leap' | 'climb' | 'soar' | 'glide' | 'land' | 'bankL' | 'bankR' | 'swoop' | 'attack' | 'cut' | 'gather' | 'eat' | 'tired' | 'die' | 'carryFood' | 'carryWood' | 'carryCrystal';
 
 export interface AnimArt {
@@ -40,6 +43,8 @@ export interface AnimArt {
   shadows?: Sprite[][];
   /** Playback rate for looping animations (attack and die play once over their duration). */
   fps?: number;
+  /** A walk: how far one loop carries the body (model units, 2 a tile). Played by the distance walked, its planted feet stay put. */
+  stride?: number;
 }
 
 export interface UnitArt {
@@ -140,22 +145,27 @@ export function anim(art: UnitArt, a: ArtAnim): AnimArt {
 }
 
 /** The frame to show for a unit facing map octant 0..7. `progress` (0..1) for one-shot anims, else `time` in seconds. */
-export function unitSprite(art: UnitArt, a: ArtAnim, octant: number, t: { time?: number; progress?: number }): Sprite {
+export function unitSprite(art: UnitArt, a: ArtAnim, octant: number, t: FrameTime): Sprite {
   return frameOf(anim(art, a), anim(art, a).frames, octant, t);
 }
 
 /** The shadow of the frame unitSprite picks (an animation in the air), if it has one. */
-export function unitShadow(art: UnitArt, a: ArtAnim, octant: number, t: { time?: number; progress?: number }): Sprite | undefined {
+export function unitShadow(art: UnitArt, a: ArtAnim, octant: number, t: FrameTime): Sprite | undefined {
   const an = anim(art, a);
   return an.shadows ? frameOf(an, an.shadows, octant, t) : undefined;
 }
 
-function frameOf(an: AnimArt, set: Sprite[][], octant: number, t: { time?: number; progress?: number }): Sprite {
+/** Where in an animation: seconds into a loop, progress through a one-shot, or (a walk) model units walked. */
+export interface FrameTime { time?: number; progress?: number; walked?: number }
+
+function frameOf(an: AnimArt, set: Sprite[][], octant: number, t: FrameTime): Sprite {
   const facings = set.length;
   const f = facings === 1 ? 0 : Math.round(((((octant % 8) + 8) % 8) * facings) / 8) % facings;
   const frames = set[f];
   const n = frames.length;
-  const i = t.progress !== undefined ? Math.min(n - 1, Math.floor(t.progress * n)) : Math.floor((t.time ?? 0) * (an.fps ?? 8)) % n;
+  const i = t.progress !== undefined ? Math.min(n - 1, Math.floor(t.progress * n))
+    : t.walked !== undefined && an.stride ? Math.floor((t.walked / an.stride) * n) % n
+    : Math.floor((t.time ?? 0) * (an.fps ?? 8)) % n;
   return frames[Math.max(0, i)];
 }
 

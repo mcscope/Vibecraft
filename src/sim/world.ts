@@ -133,6 +133,8 @@ export interface Unit {
   crystalMass: number;
   x: number; y: number;
   px: number; py: number; // previous tick, for render interpolation
+  /** Tiles it has walked (on the ground), for its walk to play by: its planted feet stay put. */
+  walked: number;
   hp: number;
   cal: number;
   exhausted: boolean;
@@ -1010,7 +1012,7 @@ export class World {
       food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
       order: { kind: 'idle' }, resume: null, queue: [], engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
-      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, diveSpeed: 0, flyDir: 0, bank: 0, launchT: 0, diving: false, diveAngle: 0, diveRun: false, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', cutting: false, facing: Math.PI / 4, turnTick: -1, turnLeft: 0, faceTo: null, brood: [], autoBrood: null,
+      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, diveSpeed: 0, flyDir: 0, bank: 0, launchT: 0, walked: 0, diving: false, diveAngle: 0, diveRun: false, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', cutting: false, facing: Math.PI / 4, turnTick: -1, turnLeft: 0, faceTo: null, brood: [], autoBrood: null,
       dummy: !!spec.dummy,
       carter: spec.role === 'carter',
       gatherAcc: 0,
@@ -1295,6 +1297,7 @@ export class World {
     }
     if (u.airborne) { u.vx = (u.x - u.px) / DT; u.vy = (u.y - u.py) / DT; } // fliers: their own flight model
     else this.coast(u); // on the ground: unsteered bodies slide to a stop
+    if (!u.airborne) u.walked += Math.hypot(u.x - u.px, u.y - u.py);
     u.ovx = u.ovx * 0.9 + ((u.x - u.px) / DT) * 0.1; u.ovy = u.ovy * 0.9 + ((u.y - u.py) / DT) * 0.1;
   }
 

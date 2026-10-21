@@ -9,7 +9,8 @@ import type { BuildingModel, ModelBuilder, Pose, UnitModel } from './types';
 import { Builder, type BuildOpts } from './builder';
 
 /** Model units per map tile. A 1.7-unit person is a bit under a tile tall. */
-export const UNITS_PER_TILE = 2;
+import { UNITS_PER_TILE } from '../../art/contract';
+export { UNITS_PER_TILE };
 /** Screen px per model unit at zoom 1 (one tile = 64×32 px). */
 export const PX_PER_UNIT = 32 * Math.SQRT2 / UNITS_PER_TILE;
 
@@ -206,6 +207,36 @@ export class Baker {
   }
 
   /** Measure a model's bounding cylinder (radius, height) across a few poses. */
+  /**
+   * How far (model units) a walk cycle carries the body: the distance its planted feet slide back under it, frame to
+   * frame, summed over the loop. Played at its real ground speed by that, a planted foot stays where it is. Undefined
+   * if nothing in it stays planted (a crawl, a roll).
+   */
+  private stride(build: (b: ModelBuilder, pose: Pose) => void, team: TeamColors, pose: (phase: number) => Pose, n: number): number | undefined {
+    const frames: Array<Array<{ lo: number; x: number }>> = [];
+    const box = new THREE.Box3(), c = new THREE.Vector3();
+    for (let f = 0; f < n; f++) {
+      this.clearStage();
+      this.stage.rotation.y = 0;
+      build(new Builder(team, this.stage), pose(f / n));
+      this.stage.updateMatrixWorld(true);
+      const parts: Array<{ lo: number; x: number }> = [];
+      this.stage.traverse((o) => { if (o instanceof THREE.Mesh) { box.setFromObject(o); box.getCenter(c); parts.push({ lo: box.min.y, x: c.x }); } });
+      frames.push(parts);
+    }
+    const on = Math.max(0, Math.min(...frames.flat().map((p) => p.lo))) + 0.05; // (on the ground: within 5 cm of it)
+    let d = 0, steps = 0;
+    for (let f = 0; f < n; f++) {
+      const a = frames[f], b = frames[(f + 1) % n];
+      if (a.length !== b.length) continue;
+      const slides = a.map((p, i) => (p.lo < on && b[i].lo < on ? p.x - b[i].x : 0)).filter((dx) => dx > 1e-4).sort((x, y) => x - y);
+      if (!slides.length) continue;
+      d += slides[Math.floor(slides.length / 2)];
+      steps++;
+    }
+    return steps >= n / 2 && d > 0.05 ? (d * n) / steps : undefined;
+  }
+
   private measure(build: (b: ModelBuilder, pose: Pose) => void, team: TeamColors, poses: Pose[]): { r: number; h: number } {
     let r = 0.3, h = 0.3;
     const box = new THREE.Box3();
@@ -500,9 +531,12 @@ export class Baker {
       for (let di = 0; di < rows; di++) frames.push(list.slice(di * n, di * n + n).map((c) => ({ img: imgs[c.page ?? 0], sx: c.dx, sy: c.dy, sw: c.w, sh: c.h, ax: c.ax, ay: c.ay, q })));
       return frames;
     };
+    // the walk's stride (the charge and the loaded walks are the same legs): played by distance, feet stay planted
+    const stride = opts.dummy ? undefined : this.stride(model, team, (ph) => poseFor('walk', ph), FRAMES.walk);
+    const WALKS: BakedAnim[] = ['walk', 'charge', 'carryFood', 'carryWood', 'carryCrystal'];
     for (const [anim, list] of crops) {
       const sh = shadowCrops.get(anim);
-      out[anim] = { frames: sprites(anim, list), fps: FPS[anim], ...(sh ? { shadows: sprites(anim, sh) } : {}) };
+      out[anim] = { frames: sprites(anim, list), fps: FPS[anim], ...(sh ? { shadows: sprites(anim, sh) } : {}), ...(stride && WALKS.includes(anim) ? { stride } : {}) };
     }
     return { height: (h * Math.cos(Math.PI / 6)) * PX_PER_UNIT, anims: out as UnitArt['anims'] };
   }

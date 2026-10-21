@@ -37,7 +37,7 @@ export const LAUNCH_BURST = 0;
 export const DIVE_START = Math.PI / 4;
 export const DIVE_MAX = 1.3;
 /** Air drag on a diving (or zooming) body: k in dv/dt = g·sinθ − k·v², so it falls no faster than ~45 m/s. */
-const DRAG = K.gravity / 45 ** 2;
+const drag = (): number => K.gravity / 45 ** 2; // (read when it flies: physics loads after this module)
 /** Climbing away after a dive, it zooms up at this angle, trading its extra speed for height. */
 const ZOOM_ANGLE = 0.5;
 
@@ -56,13 +56,15 @@ export function diveAt(w: World, u: Unit, t: Unit, dt: number, face: (dx: number
   const reach = u.stats.range + t.stats.radius + u.stats.radius;
   const dist = Math.hypot(t.x - u.x, t.y - u.y);
   let v = Math.max(u.flySpeed, airSpeed(u)) * M_PER_TILE;
+  // (close, it flies on through, as a charger runs on past: it never stops in the air)
+  const past = (): [number, number] => dist > reach * 2 ? [t.x, t.y] : [u.x + Math.cos(u.flyDir) * 3, u.y + Math.sin(u.flyDir) * 3];
   if (u.diveRun) {
     // the run in: level, straight at it, slowing only to drag; past it (it's behind), the run is over
     const ahead = Math.cos(Math.atan2(t.y - u.y, t.x - u.x) - u.flyDir);
     if (ahead < -0.2 && dist > reach) { u.diveRun = false; return false; }
-    v = Math.max(airSpeed(u) * M_PER_TILE, v - DRAG * v * v * dt);
+    v = Math.max(airSpeed(u) * M_PER_TILE, v - drag() * v * v * dt);
     u.alt = strikeAlt;
-    flyTo(w, u, t.x, t.y, 0.01, v / M_PER_TILE / FLY_SPEED, dt, face);
+    flyTo(w, u, ...past(), 0.01, v / M_PER_TILE / FLY_SPEED, dt, face);
     u.flySpeed = v / M_PER_TILE;
     return dist <= reach;
   }
@@ -71,13 +73,12 @@ export function diveAt(w: World, u: Unit, t: Unit, dt: number, face: (dx: number
   const angle = Math.atan2(drop, dm);
   // (it dives only from high enough to gather speed: after a dive it climbs back up first)
   if (!u.diving && (angle < DIVE_START || drop < u.stats.flyHeight * 0.5)) {
-    if (drop <= 0.05 && dist <= reach) return true; // low and on it anyway: it strikes in passing
-    flyTo(w, u, t.x, t.y, 0.05, Math.max(u.flySpeed / FLY_SPEED, u.stats.speed), dt, face);
-    return false;
+    flyTo(w, u, ...(drop <= 0.05 ? past() : [t.x, t.y] as [number, number]), 0.05, Math.max(u.flySpeed / FLY_SPEED, u.stats.speed), dt, face);
+    return drop <= 0.05 && dist <= reach; // low and on it anyway: it strikes in passing
   }
   u.diving = true;
   const th = Math.min(DIVE_MAX, Math.max(0.2, angle));
-  v = Math.max(0, v + (K.gravity * Math.sin(th) - DRAG * v * v) * dt);
+  v = Math.max(0, v + (K.gravity * Math.sin(th) - drag() * v * v) * dt);
   u.diveAngle = th;
   u.alt = Math.max(strikeAlt, u.alt - v * Math.sin(th) * dt);
   flyTo(w, u, t.x, t.y, 0.01, (v * Math.cos(th)) / M_PER_TILE / FLY_SPEED, dt, face);
@@ -152,6 +153,7 @@ export function flyTo(w: World, u: Unit, gx: number, gy: number, arrive: number,
   u.goalX = gx; u.goalY = gy;
   if (d <= arrive) { u.path = []; return true; }
   const want = Math.atan2(dy, dx);
+  if (u.launchT <= LAUNCH_WINDUP && !u.stats.launchBackward) u.flyDir = want; // (crouched to spring, it turns to face where it's going)
   let turn = Math.atan2(Math.sin(want - u.flyDir), Math.cos(want - u.flyDir));
   const max = u.launchT < LEAP_TIME ? 0 : turnRate(u) * dt; // (it finishes its leap before it wheels round)
   turn = Math.max(-max, Math.min(max, turn));
@@ -179,7 +181,7 @@ export function tickFlight(w: World, u: Unit, _moved: boolean, dt: number, face:
   // faster than it flies, after a dive: it zooms up, trading the extra speed for height
   const cruise = airSpeed(u) * M_PER_TILE, v = u.flySpeed * M_PER_TILE;
   if (v > cruise + 0.01) {
-    const v2 = Math.max(cruise, v - (K.gravity * Math.sin(ZOOM_ANGLE) + DRAG * v * v) * dt);
+    const v2 = Math.max(cruise, v - (K.gravity * Math.sin(ZOOM_ANGLE) + drag() * v * v) * dt);
     u.alt = Math.min(u.stats.flyHeight, u.alt + v * Math.sin(ZOOM_ANGLE) * dt);
     u.flySpeed = v2 / M_PER_TILE;
   }
