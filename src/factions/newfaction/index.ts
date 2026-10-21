@@ -57,8 +57,8 @@ function caterpillar(b: ModelBuilder, p: Pose, color: string, mass: number): voi
 
 /** An egg: a whitish, folded, faceted shell (origami-like), tinted toward its larva, sized by tier (the user's). */
 function origamiEgg(b: ModelBuilder, p: Pose, tint: string, mass: number): void {
-  const paper: Mat = { color: mix('#f2efe6', tint, 0.18), tex: 'none', rough: 0.85 };
-  const fold: Mat = { color: mix('#d9d4c4', tint, 0.28), tex: 'none', rough: 0.85 };
+  const paper: Mat = { color: mix('#f2efe6', tint, 0.4), tex: 'none', rough: 0.85 };
+  const fold: Mat = { color: mix('#d9d4c4', tint, 0.55), tex: 'none', rough: 0.85 };
   const breathe = 1 + (p.anim === 'idle' ? Math.sin(p.phase * TAU) * 0.02 : 0);
   b.joint([0, 0, 0], [0, 0, 0], (e) => {
     e.cylinder(0.0, 0.2, 0.3, [0, 0.35, 0], paper, undefined, 5); // folded top
@@ -331,7 +331,7 @@ const unit = (u: Omit<Unit, 'description'> & { description?: string }, look?: ke
 
 // the larvae: 35 / 70 / 140 food, work refinement = refinement
 const larva1 = unit({ crawls: true, id: 'larva1', name: 'T1 Larva', mass: 15, physique: LARVA, refinement: 1, workRefinement: 1, shell: 'cocoon',
-  becomes: ['larva2', 'charger', 'micropike', 'tree-worm', 'mother1'], description: 'A small green larva. Gathers, then changes into a T1 form.',
+  digestsTrees: true, becomes: ['larva2', 'charger', 'micropike', 'mother1'], description: 'A small green larva. Gathers, then changes into a T1 form. Sent onto a tree, it turns the whole tree into food and is absorbed into it.',
   model: (b, p) => caterpillar(b, p, TIER[1], 15) }, 'caterpillar');
 const larva2 = unit({ crawls: true, id: 'larva2', name: 'T2 Larva', mass: 60, physique: LARVA, refinement: 2, workRefinement: 2, shell: 'cocoon',
   becomes: ['larva3', 'flier', 'ground-attacker2', 'slinger', 'mother2'], description: 'A medium cyan larva. Gathers, then changes into a T2 form.',
@@ -359,8 +359,6 @@ const charger = unit({ id: 'charger', name: 'Charger', mass: 38, physique: { mus
   attack: { style: 'strike', crystalMass: 1.5 }, description: 'T1: a fast charging body.', model: (b, p) => bug(b, p, '#7fbf4a', 38, 'strike') }, 'bug');
 const micropike = unit({ id: 'micropike', name: 'Micropike', mass: 35, physique: { muscle: 0.45, frame: 0.4, reserve: 0.15 }, refinement: 2,
   attack: { style: 'strike', crystalMass: 0.8, shaft: 1.5 }, description: 'T1: micropikes.', model: (b, p) => bug(b, p, '#6aa84a', 35, 'pike') }, 'bug');
-const treeWorm = unit({ crawls: true, id: 'tree-worm', name: 'Tree Worm', mass: 20, physique: { muscle: 0.2, frame: 0.1, reserve: 0.7 }, refinement: 2, canGather: false,
-  digestsTrees: true, description: 'T1: turns a whole tree into food, and is absorbed into it.', model: (b, p) => caterpillar(b, p, '#8a9a3a', 20) }, 'caterpillar');
 const flier = unit({ id: 'flier', name: 'Flier', mass: 120, physique: { muscle: 0.5, frame: 0.25, reserve: 0.25 }, refinement: 3, flight: true,
   attack: { style: 'strike', crystalMass: 2 }, description: 'T2: a flier.', model: (b, p) => winged(b, p, '#2a9aa6', '#9fe6ee', 120) }, 'winged');
 const groundAttacker2 = unit({ id: 'ground-attacker2', name: 'T2 Ground Attacker', mass: 150, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 3,
@@ -376,7 +374,7 @@ const groundAttacker3 = unit({ id: 'ground-attacker3', name: 'T3 Ground Attacker
 export const units: Unit[] = [
   motherOf(1, 80), motherOf(2, 120), motherOf(3, 190),
   egg(1, 15), egg(2, 30), egg(3, 45), larva1, larva2, larva3, cocoon,
-  charger, micropike, treeWorm, flier, groundAttacker2, slinger, dragonFly, groundAttacker3,
+  charger, micropike, flier, groundAttacker2, slinger, dragonFly, groundAttacker3,
 ];
 
 export const newFaction: FactionSpec = {

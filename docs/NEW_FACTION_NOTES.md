@@ -20,7 +20,7 @@ The user's decisions so far, as given. Nothing here is designed beyond what they
 - **Three tiers of egg and larva:** refinement 1, 2 and 3, each an egg and a larva.
 
 ## What each tier's larva can become (offshoots, one refinement up). All confirmed.
-- **T1:** a fast charging body, the tree-digesting worm, micropikes; and the T2 larva.
+- **T1:** a fast charging body, micropikes; and the T2 larva. The T1 larva itself can eat a tree (see Food source).
 - **T2:** flier bodies, ground-attack bodies, a slinger, the mother; and the T3 larva.
 - **T3:** the Dragon Fly (flier) and ground-attack bodies.
 
@@ -29,7 +29,7 @@ The user's decisions so far, as given. Nothing here is designed beyond what they
 - A few wing patterns, about 3.
 - **Fire-breathing:** a conversion of crystal. The mechanic is TBD.
 - **Feeding:** a larva fills its own pack, then needs food brought to it. The mother harvests and carries food to her eggs.
-- **Food source:** a worm that turns a whole tree into food (ratio 1, instant, with an animation). The tree becomes a semi-digested tree, and the worm is absorbed, giving no food of its own. The engine ability is `digestsTrees`.
+- **Food source:** the T1 larva can turn a whole tree into food (ratio 1, instant, with an animation). The tree becomes a semi-digested tree, and the larva is absorbed, giving no food of its own. (There's no separate Tree Worm.) The engine ability is `digestsTrees`.
 - **Each larva can also go into a shell and become the next tier's larva:** T1 → T2 → T3.
 - **Work refinement equals refinement** for the larvae (being tried).
 - **Tier prices being tried:** 35 / 70 / 140 food, each double the last.
