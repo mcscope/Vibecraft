@@ -726,6 +726,11 @@ export class World {
         return;
       }
       case 'tend': return set(mine(cmd.units).filter((u) => this.gathers(u, 'food')), { kind: 'tend', g: null });
+      case 'graze': {
+        const n = this.nodes.get(cmd.node);
+        if (n?.type === 'food') set(mineAll(cmd.units), { kind: 'graze', node: n.id });
+        return;
+      }
       case 'gather': {
         const n = this.nodes.get(cmd.node);
         if (!n) return;
@@ -1353,11 +1358,9 @@ export class World {
     const dB = b ? (b.ox + b.size / 2 - u.x) ** 2 + (b.oy + b.size / 2 - u.y) ** 2 : Infinity;
     if (fb && dFb < dB) { this.detour(u, { kind: 'eatFrom', unit: fb.id }); return true; }
     if (b) { this.detour(u, { kind: 'resupply', building: b.id }); return true; }
-    // nothing else: a gatherer of food grazes at the nearest food it can see, eating straight from it till it's full
-    if (this.gathers(u, 'food')) {
-      const n = this.nearestNode(u, 'food', u.stats.sight * 2, false);
-      if (n) { this.detour(u, { kind: 'graze', node: n.id }); return true; }
-    }
+    // nothing else: it grazes at the nearest food it can see, eating straight from it till it's full
+    const n = this.nearestNode(u, 'food', u.stats.sight * 2, false);
+    if (n) { this.detour(u, { kind: 'graze', node: n.id }); return true; }
     return false;
   }
 
@@ -1368,7 +1371,7 @@ export class World {
     if (!n || n.amount <= 0.001 || room < 1) { this.finish(u); return false; }
     if (!this.moveToNear(u, n.x, n.y, 0.85 + u.stats.radius, true)) return u.x !== u.px || u.y !== u.py;
     this.face(u, n.x - u.x, n.y - u.y);
-    const kg = Math.min(n.amount, u.stats.gatherRate * DT, (u.stats.eatRate * DT) / K.calPerFood, room / K.calPerFood);
+    const kg = Math.min(n.amount, (u.stats.eatRate * DT) / K.calPerFood, room / K.calPerFood); // (eating: anyone can, gatherer or not)
     n.amount -= kg; u.cal += kg * K.calPerFood; u.busy = true;
     if (n.amount <= 0.001) this.removeNode(n);
     return false;
@@ -1782,6 +1785,10 @@ export class World {
     if (o.phase === 'harvest') {
       const n = node!;
       if (u.exhausted) return false;
+      if (u.airborne) return false; // a flier lands to gather (stopped, it settles to the ground), not from the sky
+      // it gathers within reach (a flier may have settled short of it: it walks the rest)
+      const reach = n.shard ? u.stats.radius + 0.45 : 0.85 + u.stats.radius;
+      if ((n.x - u.x) ** 2 + (n.y - u.y) ** 2 > (reach + 0.35) ** 2) { o.phase = 'toNode'; return false; }
       this.face(u, n.x - u.x, n.y - u.y);
       const boost = n.shard ? { mult: 1, from: null } : this.boostAt(u.owner, n.x, n.y, n.type);
       const rate = n.shard ? Math.max(2, u.stats.gatherRate * 4) : u.stats.gatherRate * boost.mult;

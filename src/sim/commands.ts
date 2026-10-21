@@ -21,6 +21,8 @@ export type CommandBody =
   | { type: 'cancelSpawn'; units: number[]; index?: number }
   | { type: 'attack'; units: number[]; target: number; charge?: boolean }
   | { type: 'gather'; units: number[]; node: number }
+  /** Eat straight from a food source until full. */
+  | { type: 'graze'; units: number[]; node: number }
   /** Tend the nest: carry food to whoever of their side is waiting on it, gathering more in between, until told otherwise. */
   | { type: 'tend'; units: number[] }
   /**

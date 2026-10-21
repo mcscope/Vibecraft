@@ -14,8 +14,11 @@ export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
   if (!faction?.art) { out.textContent = `no art for ${id}`; return; }
   out.textContent = `baking ${id}…`;
   const art = (await faction.art(TEAM_COLORS[0], undefined, [id])).units[id];
-  const a = art?.anims[anim];
-  if (!a) { out.textContent = `${id} has no '${anim}' (has: ${Object.keys(art?.anims ?? {}).join(', ')})`; return; }
+  const found = art?.anims[anim];
+  if (!found) { out.textContent = `${id} has no '${anim}' (has: ${Object.keys(art?.anims ?? {}).join(', ')})`; return; }
+  // &shadows=1: an animation in the air's shadow frames instead (baked alone, laid on the ground by the renderer)
+  const a = params.get('shadows') ? { ...found, frames: found.shadows ?? [] } : found;
+  if (!a.frames.length) { out.textContent = `${id} '${anim}' has no shadow frames`; return; }
   const facing = params.get('facing');
   if (facing !== null) a.frames.splice(0, a.frames.length, a.frames[+facing % a.frames.length]);
   const cell = Math.max(...a.frames.flat().map((s) => Math.max(s.sw, s.sh) / s.q)) * scale;

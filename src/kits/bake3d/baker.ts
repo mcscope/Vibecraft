@@ -108,8 +108,6 @@ interface Extent { left: number; right: number; top: number; bottom: number }
 
 /** Poses drawn in the air (lifted to the flier's height): baked without a ground shadow, their shadows baked alone. */
 const AIR_POSES = new Set<string>(['fly', 'leap', 'climb', 'soar', 'glide', 'land']);
-/** The layer a body goes on to cast its shadow unseen (the camera draws layer 0 only). */
-const SHADOW_ONLY = 1;
 
 export class Baker {
   readonly q: number;
@@ -139,7 +137,6 @@ export class Baker {
     this.scene.add(new THREE.HemisphereLight('#cfdcff', '#4a3f2a', 0.75));
     this.sun = new THREE.DirectionalLight('#ffe6c4', 3.1);
     this.sun.position.set(-7, 9, -2.2);
-    this.sun.shadow.camera.layers.enable(SHADOW_ONLY); // (a body on this layer casts a shadow the camera never sees it make)
     this.sun.castShadow = true;
     this.sun.shadow.mapSize.set(2048, 2048);
     this.sun.shadow.bias = -0.0003;
@@ -383,7 +380,14 @@ export class Baker {
             body.rotation.x = k * 1.5;
             body.position.y = -0.04 * k;
           }
-          if (shadowPass) body.traverse((o) => o.layers.set(SHADOW_ONLY));
+          // its shadow alone: the body draws nothing (its own copies of its materials write no colour or depth) but
+          // still casts its shadow (the shadow map is drawn apart, from the light)
+          if (shadowPass) body.traverse((o) => {
+            const m = o as THREE.Mesh;
+            if (!m.isMesh) return;
+            const hide = (mat: THREE.Material) => { const c = mat.clone(); c.colorWrite = false; c.depthWrite = false; return c; };
+            m.material = Array.isArray(m.material) ? m.material.map(hide) : hide(m.material);
+          });
           this.stage.rotation.y = -theta;
           const vx = (f - f0) * cw, vy = (rowsPer - 1 - (di - r0)) * chh; // GL viewports start bottom-left
           this.renderer.setViewport(vx, vy, cw, chh);

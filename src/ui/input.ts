@@ -318,7 +318,11 @@ export class Input {
       if (rest.length) this.issue({ type: 'gather', units: rest, node: tn.id });
       this.ping(tn.x, tn.y, '#e0457a');
     } else if (tn) {
-      this.issue({ type: 'gather', units, node: tn.id });
+      // on food: anyone low on calories (under half, or worn out) eats from it till full; the rest gather it
+      const hungry = tn.type === 'food' ? units.filter((id) => { const u = w.units.get(id); return u && (u.exhausted || u.cal < u.stats.maxCalories * 0.5); }) : [];
+      if (hungry.length) this.issue({ type: 'graze', units: hungry, node: tn.id });
+      const rest = units.filter((id) => !hungry.includes(id));
+      if (rest.length) this.issue({ type: 'gather', units: rest, node: tn.id });
       this.ping(tn.x, tn.y, tn.type === 'food' ? '#e0457a' : '#7ae7ff');
     } else if (tb && tb.owner === this.player && tb.complete && units.some((id) => w.units.get(id)?.carter)) {
       // carts in the selection get reassigned to supply this building; anyone else resupplies there
