@@ -114,27 +114,27 @@ function mother(b: ModelBuilder, p: Pose, mass: number): void {
   const sway = walking ? Math.sin(t) * 0.06 : 0;
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
     // thorax at the origin
-    c.sphere([0.17, 0.14, 0.16], [0, 0.3, 0], shell);
+    c.sphere([0.17, 0.14, 0.16], [0, 0.22, 0], shell);
     // head, in front, with mandibles
-    c.sphere([0.11, 0.1, 0.11], [0.22, 0.3, 0], shell);
+    c.sphere([0.11, 0.1, 0.11], [0.22, 0.21, 0], shell);
     for (const z of [1, -1]) {
-      c.sphere(0.022, [0.3, 0.34, z * 0.07], { color: '#111111' });
-      c.cone(0.025, 0.09, [0.34, 0.25, z * 0.04], shell, [0, z * 0.5, -Math.PI / 2], 6);
+      c.sphere(0.022, [0.3, 0.25, z * 0.07], { color: '#111111' });
+      c.cone(0.025, 0.09, [0.34, 0.16, z * 0.04], shell, [0, z * 0.5, -Math.PI / 2], 6);
     }
-    // six legs, all off the thorax: a tripod gait
-    for (const [x, ph] of [[0.08, 0], [0, Math.PI], [-0.08, 0]] as const) for (const z of [1, -1]) {
-      const swing = walking ? Math.sin(t + ph + (z > 0 ? 0 : Math.PI)) : 0, up = Math.max(0, swing) * 0.05;
-      const knee: [number, number, number] = [x + swing * 0.04, 0.42, z * 0.3];
-      c.limb([x, 0.28, z * 0.12], knee, 0.03, shell, 0.025);
-      c.limb(knee, [x + 0.06 + swing * 0.1, up, z * 0.42], 0.025, shell, 0.014);
+    // six legs, all off the thorax: short and spread wide, a tripod gait
+    for (const [x, ph, fx] of [[0.08, 0, 0.16], [0, Math.PI, 0], [-0.08, 0, -0.16]] as const) for (const z of [1, -1]) {
+      const swing = walking ? Math.sin(t + ph + (z > 0 ? 0 : Math.PI)) : 0, up = Math.max(0, swing) * 0.04;
+      const knee: [number, number, number] = [x + fx * 0.5 + swing * 0.03, 0.26, z * 0.3];
+      c.limb([x, 0.2, z * 0.12], knee, 0.032, shell, 0.027);
+      c.limb(knee, [x + fx + swing * 0.08, up, z * 0.46], 0.027, shell, 0.016);
     }
     // eggs clustered on the thorax
     for (let k = 0; k < 7; k++) {
       const a = (k / 7) * TAU, r = k === 0 ? 0 : 0.08, up = k === 0 ? 0.04 : 0;
-      c.sphere([0.045, 0.06, 0.045], [Math.cos(a) * r - 0.02, 0.47 + up, Math.sin(a) * r], eggMat);
+      c.sphere([0.045, 0.06, 0.045], [Math.cos(a) * r - 0.02, 0.39 + up, Math.sin(a) * r], eggMat);
     }
     // the swollen abdomen, dragging behind, banded, a cavity on each side
-    c.joint([-0.12, 0.26, 0], [0, sway, 0], (ab) => {
+    c.joint([-0.12, 0.23, 0], [0, sway, 0], (ab) => { // its belly on the ground
       ab.sphere([0.4, 0.25, 0.28], [-0.36, 0, 0], belly);
       for (const x of [-0.14, -0.32, -0.5]) ab.sphere([0.025, 0.26, 0.29], [x, 0, 0], band);
       for (const z of [1, -1]) {
