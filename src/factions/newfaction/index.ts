@@ -618,7 +618,6 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number): void {
     // the abdomen: huge against her thin neck and legs, one sculpted shape. A ratite's chest: broad, high shoulders
     // whose sides fall steeply to a deep keel under the breast (a chicken's breast), the topline arching smoothly
     // back and the whole body tapering naturally away into the tail. Plated over the top, cavities on its sides
-    // (the body flows on into her tail: one shape tapering away, drooping a little and swaying as she walks)
     const shape: [number, number, number, number, number][] = [ // x, half-width, up, down, keel
       [0.0, 0.13, 0.12, 0.1, 0.3],
       [-0.14, 0.3, 0.21, 0.3, 0.75],
@@ -626,13 +625,8 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number): void {
       [-0.52, 0.41, 0.31, 0.34, 0.6],
       [-0.72, 0.36, 0.29, 0.24, 0.4],
       [-0.94, 0.28, 0.24, 0.17, 0.25],
-      [-1.16, 0.2, 0.18, 0.12, 0.1],
-      [-1.38, 0.14, 0.13, 0.09, 0],
-      [-1.6, 0.1, 0.095, 0.07, 0],
-      [-1.82, 0.072, 0.068, 0.052, 0],
-      [-2.02, 0.05, 0.048, 0.038, 0],
-      [-2.2, 0.03, 0.03, 0.025, 0],
-      [-2.32, 0.012, 0.012, 0.012, 0],
+      [-1.1, 0.17, 0.15, 0.1, 0.1],
+      [-1.2, 0.06, 0.06, 0.05, 0], // (no tail: her body rounds off behind)
     ];
     const along = (x: number): [number, number] => { // (her tail's droop and sway, growing toward its tip)
       const k = Math.max(0, (-0.9 - x) / 1.4);
@@ -642,7 +636,7 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number): void {
     c.loft(shape.map(([x, w, up, down, keel]) => ({ at: centre(x, up), w, up, down, keel })), under);
     // the carapace: plates over the top, each a little proud of the last, their edges along her flanks, smaller and
     // closer down the tail
-    for (const [from, to] of [[0, 3], [2, 5], [4, 7], [6, 9], [8, 11]] as const) {
+    for (const [from, to] of [[0, 3], [2, 5], [4, 7]] as const) {
       c.loft(shape.slice(from, to + 1).map(([x, w, up, , keel], i, all) => {
         const end = i === 0 || i === all.length - 1 ? 0.6 : 1; // (each plate's ends tuck in)
         return { at: centre(x, up, 0.02), w: w * 1.04 * end, up: (up + 0.015) * end, down: 0.04 * (w / 0.3), keel, flat: 0.15 };
