@@ -117,80 +117,94 @@ function winged(b: ModelBuilder, p: Pose, color: string, wing: string, mass: num
  * beating in flight, folded up over its back on the ground.
  */
 function drawDragonFly(b: ModelBuilder, p: Pose, mass: number): void {
-  const scale: Mat = { color: '#6a2a6e', tex: 'leather', rough: 0.35 };
-  const belly: Mat = { color: '#c69ab0', tex: 'skin', rough: 0.5 };
-  const horn: Mat = { color: '#e8dcc0', tex: 'none', rough: 0.4 };
+  // an insect's body, iridescent: metallic violet-blue, teal compound eyes, its decorated butterfly wings
+  const scale: Mat = { color: '#4a3aa0', tex: 'leather', rough: 0.25, metal: 0.55 };
+  const belly: Mat = { color: '#8a70c8', tex: 'skin', rough: 0.35, metal: 0.3 };
+  const band: Mat = { color: '#2ad0c4', tex: 'none', rough: 0.3, metal: 0.5 };
+  const horn: Mat = { color: '#1a1430', tex: 'none', rough: 0.4 };
+  const eyeMat: Mat = { color: '#28d8c8', tex: 'none', rough: 0.15, metal: 0.6, emissive: '#0a3a38' };
   const wing: Mat = { color: '#f0a040', tex: 'none', rough: 0.6 };
-  const vein: Mat = { color: '#1e1418', tex: 'none', rough: 0.7 };
-  const band: Mat = { color: '#fff2d8', tex: 'none', rough: 0.6 };
   const eyeOut: Mat = { color: '#18101a', tex: 'none' }, eyeMid: Mat = { color: '#3fa8e0', tex: 'none' }, eyeIn: Mat = { color: '#fbfbf4', tex: 'none' };
   const flying = p.anim === 'fly' || p.anim === 'climb' || p.anim === 'soar' || p.anim === 'glide' || p.anim === 'leap' || p.anim === 'land';
   const t = p.phase * TAU, beat = flying ? Math.sin(t) * 0.75 : 0;
   const bite = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0;
-  b.joint([0, 0, 0], [0, 0, 0], (c) => {
-    const y0 = flying ? 0.5 : 0.46;
-    // a wyvern's build: a long slim body on two strong hind legs (its forelimbs are the wings)
-    c.sphere([0.42, 0.16, 0.16], [0, y0, 0], scale);
-    c.sphere([0.34, 0.1, 0.12], [0.02, y0 - 0.07, 0], belly);
-    for (let i = 0; i < 7; i++) c.cone(0.03, 0.08, [0.28 - i * 0.09, y0 + 0.15, 0], horn, undefined, 4); // spines down its back
-    // the neck: a long S, always moving (a playful sway and curl)
-    const wave = (k: number, speed: number, amp: number) => Math.sin(t * speed + k) * amp;
-    let n: [number, number, number] = [0.32, y0 + 0.06, 0];
-    for (let i = 1; i <= 5; i++) {
-      const up = i <= 3 ? 0.13 : 0.03, fwd = i <= 3 ? 0.07 : 0.12;
-      const next: [number, number, number] = [n[0] + fwd, n[1] + up + wave(i, 1, 0.012), wave(i * 0.8, 1, 0.05) * (i / 5)];
-      c.limb(n, next, 0.075 - i * 0.008, scale, 0.07 - i * 0.008);
+  const wave = (k: number, speed: number, amp: number) => Math.sin(t * speed + k) * amp;
+  const y0 = flying ? 0.5 : 0.5;
+  b.joint([0, 0, 0], [0, 0, 0], (o) => {
+  // the body canted up, nose high
+  o.joint([0, y0, 0], [0, 0, 0.42], (c) => {
+    // thorax
+    c.sphere([0.26, 0.17, 0.16], [0, 0, 0], scale);
+    c.sphere([0.2, 0.1, 0.12], [0.02, -0.08, 0], belly);
+    // the long mantis neck, segmented and swaying, rising from the thorax
+    let n: [number, number, number] = [0.22, 0.05, 0];
+    for (let i = 1; i <= 6; i++) {
+      const rise = i <= 4 ? 0.09 : 0.0, fwd = i <= 4 ? 0.07 : 0.1;
+      const next: [number, number, number] = [n[0] + fwd, n[1] + rise + wave(i, 1, 0.012), wave(i * 0.8, 1, 0.045) * (i / 6)];
+      c.limb(n, next, 0.042 - i * 0.003, scale, 0.039 - i * 0.003);
+      c.sphere(0.046 - i * 0.003, next, belly); // its joints
       n = next;
     }
-    // head: tilting and turning as it goes, a nod with each wingbeat in flight
+    // a dragonfly's head: two great compound eyes, a small face, mandibles, short antennae
     const nod = flying ? Math.sin(t) * 0.07 : 0, look = Math.sin(t * 0.5) * (flying ? 0.18 : 0.3), tilt = Math.sin(t * 0.7 + 1) * 0.2;
-    c.joint(n, [tilt, look, -0.15 - bite * 0.3 + nod], (h) => {
-      h.sphere([0.15, 0.075, 0.08], [0.08, 0, 0], scale); // head
-      h.cone(0.055, 0.18, [0.25, -0.01, 0], scale, [0, 0, -Math.PI / 2], 8); // long snout
-      h.box([0.17, 0.022, 0.065], [0.17, -0.055 - bite * 0.05, 0], belly); // jaw
+    c.joint(n, [tilt, look, -0.6 - bite * 0.3 + nod], (h) => {
+      h.sphere([0.07, 0.06, 0.07], [0.05, 0, 0], scale); // face
       for (const z of [1, -1]) {
-        h.cone(0.02, 0.18, [-0.03, 0.07, z * 0.045], horn, [z * 0.3, 0, 1.0], 6); // horns sweeping back
-        h.sphere(0.022, [0.12, 0.035, z * 0.055], { color: '#ffd23f', emissive: '#7a5a00' });
+        h.sphere([0.095, 0.1, 0.09], [0.04, 0.05, z * 0.085], eyeMat); // compound eye
+        h.cone(0.012, 0.09, [0.08, 0.1, z * 0.025], horn, [z * 0.35, 0, -0.5], 5); // antenna
+        h.cone(0.02, 0.06 + bite * 0.02, [0.12, -0.04, z * 0.025], horn, [0, z * (0.4 - bite * 0.3), -Math.PI / 2], 5); // mandible
       }
-      if (bite > 0.3) h.sphere(0.05, [0.38, -0.03, 0], { color: '#ff8a20', emissive: '#ff5a00' }); // (its fire: placeholder until the mechanic is designed)
+      if (bite > 0.3) h.sphere(0.04, [0.18, -0.02, 0], { color: '#ff8a20', emissive: '#ff5a00' }); // (its fire: placeholder until the mechanic is designed)
     });
-    // the tail: a long whip, rippling side to side and up and down, a spade at its tip
-    let tp: [number, number, number] = [-0.4, y0, 0];
+    // the abdomen: long and slender, segmented, banded, rippling, claspers at its tip
+    let tp: [number, number, number] = [-0.24, 0, 0];
     for (let i = 1; i <= 10; i++) {
-      const next: [number, number, number] = [tp[0] - 0.14, y0 - i * 0.012 + wave(-i * 0.6, 1, 0.025), wave(-i * 0.55, 1, 0.025 * i)];
-      c.limb(tp, next, 0.075 * (1 - i * 0.085), scale, 0.075 * (1 - (i + 1) * 0.085));
+      const next: [number, number, number] = [tp[0] - 0.12, tp[1] + 0.05 - i * 0.004 + wave(-i * 0.6, 1, 0.02), wave(-i * 0.55, 1, 0.02 * i)];
+      const r = 0.065 * (1 - i * 0.055);
+      c.limb(tp, next, r, i % 2 ? scale : belly, r * 0.95);
+      if (i % 2 === 0) c.sphere([0.012, r * 1.08, r * 1.08], tp, band); // a band at each segment
       tp = next;
     }
-    c.cone(0.06, 0.14, [tp[0] - 0.06, tp[1], tp[2]], scale, [0, 0, Math.PI / 2], 4); // the spade
-    // two strong hind legs (tucked in flight)
-    for (const z of [1, -1]) {
-      const step = !flying && p.anim === 'walk' ? Math.sin(t + (z > 0 ? 0 : Math.PI)) * 0.12 : 0;
-      const hip: [number, number, number] = [-0.12, y0 - 0.06, z * 0.12];
-      const knee: [number, number, number] = flying ? [-0.2, y0 - 0.16, z * 0.16] : [-0.02 + step * 0.4, 0.26, z * 0.18];
-      const foot: [number, number, number] = flying ? [-0.36, y0 - 0.2, z * 0.16] : [-0.1 + step, 0.02, z * 0.2];
-      c.limb(hip, knee, 0.065, scale, 0.05);
-      c.limb(knee, foot, 0.045, scale, 0.03);
-      if (!flying) for (const dz of [-0.03, 0, 0.03]) c.cone(0.012, 0.06, [foot[0] + 0.05, 0.01, foot[2] + dz], horn, [0, 0, -Math.PI / 2], 4); // claws
+    for (const z of [1, -1]) c.cone(0.02, 0.1, [tp[0] - 0.04, tp[1], tp[2] + z * 0.025], horn, [0, z * 0.4, Math.PI / 2], 4); // claspers
+  });
+  // six thin insect legs under the thorax (tucked in flight), and the wings, set on the canted thorax
+  const c = o;
+  {
+    for (const [x, ph] of [[0.14, 0], [0.04, Math.PI], [-0.06, 0]] as const) for (const z of [1, -1]) {
+      const step = !flying && p.anim === 'walk' ? Math.sin(t + ph + (z > 0 ? 0 : Math.PI)) * 0.08 : 0;
+      const hip: [number, number, number] = [x, y0 - 0.08 + x * 0.4, z * 0.08];
+      const knee: [number, number, number] = flying ? [x - 0.08, y0 - 0.12, z * 0.14] : [x + 0.05 + step * 0.4, 0.34, z * 0.22];
+      const foot: [number, number, number] = flying ? [x - 0.18, y0 - 0.16, z * 0.12] : [x + 0.08 + step, 0.01, z * 0.3];
+      c.limb(hip, knee, 0.022, horn, 0.018);
+      c.limb(knee, foot, 0.018, horn, 0.01);
     }
-    // butterfly wings: forewings and hindwings, decorated
+    // butterfly wings, a monarch's or a swallowtail's: a long swept forewing, bright at the base and deepening to a dark
+    // tip, a black margin spotted white, black veins fanning from the body, a blue shimmer by the body; a rounded
+    // hindwing with an eyespot and a swallowtail. Beating in flight; at rest raised together upright over its back
+    const deep: Mat = { color: '#c0581c', tex: 'none', rough: 0.55 }, margin: Mat = { color: '#141016', tex: 'none', rough: 0.7 };
+    const dot: Mat = { color: '#fbf6e8', tex: 'none', rough: 0.5 }, shimmer: Mat = { color: '#3a7ae0', tex: 'none', rough: 0.2, metal: 0.6 };
     for (const z of [1, -1]) {
-      // on the ground: raised together upright over its back, as a butterfly rests, leaning a little back
-      // (about x, a wing on the +z side swings up with a negative turn)
       const up = flying ? -z * beat : -z * 1.45, lean = flying ? 0.15 : -0.2;
-      c.joint([0.08, y0 + 0.15, z * 0.12], [up, 0, lean], (wg) => wg.joint([0, 0, 0], [0, 0, 0], (wg) => {
-        wg.sphere([0.34, 0.012, 0.62], [0.08, 0, z * 0.6], wing); // forewing
-        wg.sphere([0.36, 0.008, 0.66], [0.08, -0.002, z * 0.6], vein); // its dark edge
-        wg.sphere([0.06, 0.016, 0.5], [0.2, 0.002, z * 0.62], band); // a pale band
-        for (const [r, m, dy] of [[0.13, eyeOut, 0.008], [0.09, eyeMid, 0.012], [0.04, eyeIn, 0.016]] as const) wg.sphere([r, 0.006, r], [0.02, dy, z * 0.78], m); // eyespot
-        for (let k = 0; k < 4; k++) wg.limb([0.0, 0.012, z * 0.05], [-0.1 + k * 0.1, 0.012, z * (0.9 + (k % 2) * 0.1)], 0.006, vein); // veins
-      }, 0.65));
-      c.joint([-0.14, y0 + 0.13, z * 0.12], [flying ? -z * beat * 0.85 : -z * 1.4, 0, flying ? -0.1 : -0.35], (wg) => wg.joint([0, 0, 0], [0, 0, 0], (wg) => {
-        wg.sphere([0.3, 0.012, 0.48], [-0.12, 0, z * 0.46], wing); // hindwing
-        wg.sphere([0.32, 0.008, 0.51], [-0.12, -0.002, z * 0.46], vein);
-        for (const [r, m, dy] of [[0.07, eyeOut, 0.008], [0.04, eyeIn, 0.014]] as const) wg.sphere([r, 0.006, r], [-0.18, dy, z * 0.62], m);
-        wg.limb([-0.3, 0.008, z * 0.5], [-0.62, 0.008, z * 0.55], 0.02, vein, 0.006); // a swallowtail
-      }, 0.65));
+      c.joint([0.04, y0 + 0.17, z * 0.1], [up, 0, lean + 0.42], (wg) => wg.joint([0, 0, 0], [0, 0, 0], (wg) => {
+        wg.sphere([0.4, 0.006, 0.74], [0.06, 0, z * 0.66], margin); // the black margin, under it all
+        wg.sphere([0.34, 0.01, 0.6], [0.05, 0, z * 0.58], wing); // the wing
+        wg.sphere([0.22, 0.012, 0.3], [0.12, 0, z * 0.92], deep); // deepening toward the tip
+        wg.sphere([0.12, 0.013, 0.18], [0.02, 0, z * 0.18], shimmer); // a blue shimmer by the body
+        for (let k = 0; k < 6; k++) { const a = -0.9 + k * 0.36; wg.limb([0, 0, z * 0.08], [Math.sin(a) * 0.3, 0, z * (0.1 + Math.cos(a) * 0.8)], 0.015, margin, 0.014); } // veins
+        for (let k = 0; k < 9; k++) { const a = -1.0 + k * 0.25; wg.sphere([0.022, 0.017, 0.022], [0.06 + Math.sin(a) * 0.37, 0, z * (0.66 + Math.cos(a) * 0.7)], dot); } // white spots in the margin
+        for (const [r, m, th] of [[0.11, eyeOut, 0.016], [0.075, eyeMid, 0.018], [0.035, eyeIn, 0.02]] as const) wg.sphere([r, th, r], [-0.05, 0, z * 0.72], m); // eyespot
+      }, 0.7));
+      c.joint([-0.1, y0 + 0.08, z * 0.1], [flying ? -z * beat * 0.85 : -z * 1.4, 0, (flying ? -0.1 : -0.35) + 0.42], (wg) => wg.joint([0, 0, 0], [0, 0, 0], (wg) => {
+        wg.sphere([0.34, 0.006, 0.54], [-0.14, 0, z * 0.46], margin);
+        wg.sphere([0.29, 0.01, 0.46], [-0.13, 0, z * 0.42], wing);
+        wg.sphere([0.1, 0.013, 0.14], [-0.04, 0, z * 0.16], shimmer);
+        for (let k = 0; k < 4; k++) { const a = -0.5 - k * 0.35; wg.limb([0, 0, z * 0.06], [Math.sin(a) * 0.34, 0, z * (0.06 + Math.cos(a) * 0.5)], 0.015, margin, 0.014); }
+        for (let k = 0; k < 6; k++) { const a = -0.6 - k * 0.3; wg.sphere([0.02, 0.017, 0.02], [-0.14 + Math.sin(a) * 0.34, 0, z * (0.46 + Math.cos(a) * 0.52)], dot); }
+        for (const [r, m, th] of [[0.08, eyeOut, 0.016], [0.05, band, 0.018], [0.025, eyeIn, 0.02]] as const) wg.sphere([r, th, r], [-0.24, 0, z * 0.6], m); // eyespot
+        wg.limb([-0.36, 0, z * 0.62], [-0.72, 0, z * 0.7], 0.03, margin, 0.012); // the swallowtail
+      }, 0.7));
     }
+  }
   }, LOOK.dragon.scale(mass));
 }
 
@@ -260,26 +274,37 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number): void {
     // thorax at the origin, plated
     c.sphere([0.2, 0.16, 0.17], [0, y0, 0], plate);
     c.sphere([0.16, 0.08, 0.13], [0, y0 - 0.1, 0], under);
-    // the abdomen: huge against her thin neck and legs. A deep, broad barrel of a chest like a ratite's, keeled
-    // underneath, swelling into a second great lobe behind; plated over the top, cavities on its sides
-    const body = (at: [number, number, number], r: [number, number, number], m: Mat) => c.sphere(r, at, m);
-    body([-0.22, y0 - 0.02, 0], [0.36, 0.3, 0.34], under); // the chest barrel
-    body([-0.22, y0 + 0.04, 0], [0.34, 0.27, 0.33], plate); // its plated top
-    body([-0.18, y0 - 0.3, 0], [0.24, 0.07, 0.05], plate); // the keel, down the breastbone
-    body([-0.62, y0 + 0.02, 0], [0.32, 0.27, 0.3], under); // the rear lobe
-    body([-0.62, y0 + 0.07, 0], [0.3, 0.24, 0.29], plate);
-    body([-0.88, y0 - 0.02, 0], [0.16, 0.15, 0.16], plate); // narrowing into the tail
-    for (const x of [-0.08, -0.36, -0.5, -0.76]) body([x, y0 + 0.08, 0], [0.025, 0.25, 0.3], under); // the seams between plates
-    for (const [x, rz] of [[-0.3, 0.34], [-0.6, 0.31]] as const) for (const z of [1, -1]) {
-      c.sphere([0.07, 0.065, 0.025], [x, y0, z * rz], dark);
-      c.cylinder(0.075, 0.075, 0.018, [x, y0, z * (rz - 0.005)], { team: 'primary', tex: 'skin' }, [Math.PI / 2, 0, 0], 12);
+    // the abdomen: huge against her thin neck and legs, one sculpted shape. A ratite's chest: broad, high shoulders
+    // whose sides fall steeply to a deep keel under the breast (a chicken's breast), the topline arching smoothly
+    // back and the whole body tapering naturally away into the tail. Plated over the top, cavities on its sides
+    const shape: [number, number, number, number, number][] = [ // x, half-width, up, down, keel
+      [0.0, 0.13, 0.12, 0.1, 0.3],
+      [-0.14, 0.3, 0.21, 0.3, 0.75],
+      [-0.32, 0.39, 0.28, 0.42, 0.85],
+      [-0.52, 0.41, 0.31, 0.34, 0.6],
+      [-0.72, 0.35, 0.28, 0.22, 0.35],
+      [-0.92, 0.23, 0.2, 0.14, 0.2],
+      [-1.08, 0.13, 0.11, 0.08, 0],
+      [-1.2, 0.08, 0.07, 0.06, 0],
+    ];
+    c.loft(shape.map(([x, w, up, down, keel]) => ({ at: [x, y0 + up * 0.15, 0], w, up, down, keel })), under);
+    // the carapace: plates over the top, each a little proud of the last, their edges along her flanks
+    for (const [from, to] of [[0, 3], [2, 5], [4, 7]] as const) {
+      c.loft(shape.slice(from, to + 1).map(([x, w, up, , keel], i, all) => {
+        const end = i === 0 || i === all.length - 1 ? 0.6 : 1; // (each plate's ends tuck in)
+        return { at: [x, y0 + up * 0.15 + 0.02, 0], w: w * 1.04 * end, up: (up + 0.015) * end, down: 0.04, keel, flat: 0.15 };
+      }), plate);
     }
-    // the tail, segmented and tapering, held out behind
-    let prev: [number, number, number] = [-1.0, y0 - 0.04, 0];
+    for (const [x, rz] of [[-0.32, 0.39], [-0.66, 0.37]] as const) for (const z of [1, -1]) {
+      c.sphere([0.075, 0.07, 0.03], [x, y0 + 0.03, z * rz], dark);
+      c.cylinder(0.08, 0.08, 0.018, [x, y0 + 0.03, z * (rz - 0.005)], { team: 'primary', tex: 'skin' }, [Math.PI / 2, 0, 0], 12);
+    }
+    // the tail, segmented and tapering on from the body, held out behind
+    let prev: [number, number, number] = [-1.2, y0, 0];
     for (let i = 1; i <= 6; i++) {
       const sway = walking ? Math.sin(t + i * 0.6) * 0.03 * i : 0;
-      const next: [number, number, number] = [-1.0 - i * 0.15, y0 - 0.04 - i * 0.02, sway];
-      c.limb(prev, next, 0.08 * (1 - i * 0.13), plate, 0.08 * (1 - (i + 1) * 0.13));
+      const next: [number, number, number] = [-1.2 - i * 0.14, y0 - i * 0.02, sway];
+      c.limb(prev, next, 0.065 * (1 - i * 0.13), plate, 0.065 * (1 - (i + 1) * 0.13));
       prev = next;
     }
     // neck, head and its crest: the long tube sweeping back
@@ -300,12 +325,12 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number): void {
     // big jointed hind legs, small forelegs: insect legs
     for (const z of [1, -1]) {
       const step = walking ? Math.sin(t + (z > 0 ? 0 : Math.PI)) : 0;
-      const hip: [number, number, number] = [-0.12, y0 - 0.05, z * 0.14];
-      const knee: [number, number, number] = [-0.02 + step * 0.06, y0 + 0.18, z * 0.3];
-      const ankle: [number, number, number] = [-0.2 + step * 0.1, 0.18, z * 0.32];
+      const hip: [number, number, number] = [0.02, y0 - 0.04, z * 0.14];
+      const knee: [number, number, number] = [0.1 + step * 0.06, y0 + 0.16, z * 0.42];
+      const ankle: [number, number, number] = [-0.04 + step * 0.1, 0.18, z * 0.48];
       c.limb(hip, knee, 0.06, plate, 0.05);
       c.limb(knee, ankle, 0.045, plate, 0.035);
-      c.limb(ankle, [-0.1 + step * 0.16, Math.max(0, step) * 0.05, z * 0.34], 0.03, plate, 0.018);
+      c.limb(ankle, [0.06 + step * 0.16, Math.max(0, step) * 0.05, z * 0.5], 0.03, plate, 0.018);
       const fstep = walking ? Math.sin(t + Math.PI + (z > 0 ? 0 : Math.PI)) : 0;
       const fk: [number, number, number] = [0.22 + fstep * 0.04, y0 - 0.02, z * 0.22];
       c.limb([0.1, y0 - 0.06, z * 0.1], fk, 0.03, plate, 0.025);

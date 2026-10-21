@@ -48,6 +48,9 @@ export interface ModelBuilder {
   /** Upright cylinder centred at `at`. Use `sides` 4 for a square block, 6 for hex. */
   cylinder(rTop: number, rBottom: number, height: number, at: Vec3, mat: Mat, rot?: Vec3, sides?: number): void;
   cone(radius: number, height: number, at: Vec3, mat: Mat, rot?: Vec3, sides?: number): void;
+  /** A smooth organic body lofted through cross-sections along a spine (a breast, a torso, a tapering tail): see
+   *  `Section`. The surface curves smoothly through them; the ends close. */
+  loft(sections: Section[], mat: Mat): void;
   /** A rounded rod from `a` to `b` — arms, legs, staffs, horns. */
   limb(a: Vec3, b: Vec3, radius: number, mat: Mat, radiusB?: number): void;
   /** Hip roof / pyramid with a rectangular base of size [w, h, d], base centred at `at`. */
@@ -57,6 +60,10 @@ export interface ModelBuilder {
   /** A glowing faceted crystal of the given length. */
   crystal(length: number, at: Vec3, rot?: Vec3): void;
 }
+
+/** One cross-section of a `loft`: its centre, its half-width (z), how far it rises above the centre and hangs below
+ *  it, and `keel` (0 round underneath … 1 a sharp V, a breastbone's ridge); `flat` (0 … 1) squares off its top. */
+export interface Section { at: Vec3; w: number; up: number; down: number; keel?: number; flat?: number }
 
 export type UnitModel = (b: ModelBuilder, pose: Pose) => void;
 
