@@ -407,35 +407,39 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number): void {
     // the abdomen: huge against her thin neck and legs, one sculpted shape. A ratite's chest: broad, high shoulders
     // whose sides fall steeply to a deep keel under the breast (a chicken's breast), the topline arching smoothly
     // back and the whole body tapering naturally away into the tail. Plated over the top, cavities on its sides
+    // (the body flows on into her tail: one shape tapering away, drooping a little and swaying as she walks)
     const shape: [number, number, number, number, number][] = [ // x, half-width, up, down, keel
       [0.0, 0.13, 0.12, 0.1, 0.3],
       [-0.14, 0.3, 0.21, 0.3, 0.75],
       [-0.32, 0.39, 0.28, 0.42, 0.85],
       [-0.52, 0.41, 0.31, 0.34, 0.6],
-      [-0.72, 0.35, 0.28, 0.22, 0.35],
-      [-0.92, 0.23, 0.2, 0.14, 0.2],
-      [-1.08, 0.13, 0.11, 0.08, 0],
-      [-1.2, 0.08, 0.07, 0.06, 0],
+      [-0.72, 0.36, 0.29, 0.24, 0.4],
+      [-0.94, 0.28, 0.24, 0.17, 0.25],
+      [-1.16, 0.2, 0.18, 0.12, 0.1],
+      [-1.38, 0.14, 0.13, 0.09, 0],
+      [-1.6, 0.1, 0.095, 0.07, 0],
+      [-1.82, 0.072, 0.068, 0.052, 0],
+      [-2.02, 0.05, 0.048, 0.038, 0],
+      [-2.2, 0.03, 0.03, 0.025, 0],
+      [-2.32, 0.012, 0.012, 0.012, 0],
     ];
-    c.loft(shape.map(([x, w, up, down, keel]) => ({ at: [x, y0 + up * 0.15, 0], w, up, down, keel })), under);
-    // the carapace: plates over the top, each a little proud of the last, their edges along her flanks
-    for (const [from, to] of [[0, 3], [2, 5], [4, 7]] as const) {
+    const along = (x: number): [number, number] => { // (her tail's droop and sway, growing toward its tip)
+      const k = Math.max(0, (-0.9 - x) / 1.4);
+      return [-0.16 * k * k, walking ? Math.sin(t - x * 2.5) * 0.09 * k * k : 0];
+    };
+    const centre = (x: number, up: number, dy = 0): [number, number, number] => { const [dr, sw] = along(x); return [x, y0 + up * 0.15 + dr + dy, sw]; };
+    c.loft(shape.map(([x, w, up, down, keel]) => ({ at: centre(x, up), w, up, down, keel })), under);
+    // the carapace: plates over the top, each a little proud of the last, their edges along her flanks, smaller and
+    // closer down the tail
+    for (const [from, to] of [[0, 3], [2, 5], [4, 7], [6, 9], [8, 11]] as const) {
       c.loft(shape.slice(from, to + 1).map(([x, w, up, , keel], i, all) => {
         const end = i === 0 || i === all.length - 1 ? 0.6 : 1; // (each plate's ends tuck in)
-        return { at: [x, y0 + up * 0.15 + 0.02, 0], w: w * 1.04 * end, up: (up + 0.015) * end, down: 0.04, keel, flat: 0.15 };
+        return { at: centre(x, up, 0.02), w: w * 1.04 * end, up: (up + 0.015) * end, down: 0.04 * (w / 0.3), keel, flat: 0.15 };
       }), plate);
     }
     for (const [x, rz] of [[-0.32, 0.39], [-0.66, 0.37]] as const) for (const z of [1, -1]) {
       c.sphere([0.075, 0.07, 0.03], [x, y0 + 0.03, z * rz], dark);
       c.cylinder(0.08, 0.08, 0.018, [x, y0 + 0.03, z * (rz - 0.005)], { team: 'primary', tex: 'skin' }, [Math.PI / 2, 0, 0], 12);
-    }
-    // the tail, segmented and tapering on from the body, held out behind
-    let prev: [number, number, number] = [-1.2, y0, 0];
-    for (let i = 1; i <= 6; i++) {
-      const sway = walking ? Math.sin(t + i * 0.6) * 0.03 * i : 0;
-      const next: [number, number, number] = [-1.2 - i * 0.14, y0 - i * 0.02, sway];
-      c.limb(prev, next, 0.065 * (1 - i * 0.13), plate, 0.065 * (1 - (i + 1) * 0.13));
-      prev = next;
     }
     // neck, head and its crest: the long tube sweeping back
     const head: [number, number, number] = [0.42, y0 + 0.42, 0];
