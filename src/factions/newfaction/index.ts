@@ -10,7 +10,7 @@
 // Self-contained: only engine types and kits, never another faction.
 import type { FactionSpec, UnitSpec } from '../types';
 import type { Section, ModelBuilder, Pose, Vec3 as V3 } from '../../kits/bake3d/types';
-import { footAt, jointBetween, span } from '../../kits/bake3d/gait';
+import { aim, footAt, jointBetween, span } from '../../kits/bake3d/gait';
 import type { Mat } from '../../kits/bake3d/types';
 
 type Unit = UnitSpec & { model: (b: ModelBuilder, p: Pose) => void };
@@ -60,26 +60,26 @@ function drawVee(b: ModelBuilder, p: Pose, mass: number): void {
   type V = [number, number, number];
   // its wing bones, shoulder to wrist, wrist to knuckle, knuckle to tip: the same standing and flying; how high its
   // body stands on them, how low and tipped back it crouches to leap
-  const BONES = [0.55, 0.7, 0.6], STAND_Y = 0.5, CROUCH_Y = 0.3, CROUCH_TILT = 0.25;
+  const BONES = [0.69, 1.02, 1.02], STAND_Y = 0.5, CROUCH_Y = 0.3, CROUCH_TILT = 0.25; // (its standing pose is the user's, locked: these bones are its bones)
+  // flying, its wings are shorter (the user's: a cheat, they draw in as they unfold during its leap)
+  const FLY_BONES = [0.55, 0.7, 0.6];
   const norm = (v: V): V => { const l = Math.hypot(...v) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
   const along = (a: V, d: V, len: number): V => [a[0] + d[0] * len, a[1] + d[1] * len, a[2] + d[2] * len];
-  // one wing bone from a to b: a spined spar along its leading edge, the membrane trailing behind it (ribbed, its
-  // edge scalloped), `chord` wide at a and `chord2` at b
-  const bone = (c: ModelBuilder, a: V, bb: V, chord: number, chord2: number) => {
+  // one wing bone from a to b: a spined spar along its leading edge, the membrane trailing behind it toward `aft` (its
+  // body's tail, however the body is turned), ribbed, its edge scalloped, `chord` wide at a and `chord2` at b
+  const bone = (c: ModelBuilder, a: V, bb: V, chord: number, chord2: number, aft: V = [-1, 0, 0]) => {
     const d: V = [bb[0] - a[0], bb[1] - a[1], bb[2] - a[2]], len = Math.hypot(...d);
     if (len < 1e-3) return;
-    const n = norm(d), yaw = Math.atan2(-n[2], n[0]), pitch = Math.asin(n[1]);
-    const back = Math.sin(yaw) < 0 ? 1 : -1; // (local z toward its trailing side)
-    c.joint(a, [0, yaw, pitch], (w) => {
+    c.joint(a, aim(d, aft), (w) => {
       w.limb([0, 0, 0], [len, 0, 0], 0.03, chitin, 0.022);
       for (let x = 0.08; x < len - 0.04; x += 0.13) w.cone(0.012, 0.06, [x, 0.03, 0], sheen, [0, 0, -0.5], 4); // spines
       if (chord > 0.01 || chord2 > 0.01) {
         const steps = 6;
         w.loft(Array.from({ length: steps + 1 }, (_, i) => {
           const k = i / steps, cw = (chord + (chord2 - chord) * k) * (i % 2 ? 0.72 : 1); // ribs at the full width: scalloped between
-          return { at: [k * len, 0, back * cw * 0.9] as V, w: Math.max(0.01, cw), up: 0.008, down: 0.008 };
+          return { at: [k * len, 0, cw * 0.9] as V, w: Math.max(0.01, cw), up: 0.008, down: 0.008 };
         }), membrane);
-        for (let i = 0; i <= steps; i += 2) { const k = i / steps, cw = chord + (chord2 - chord) * k; if (cw > 0.03) w.limb([k * len, 0, 0], [k * len - 0.03, 0, back * cw * 1.8], 0.009, rib, 0.005); }
+        for (let i = 0; i <= steps; i += 2) { const k = i / steps, cw = chord + (chord2 - chord) * k; if (cw > 0.03) w.limb([k * len, 0, 0], [k * len - 0.03, 0, cw * 1.8], 0.009, rib, 0.005); }
       }
     });
   };
@@ -136,19 +136,20 @@ function drawVee(b: ModelBuilder, p: Pose, mass: number): void {
         g.joint(at, [0, 0, pitch], (pc) => pc.joint([0, 0, 0], [roll, 0, 0], body));
         const open = ease((k - 0.3) / 0.45);
         for (const S of [1, -1]) {
-          const planted = standing(S, CROUCH_Y), fly = veePoints(S, open, 0);
+          const bl = BONES.map((l, i) => l + (FLY_BONES[i] - l) * open); // (its bones drawing in to their flying length as it unfolds)
+          const planted = standing(S, CROUCH_Y), fly = veePoints(S, open, 0, bl);
           const sh = toGround(fly.sh);
           // held to the ground where they stood, unless their bones are pulled straight (then dragged up after);
           // once up, swinging out to where the V puts them
-          const wristHeld = reachOf(sh, planted.wrist, BONES[0]);
+          const wristHeld = reachOf(sh, planted.wrist, bl[0]);
           const up1 = Math.max(ease(wristHeld[1] / 0.35), ease((k - 0.6) / 0.3)), wrist = mixV(wristHeld, toGround(fly.wrist), up1); // (swinging out only once it's off the ground)
-          const tipHeld = reachOf(wrist, planted.tip, BONES[1] + BONES[2]);
+          const tipHeld = reachOf(wrist, planted.tip, bl[1] + bl[2]);
           const up2 = Math.max(ease(tipHeld[1] / 0.35), ease((k - 0.7) / 0.25)), tip = mixV(tipHeld, toGround(fly.tip), up2);
-          const knuckle = mixV(jointBetween(wrist, tip, BONES[1], BONES[2], [0.1, 1, S * 0.3]), toGround(fly.knuckle), up2);
-          const f = 0.35 + 0.65 * open;
-          bone(g, sh, wrist, 0.05 + 0.13 * f * up1, 0.03 + 0.19 * f * up1);
-          bone(g, wrist, knuckle, 0.06 + 0.16 * f * up2, 0.1 + 0.08 * f * up2);
-          bone(g, knuckle, tip, 0.1 + 0.08 * f * up2, 0.01);
+          const knuckle = mixV(jointBetween(wrist, tip, bl[1], bl[2], [0.02, 1, S * 0.05]), toGround(fly.knuckle), up2);
+          const f = 0.35 + 0.65 * open, aft = sub(toGround([-1, 0, 0]), at); // (its tail's way, as it turns)
+          bone(g, sh, wrist, 0.05 + 0.13 * f * up1, 0.03 + 0.19 * f * up1, aft);
+          bone(g, wrist, knuckle, 0.06 + 0.16 * f * up2, 0.1 + 0.08 * f * up2, aft);
+          bone(g, knuckle, tip, 0.1 + 0.08 * f * up2, 0.01, aft);
         }
       });
       return;
@@ -161,20 +162,20 @@ function drawVee(b: ModelBuilder, p: Pose, mass: number): void {
   }, LOOK.vee.scale(mass));
   // where its wing joints are in the V, in its own frame: `open` from folded tight back along its body (0) to spread
   // (1), beating by `flap`
-  function veePoints(S: number, open: number, flap: number) {
+  function veePoints(S: number, open: number, flap: number, bones = FLY_BONES) {
     const mixd = (a: number, b: number) => a + (b - a) * open;
     const dir = (sweep: number, up: number): V => norm([-Math.sin(sweep), up, S * Math.cos(sweep)]);
     const e = (k: number) => mixd(0.25 - k * 0.08, 0.12 + flap * (0.6 + k * 0.4));
     const sh: V = [0.06, 0.04, S * 0.08];
-    const wrist = along(sh, dir(mixd(1.2, 0.45), e(0)), BONES[0]), knuckle = along(wrist, dir(mixd(1.35, 0.7), e(1)), BONES[1]);
-    return { sh, wrist, knuckle, tip: along(knuckle, dir(mixd(1.45, 0.95), e(2)), BONES[2]) };
+    const wrist = along(sh, dir(mixd(1.2, 0.45), e(0)), bones[0]), knuckle = along(wrist, dir(mixd(1.35, 0.7), e(1)), bones[1]);
+    return { sh, wrist, knuckle, tip: along(knuckle, dir(mixd(1.45, 0.95), e(2)), bones[2]) };
   }
   // where its wing joints are, standing on them with its body `y0` up: each wing's wrist (in front) and tip (behind)
   // planted, the joint between them arched up where its bones put it (the same bones it flies on)
   function standing(S: number, y0: number, step = (rest: V): V => rest) {
     const sh: V = [0.06, y0 + 0.04, S * 0.08];
-    const wrist = step([0.18, 0, S * 0.26]), tip = step([-0.5, 0, S * 0.62]);
-    return { sh, wrist, tip, knuckle: jointBetween(wrist, tip, BONES[1], BONES[2], [0.1, 1, S * 0.3]) };
+    const wrist = step([0.34, 0, S * 0.4]), tip = step([-0.5, 0, S * 0.7]);
+    return { sh, wrist, tip, knuckle: jointBetween(wrist, tip, BONES[1], BONES[2], [0.02, 1, S * 0.05]) };
   }
   // standing on its wings, each wing's wrist (in front) and tip (behind) planted, the joint between arched high;
   // walking, the four points step in turn

@@ -29,5 +29,22 @@ export function jointBetween(a: Vec3, b: Vec3, l1: number, l2: number, toward: V
   return [a[0] + u[0] * along + w[0] * h, a[1] + u[1] * along + w[1] * h, a[2] + u[2] * along + w[2] * h];
 }
 
+/**
+ * The joint rotation (as ModelBuilder.joint takes it) that points a part's +x along `x` with its +z leaning toward
+ * `zToward` (a wing bone along its spar, its membrane trailing toward the tail, however the body is turned).
+ */
+export function aim(x: Vec3, zToward: Vec3): Vec3 {
+  const xl = Math.hypot(...x) || 1, X: Vec3 = [x[0] / xl, x[1] / xl, x[2] / xl];
+  const dot = zToward[0] * X[0] + zToward[1] * X[1] + zToward[2] * X[2];
+  let Z: Vec3 = [zToward[0] - dot * X[0], zToward[1] - dot * X[1], zToward[2] - dot * X[2]];
+  const zl = Math.hypot(...Z);
+  Z = zl > 1e-6 ? [Z[0] / zl, Z[1] / zl, Z[2] / zl] : Math.abs(X[1]) < 0.9 ? [0, 1, 0] : [1, 0, 0];
+  const Y: Vec3 = [Z[1] * X[2] - Z[2] * X[1], Z[2] * X[0] - Z[0] * X[2], Z[0] * X[1] - Z[1] * X[0]];
+  // (the rotation's matrix has X, Y, Z for columns; read back as x-y-z Euler angles, as three.js does)
+  const m13 = Math.max(-1, Math.min(1, Z[0]));
+  const ry = Math.asin(m13);
+  return Math.abs(m13) < 0.9999999 ? [Math.atan2(-Z[1], Z[2]), ry, Math.atan2(-Y[0], X[0])] : [Math.atan2(Y[2], Y[1]), ry, 0];
+}
+
 /** The length from one point to another (a bone's, from its rest pose). */
 export const span = (a: Vec3, b: Vec3): number => Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]);
