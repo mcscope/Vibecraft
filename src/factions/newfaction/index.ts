@@ -58,6 +58,9 @@ function drawVee(b: ModelBuilder, p: Pose, mass: number): void {
   const ease = (k: number) => { const c = Math.max(0, Math.min(1, k)); return c * c * (3 - 2 * c); };
   const stab = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0;
   type V = [number, number, number];
+  // its wing bones, shoulder to wrist, wrist to knuckle, knuckle to tip: the same standing and flying; how high its
+  // body stands on them, how low and tipped back it crouches to leap
+  const BONES = [0.55, 0.7, 0.6], STAND_Y = 0.5, CROUCH_Y = 0.3, CROUCH_TILT = 0.25;
   const norm = (v: V): V => { const l = Math.hypot(...v) || 1; return [v[0] / l, v[1] / l, v[2] / l]; };
   const along = (a: V, d: V, len: number): V => [a[0] + d[0] * len, a[1] + d[1] * len, a[2] + d[2] * len];
   // one wing bone from a to b: a spined spar along its leading edge, the membrane trailing behind it (ribbed, its
@@ -98,21 +101,11 @@ function drawVee(b: ModelBuilder, p: Pose, mass: number): void {
     // the V, `open` from folded tight back along its body (0) to spread (1), beating by `flap`. During a leap its
     // joints unfold in turn from the ones it stood on: `legs` (1 → 0) is how much the inner and outer joints still
     // hang down as they did on the ground
-    const vee = (c: ModelBuilder, open: number, flap: number, legs: [number, number] = [0, 0]) => {
+    const vee = (c: ModelBuilder, open: number, flap: number) => {
       body(c);
-      const mixd = (a: number, b: number) => a + (b - a) * open;
-      const lerp = (a: V, b: V, k: number): V => norm([a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k]);
       for (const S of [1, -1]) {
-        const dir = (sweep: number, up: number): V => norm([-Math.sin(sweep), up, S * Math.cos(sweep)]);
-        const sh: V = [0.06, 0.04, S * 0.08];
-        const s1 = mixd(1.2, 0.45), s2 = mixd(1.35, 0.7), s3 = mixd(1.45, 0.95);
-        const e = (k: number) => mixd(0.25 - k * 0.08, 0.12 + flap * (0.6 + k * 0.4));
-        // (as legs: the inner bone down and out to the wrist, the outer ones arching up and back down)
-        const d1 = lerp(dir(s1, e(0)), norm([0.3, -0.85, S * 0.4]), legs[0]);
-        const d2 = lerp(dir(s2, e(1)), norm([-0.4, 0.55, S * 0.25]), legs[1]);
-        const d3 = lerp(dir(s3, e(2)), norm([-0.55, -0.75, S * 0.1]), legs[1]);
-        const wrist = along(sh, d1, 0.42), knuckle = along(wrist, d2, 0.42), tip = along(knuckle, d3, 0.46);
-        const f = mixd(0.35, 1) * (1 - 0.7 * Math.max(legs[0], legs[1]));
+        const { sh, wrist, knuckle, tip } = veePoints(S, open, flap);
+        const f = 0.35 + 0.65 * open;
         bone(c, sh, wrist, 0.18 * f, 0.22 * f);
         bone(c, wrist, knuckle, 0.22 * f, 0.18 * f);
         bone(c, knuckle, tip, 0.18 * f, 0.02);
@@ -126,39 +119,78 @@ function drawVee(b: ModelBuilder, p: Pose, mass: number): void {
       return;
     }
     if (leaping && p.phase >= 0.2) {
-      // its leap: it flings its heavy crystal up, and the crystal hauls the body after it: the centre goes up first
-      // while the joints it stood on unfold in turn (the inner ones as it leaves the ground, the outer ones as it
-      // lifts), and over in a half loop, rolling upright at the top: away, the other way round from how it stood
+      // its leap: it flings its heavy crystal up and the body springs after it, up and over in a half loop, rolling
+      // upright at the top: away, the other way round from how it stood. Its feet stay planted where it stood until
+      // the body has risen far enough that the bones holding them are pulled straight and lift them off the ground
+      // (the wrists first, then the wingtips); only then do the wings swing out into the V
       const k = (p.phase - 0.2) / 0.8;
-      const loop = Math.PI * ease(k / 0.85), roll = Math.PI * ease((k - 0.5) / 0.5);
-      const legs: [number, number] = [1 - ease(k / 0.15), 1 - ease((k - 0.05) / 0.35)]; // (off the ground as it springs)
-      o.joint([0, 0.3 + 0.5 * Math.sin(Math.min(Math.PI / 2, loop * 0.8)), 0], [0, Math.PI, 0], (yaw) => yaw.joint([0, 0, 0], [0, 0, loop], (pitch) =>
-        pitch.joint([0, 0, 0], [roll, 0, 0], (c) => vee(c, ease((k - 0.2) / 0.5), 0, legs))));
+      const pitch = CROUCH_TILT + (Math.PI - CROUCH_TILT) * ease(k / 0.85), roll = Math.PI * ease((k - 0.5) / 0.5);
+      const at: V = [0, CROUCH_Y + 0.9 * ease(k / 0.7), 0];
+      // its own frame (turned by the loop and the roll) to the ground's
+      const cz = Math.cos(pitch), sz = Math.sin(pitch), cx = Math.cos(roll), sx = Math.sin(roll);
+      const toGround = (v: V): V => { const y = v[1] * cx - v[2] * sx, z = v[1] * sx + v[2] * cx; return [at[0] + v[0] * cz - y * sz, at[1] + v[0] * sz + y * cz, at[2] + z]; };
+      const sub = (a: V, b: V): V => [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+      const reachOf = (from: V, to: V, len: number): V => { const d = sub(to, from), l = Math.hypot(...d); return l <= len ? to : along(from, norm(d), len - 1e-3); };
+      const mixV = (a: V, b: V, w: number): V => [a[0] + (b[0] - a[0]) * w, a[1] + (b[1] - a[1]) * w, a[2] + (b[2] - a[2]) * w];
+      o.joint([0, 0, 0], [0, Math.PI, 0], (g) => {
+        g.joint(at, [0, 0, pitch], (pc) => pc.joint([0, 0, 0], [roll, 0, 0], body));
+        const open = ease((k - 0.3) / 0.45);
+        for (const S of [1, -1]) {
+          const planted = standing(S, CROUCH_Y), fly = veePoints(S, open, 0);
+          const sh = toGround(fly.sh);
+          // held to the ground where they stood, unless their bones are pulled straight (then dragged up after);
+          // once up, swinging out to where the V puts them
+          const wristHeld = reachOf(sh, planted.wrist, BONES[0]);
+          const up1 = Math.max(ease(wristHeld[1] / 0.35), ease((k - 0.6) / 0.3)), wrist = mixV(wristHeld, toGround(fly.wrist), up1); // (swinging out only once it's off the ground)
+          const tipHeld = reachOf(wrist, planted.tip, BONES[1] + BONES[2]);
+          const up2 = Math.max(ease(tipHeld[1] / 0.35), ease((k - 0.7) / 0.25)), tip = mixV(tipHeld, toGround(fly.tip), up2);
+          const knuckle = mixV(jointBetween(wrist, tip, BONES[1], BONES[2], [0.1, 1, S * 0.3]), toGround(fly.knuckle), up2);
+          const f = 0.35 + 0.65 * open;
+          bone(g, sh, wrist, 0.05 + 0.13 * f * up1, 0.03 + 0.19 * f * up1);
+          bone(g, wrist, knuckle, 0.06 + 0.16 * f * up2, 0.1 + 0.08 * f * up2);
+          bone(g, knuckle, tip, 0.1 + 0.08 * f * up2, 0.01);
+        }
+      });
       return;
     }
     // on the ground: standing on its wings (below). Crouching to leap: facing back the way it'll come round from,
     // squatting low on them
     const crouch = leaping ? ease(p.phase / 0.2) : 0;
-    if (leaping) { o.joint([0, 0, 0], [0, Math.PI, 0], (c) => c.joint([0, 0, 0], [0, 0, 0.25 * crouch], (s) => stand(s, 0.5 - 0.2 * crouch))); return; }
-    stand(o, 0.5);
+    if (leaping) { o.joint([0, 0, 0], [0, Math.PI, 0], (c) => stand(c, STAND_Y - (STAND_Y - CROUCH_Y) * crouch, CROUCH_TILT * crouch)); return; } // (its feet where they stand)
+    stand(o, STAND_Y);
   }, LOOK.vee.scale(mass));
+  // where its wing joints are in the V, in its own frame: `open` from folded tight back along its body (0) to spread
+  // (1), beating by `flap`
+  function veePoints(S: number, open: number, flap: number) {
+    const mixd = (a: number, b: number) => a + (b - a) * open;
+    const dir = (sweep: number, up: number): V => norm([-Math.sin(sweep), up, S * Math.cos(sweep)]);
+    const e = (k: number) => mixd(0.25 - k * 0.08, 0.12 + flap * (0.6 + k * 0.4));
+    const sh: V = [0.06, 0.04, S * 0.08];
+    const wrist = along(sh, dir(mixd(1.2, 0.45), e(0)), BONES[0]), knuckle = along(wrist, dir(mixd(1.35, 0.7), e(1)), BONES[1]);
+    return { sh, wrist, knuckle, tip: along(knuckle, dir(mixd(1.45, 0.95), e(2)), BONES[2]) };
+  }
+  // where its wing joints are, standing on them with its body `y0` up: each wing's wrist (in front) and tip (behind)
+  // planted, the joint between them arched up where its bones put it (the same bones it flies on)
+  function standing(S: number, y0: number, step = (rest: V): V => rest) {
+    const sh: V = [0.06, y0 + 0.04, S * 0.08];
+    const wrist = step([0.18, 0, S * 0.26]), tip = step([-0.5, 0, S * 0.62]);
+    return { sh, wrist, tip, knuckle: jointBetween(wrist, tip, BONES[1], BONES[2], [0.1, 1, S * 0.3]) };
+  }
   // standing on its wings, each wing's wrist (in front) and tip (behind) planted, the joint between arched high;
   // walking, the four points step in turn
-  function stand(o: ModelBuilder, y0: number): void {
+  function stand(o: ModelBuilder, y0: number, tilt = 0): void {
     for (const S of [1, -1]) {
       // (walking, its four points step in turn on planted feet, the high joints riding between)
-      const step = (rest: V, k: number): V => (p.anim === 'walk' ? footAt(rest, p.phase + k * 0.25 + (S > 0 ? 0 : 0.5), 0.1, 0.06) : rest);
-      const sh: V = [0.06, y0 + 0.04, S * 0.08];
-      const wrist = step([0.34, 0, S * 0.4], 0);
-      const tip = step([-0.5, 0, S * 0.7], 1);
-      const knuckle: V = [-0.06 + (wrist[0] + tip[0] + 0.16) * 0.3, y0 + 0.42, S * 0.6];
+      let leg = 0;
+      const step = (rest: V): V => (p.anim === 'walk' ? footAt(rest, p.phase + leg++ * 0.25 + (S > 0 ? 0 : 0.5), 0.1, 0.06) : rest);
+      const { sh, wrist, knuckle, tip } = standing(S, y0, step);
       bone(o, sh, wrist, 0.05, 0.03);
       bone(o, wrist, knuckle, 0.06, 0.1);
       bone(o, knuckle, tip, 0.1, 0.01);
       for (const foot of [wrist, tip]) for (const dz of [-0.025, 0.025]) o.cone(0.012, 0.06, [foot[0] + 0.03, 0.01, foot[2] + dz], rib, [0, 0, -Math.PI / 2], 4); // claws
     }
     // the body slung between them; striking, it drives its whole torso forward like a battering ram, the spike first
-    o.joint([0.34 * stab, y0 - 0.04 * stab, 0], [0, 0, -0.08 * stab], body);
+    o.joint([0.34 * stab, y0 - 0.04 * stab, 0], [0, 0, tilt - 0.08 * stab], body);
   }
 }
 
