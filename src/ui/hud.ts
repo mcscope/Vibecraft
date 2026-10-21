@@ -25,8 +25,8 @@ export interface HudActions {
   formationOf(): Formation;
   /** Change the selected units that can into this form, or (`spawn`) have them grow one (sim/abilities/metamorph.ts). */
   morph(into: string, spawn: boolean): void;
-  /** Cancel the last spawn queued in the selected units. */
-  cancelSpawn(): void;
+  /** Cancel a spawn queued in the selected units (default: the last). */
+  cancelSpawn(index?: number): void;
   ungarrison(buildingId: number): void;
   place(specId: string): void;
   idleWorker(): void;
@@ -143,7 +143,7 @@ export class Hud {
 
   private onClick(e: MouseEvent): void {
     if (this.suppressClick) { this.suppressClick = false; return; } // that was a hold, not a click
-    const el = (e.target as HTMLElement).closest('[data-train],[data-research],[data-cancel],[data-select],[data-cmd],[data-morph],[data-formation],[data-place],[data-sow],[data-ungarrison]') as HTMLElement | null;
+    const el = (e.target as HTMLElement).closest('[data-train],[data-research],[data-cancel],[data-select],[data-cmd],[data-morph],[data-brood],[data-formation],[data-place],[data-sow],[data-ungarrison]') as HTMLElement | null;
     if (!el || el.classList.contains('locked')) return;
     if (el.dataset.ungarrison) { this.actions.ungarrison(+el.dataset.ungarrison); return; }
     if (el.dataset.sow) {
@@ -159,6 +159,7 @@ export class Hud {
     else if (el.dataset.select) this.actions.select(el.dataset.select.split(',').map(Number));
     else if (el.dataset.cmd) this.actions.command(el.dataset.cmd as 'stop');
     else if (el.dataset.morph) this.actions.morph(el.dataset.morph, el.dataset.spawn === '1');
+    else if (el.dataset.brood) this.actions.cancelSpawn(+el.dataset.brood);
     else if (el.dataset.formation) { this.actions.formation(el.dataset.formation as Formation); this.sig = ''; }
     else if (el.dataset.place) this.actions.place(el.dataset.place);
   }
@@ -235,7 +236,7 @@ export class Hud {
     const building = [...selected].map((id) => w.buildings.get(id)).find((b): b is Building => !!b);
     const p = w.players[this.player];
     const stances = units.map((u) => u.stance[0] + u.brood.length).join('') + (units.length > 1 ? this.actions.formationOf() + doing(units) : '');
-    const sig = units.length === 1 ? `u${units[0].id}:${stances}${doing(units)}`
+    const sig = units.length === 1 ? `u${units[0].id}:${stances}${doing(units)}:${units[0].order.kind}:${units[0].brood.map((b) => b.into).join(',')}`
       : building ? `b${building.id}:${building.complete}:${building.queue.map((q) => (q.kind === 'unit' ? q.specId : q.techId)).join(',')}:${p.researched.length}:${building.owner}:${building.sowing.join('')}:${building.garrison.length}`
       : `m${units.map((u) => u.id).join(',')}:${stances}`;
     if (sig !== this.sig) {
@@ -294,6 +295,19 @@ export class Hud {
         ammo.dataset.sig = sig;
         ammo.innerHTML = `<span>Crystals ${have}/${max}</span>` + Array.from({ length: max }, (_, i) => `<i class="${i < have ? 'on' : ''}"></i>`).join('');
       }
+    }
+    // laying or changing: the front of the queue, like a building's training bar
+    const grow = this.panel.querySelector<HTMLElement>('[data-bar="grow"]');
+    if (grow) {
+      const food = this.names().food.toLowerCase();
+      const o = u.order, b = u.brood[0];
+      const job = o.kind === 'metamorph' ? { into: o.into, from: o.from ?? u.specId, paid: o.paid, t: o.t, spawn: false, mass: u.stats.mass }
+        : b ? { into: b.into, from: u.specId, paid: b.paid, t: b.t, spawn: true, mass: undefined } : null;
+      const from = job && w.specOf(u.owner, job.from), to = job && w.specOf(u.owner, job.into);
+      const c = from && to ? metamorphCost(from.stats, to.stats, job!.spawn, job!.mass) : null;
+      grow.querySelector<HTMLElement>('i')!.style.width = c && job ? pct(job.t, c.sec) : '0%';
+      const label = grow.querySelector<HTMLElement>('span');
+      if (label) label.textContent = !c || !job ? '' : job.t <= 0 && job.paid + 1e-6 < c.food ? `Waiting for ${need(c.food - job.paid)} ${food}${job.spawn ? ' in its pack' : ': in its pack, or Give it some'}` : `${to!.spec.name} ${Math.round((job.t / c.sec) * 100)}%`;
     }
     const st = this.panel.querySelector('[data-state]');
     if (st) st.textContent = describeOrder(w, u);
@@ -429,11 +443,18 @@ export class Hud {
           ${u.dummy ? '' : `<div class="bar cal" data-bar="cal"><i></i><span></span></div>
           <div class="bar pack" data-bar="pack"><div class="segs"><i class="crystal"></i><i class="food"></i><i class="wood"></i></div><span></span></div>
           ${u.throws ? '<div class="ammo" data-ammo></div>' : ''}`}
+          ${own && this.grows(u) ? this.growthQueue(u) : ''}
           ${own && !u.carter ? this.commandButtons([u]) : ''}
           ${own && u.carter ? '<div class="hint">Carts supply whichever building is shortest. Right-click a building to pin this cart to it; Stop to unpin.</div>' : ''}
         </div>
         ${(own && this.growthMenu([u])) || (own && this.isWorker(u.specId) ? this.buildMenu() : statsTable(s.spec, s.stats, this.names().food.toLowerCase()))}
       </div>`;
+  }
+
+  /** Does this unit lay or change into anything (or is it changing)? */
+  private grows(u: Unit): boolean {
+    const w = this.world, spec = w.specOf(u.owner, u.specId)?.spec, origin = w.specOf(u.owner, u.shellOf ?? u.specId)?.spec;
+    return !!(spec?.spawns?.length || origin?.becomes?.length || u.order.kind === 'metamorph' || u.brood.length);
   }
 
   private groupPanel(units: Unit[]): string {
@@ -500,7 +521,7 @@ export class Hud {
     </div>`;
   }
 
-  /** Where the build menu sits: what the selected units can lay (spawns) or change into (becomes), as picture tiles. */
+  /** What the selected units can lay (spawns) or change into (becomes): tiles like a building's training buttons. */
   private growthMenu(units: Unit[]): string {
     const w = this.world, forms = new Map<string, [Unit, boolean]>();
     for (const u of units) {
@@ -510,22 +531,30 @@ export class Hud {
     }
     if (!forms.size) return '';
     const food = this.names().food.toLowerCase();
-    const tile = ([key, [u, spawn]]: [string, [Unit, boolean]]) => {
+    const tiles = [...forms.entries()].map(([key, [u, spawn]]) => {
       const id = key.slice(0, -2), to = w.specOf(u.owner, id), from = w.specOf(u.owner, spawn ? u.specId : u.shellOf ?? u.specId);
       if (!to || !from) return '';
       const c = metamorphCost(from.stats, to.stats, spawn, spawn ? undefined : u.stats.mass);
-      const queued = spawn ? units.reduce((t, x) => t + x.brood.filter((b) => b.into === id).length, 0) : 0;
-      const art = this.icon('unit', id, 160);
       const tip = spawn
-        ? `Lay a ${to.spec.name}: ${c.food} ${food} paid up front (from its pack, a food bearer in reach or a building beside it), ${c.sec.toFixed(0)} s, grown in its body while it keeps moving. Right-click: cancel the last.`
+        ? `Lay a ${to.spec.name}: ${c.food} ${food} paid up front (from its pack, a food bearer in reach or a building beside it), ${c.sec.toFixed(0)} s, grown in its body while it keeps moving.`
         : `Change into ${to.spec.name}: ${c.food} ${food} (from its pack, a food bearer in reach, a building beside it, or food Given to it), ${c.sec.toFixed(0)} s, inside a shell where it stands.`;
-      return `<button class="bld" data-morph="${id}" data-spawn="${spawn ? 1 : 0}" title="${tip}">
-        ${art ? `<img class="art" src="${art}" alt="">` : ''}
-        <b>${to.spec.name}${queued ? ` ×${queued}` : ''}</b><span>${c.food} ${food} · ${c.sec.toFixed(0)} s</span>
+      return `<button class="train" data-morph="${id}" data-spawn="${spawn ? 1 : 0}" title="${tip}">
+        <canvas class="portrait" data-portrait="${u.owner}:${id}"></canvas>
+        <span class="name">${spawn ? '' : '→ '}${to.spec.name}</span>
+        <span class="cost">${c.food} ${food} · ${c.sec.toFixed(0)} s</span>
+        <span class="ref" title="Refinement ${fmt(to.stats.refinement, 2)}×">${fmt(to.stats.refinement, 2)}×</span>
       </button>`;
-    };
-    const lay = [...forms.entries()].filter(([, [, sp]]) => sp), grow = [...forms.entries()].filter(([, [, sp]]) => !sp);
-    return `<div class="build">${lay.length ? `<div class="label">Lay</div><div class="btns">${lay.map(tile).join('')}</div>` : ''}${grow.length ? `<div class="label">Change into</div><div class="btns">${grow.map(tile).join('')}</div>` : ''}</div>`;
+    }).join('');
+    return `<div class="actions"><div class="trains">${tiles}</div></div>`;
+  }
+
+  /** A unit that lays or changes: its queue like a building's (click one to cancel), and a progress bar. */
+  private growthQueue(u: Unit): string {
+    const w = this.world, name = (id: string) => w.specOf(u.owner, id)?.spec.name ?? id;
+    const chips = u.brood.map((b, i) => `<span class="q" data-brood="${i}" title="Click to cancel (its food goes back in the pack)">${name(b.into)}</span>`);
+    if (u.order.kind === 'metamorph') chips.unshift(`<span class="q" data-cmd="stop" title="Click to call it off (its food goes back in the pack)">→ ${name(u.order.into)}</span>`);
+    if (!chips.length && !u.order) return '';
+    return `<div class="queue">${chips.join('') || '<em>Idle</em>'}</div><div class="bar train" data-bar="grow"><i></i><span></span></div>`;
   }
 
   /** A group of fighters: big order tiles, and each formation drawn with this group in it. */

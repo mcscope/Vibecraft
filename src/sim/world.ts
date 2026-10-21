@@ -705,7 +705,7 @@ export class World {
         if (cmd.spawn) { for (const u of mine(cmd.units)) queueBrood(this, u, cmd.into); return; } // trained in its body: it carries on
         for (const u of mine(cmd.units)) if (canBecome(this, u, cmd.into)) { refundMetamorph(u); beginMetamorph(this, u, cmd.into); }
         return;
-      case 'cancelSpawn': for (const u of mine(cmd.units)) cancelBrood(u); return;
+      case 'cancelSpawn': for (const u of mine(cmd.units)) cancelBrood(u, cmd.index); return;
       case 'attack': {
         const tgt = this.units.get(cmd.target) ?? this.buildings.get(cmd.target);
         if (!tgt || tgt.owner === player) return;

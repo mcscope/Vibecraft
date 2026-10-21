@@ -148,9 +148,9 @@ export function queueBrood(w: World, u: Unit, into: string): void {
   if (canBecome(w, u, into, true) && u.brood.length < MAX_QUEUE) u.brood.push({ into, t: 0, paid: 0 });
 }
 
-/** Cancel the last spawn queued in `u`: what it had paid goes back into its pack. */
-export function cancelBrood(u: Unit): void {
-  const b = u.brood.pop();
+/** Cancel a spawn queued in `u` (default: the last): what it had paid goes back into its pack. */
+export function cancelBrood(u: Unit, index = u.brood.length - 1): void {
+  const [b] = u.brood.splice(index, 1);
   if (b) u.food += b.paid;
 }
 

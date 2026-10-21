@@ -16,7 +16,7 @@ export type CommandBody =
   /** Units that digest trees walk to this tree and turn it into food (sim/abilities/digest.ts). */
   | { type: 'digest'; units: number[]; node: number }
   /** Cancel the last spawn queued in each of them (what it had paid goes back into its pack). */
-  | { type: 'cancelSpawn'; units: number[] }
+  | { type: 'cancelSpawn'; units: number[]; index?: number }
   /** Walk back and forth between where they are now and (x, y), fighting anything met on the way. */
   | { type: 'patrol'; units: number[]; x: number; y: number }
   | { type: 'attack'; units: number[]; target: number; charge?: boolean }

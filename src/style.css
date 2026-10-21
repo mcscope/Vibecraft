@@ -75,7 +75,7 @@ kbd {
 .bar.stock.wood i { background: linear-gradient(180deg, #b08a5a, #6a4a2a); }
 .bar.stock.crystal i { background: linear-gradient(180deg, #8fd0ec, #3a7fa0); }
 .bar.built i { background: linear-gradient(180deg, #b08a5a, #6a4a2a); }
-.building-panel .actions { display: flex; flex-direction: column; gap: 8px; }
+.building-panel .actions, .unit-panel .actions, .group-panel .actions { display: flex; flex-direction: column; gap: 8px; }
 .techs { display: flex; flex-wrap: wrap; gap: 6px; }
 .tech { display: flex; flex-direction: column; align-items: flex-start; padding: 5px 10px; min-width: 140px; }
 .tech b { color: var(--gold); font-size: 13.5px; }
