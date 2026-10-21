@@ -72,8 +72,8 @@ export interface UnitSpec {
   size?: number;
   /** Soft-bodied: it crawls under (and over) its own side's units: it never pushes or is pushed by them, only by enemies. */
   crawls?: boolean;
-  /** It flies: walks short hops, takes off to go further, straight over everything; burns calories aloft (∝ mass, so endurance comes from its reserve); lands when it stops or runs low. Melee fliers land to strike. */
-  flight?: boolean | { height: number };
+  /** It flies: walks short hops, takes off to go further, straight over everything; burns calories aloft (∝ mass, so endurance comes from its reserve); lands when it stops or runs low. A striker dives on its target. `height`: its ceiling (m); `launch: 'backward'`: it springs off the way it faces away from, flinging itself up and over, and banks round. */
+  flight?: boolean | { height?: number; launch?: 'backward' };
   /** Can this unit harvest resource nodes? Default true. */
   canGather?: boolean;
   /** Training dummy: never moves, eats or fights. Only for scenarios. */

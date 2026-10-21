@@ -166,6 +166,8 @@ export interface DerivedStats {
   flight: boolean;
   /** Metres it flies at (0: doesn't fly). Higher drops hit harder; staying up there costs more. */
   flyHeight: number;
+  /** It takes off backward, away from the way it faces (flight.launch). */
+  launchBackward: boolean;
   /** kg. Shared by weapon crystal, ammo, and cargo. */
   carryCapacity: number;
   /** kg of crystal the unit keeps as its loadout (weapon or ammo). */
@@ -362,7 +364,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   return {
     improvised, sidearm,
     mass, physique, muscleMass, frameMass, reserveMass,
-    maxHp, armour, coverage, maxCalories, speed, sprint: sprintTiles, canAttack, wheeled, gait: deriveGait(spec), flight: !!spec.flight, flyHeight: !spec.flight ? 0 : spec.flight === true ? DEFAULT_FLY_HEIGHT : spec.flight.height, carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, wingspan, sight,
+    maxHp, armour, coverage, maxCalories, speed, sprint: sprintTiles, canAttack, wheeled, gait: deriveGait(spec), flight: !!spec.flight, flyHeight: !spec.flight ? 0 : spec.flight === true ? DEFAULT_FLY_HEIGHT : spec.flight.height ?? DEFAULT_FLY_HEIGHT, launchBackward: typeof spec.flight === 'object' && spec.flight.launch === 'backward', carryCapacity, loadoutCrystal, cargoCapacity: Math.max(0, carryCapacity - loadoutCrystal), radius, wingspan, sight,
     limbSpeed, maxAttackEnergy, crystalVelocity, attackEnergy, damage, attackCalories, cooldown, range,
     dps: damage / cooldown,
     holdForce: K.holdForcePerMuscleKg * muscleMass,

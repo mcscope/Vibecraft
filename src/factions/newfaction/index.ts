@@ -92,17 +92,24 @@ function drawVee(b: ModelBuilder, p: Pose, mass: number): void {
     if (p.armed) c.crystal(0.32, [0.33, -0.02, 0], [0, 0, -Math.PI / 2]);
   };
   b.joint([0, 0, 0], [0, 0, 0], (o) => {
-    // the V, `open` from folded tight back along its body (0) to spread (1), beating by `flap`
-    const vee = (c: ModelBuilder, open: number, flap: number) => {
+    // the V, `open` from folded tight back along its body (0) to spread (1), beating by `flap`. During a leap its
+    // joints unfold in turn from the ones it stood on: `legs` (1 → 0) is how much the inner and outer joints still
+    // hang down as they did on the ground
+    const vee = (c: ModelBuilder, open: number, flap: number, legs: [number, number] = [0, 0]) => {
       body(c);
       const mixd = (a: number, b: number) => a + (b - a) * open;
+      const lerp = (a: V, b: V, k: number): V => norm([a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k]);
       for (const S of [1, -1]) {
         const dir = (sweep: number, up: number): V => norm([-Math.sin(sweep), up, S * Math.cos(sweep)]);
         const sh: V = [0.06, 0.04, S * 0.08];
         const s1 = mixd(1.2, 0.45), s2 = mixd(1.35, 0.7), s3 = mixd(1.45, 0.95);
         const e = (k: number) => mixd(0.25 - k * 0.08, 0.12 + flap * (0.6 + k * 0.4));
-        const wrist = along(sh, dir(s1, e(0)), 0.42), knuckle = along(wrist, dir(s2, e(1)), 0.42), tip = along(knuckle, dir(s3, e(2)), 0.46);
-        const f = mixd(0.35, 1);
+        // (as legs: the inner bone down and out to the wrist, the outer ones arching up and back down)
+        const d1 = lerp(dir(s1, e(0)), norm([0.3, -0.85, S * 0.4]), legs[0]);
+        const d2 = lerp(dir(s2, e(1)), norm([-0.4, 0.55, S * 0.25]), legs[1]);
+        const d3 = lerp(dir(s3, e(2)), norm([-0.55, -0.75, S * 0.1]), legs[1]);
+        const wrist = along(sh, d1, 0.42), knuckle = along(wrist, d2, 0.42), tip = along(knuckle, d3, 0.46);
+        const f = mixd(0.35, 1) * (1 - 0.7 * Math.max(legs[0], legs[1]));
         bone(c, sh, wrist, 0.18 * f, 0.22 * f);
         bone(c, wrist, knuckle, 0.22 * f, 0.18 * f);
         bone(c, knuckle, tip, 0.18 * f, 0.02);
@@ -116,12 +123,14 @@ function drawVee(b: ModelBuilder, p: Pose, mass: number): void {
       return;
     }
     if (leaping && p.phase >= 0.3) {
-      // its leap, an Immelmann: from its crouch facing back the way it came, it springs up and over in a half loop,
-      // unfolding into the V, and rolls upright at the top: away, the other way round from how it stood
+      // its leap: it flings its heavy crystal up, and the crystal hauls the body after it: the centre goes up first
+      // while the joints it stood on unfold in turn (the inner ones as it leaves the ground, the outer ones as it
+      // lifts), and over in a half loop, rolling upright at the top: away, the other way round from how it stood
       const k = (p.phase - 0.3) / 0.7;
-      const loop = Math.PI * ease(k / 0.8), roll = Math.PI * ease((k - 0.45) / 0.55);
-      o.joint([0, 0.45 + 0.35 * Math.sin(loop / 2), 0], [0, Math.PI, 0], (yaw) => yaw.joint([0, 0, 0], [0, 0, loop], (pitch) =>
-        pitch.joint([0, 0, 0], [roll, 0, 0], (c) => vee(c, ease(k / 0.6), 0))));
+      const loop = Math.PI * ease(k / 0.85), roll = Math.PI * ease((k - 0.5) / 0.5);
+      const legs: [number, number] = [1 - ease(k / 0.35), 1 - ease((k - 0.2) / 0.45)];
+      o.joint([0, 0.3 + 0.5 * Math.sin(Math.min(Math.PI / 2, loop * 0.8)), 0], [0, Math.PI, 0], (yaw) => yaw.joint([0, 0, 0], [0, 0, loop], (pitch) =>
+        pitch.joint([0, 0, 0], [roll, 0, 0], (c) => vee(c, ease((k - 0.2) / 0.5), 0, legs))));
       return;
     }
     // on the ground: standing on its wings (below). Crouching to leap: facing back the way it'll come round from,
@@ -145,8 +154,8 @@ function drawVee(b: ModelBuilder, p: Pose, mass: number): void {
       bone(o, knuckle, tip, 0.1, 0.01);
       for (const foot of [wrist, tip]) for (const dz of [-0.025, 0.025]) o.cone(0.012, 0.06, [foot[0] + 0.03, 0.01, foot[2] + dz], rib, [0, 0, -Math.PI / 2], 4); // claws
     }
-    // the body slung between them; striking, it lunges down and forward, the spike first
-    o.joint([0.12 * stab, y0 - 0.12 * stab, 0], [0, 0, -0.55 * stab], body);
+    // the body slung between them; striking, it drives its whole torso forward like a battering ram, the spike first
+    o.joint([0.34 * stab, y0 - 0.04 * stab, 0], [0, 0, -0.08 * stab], body);
   }
 }
 
@@ -502,7 +511,7 @@ const charger = unit({ id: 'charger', name: 'Charger', mass: 38, physique: { mus
   attack: { style: 'strike', crystalMass: 1.5 }, description: 'T1: a fast charging body.', model: (b, p) => bug(b, p, '#7fbf4a', 38, 'strike') }, 'bug');
 const micropike = unit({ id: 'micropike', name: 'Micropike', mass: 35, physique: { muscle: 0.45, frame: 0.4, reserve: 0.15 }, refinement: 2,
   attack: { style: 'strike', crystalMass: 0.8, shaft: 1.5 }, description: 'T1: micropikes.', model: (b, p) => bug(b, p, '#6aa84a', 35, 'pike') }, 'bug');
-const flier = unit({ id: 'flier', name: 'Flier', mass: 120, physique: { muscle: 0.5, frame: 0.25, reserve: 0.25 }, refinement: 3, flight: true,
+const flier = unit({ id: 'flier', name: 'Flier', mass: 120, physique: { muscle: 0.5, frame: 0.25, reserve: 0.25 }, refinement: 3, flight: { launch: 'backward' },
   attack: { style: 'strike', crystalMass: 2 }, description: 'T2: a dive bomber: it swoops down onto its target to strike, its dive behind the blow, and climbs away again.', model: (b, p) => drawVee(b, p, 120) }, 'vee');
 const groundAttacker2 = unit({ id: 'ground-attacker2', name: 'T2 Ground Attacker', mass: 150, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 3,
   attack: { style: 'strike', crystalMass: 4 }, description: 'T2: a ground attacker.', model: (b, p) => bug(b, p, '#2a8a96', 150, 'strike') }, 'bug');

@@ -109,7 +109,10 @@ const airSpeed = (u: Unit): number => u.stats.speed * FLY_SPEED;
 
 /** Take off (if it can fly and has the strength). */
 export function takeOff(u: Unit): void {
-  if (u.stats.flight && !u.exhausted && u.cal > u.stats.maxCalories * LAUNCH_FRACTION) u.airborne = true;
+  if (!u.stats.flight || u.airborne || u.exhausted || u.cal <= u.stats.maxCalories * LAUNCH_FRACTION) return;
+  u.airborne = true;
+  // it springs off the way it's facing, or (launch: 'backward') flings itself up and over away from it
+  u.flyDir = u.facing + (u.stats.launchBackward ? Math.PI : 0);
 }
 
 /** Would a grounded flier rather walk to (gx, gy)? Short and clear: yes. */
@@ -120,6 +123,7 @@ export function walks(w: World, u: Unit, gx: number, gy: number): boolean {
 /** Fly forward along its heading for a tick, staying on the map. */
 function glide(w: World, u: Unit, speed: number, dt: number, face: (dx: number, dy: number) => void): void {
   const cx = Math.cos(u.flyDir), cy = Math.sin(u.flyDir);
+  if (u.launchT <= LAUNCH_WINDUP) speed = 0; // (crouched, winding up to spring)
   u.x = Math.max(0.5, Math.min(w.grid.width - 0.5, u.x + cx * speed * dt));
   u.y = Math.max(0.5, Math.min(w.grid.height - 0.5, u.y + cy * speed * dt));
   face(cx, cy);
@@ -136,7 +140,6 @@ export function flyTo(w: World, u: Unit, gx: number, gy: number, arrive: number,
   u.goalX = gx; u.goalY = gy;
   if (d <= arrive) { u.path = []; return true; }
   const want = Math.atan2(dy, dx);
-  if (u.alt < 0.05) u.flyDir = want; // leaping off the ground, it faces where it's going
   let turn = Math.atan2(Math.sin(want - u.flyDir), Math.cos(want - u.flyDir));
   const max = turnRate(u) * dt;
   turn = Math.max(-max, Math.min(max, turn));
@@ -211,8 +214,13 @@ export const heightBonus = (u: Unit): number => (u.airborne ? u.crystalMass * K.
 
 export const flight: Ability = {
   id: 'flight',
-  validateUnit: (u: UnitSpec, where: string) => (u.flight !== undefined && typeof u.flight !== 'boolean' && !(typeof u.flight === 'object' && typeof u.flight.height === 'number' && u.flight.height >= 3 && u.flight.height <= 30) ? [`${where}: bad flight (true, or { height: 3–30 m })`] : []),
+  validateUnit: (u: UnitSpec, where: string) => {
+    const f = u.flight;
+    if (f === undefined || typeof f === 'boolean') return [];
+    const ok = typeof f === 'object' && (f.height === undefined || (typeof f.height === 'number' && f.height >= 3 && f.height <= 30)) && (f.launch === undefined || f.launch === 'backward');
+    return ok ? [] : [`${where}: bad flight (true, or { height?: 3–30 m, launch?: 'backward' })`];
+  },
   unitCodex: (u: UnitSpec, d: DerivedStats) => (u.flight
-    ? `<b>Flies</b>, climbing slowly to ${n0(d.flyHeight)} m. Walks a few tiles, takes off to go further, straight over walls and water. Flapping up costs ${f1(flightBurn(d), 1)} cal/s plus ${n0(climbCost(d))} cal for the whole climb; once at its ceiling it soars on ${f1(soarBurn(d), 1)} cal/s. It lands when it stops or runs low. In the air only thrown crystals reach it${u.attack?.style === 'strike' ? '; it lands to strike' : '; it bombs: flies over its target and drops crystals that hit harder the higher it has climbed'}, and it sees further.`
+    ? `<b>Flies</b>, climbing slowly to ${n0(d.flyHeight)} m. Walks a few tiles, takes off to go further, straight over walls and water. Flapping up costs ${f1(flightBurn(d), 1)} cal/s plus ${n0(climbCost(d))} cal for the whole climb; once at its ceiling it soars on ${f1(soarBurn(d), 1)} cal/s. It lands when it stops or runs low.${d.launchBackward ? ' It takes off backward, flinging itself up and over away from the way it faces, and banks round.' : ''} In the air only thrown crystals reach it${u.attack?.style === 'strike' ? '; it dives on its target, gathering speed as it drops, and strikes once it is down within reach, then zooms back up' : '; it bombs: flies over its target and drops crystals that hit harder the higher it has climbed'}, and it sees further.`
     : null),
 };
