@@ -665,18 +665,23 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number): void {
     for (const z of [1, -1]) {
       // (on planted feet: each hind leg steps with the foreleg across from it)
       const ph = p.phase + (z > 0 ? 0 : 0.5);
-      const hip: V3 = [0.02, y0 - 0.04, z * 0.14], kneeRest: V3 = [0.1, y0 + 0.16, z * 0.42], ankleRest: V3 = [-0.04, 0.18, z * 0.48], rest: V3 = [0.06, 0, z * 0.5];
+      // (her weight is in the abdomen: the great hind legs stand under the middle of it, thick, set wide on her
+      // flanks; the forelegs bear the front under her thorax)
+      const hip: V3 = [-0.46, y0 - 0.02, z * 0.3], kneeRest: V3 = [-0.3, y0 + 0.14, z * 0.62], ankleRest: V3 = [-0.5, 0.2, z * 0.68], rest: V3 = [-0.42, 0, z * 0.7];
       const foot = walking ? footAt(rest, ph, 0.1, 0.06) : rest;
       const ankle: V3 = [foot[0] + ankleRest[0] - rest[0], foot[1] + ankleRest[1], foot[2] + ankleRest[2] - rest[2]];
       const knee = jointBetween(hip, ankle, span(hip, kneeRest), span(kneeRest, ankleRest), [0.3, 1, z]);
-      c.limb(hip, knee, 0.06, plate, 0.05);
-      c.limb(knee, ankle, 0.045, plate, 0.035);
-      c.limb(ankle, foot, 0.03, plate, 0.018);
-      const fhip: V3 = [0.1, y0 - 0.06, z * 0.1], fkRest: V3 = [0.22, y0 - 0.02, z * 0.22], frest: V3 = [0.3, 0, z * 0.26];
+      c.limb(hip, knee, 0.12, plate, 0.09);
+      c.sphere([0.13, 0.11, 0.11], [(hip[0] + knee[0]) / 2, (hip[1] + knee[1]) / 2, (hip[2] + knee[2]) / 2], plate); // the thigh's bulk
+      c.limb(knee, ankle, 0.08, plate, 0.065);
+      c.limb(ankle, foot, 0.065, plate, 0.05);
+      c.sphere([0.09, 0.04, 0.1], [foot[0] + 0.02, 0.03, foot[2]], plate); // a broad foot
+      const fhip: V3 = [0.06, y0 - 0.06, z * 0.12], fkRest: V3 = [0.2, y0 + 0.02, z * 0.3], frest: V3 = [0.3, 0, z * 0.36];
       const ffoot = walking ? footAt(frest, ph + 0.5, 0.1, 0.04) : frest;
       const fk = jointBetween(fhip, ffoot, span(fhip, fkRest), span(fkRest, frest), [0.5, 1, z]);
-      c.limb(fhip, fk, 0.03, plate, 0.025);
-      c.limb(fk, ffoot, 0.025, plate, 0.014);
+      c.limb(fhip, fk, 0.06, plate, 0.05);
+      c.limb(fk, ffoot, 0.05, plate, 0.035);
+      c.sphere([0.06, 0.03, 0.07], [ffoot[0] + 0.02, 0.02, ffoot[2]], plate);
     }
   }, LOOK.mother.scale(mass));
 }
