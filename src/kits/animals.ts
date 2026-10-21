@@ -14,11 +14,11 @@ export function legs(b: ModelBuilder, p: Pose, o: { fx: number; bx: number; z: n
   const walking = p.anim === 'walk';
   const t = p.phase * TAU;
   // (walking, on planted feet: diagonal pairs step together, a hoof holding where it stands as the body goes over it)
-  const bob = walking ? -0.05 * o.len + Math.abs(Math.cos(t * 2)) * 0.025 * o.len : 0;
+  const bob = walking ? -0.1 * o.len + Math.abs(Math.cos(t * 2)) * 0.03 * o.len : 0;
   for (const [x, z, ph] of [[o.fx, o.z, 0], [o.fx, -o.z, 0.5], [o.bx, o.z, 0.5], [o.bx, -o.z, 0]] as Array<[number, number, number]>) {
     const hip: Vec3 = [x, o.hip + bob, z];
     const rest: Vec3 = [x, Math.min(o.r * 0.4, o.hip - o.len * 0.98), z];
-    const foot = walking ? footAt(rest, p.phase + ph, 0.24 * o.len, 0.12 * o.len) : rest;
+    const foot = walking ? footAt(rest, p.phase + ph, 0.42 * o.len, 0.16 * o.len) : rest; // (long strides, not scurrying)
     const knee = jointBetween(hip, foot, o.len * 0.5, o.len * 0.5, [x > 0 ? 1 : -1, 0, 0]); // (a foreleg's knee forward, a hind leg's hock back)
     b.limb(hip, knee, o.r, o.mat, o.r * 0.75);
     b.limb(knee, foot, o.r * 0.7, o.mat, o.r * 0.55);

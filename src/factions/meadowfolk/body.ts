@@ -89,7 +89,7 @@ export function human(
   const t = p.phase;
   const lunge = look.stance === 'lunge' && !look.mounted;
   const walking = p.anim === 'walk' && !look.mounted && !lunge;
-  const bob = lunge ? -LUNGE.drop : walking ? -0.08 + Math.abs(Math.sin(t * TAU)) * 0.035 : // (walking, knees a touch bent: highest over a planted foot)
+  const bob = lunge ? -LUNGE.drop : walking ? -0.12 + Math.abs(Math.sin(t * TAU)) * 0.035 : // (walking, knees a touch bent: highest over a planted foot)
     p.anim === 'idle' ? Math.sin(t * TAU) * 0.008 : 0;
   const lean = torsoLean(p, look);
   const skin: Mat = { color: look.skin, tex: 'skin', rough: 0.7 };
@@ -113,7 +113,7 @@ export function human(
       if (walking) {
         // walking, a foot is planted: on the ground it slides back under the body at an even pace (as the body goes
         // over it), then lifts and swings forward to plant again; the knee falls where hip and foot put it
-        const ph = (t + (side > 0 ? 0 : 0.5)) % 1, S = 0.3;
+        const ph = (t + (side > 0 ? 0 : 0.5)) % 1, S = 0.42; // (long steps: it covers ground by its stride, not by scurrying)
         const k = ph < 0.5 ? ph / 0.5 : (ph - 0.5) / 0.5, e = k * k * (3 - 2 * k);
         ankle = ph < 0.5 ? [S - 2 * S * k, 0.055, z] : [-S + 2 * S * e, 0.055 + Math.sin(Math.PI * k) * 0.12, z];
         knee = kneeBetween(hip, ankle, 0.44, 0.42);
@@ -226,14 +226,14 @@ export function quadLegs(b: ModelBuilder, p: Pose, o: { fx: number; bx: number; 
   const t = p.phase * TAU;
   // (walking, on planted feet: diagonal pairs step together, a foot holding where it stands as the body goes over it;
   // the legs a touch bent, the body highest over its planted feet)
-  const bob = walking ? -0.05 * o.len + Math.abs(Math.cos(t * 2)) * 0.02 * o.len : 0;
+  const bob = walking ? -0.1 * o.len + Math.abs(Math.cos(t * 2)) * 0.03 * o.len : 0;
   const legs: Array<[number, number, number]> = [
     [o.fx, o.z, 0], [o.fx, -o.z, 0.5], [o.bx, o.z, 0.5], [o.bx, -o.z, 0],
   ];
   for (const [x, z, ph] of legs) {
     const hip: Vec3 = [x, o.hip + bob, z];
     const rest: Vec3 = [x + (p.anim === 'tired' ? 0.04 * o.len : 0), Math.min(o.r * 0.5, o.hip - o.len * 0.98), z];
-    const foot = walking ? footAt(rest, p.phase + ph, 0.22 * o.len, 0.12 * o.len) : rest;
+    const foot = walking ? footAt(rest, p.phase + ph, 0.42 * o.len, 0.16 * o.len) : rest; // (long strides: a runner covers ground by reach, not by scurrying)
     const knee = jointBetween(hip, foot, o.len * 0.5, o.len * 0.5, [x > 0 ? 1 : -1, 0, 0]); // (a foreleg's knee forward, a hind leg's hock back)
     b.limb(hip, knee, o.r, o.mat, o.r * 0.8);
     b.limb(knee, foot, o.r * 0.75, o.mat, o.r * 0.65);
