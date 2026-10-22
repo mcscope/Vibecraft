@@ -2418,7 +2418,7 @@ export class World {
     return (cx2 - u.x) ** 2 + (cy2 - u.y) ** 2 <= reach * reach;
   }
 
-  private crawls(u: Unit): boolean { return !!this.specOf(u.owner, u.specId)?.spec.crawls; }
+  crawls(u: Unit): boolean { return !!this.specOf(u.owner, u.specId)?.spec.crawls; }
 
   /** Soft collisions so crowds spread out. Heavier units push lighter ones. */
   private separate(): void {

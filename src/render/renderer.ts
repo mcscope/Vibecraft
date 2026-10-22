@@ -488,7 +488,7 @@ export class Renderer {
         this.alt.set(u.id, a0 + (target - a0) * Math.min(1, this.dt * 18)); // (close behind its real height: a dive reads as a dive)
       }
       sp.position.set(isoX(x, y), isoY(x, y) - this.lift(u.id));
-      sp.zIndex = x + y + (u.airborne ? 2 : 0);
+      sp.zIndex = x + y + (u.airborne ? 2 : 0) - (this.world.crawls(u) ? 1.5 : 0); // (a crawler goes under the bodies it crawls beneath)
       const art = this.bank.unit(u.owner, u.specId);
       if (art) {
         // a bird still off the ground (taking off, gliding in to land) keeps its wings spread
@@ -774,7 +774,7 @@ export class Renderer {
       this.setFrame(s, frame);
       s.scale.set(k / frame.q);
       s.position.set(isoX(px, py), isoY(px, py));
-      s.zIndex = px + py;
+      s.zIndex = px + py - (this.world.crawls(u) ? 1.5 : 0);
       s.tint = front.tint;
       s.visible = front.visible;
     });
