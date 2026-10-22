@@ -229,16 +229,20 @@ export function gStag(b: ModelBuilder, p: Pose): void {
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
     const y = 0.5;
     c.loft([[0.3, 0.14, 0.12, 0.1], [0.12, 0.3, 0.3, 0.2], [-0.12, 0.26, 0.24, 0.16], [-0.38, 0.18, 0.14, 0.1], [-0.52, 0.06, 0.05, 0.04]].map(([x, w, u, d]) => ({ at: [x, y - (0.3 - x) * 0.25, 0] as Vec3, w, up: u, down: d, keel: 0.3 })), chitin); // hunched: high shoulders, falling away
-    c.sphere([0.14, 0.1, 0.13], [0.36, y + 0.0, 0], chitin); // the head
-    for (const z of [1, -1]) { // the mandibles: great curving antlers, closing on a blow
-      const open = 0.35 - clamp * 0.3;
-      c.joint([0.44, y + 0.02, z * 0.08], [0, z * open, 0.15], (m) => {
-        shapedLimb(m, [0, 0, 0], [0.24, 0.04, 0], 0.05, [1.1, 1.0, 0.9, 0.8], rim, { flat: 0.4 }); // (glossy black mandibles)
-        shapedLimb(m, [0.24, 0.04, 0], [0.42, 0.0, -z * 0.1], 0.04, [0.9, 0.7, 0.5, 0.3], rim, { flat: 0.4 });
-        m.cone(0.015, 0.06, [0.2, 0.0, -z * 0.04], claw, [z * Math.PI / 2, 0, 0], 4);
-      });
+    // the head: broad and flattened, as a stag beetle's, eyes on its sides, a mouth beneath its front
+    c.loft([[0.28, 0.1, 0.08, 0.07], [0.38, 0.15, 0.08, 0.07, 0.4], [0.48, 0.13, 0.06, 0.06, 0.5], [0.53, 0.08, 0.04, 0.045]].map(([x, w, u, d, fl]) => ({ at: [x, y, 0] as Vec3, w, up: u, down: d, flat: fl ?? 0 })), chitin);
+    for (const z of [1, -1]) c.sphere([0.028, 0.03, 0.022], [0.42, y + 0.035, z * 0.14], { color: '#0a0806', rough: 0.1, metal: 0.4 }); // eyes
+    c.sphere([0.03, 0.022, 0.05], [0.53, y - 0.04, 0], { color: '#2a0c08', tex: 'skin', rough: 0.8 }); // the mouth
+    // the mandibles, from the mouth's corners: sweeping out and forward, then curving back in, their tips gripping the
+    // crystal between them (closing harder on a blow)
+    const grip = 0.035; // (the tips' half-gap: the crystal's width, gripped)
+    for (const z of [1, -1]) {
+      const root: Vec3 = [0.5, y - 0.03, z * 0.07], elbow: Vec3 = [0.66, y + 0.02, z * (0.2 - clamp * 0.04)], tip: Vec3 = [0.84, y - 0.02, z * (grip + 0.005)];
+      shapedLimb(c, root, elbow, 0.045, [1.15, 1.05, 0.95, 0.85], rim, { flat: 0.45 });
+      shapedLimb(c, elbow, tip, 0.038, [0.95, 0.8, 0.6, 0.35], rim, { flat: 0.45 });
+      c.cone(0.012, 0.05, [(elbow[0] + tip[0]) / 2, y - 0.01, z * ((elbow[2] * z + grip) / 2 - 0.02)], claw, [z * Math.PI / 2, 0, 0], 4); // a tooth on its inner edge
     }
-    if (p.armed) c.crystal(0.12, [0.66, y - 0.02, 0], [0, 0, -Math.PI / 2]);
+    if (p.armed) c.crystal(0.12, [0.8, y - 0.02, 0], [0, 0, -Math.PI / 2]); // held in the mandibles' grip
     for (const z of [1, -1]) {
       gLeg(c, [0.16, y + 0.08, z * 0.26], [0.36, 0, z * 0.42], p.phase + (z > 0 ? 0 : 0.5), walking, 0.36, 0.38, 0.085, [-0.3, 0.6, z], 0.1, second); // the great forelegs, knuckling
       gLeg(c, [-0.36, y - 0.12, z * 0.14], [-0.4, 0, z * 0.3], p.phase + 0.5 + (z > 0 ? 0 : 0.5), walking, 0.2, 0.2, 0.045, [0.5, 0.6, z], undefined, second);
