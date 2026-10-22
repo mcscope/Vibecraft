@@ -319,16 +319,31 @@ export function gStag(b: ModelBuilder, p: Pose, torso: GoliathTorso = 'geode'): 
   // speed: reach × 2 ÷ duty a loop, the same for each leg.) Idle, it breathes; striking, it rears back on its
   // forelegs and slams its head down
   const bound = walking && p.style === 'charge', ph = ((p.phase % 1) + 1) % 1;
-  const FORE = bound ? { reach: 0.28, duty: 0.35, lift: 0.16 } : { reach: 0.22, duty: 0.6, lift: 0.14 };
-  const HIND = bound ? { reach: 0.14, duty: 0.175, lift: 0.08 } : { reach: 0.0917, duty: 0.5, lift: 0.05 }; // (walking, two steps a loop; bounding, a short hard push)
+  const FORE = bound ? { reach: 0.28, duty: 0.35, lift: 0.16 } : { reach: 0, duty: 0, lift: 0.16 }; // (walking: worked out below)
+  const HIND = bound ? { reach: 0.14, duty: 0.175, lift: 0.08 } : { reach: 0, duty: 0.5, lift: 0.07 }; // (bounding, a short hard push)
   const sm = (x: number) => { const k = Math.max(0, Math.min(1, x)); return k * k * (3 - 2 * k); };
   let surge = 0, dip = p.anim === 'idle' ? Math.sin(t) * 0.01 : 0, pitch = 0, nod = 0;
+  // the crutch-walk, worked out on the ground: its body vaults 2A through its planted forelegs, then creeps on (a share
+  // σ of the loop's S) while they reach, its hind feet down. The model's origin moves at an even S a loop, so the
+  // body surges ahead of it and falls back; feet down stay where they were put
+  let fore: ((z: number) => Vec3) | null = null, hind: ((z: number) => Vec3) | null = null;
   if (walking && !bound) {
-    const st = ph < FORE.duty, k = st ? ph / FORE.duty : (ph - FORE.duty) / (1 - FORE.duty);
-    surge = st ? 0.05 * (sm(k) * 2 - 1) : 0.05 * (1 - sm(k) * 2); // (lagging as it plants, vaulting ahead of its pillars)
-    dip = st ? 0.05 * Math.sin(Math.PI * k) - 0.03 * Math.max(0, 1 - k / 0.15) : -0.015 * Math.sin(Math.PI * k); // (up over them; the crash of the plant)
-    pitch = st ? -0.06 * Math.max(0, 1 - k / 0.3) : 0.08 * Math.sin(Math.PI * k); // (nose up as it reaches, down into the plant)
-    nod = st ? 0.12 * Math.max(0, 1 - k / 0.35) : -0.05 * Math.sin(Math.PI * k);
+    const A = 0.3, sig = 0.18, S = (2 * A) / (1 - sig), d = 0.55;
+    const ease = (k: number) => 0.4 * k + 0.6 * sm(k); // (the vault: quickest as it passes over)
+    const B = (q: number) => q < d ? 2 * A * ease(q / d) : 2 * A + sig * S * sm((q - d) / (1 - d)); // (its body, on the ground)
+    let mean = 0; for (let i = 0; i < 24; i++) mean += (B(i / 24) - S * (i / 24)) / 24;
+    const toModel = (w: number) => w - S * ph - mean; // (a spot on the ground, in the model's frame now)
+    surge = toModel(B(ph));
+    const st = ph < d, k = st ? ph / d : (ph - d) / (1 - d);
+    fore = (z) => { const w0 = 0.21 + A, w = st ? w0 : w0 + S * sm(k); return [toModel(w), st ? 0 : Math.sin(Math.PI * k) * FORE.lift, z * 0.42]; };
+    hind = (z) => { // (down while the forelegs reach; hopping on together, one a touch behind, as it vaults)
+      const lag = z > 0 ? 0 : 0.08, kh = st ? Math.max(0, (k - lag) / (1 - lag)) : 1;
+      const w1 = 2 * A - 0.4 + sig * S / 2, w = st ? w1 - S + S * sm(kh) : w1;
+      return [toModel(w), st ? Math.sin(Math.PI * kh) * HIND.lift : 0, z * 0.3];
+    };
+    dip = st ? 0.09 * Math.sin(Math.PI * k) - 0.04 * Math.max(0, 1 - k / 0.15) : -0.02 * Math.sin(Math.PI * k); // (up over them; the crash of the plant)
+    pitch = st ? -0.08 * Math.max(0, 1 - k / 0.3) : 0.1 * Math.sin(Math.PI * k); // (nose up as it reaches, down into the plant)
+    nod = st ? 0.14 * Math.max(0, 1 - k / 0.35) : -0.06 * Math.sin(Math.PI * k);
   } else if (bound) {
     const air = (x: number) => Math.sin(Math.PI * Math.max(0, Math.min(1, x))); // (off the ground in the gaps between plants)
     dip = 0.07 * (air((ph - FORE.duty) / (0.5 - FORE.duty)) + air((ph - 0.5 - HIND.duty) / (0.5 - HIND.duty))) - 0.03 * Math.sin(Math.PI * Math.min(1, ph / FORE.duty));
@@ -367,9 +382,8 @@ export function gStag(b: ModelBuilder, p: Pose, torso: GoliathTorso = 'geode'): 
     // off together (bounding). Their hips ride with the body's surge, pitch and dip
     const hindY = (x: number) => y + Math.min(0.03, Math.sin(rear + pitch) * (x - 0.16)); // (its short hind legs keep their feet down: rising little)
     for (const z of [1, -1]) {
-      gLeg(c, [0.16 + surge, y + 0.08, z * 0.26], [0.36, 0, z * 0.42], ph + (z > 0 ? 0 : 0.03), walking, 0.36, 0.38, 0.085, [-0.3, 0.6, z], FORE.reach, second, FORE.lift, FORE.duty);
-      const hp = bound ? ph + 0.5 + (z > 0 ? 0 : 0.03) : 2 * ph + 0.2 + (z > 0 ? 0 : 0.5);
-      gLeg(c, [-0.36 + surge, hindY(-0.36) - 0.12, z * 0.14], [-0.4, 0, z * 0.3], hp, walking, 0.2, 0.2, 0.045, [0.5, 0.6, z], HIND.reach, second, HIND.lift, HIND.duty);
+      gLeg(c, [0.16 + surge, y + 0.08, z * 0.26], fore?.(z) ?? [0.36, 0, z * 0.42], ph + (z > 0 ? 0 : 0.03), walking && !fore, 0.36, 0.38, 0.085, [-0.3, 0.6, z], FORE.reach, second, FORE.lift, FORE.duty);
+      gLeg(c, [-0.36 + surge, hindY(-0.36) - 0.12, z * 0.14], hind?.(z) ?? [-0.4, 0, z * 0.3], ph + 0.5 + (z > 0 ? 0 : 0.03), walking && !hind, 0.2, 0.2, 0.045, [0.5, 0.6, z], HIND.reach, second, HIND.lift, HIND.duty);
     }
   }, G);
 }
