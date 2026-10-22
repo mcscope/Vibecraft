@@ -2,7 +2,7 @@
 // between frames and are batched by the GPU, so thousands of trees and units
 // stay cheap. Reads simulation state, never writes it.
 import { Application, Container, ImageSource, Matrix, Rectangle, Sprite as PixiSprite, Text, Texture, type TextureSource } from 'pixi.js';
-import { type Building, type Order, type ResourceNode, type Unit, type World, type WorldEvent } from '../sim/world';
+import { DT, type Building, type Order, type ResourceNode, type Unit, type World, type WorldEvent } from '../sim/world';
 import { Camera, isoX, isoY, TILE_H, TILE_W } from './camera';
 import { isUnderfoot, parcelPos } from '../sim/abilities/underfoot';
 import { LEAP_TIME } from '../sim/abilities/flight';
@@ -729,8 +729,9 @@ export class Renderer {
     if (!was) { this.posture.set(id, { up, at: -Infinity, sat: false }); return {}; }
     // (stopping, it stays up a couple of seconds before it sits. It gets up again only if it actually sat)
     const SIT_AFTER = 2;
-    if (was.up !== up) { was.at = up && !was.sat ? -Infinity : this.time; was.up = up; was.sat = false; }
-    const k = (this.time - was.at - (up ? 0 : SIT_AFTER)) / RISE;
+    const now = this.world.tick * DT; // (game time: it keeps pace with the game at any speed, slow motion included)
+    if (was.up !== up) { was.at = up && !was.sat ? -Infinity : now; was.up = up; was.sat = false; }
+    const k = (now - was.at - (up ? 0 : SIT_AFTER)) / RISE;
     if (!up && k >= 0) was.sat = true; // (it has begun to sit)
     if (k >= 1) return {};
     return { anim: 'rise', progress: up ? Math.max(0, k) : Math.min(0.999, 1 - Math.max(0, k)), time: undefined, walked: undefined };
