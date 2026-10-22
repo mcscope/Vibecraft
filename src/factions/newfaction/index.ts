@@ -856,7 +856,7 @@ const dragonFly = unit({ id: 'dragon-fly', name: 'Dragon Fly', mass: 500, physiq
   attack: { style: 'throw', crystalMass: 6, ammo: 10 }, // PLACEHOLDER: its fire (a conversion of crystal) is still to design
   description: 'T3: a fire-breathing dragon with butterfly wings, insectoid and reptilian.', model: (b, p) => drawDragonFly(b, p, 500) }, 'dragon');
 const groundAttacker3 = unit({ id: 'ground-attacker3', name: 'Goliath Charger', mass: 600, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 4,
-  attack: { style: 'strike', crystalMass: 8 }, description: 'T3: a stag bull: hunched and front-heavy on two massive knuckle-walking forelegs, huge mandibles clamping its crystal.', model: (b, p) => gStag(b, p) }, 'goliath');
+  attack: { style: 'strike', crystalMass: 8 }, description: 'T3: a stag bull: hunched and front-heavy on two massive knuckle-walking forelegs, huge mandibles clamping its crystal.', model: (b, p) => gStag(b, p, 'bellows') }, 'goliath'); // (bellows for now, to try in the arena: the torso is not yet chosen)
 
 export const units: Unit[] = [
   motherOf(1, 80), motherOf(2, 120), motherOf(3, 500), // (the T3 mother weighs a lot more: the user's)

@@ -180,8 +180,8 @@ const claw: Mat = { color: '#0c0e0e', tex: 'none', rough: 0.4 };
 const G = 2.4;
 
 /** A leg from hip to a planted foot, the knee bending toward `bend`, shaped and tapering. */
-function gLeg(c: ModelBuilder, hip: Vec3, rest: Vec3, phase: number, walking: boolean, l1: number, l2: number, r: number, bend: Vec3, reach = 0.08, mat: Mat = chitin): void {
-  const foot = walking ? footAt(rest, phase, reach, 0.05) : rest;
+function gLeg(c: ModelBuilder, hip: Vec3, rest: Vec3, phase: number, walking: boolean, l1: number, l2: number, r: number, bend: Vec3, reach = 0.08, mat: Mat = chitin, lift = 0.05, duty = 0.5): void {
+  const foot = walking ? footAt(rest, phase, reach, lift, duty) : rest;
   const knee = jointBetween(hip, foot, l1, l2, bend);
   shapedLimb(c, hip, knee, r, [1.2, 1.3, 1.1, 0.85], mat, { flat: 0.25 });
   c.sphere(r * 0.9, knee, mat);
@@ -312,14 +312,35 @@ export function gStag(b: ModelBuilder, p: Pose, torso: GoliathTorso = 'geode'): 
   const edge: Mat = { color: '#2a120c', tex: 'none', rough: 0.2, metal: 0.4 };
   const belly: Mat = { color: '#7a3424', tex: 'leather', rough: 0.4 };
   const second: Mat = { color: '#7a3424', tex: 'leather', rough: 0.35 };
-  // its weight: rolling onto the planted foreleg and dipping as it lands, a nod; breathing at rest; rearing back and
-  // slamming down to strike
-  const roll = walking ? Math.sin(t) * 0.09 : 0, dip = walking ? -Math.abs(Math.sin(t)) * 0.035 : p.anim === 'idle' ? Math.sin(t) * 0.01 : 0;
+  // how it walks: front-heavy on two great pillars, it crutch-walks. Both forelegs reach and plant together, its weight
+  // crashing onto them (the head dipping), then the body vaults up and forward through them, highest as it passes
+  // over, while the small hind legs shuffle two quick steps beneath it. Charging, it bounds: forelegs together, then
+  // hind together, gathering and launching, off the ground between. (Feet planted: every foot down moves back at one
+  // speed: reach × 2 ÷ duty a loop, the same for each leg.) Idle, it breathes; striking, it rears back on its
+  // forelegs and slams its head down
+  const bound = walking && p.style === 'charge', ph = ((p.phase % 1) + 1) % 1;
+  const FORE = bound ? { reach: 0.2, duty: 0.35, lift: 0.12 } : { reach: 0.14, duty: 0.6, lift: 0.1 };
+  const HIND = bound ? { reach: 0.14, duty: 0.245, lift: 0.08 } : { reach: 0.07, duty: 0.6, lift: 0.04 }; // (walking, two steps a loop)
+  const sm = (x: number) => { const k = Math.max(0, Math.min(1, x)); return k * k * (3 - 2 * k); };
+  let surge = 0, dip = p.anim === 'idle' ? Math.sin(t) * 0.01 : 0, pitch = 0, nod = 0;
+  if (walking && !bound) {
+    const st = ph < FORE.duty, k = st ? ph / FORE.duty : (ph - FORE.duty) / (1 - FORE.duty);
+    surge = st ? 0.05 * (sm(k) * 2 - 1) : 0.05 * (1 - sm(k) * 2); // (lagging as it plants, vaulting ahead of its pillars)
+    dip = st ? 0.05 * Math.sin(Math.PI * k) - 0.03 * Math.max(0, 1 - k / 0.15) : -0.015 * Math.sin(Math.PI * k); // (up over them; the crash of the plant)
+    pitch = st ? -0.06 * Math.max(0, 1 - k / 0.3) : 0.08 * Math.sin(Math.PI * k); // (nose up as it reaches, down into the plant)
+    nod = st ? 0.12 * Math.max(0, 1 - k / 0.35) : -0.05 * Math.sin(Math.PI * k);
+  } else if (bound) {
+    const air = (x: number) => Math.sin(Math.PI * Math.max(0, Math.min(1, x))); // (off the ground in the gaps between plants)
+    dip = 0.07 * (air((ph - FORE.duty) / (0.5 - FORE.duty)) + air((ph - 0.5 - HIND.duty) / (0.5 - HIND.duty))) - 0.03 * Math.sin(Math.PI * Math.min(1, ph / FORE.duty));
+    pitch = -0.1 * Math.sin(2 * Math.PI * ph); // (nose down landing on its forelegs, up as the hind legs launch it)
+    surge = 0.03 * Math.sin(2 * Math.PI * ph);
+    nod = 0.08 * Math.sin(2 * Math.PI * ph);
+  }
+  const roll = 0;
   const rear = atk < 0 ? 0 : atk < 0.3 ? 0.32 * Math.sin((atk / 0.3) * Math.PI / 2) : atk < 0.45 ? 0.32 - 0.62 * ((atk - 0.3) / 0.15) : -0.3 * (1 - (atk - 0.45) / 0.55) ** 2;
-  const nod = walking ? Math.sin(t * 2) * 0.05 : 0;
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
     const y = 0.5 + dip;
-    c.joint([0.16, y, 0], [roll, 0, rear], (bd) => { // (the body pivots over its forelegs)
+    c.joint([0.16 + surge, y, 0], [roll, 0, rear + pitch], (bd) => { // (the body pivots over its forelegs)
       const Y = 0;
       const X = (x: number) => x - 0.16;
       goliathTorso(bd, torso, X, Y, t, p, { shell, plate, edge, belly });
@@ -342,11 +363,13 @@ export function gStag(b: ModelBuilder, p: Pose, torso: GoliathTorso = 'geode'): 
         }
       });
     });
-    // the legs: the great forelegs knuckling, the hind legs smaller; their hips go with the body's roll and dip
+    // the legs: the great forelegs knuckling, planting together; the hind legs smaller, shuffling (walking) or pushing
+    // off together (bounding). Their hips ride with the body's surge, pitch and dip
+    const hindY = (x: number) => y + Math.min(0.03, Math.sin(rear + pitch) * (x - 0.16)); // (its short hind legs keep their feet down: rising little)
     for (const z of [1, -1]) {
-      const lift = roll * z * 0.26;
-      gLeg(c, [0.16, y + 0.08 - lift, z * 0.26], [0.36, 0, z * 0.42], p.phase + (z > 0 ? 0 : 0.5), walking, 0.36, 0.38, 0.085, [-0.3, 0.6, z], 0.1, second);
-      gLeg(c, [-0.36, y - 0.12 - lift * 0.5 + rear * 0.3, z * 0.14], [-0.4, 0, z * 0.3], p.phase + 0.5 + (z > 0 ? 0 : 0.5), walking, 0.2, 0.2, 0.045, [0.5, 0.6, z], undefined, second);
+      gLeg(c, [0.16 + surge, y + 0.08, z * 0.26], [0.36, 0, z * 0.42], ph + (z > 0 ? 0 : 0.03), walking, 0.36, 0.38, 0.085, [-0.3, 0.6, z], FORE.reach, second, FORE.lift, FORE.duty);
+      const hp = bound ? ph + 0.5 + (z > 0 ? 0 : 0.03) : 2 * ph + 0.2 + (z > 0 ? 0 : 0.5);
+      gLeg(c, [-0.36 + surge, hindY(-0.36) - 0.12, z * 0.14], [-0.4, 0, z * 0.3], hp, walking, 0.2, 0.2, 0.045, [0.5, 0.6, z], HIND.reach, second, HIND.lift, HIND.duty);
     }
   }, G);
 }
