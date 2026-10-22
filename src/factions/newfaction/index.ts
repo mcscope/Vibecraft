@@ -403,8 +403,8 @@ function trebuchetParts(q: ModelBuilder, p: Pose, tp: number, rp: number, tint: 
   q.loft([[0.16, 0.1, 0.1, 0.08], [0.26, 0.13, 0.13, 0.09], [0.36, 0.1, 0.1, 0.07], [0.42, 0.05, 0.05, 0.04]].map(([x, w, u, d]) => ({ at: [x, 0.04, 0] as V, w, up: u, down: d, flat: 0.25 })), sheen);
   for (const x of [0.2, 0.28, 0.36]) q.cone(0.022, 0.07, [x, 0.17, 0], chitin, [0, 0, 0.5], 4);
   // the pouch of crystals on its counterweight
-  q.sphere([0.06, 0.045, 0.05], [0.0, 0.18, 0.06], cord); // (on its shoulders, where the curled arm reaches)
-  for (const [dx, dz] of [[-0.02, 0.04], [0.02, 0.07], [0.0, 0.055]] as const) q.crystal(0.05, [0.0 + dx, 0.21, dz], [0.3, 0, 0.2]);
+  q.sphere([0.06, 0.045, 0.05], [0.24, 0.2, 0.07], cord); // (on its counterweight)
+  for (const [dx, dz] of [[-0.02, 0.05], [0.02, 0.08], [0.0, 0.065]] as const) q.crystal(0.05, [0.24 + dx, 0.23, dz], [0.3, 0, 0.2]);
   // the arm's swing about the tail's base: reloading, up over its back to the pouch and back down low behind (cocked);
   // winding up to throw, pulled down to the ground
   const ease = (x: number) => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c); };
@@ -412,7 +412,7 @@ function trebuchetParts(q: ModelBuilder, p: Pose, tp: number, rp: number, tint: 
   // low, cocked; winding up to throw, the arm is pulled down to the ground)
   const reach = rp >= 0 ? (rp < 0.45 ? ease(rp / 0.45) : rp < 0.55 ? 1 : 1 - ease((rp - 0.55) / 0.45)) : 0;
   const arm = rp >= 0 ? 1.2 * reach - (rp > 0.55 ? 0.35 * ease((rp - 0.55) / 0.45) : 0) : tp >= 0 && tp < 0.3 ? -0.35 * ease(tp / 0.3) : 0;
-  const curl = 2.6 * reach;
+  const curl = 3.2 * reach; // (curled, the long arm's tip comes over to hang its sling on the counterweight's pouch)
   const loaded = p.armed && (rp >= 0 ? rp > 0.5 : tp < 0 || tp < 0.5);
   q.joint([-0.58, 0, 0], [0, 0, -arm], (a) => trebuchetArm(a, tp, loaded, curl, chitin, sheen, cord));
   for (const z of [1, -1]) q.limb([-0.3, -0.06, z * 0.06], [-0.58, 0, z * 0.015], 0.008, chitin, 0.005); // struts
@@ -422,10 +422,10 @@ function trebuchetParts(q: ModelBuilder, p: Pose, tp: number, rp: number, tint: 
 function trebuchetArm(q: ModelBuilder, tp: number, loaded: boolean, curl: number, chitin: Mat, sheen: Mat, cord: Mat): void {
   type V = [number, number, number];
   let at: V = [0, 0, 0];
-  for (let i = 1; i <= 5; i++) {
-    const th = curl * ((i - 0.5) / 5); // (curling: each segment turned up and over a little further than the last)
-    const nx: V = [at[0] - 0.12 * Math.cos(th), at[1] + 0.012 + 0.12 * Math.sin(th), 0];
-    shapedLimb(q, at, nx, 0.035 * (1 - i * 0.12), [1.1, 0.85, 0.9, 1.05], i % 2 ? chitin : sheen, { flat: 0.3 });
+  for (let i = 1; i <= 8; i++) { // (a long arm: eight segments)
+    const th = curl * ((i - 0.5) / 8); // (curling: each segment turned up and over a little further than the last)
+    const nx: V = [at[0] - 0.16 * Math.cos(th), at[1] + 0.012 + 0.16 * Math.sin(th), 0];
+    shapedLimb(q, at, nx, 0.038 * (1 - i * 0.08), [1.1, 0.85, 0.9, 1.05], i % 2 ? chitin : sheen, { flat: 0.3 });
     q.cone(0.012, 0.045, [nx[0] + 0.05, nx[1] + 0.03, 0], chitin, [0, 0, 0.6], 4);
     at = nx;
   }
