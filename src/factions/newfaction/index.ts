@@ -301,11 +301,7 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
     c.joint([ramShift + 0.08 * spear, H + bob + 0.04 - 0.08 * dip - 0.07 * spear, 0], [0, 0, tilt + ramTilt + treb + (running ? (spear ? -0.02 : -0.15) : 0) - 0.35 * dip], (t) => t.joint([0, 0, 0], [0, 0, 0], (q) => {
       if (k.goliath) goliathBody(q, p, k.tint);
       else spikeBody(q, k.whip || k.trebuchet ? false : p.armed, k.tint);
-      if (k.trebuchet) { // the sling at its tail tip, the crystal in it till it's loosed
-        q.limb([-0.66, 0, 0], [-0.78, -0.04, 0], 0.008, { color: '#5a4a3a', tex: 'leather' });
-        q.sphere([0.03, 0.02, 0.03], [-0.8, -0.05, 0], { color: '#3a2e24', tex: 'leather' });
-        if (p.armed && (tp < 0 || tp < 0.5)) q.crystal(0.08, [-0.8, -0.04, 0], [0, 0, Math.PI / 2]);
-      }
+      if (k.trebuchet) trebuchetParts(q, p, tp, k.tint);
       if (k.whip) whipArms(q, p, (k.whip / LOOK.lasher.scale(mass)) / k.body, k.tint);
     }, k.body));
   }, (k.goliath ? LOOK.goliath : k.whip ? LOOK.lasher : LOOK.charger).scale(mass));
@@ -389,6 +385,36 @@ function whipArms(c: ModelBuilder, p: Pose, len: number, tint: string): void {
     }
     if (p.armed && z > 0) c.crystal(0.14, at, [0, 0, -Math.PI / 2 + (1 - out) * Math.PI]); // the crystal at the near lash's tip
   }
+}
+
+/**
+ * The slinger's trebuchet (the user's design), on the charger's body: a heavy armoured head, the counterweight that
+ * plunges; its tail drawn out into a long segmented throwing arm, spined and braced by struts; and at its end a long
+ * sling cord with a pouch, the crystal in it till it's loosed at the top of the swing. `tp`: the throw's progress (-1 when not throwing).
+ */
+function trebuchetParts(q: ModelBuilder, p: Pose, tp: number, tint: string): void {
+  type V = [number, number, number];
+  const chitin: Mat = { color: '#1a2628', tex: 'leather', rough: 0.3, metal: 0.35 };
+  const sheen: Mat = { color: tint, tex: 'leather', rough: 0.3, metal: 0.4 };
+  const cord: Mat = { color: '#6a5640', tex: 'leather', rough: 0.8 };
+  // the counterweight: plates over a heavy head
+  q.loft([[0.16, 0.1, 0.1, 0.08], [0.26, 0.13, 0.13, 0.09], [0.36, 0.1, 0.1, 0.07], [0.42, 0.05, 0.05, 0.04]].map(([x, w, u, d]) => ({ at: [x, 0.04, 0] as V, w, up: u, down: d, flat: 0.25 })), sheen);
+  for (const x of [0.2, 0.28, 0.36]) q.cone(0.022, 0.07, [x, 0.17, 0], chitin, [0, 0, 0.5], 4);
+  // the throwing arm: the tail drawn out in segments, spined, braced from the hips
+  let at: V = [-0.58, 0, 0];
+  for (let i = 1; i <= 5; i++) {
+    const nx: V = [-0.58 - i * 0.12, 0.012 * i, 0];
+    shapedLimb(q, at, nx, 0.035 * (1 - i * 0.12), [1.1, 0.85, 0.9, 1.05], i % 2 ? chitin : sheen, { flat: 0.3 });
+    q.cone(0.012, 0.045, [nx[0] + 0.05, nx[1] + 0.03, 0], chitin, [0, 0, 0.6], 4);
+    at = nx;
+  }
+  for (const z of [1, -1]) q.limb([-0.3, -0.06, z * 0.06], [-0.82, 0.03, z * 0.015], 0.008, chitin, 0.005); // struts
+  // the sling: a long cord swinging from the arm's end, its pouch, the crystal in it till it's loosed
+  const swing = tp < 0 ? 0 : tp < 0.3 ? -0.3 * (tp / 0.3) : tp < 0.55 ? -0.3 + 1.6 * ((tp - 0.3) / 0.25) : 1.3 - 1.3 * ((tp - 0.55) / 0.45);
+  const pouch: V = [at[0] - 0.16 * Math.cos(swing), at[1] - 0.16 * Math.sin(-swing) - 0.04, 0];
+  q.limb(at, pouch, 0.006, cord, 0.005);
+  q.sphere([0.045, 0.028, 0.04], pouch, cord);
+  if (p.armed && (tp < 0 || tp < 0.5)) q.crystal(0.09, [pouch[0], pouch[1] + 0.01, 0], [0, 0, Math.PI / 2]);
 }
 
 /** How far apart a caterpillar's segments are along its path (model units, before its size). */
@@ -848,8 +874,9 @@ const flier = unit({ id: 'flier', name: 'Vimmer', mass: 120, physique: { muscle:
   attack: { style: 'strike', crystalMass: 2 }, description: 'T2: a dive bomber: it swoops down onto its target to strike, its dive behind the blow, and climbs away again.', model: (b, p) => drawVimmer(b, p, 120) }, 'vimmer');
 const whipweld = unit({ id: 'whipweld', name: 'Whipweld', mass: 150, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 3,
   attack: { style: 'strike', crystalMass: 4, whip: 2 }, description: 'T2: on two running legs, two whip arms held back along its torso; it dips and lashes one out, its crystal at the tip, a long reach.', model: (b, p) => drawCharger(b, p, 150, LASHER) }, 'lasher');
-const slinger = unit({ id: 'slinger', name: 'Slinger', mass: 60, physique: { muscle: 0.5, frame: 0.3, reserve: 0.2 }, refinement: 3,
-  attack: { style: 'throw', crystalMass: 0.5, ammo: 8, sling: 0.6 }, description: 'T2: the charger\'s build; its body is a trebuchet\'s arm: it rears back, plunges its head and whips its tail over, loosing the crystal from a sling at its tip.', model: (b, p) => drawCharger(b, p, 60, SLINGER) }, 'charger');
+const slinger = unit({ id: 'slinger', name: 'Slinger', mass: 130, // (a T2's size, as the Vimmer and the Whipweld)
+  physique: { muscle: 0.5, frame: 0.3, reserve: 0.2 }, refinement: 3,
+  attack: { style: 'throw', crystalMass: 0.5, ammo: 8, sling: 0.6 }, description: 'T2: the charger\'s build; its body is a trebuchet\'s arm: it rears back, plunges its head and whips its tail over, loosing the crystal from a sling at its tip.', model: (b, p) => drawCharger(b, p, 130, SLINGER) }, 'charger');
 const dragonFly = unit({ id: 'dragon-fly', name: 'Dragon Fly', mass: 500, physique: { muscle: 0.5, frame: 0.3, reserve: 0.2 }, refinement: 4, flight: true,
   attack: { style: 'throw', crystalMass: 6, ammo: 10 }, // PLACEHOLDER: its fire (a conversion of crystal) is still to design
   description: 'T3: a fire-breathing dragon with butterfly wings, insectoid and reptilian.', model: (b, p) => drawDragonFly(b, p, 500) }, 'dragon');
