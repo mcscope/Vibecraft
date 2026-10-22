@@ -286,9 +286,10 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
     // (a lasher doesn't ram: it dips its torso down as it lashes)
     // (striking, a battering ram: drawn back on its legs, then slammed forward level and hard, spike first)
     const hit = p.anim === 'attack' && !k.whip ? p.phase : -1;
-    const ramX = hit < 0 ? 0 : hit < 0.35 ? -0.12 * Math.sin((hit / 0.35) * Math.PI / 2) : hit < 0.5 ? -0.12 + 0.52 * ((hit - 0.35) / 0.15) : 0.4 * (1 - (hit - 0.5) / 0.5) ** 2;
+    const ramX = hit < 0 ? 0 : hit < 0.38 ? -0.3 * Math.sin((hit / 0.38) * Math.PI / 2) : hit < 0.5 ? -0.3 + 1.0 * ((hit - 0.38) / 0.12) : 0.7 * (1 - (hit - 0.5) / 0.5) ** 2; // (exaggerated: far back, then a long hard slam)
+    const ramTilt = hit < 0 ? 0 : hit < 0.38 ? 0.25 * Math.sin((hit / 0.38) * Math.PI / 2) : hit < 0.5 ? 0.25 - 0.45 * ((hit - 0.38) / 0.12) : -0.2 * (1 - (hit - 0.5) / 0.5) ** 2; // (rearing back, then driving down into it)
     const dip = k.whip ? Math.sin(Math.min(1, p.phase / 0.7) * Math.PI) * (p.anim === 'attack' ? 1 : 0) : 0;
-    c.joint([ramX * k.body / 0.7 + 0.08 * spear, H + bob + 0.04 - 0.08 * dip - 0.07 * spear, 0], [0, 0, tilt + (running ? (spear ? -0.02 : -0.15) : 0) - 0.35 * dip], (t) => t.joint([0, 0, 0], [0, 0, 0], (q) => {
+    c.joint([ramX * k.body / 0.7 + 0.08 * spear, H + bob + 0.04 - 0.08 * dip - 0.07 * spear, 0], [0, 0, tilt + ramTilt + (running ? (spear ? -0.02 : -0.15) : 0) - 0.35 * dip], (t) => t.joint([0, 0, 0], [0, 0, 0], (q) => {
       if (k.goliath) goliathBody(q, p, k.tint);
       else spikeBody(q, k.whip ? false : p.armed, k.tint);
       if (k.whip) whipArms(q, p, (k.whip / LOOK.lasher.scale(mass)) / k.body, k.tint);

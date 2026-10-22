@@ -1535,6 +1535,8 @@ export class World {
       return true;
     }
     // a striker in the air dives on one on the ground, and strikes only once it's down at it (flight.ts)
+    // (on the ground, it takes off to dive rather than walking up to strike)
+    if (!u.airborne && u.stats.flight && !wpn.throws && tu && !tu.airborne && !holding && edge > range) takeOff(u);
     if (u.airborne && !wpn.throws && tu && !tu.airborne && !holding && !diveAt(this, u, tu, DT, (fx, fy) => this.face(u, fx, fy))) return true;
     if (edge > range - 0.05) {
       if (holding) { this.face(u, tx - u.x, ty - u.y); return true; } // out of reach: it faces it and waits (units, buildings, flying or not)

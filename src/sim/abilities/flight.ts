@@ -72,7 +72,7 @@ export function diveAt(w: World, u: Unit, t: Unit, dt: number, face: (dx: number
   const dm = Math.max(0.5, dist * M_PER_TILE - RUN_IN); // metres across to where it bottoms out
   const angle = Math.atan2(drop, dm);
   // (it dives only from high enough to gather speed: after a dive it climbs back up first)
-  if (!u.diving && (angle < DIVE_START || drop < u.stats.flyHeight * 0.5)) {
+  if (!u.diving && (angle < DIVE_START || (drop < u.stats.flyHeight * 0.5 && u.alt < u.stats.flyHeight - 0.3))) {
     flyTo(w, u, ...(drop <= 0.05 ? past() : [t.x, t.y] as [number, number]), 0.05, Math.max(u.flySpeed / FLY_SPEED, u.stats.speed), dt, face);
     return drop <= 0.05 && dist <= reach; // low and on it anyway: it strikes in passing
   }
