@@ -1630,10 +1630,13 @@ export class World {
   /** Share of a swing at which the weapon meets its target (where the strike animations make contact). */
   private static readonly CONTACT = 0.4;
 
-  /** A melee blow begins: it lands at the swing's moment of contact (a flier striking in passing lands it at once). */
+  /** A melee blow begins: it lands at the swing's moment of contact (struck in passing, a flier's or a charge's, at once). */
   private swingAt(u: Unit, targetId: number, damage: number, shaft: boolean, reach: number): void {
-    u.blow = { at: this.tick + (u.airborne ? 0 : Math.round((u.swing * World.CONTACT) / DT)), target: targetId, damage, shaft, reach };
-    if (u.airborne) this.strike(u);
+    // (at a run, a charge: the point is already out in front, and it lands as the charge arrives, in the charging pose)
+    const charging = !u.airborne && Math.hypot(u.vx, u.vy) > u.stats.speed * 1.1;
+    if (charging) u.swing = 0;
+    u.blow = { at: this.tick + (u.airborne || charging ? 0 : Math.round((u.swing * World.CONTACT) / DT)), target: targetId, damage, shaft, reach };
+    if (u.airborne || charging) this.strike(u);
   }
 
   /** The blow lands, if its target is still there and in reach (a little more than the weapon's: it follows through); else it misses. */
