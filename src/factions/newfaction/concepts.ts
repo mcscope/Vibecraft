@@ -328,7 +328,7 @@ export function gStag(b: ModelBuilder, p: Pose, torso: GoliathTorso = 'geode'): 
   // body surges ahead of it and falls back; feet down stay where they were put
   let fore: ((z: number) => Vec3) | null = null, hind: ((z: number) => Vec3) | null = null;
   if (walking && !bound) {
-    const A = 0.3, sig = 0.18, S = (2 * A) / (1 - sig), d = 0.55;
+    const A = 0.38, sig = 0.1, S = (2 * A) / (1 - sig), d = 0.45;
     const ease = (k: number) => 0.4 * k + 0.6 * sm(k); // (the vault: quickest as it passes over)
     const B = (q: number) => q < d ? 2 * A * ease(q / d) : 2 * A + sig * S * sm((q - d) / (1 - d)); // (its body, on the ground)
     let mean = 0; for (let i = 0; i < 24; i++) mean += (B(i / 24) - S * (i / 24)) / 24;
@@ -342,7 +342,9 @@ export function gStag(b: ModelBuilder, p: Pose, torso: GoliathTorso = 'geode'): 
       return [toModel(w), st ? Math.sin(Math.PI * kh) * HIND.lift : 0, z * 0.3];
     };
     dip = st ? 0.09 * Math.sin(Math.PI * k) - 0.04 * Math.max(0, 1 - k / 0.15) : -0.02 * Math.sin(Math.PI * k); // (up over them; the crash of the plant)
-    pitch = st ? -0.08 * Math.max(0, 1 - k / 0.3) : 0.1 * Math.sin(Math.PI * k); // (nose up as it reaches, down into the plant)
+    // (it swings on its shoulders: nose-down at the plant, its rear high; the rear swinging forward and under through
+    // the vault, nose up; held up as the forelegs reach, then crashing down onto them)
+    pitch = st ? -0.18 + 0.4 * sm(k) : k < 0.55 ? 0.22 : 0.22 - 0.4 * sm((k - 0.55) / 0.45);
     nod = st ? 0.14 * Math.max(0, 1 - k / 0.35) : -0.06 * Math.sin(Math.PI * k);
   } else if (bound) {
     const air = (x: number) => Math.sin(Math.PI * Math.max(0, Math.min(1, x))); // (off the ground in the gaps between plants)
@@ -380,7 +382,7 @@ export function gStag(b: ModelBuilder, p: Pose, torso: GoliathTorso = 'geode'): 
     });
     // the legs: the great forelegs knuckling, planting together; the hind legs smaller, shuffling (walking) or pushing
     // off together (bounding). Their hips ride with the body's surge, pitch and dip
-    const hindY = (x: number) => y + Math.min(0.03, Math.sin(rear + pitch) * (x - 0.16)); // (its short hind legs keep their feet down: rising little)
+    const hindY = (x: number) => y + Math.sin(pitch) * (x - 0.16) + Math.min(0.03, Math.sin(rear) * (x - 0.16)); // (its hips swing with its body; striking, its short hind legs keep their feet down)
     for (const z of [1, -1]) {
       gLeg(c, [0.16 + surge, y + 0.08, z * 0.26], fore?.(z) ?? [0.36, 0, z * 0.42], ph + (z > 0 ? 0 : 0.03), walking && !fore, 0.36, 0.38, 0.085, [-0.3, 0.6, z], FORE.reach, second, FORE.lift, FORE.duty);
       gLeg(c, [-0.36 + surge, hindY(-0.36) - 0.12, z * 0.14], hind?.(z) ?? [-0.4, 0, z * 0.3], ph + 0.5 + (z > 0 ? 0 : 0.03), walking && !hind, 0.2, 0.2, 0.045, [0.5, 0.6, z], HIND.reach, second, HIND.lift, HIND.duty);
