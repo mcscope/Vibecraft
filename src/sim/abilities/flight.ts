@@ -77,7 +77,8 @@ export function diveAt(w: World, u: Unit, t: Unit, dt: number, face: (dx: number
     return drop <= 0.05 && dist <= reach; // low and on it anyway: it strikes in passing
   }
   u.diving = true;
-  const th = Math.min(DIVE_MAX, Math.max(0.2, angle));
+  // (pulling out over the last 2 m of the drop: it flattens as it comes down, so its speed turns forward smoothly)
+  const th = Math.min(DIVE_MAX, Math.max(0.2, angle), 0.2 + (DIVE_MAX - 0.2) * Math.min(1, Math.max(0, drop) / 2));
   v = Math.max(0, v + (K.gravity * Math.sin(th) - drag() * v * v) * dt);
   u.diveAngle = th;
   u.alt = Math.max(strikeAlt, u.alt - v * Math.sin(th) * dt);

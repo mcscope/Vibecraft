@@ -484,7 +484,7 @@ export class Renderer {
       if (u.stats.flight) {
         // drawn at its real altitude (sim/abilities/flight.ts), smoothed between ticks
         const a0 = this.alt.get(u.id) ?? 0, target = u.airborne ? Renderer.altPx(u.alt) : 0;
-        this.alt.set(u.id, a0 + (target - a0) * Math.min(1, this.dt * 5));
+        this.alt.set(u.id, a0 + (target - a0) * Math.min(1, this.dt * 18)); // (close behind its real height: a dive reads as a dive)
       }
       sp.position.set(isoX(x, y), isoY(x, y) - this.lift(u.id));
       sp.zIndex = x + y + (u.airborne ? 2 : 0);
