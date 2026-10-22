@@ -225,7 +225,7 @@ export function gPangolin(b: ModelBuilder, p: Pose): void {
 /** G3. Stag bull: hunched and front-heavy on two massive knuckle-walking forelegs, smaller hind legs, huge stag-beetle mandibles clamping a crystal. */
 export function gStag(b: ModelBuilder, p: Pose): void {
   const walking = p.anim === 'walk', clamp = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0;
-  const chitin: Mat = { color: '#6a2418', tex: 'leather', rough: 0.25, metal: 0.3 }, rim: Mat = { color: '#120c0a', tex: 'none', rough: 0.15, metal: 0.5 }, second: Mat = { color: '#3a1410', tex: 'leather', rough: 0.3 }; // (its own colours)
+  const chitin: Mat = { color: '#b04a2c', tex: 'leather', rough: 0.3, metal: 0.25 }, rim: Mat = { color: '#3a2420', tex: 'none', rough: 0.2, metal: 0.4 }, second: Mat = { color: '#7a3424', tex: 'leather', rough: 0.35 }; // (its own colours: a rich mahogany red, legs a darker red-brown, light enough to read)
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
     const y = 0.5;
     c.loft([[0.3, 0.14, 0.12, 0.1], [0.12, 0.3, 0.3, 0.2], [-0.12, 0.26, 0.24, 0.16], [-0.38, 0.18, 0.14, 0.1], [-0.52, 0.06, 0.05, 0.04]].map(([x, w, u, d]) => ({ at: [x, y - (0.3 - x) * 0.25, 0] as Vec3, w, up: u, down: d, keel: 0.3 })), chitin); // hunched: high shoulders, falling away
