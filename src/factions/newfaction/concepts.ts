@@ -222,29 +222,117 @@ export function gPangolin(b: ModelBuilder, p: Pose): void {
   }, G);
 }
 
-/** G3. Stag bull: hunched and front-heavy on two massive knuckle-walking forelegs, smaller hind legs, huge stag-beetle mandibles clamping a crystal. */
-export function gStag(b: ModelBuilder, p: Pose): void {
-  const walking = p.anim === 'walk', clamp = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0;
-  const chitin: Mat = { color: '#b04a2c', tex: 'leather', rough: 0.3, metal: 0.25 }, rim: Mat = { color: '#3a2420', tex: 'none', rough: 0.2, metal: 0.4 }, second: Mat = { color: '#7a3424', tex: 'leather', rough: 0.35 }; // (its own colours: a rich mahogany red, legs a darker red-brown, light enough to read)
-  b.joint([0, 0, 0], [0, 0, 0], (c) => {
-    const y = 0.5;
-    c.loft([[0.3, 0.14, 0.12, 0.1], [0.12, 0.3, 0.3, 0.2], [-0.12, 0.26, 0.24, 0.16], [-0.38, 0.18, 0.14, 0.1], [-0.52, 0.06, 0.05, 0.04]].map(([x, w, u, d]) => ({ at: [x, y - (0.3 - x) * 0.25, 0] as Vec3, w, up: u, down: d, keel: 0.3 })), chitin); // hunched: high shoulders, falling away
-    // the head: broad and flattened, as a stag beetle's, eyes on its sides, a mouth beneath its front
-    c.loft([[0.28, 0.1, 0.08, 0.07], [0.38, 0.15, 0.08, 0.07, 0.4], [0.48, 0.13, 0.06, 0.06, 0.5], [0.53, 0.08, 0.04, 0.045]].map(([x, w, u, d, fl]) => ({ at: [x, y, 0] as Vec3, w, up: u, down: d, flat: fl ?? 0 })), chitin);
-    for (const z of [1, -1]) c.sphere([0.028, 0.03, 0.022], [0.42, y + 0.035, z * 0.14], { color: '#0a0806', rough: 0.1, metal: 0.4 }); // eyes
-    c.sphere([0.03, 0.022, 0.05], [0.53, y - 0.04, 0], { color: '#2a0c08', tex: 'skin', rough: 0.8 }); // the mouth
-    // the mandibles, from the mouth's corners: sweeping out and forward, then curving back in to meet (closing harder on
-    // a blow). Armed, they ARE its crystal: glowing, faceted; without one, dark chitin
-    const mand: Mat = p.armed ? { color: '#8fe6ff', rough: 0.12, metal: 0.15, emissive: '#2a8fc0' } : rim;
-    for (const z of [1, -1]) {
-      const root: Vec3 = [0.5, y - 0.03, z * 0.07], elbow: Vec3 = [0.66, y + 0.02, z * (0.2 - clamp * 0.04)], tip: Vec3 = [0.86, y - 0.02, z * (0.03 - clamp * 0.02)];
-      shapedLimb(c, root, elbow, 0.045, [1.15, 1.05, 0.95, 0.85], mand, { flat: 0.45, keel: 0.6 });
-      shapedLimb(c, elbow, tip, 0.038, [0.95, 0.8, 0.6, 0.3], mand, { flat: 0.45, keel: 0.6 });
-      for (const k of [0.35, 0.65]) c.cone(0.013, 0.05, [elbow[0] + (tip[0] - elbow[0]) * k, y - 0.01, elbow[2] + (tip[2] - elbow[2]) * k - z * 0.025], mand, [z * Math.PI / 2, 0, 0], 4); // teeth on its inner edge
+/**
+ * The Goliath Charger (the stag bull, concept 3, the user's pick): hunched and front-heavy on two massive knuckle-walking
+ * forelegs over smaller hind legs. Its body is a stag beetle's, in parts: a broad flat pronotum shield behind the head,
+ * then two glossy domed wing cases meeting in a seam, ridged, the segmented belly showing beneath. Its head is broad and
+ * flattened, eyes on its sides; its mandibles are its crystal. It carries its weight: walking, it rolls onto each
+ * planted foreleg, dips as the weight lands and nods; idle, it breathes; striking, it rears back on its forelegs and
+ * slams its head down, the mandibles clamping.
+ */
+/**
+ * The Goliath's torso, in one of four directions (the user's to choose between; none a copy of any creature), in its
+ * body's frame (X: the model's x to the body's; Y: its centre line):
+ *  - geode: a rough stony hide split along its back, crystal growing out of the cracks;
+ *  - ram: overlapping armour plates stacked into a forward-driving wedge, heaviest at the front;
+ *  - bellows: a ribbed, accordion torso that pumps, swelling as it breathes, squeezing as it strides and strikes;
+ *  - ridge: a tall ridge of armoured spines along its back over a soft, pulsing underbelly.
+ */
+function goliathTorso(bd: ModelBuilder, torso: GoliathTorso, X: (x: number) => number, Y: number, t: number, p: Pose, m: { shell: Mat; plate: Mat; edge: Mat; belly: Mat }): void {
+  const fall = (x: number) => Y - (0.3 - x) * 0.18; // (hunched: falling away behind its shoulders)
+  const crystal: Mat = { color: '#8fe6ff', rough: 0.12, metal: 0.15, emissive: '#2a8fc0' };
+  if (torso === 'geode') {
+    const stone: Mat = { color: '#8a6a58', tex: 'stone', rough: 0.85 };
+    for (const z of [1, -1]) { // two great halves of stony hide, split apart along the back
+      bd.loft([[0.3, 0.12, 0.13, 0.12], [0.12, 0.2, 0.2, 0.15], [-0.12, 0.2, 0.19, 0.14], [-0.36, 0.15, 0.14, 0.1], [-0.52, 0.06, 0.06, 0.05]]
+        .map(([x, w, u, d]) => ({ at: [X(x), fall(x), z * 0.07] as Vec3, w, up: u, down: d, flat: 0.15 })), stone);
+      for (const [x, s2] of [[0.15, 0.05], [-0.05, 0.08], [-0.22, 0.06], [-0.4, 0.04]] as const) bd.sphere([s2 * 1.4, s2, s2], [X(x), fall(x) + 0.2 * (1 - Math.abs(x) * 0.6), z * 0.19], stone); // lumps
     }
+    for (const [x, len, lean] of [[0.2, 0.12, 0.3], [0.05, 0.18, -0.2], [-0.1, 0.22, 0.15], [-0.25, 0.16, -0.3], [-0.38, 0.1, 0.25]] as const) {
+      bd.crystal(len, [X(x), fall(x) + 0.12, 0], [lean, 0, -0.25]); // crystal growing out of the crack
+      bd.crystal(len * 0.6, [X(x) - 0.04, fall(x) + 0.1, lean * 0.15], [-lean, 0, 0.3]);
+    }
+    bd.loft([[0.25, 0.04, 0.02, 0.02], [-0.45, 0.03, 0.02, 0.02]].map(([x, w, u, d]) => ({ at: [X(x), fall(x) + 0.1, 0] as Vec3, w, up: u, down: d })), crystal); // the vein along the crack
+  } else if (torso === 'ram') {
+    // overlapping plates, smallest behind, each over the next, stacked into a wedge driving forward; a blunt crown in front
+    const plates: Array<[number, number, number]> = [[-0.5, 0.08, 0.08], [-0.36, 0.12, 0.12], [-0.2, 0.16, 0.16], [-0.03, 0.2, 0.2], [0.14, 0.23, 0.23]];
+    plates.forEach(([x, w, h], i) => {
+      bd.loft([0, 0.5, 1].map((k) => ({ at: [X(x + k * 0.2), fall(x + k * 0.2) + 0.02 * i, 0] as Vec3, w: w * (k === 0.5 ? 1 : 0.8), up: h * (k === 0.5 ? 1 : 0.7), down: 0.06 + 0.02 * i, flat: 0.35, keel: 0.3 })), i % 2 ? m.plate : m.shell);
+      bd.loft([0, 1].map((k) => ({ at: [X(x + 0.18 + k * 0.02), fall(x + 0.18) + 0.02 * i, 0] as Vec3, w: w * 0.85, up: h * 0.75, down: 0.02, flat: 0.5 })), m.edge); // its leading lip
+    });
+    bd.loft([[0.3, 0.2, 0.2, 0.1], [0.36, 0.16, 0.16, 0.08], [0.4, 0.08, 0.08, 0.05]].map(([x, w, u, d]) => ({ at: [X(x), fall(0.3) + 0.06, 0] as Vec3, w, up: u, down: d, flat: 0.6 })), m.edge); // the blunt crown
+    bd.loft([[0.1, 0.18, 0.04, 0.1], [-0.4, 0.1, 0.03, 0.08]].map(([x, w, u, d]) => ({ at: [X(x), fall(x) - 0.08, 0] as Vec3, w, up: u, down: d })), m.belly);
+  } else if (torso === 'bellows') {
+    // ribbed rings, accordion-like, pumping: swelling as it breathes, squeezing on each stride and as it strikes
+    const pump = p.anim === 'walk' ? Math.sin(t * 2) : p.anim === 'attack' ? -Math.sin(Math.min(1, p.phase / 0.45) * Math.PI) : Math.sin(t);
+    const n = 8;
+    for (let i = 0; i < n; i++) {
+      const k = i / (n - 1), x = 0.24 - k * 0.74 * (1 - 0.06 * pump), r = (0.2 - Math.abs(k - 0.35) * 0.18) * (1 + 0.08 * pump * Math.sin(k * Math.PI));
+      bd.sphere([0.04, r, r * 1.05], [X(x), fall(x), 0], i % 2 ? m.edge : m.plate); // a rib
+      if (i < n - 1) { const x2 = 0.24 - (k + 1 / (n - 1)) * 0.74 * (1 - 0.06 * pump); bd.loft([x, x2].map((xx, j) => ({ at: [X(xx), fall(xx), 0] as Vec3, w: r * (j ? 0.85 : 0.88), up: r * 0.85, down: r * 0.85 })), m.belly); } // the hide between, gathered in
+    }
+    for (const z of [1, -1]) bd.limb([X(0.2), fall(0.2) + 0.12, z * 0.12], [X(-0.45), fall(-0.45) + 0.06, z * 0.05], 0.015, m.shell, 0.01); // a stiff spar each side
+  } else {
+    // a tall ridge of armoured spine plates along its back, over a soft, pale, pulsing underbelly
+    const soft: Mat = { color: '#d89a84', tex: 'skin', rough: 0.6 };
+    const pulse = 1 + Math.sin(t * (p.anim === 'walk' ? 2 : 1)) * 0.04;
+    bd.loft([[0.3, 0.12, 0.08, 0.12], [0.12, 0.2, 0.1, 0.2], [-0.12, 0.2, 0.09, 0.2], [-0.36, 0.15, 0.07, 0.15], [-0.52, 0.06, 0.04, 0.06]]
+      .map(([x, w, u, d]) => ({ at: [X(x), fall(x), 0] as Vec3, w: w * pulse, up: u, down: d * pulse, keel: 0.2 })), soft);
+    bd.loft([[0.3, 0.13, 0.11, 0.0], [0.12, 0.21, 0.14, 0.0], [-0.12, 0.21, 0.13, 0.0], [-0.36, 0.16, 0.1, 0.0], [-0.52, 0.06, 0.05, 0.0]]
+      .map(([x, w, u]) => ({ at: [X(x), fall(x) + 0.02, 0] as Vec3, w, up: u, down: 0.02, flat: 0.3 })), m.plate); // its armoured back
+    for (let i = 0; i < 7; i++) { // the spine plates, tallest over the shoulders
+      const x = 0.24 - i * 0.12, h = 0.24 - Math.abs(i - 1.5) * 0.03;
+      bd.loft([0, 0.5, 1].map((k) => ({ at: [X(x - k * 0.08), fall(x) + 0.12 + k * h * 0.4, 0] as Vec3, w: 0.014, up: h * (1 - k) * 0.5 + 0.01, down: 0.01 })), i % 2 ? m.shell : m.edge);
+    }
+  }
+}
+
+export type GoliathTorso = 'geode' | 'ram' | 'bellows' | 'ridge';
+
+export function gStag(b: ModelBuilder, p: Pose, torso: GoliathTorso = 'geode'): void {
+  const walking = p.anim === 'walk', t = p.phase * Math.PI * 2;
+  const atk = p.anim === 'attack' ? p.phase : -1;
+  const clamp = atk < 0 ? 0 : Math.sin(Math.min(1, atk / 0.6) * Math.PI);
+  const shell: Mat = { color: '#b04a2c', tex: 'none', rough: 0.15, metal: 0.35 }; // (the wing cases: glossy)
+  const plate: Mat = { color: '#5a2418', tex: 'leather', rough: 0.25, metal: 0.35 }; // (the pronotum and head: darker)
+  const edge: Mat = { color: '#2a120c', tex: 'none', rough: 0.2, metal: 0.4 };
+  const belly: Mat = { color: '#7a3424', tex: 'leather', rough: 0.4 };
+  const second: Mat = { color: '#7a3424', tex: 'leather', rough: 0.35 };
+  // its weight: rolling onto the planted foreleg and dipping as it lands, a nod; breathing at rest; rearing back and
+  // slamming down to strike
+  const roll = walking ? Math.sin(t) * 0.09 : 0, dip = walking ? -Math.abs(Math.sin(t)) * 0.035 : p.anim === 'idle' ? Math.sin(t) * 0.01 : 0;
+  const rear = atk < 0 ? 0 : atk < 0.3 ? 0.32 * Math.sin((atk / 0.3) * Math.PI / 2) : atk < 0.45 ? 0.32 - 0.62 * ((atk - 0.3) / 0.15) : -0.3 * (1 - (atk - 0.45) / 0.55) ** 2;
+  const nod = walking ? Math.sin(t * 2) * 0.05 : 0;
+  b.joint([0, 0, 0], [0, 0, 0], (c) => {
+    const y = 0.5 + dip;
+    c.joint([0.16, y, 0], [roll, 0, rear], (bd) => { // (the body pivots over its forelegs)
+      const Y = 0;
+      const X = (x: number) => x - 0.16;
+      goliathTorso(bd, torso, X, Y, t, p, { shell, plate, edge, belly });
+      // the shoulders: heavy masses over the forelegs' roots, rolling with the body (no bare leg ends)
+      for (const z of [1, -1]) { bd.sphere([0.13, 0.12, 0.12], [X(0.17), Y + 0.06, z * 0.22], plate); bd.sphere([0.09, 0.07, 0.08], [X(0.12), Y + 0.12, z * 0.18], plate); }
+      // the head: broad and flattened, eyes on its sides, a mouth beneath its front; nodding with the stride
+      bd.joint([X(0.34), Y, 0], [0, 0, -nod], (h) => {
+        h.loft([[-0.06, 0.1, 0.08, 0.07], [0.04, 0.15, 0.08, 0.07, 0.4], [0.14, 0.13, 0.06, 0.06, 0.5], [0.19, 0.08, 0.04, 0.045]].map(([x, w, u, d, fl]) => ({ at: [x, 0, 0] as Vec3, w, up: u, down: d, flat: fl ?? 0 })), plate);
+        for (const z of [1, -1]) h.sphere([0.028, 0.03, 0.022], [0.08, 0.035, z * 0.14], { color: '#0a0806', rough: 0.1, metal: 0.4 }); // eyes
+        h.sphere([0.03, 0.022, 0.05], [0.19, -0.04, 0], { color: '#2a0c08', tex: 'skin', rough: 0.8 }); // the mouth
+        // the mandibles: its crystal (dark chitin without one), sweeping out from the mouth's corners and curving back
+        // in to meet, flexing at rest, clamping on a blow
+        const mand: Mat = p.armed ? { color: '#8fe6ff', rough: 0.12, metal: 0.15, emissive: '#2a8fc0' } : edge;
+        const flex = p.anim === 'idle' ? Math.sin(t) * 0.015 : 0;
+        for (const z of [1, -1]) {
+          const root: Vec3 = [0.16, -0.03, z * 0.07], elbow: Vec3 = [0.32, 0.02, z * (0.2 - clamp * 0.05 + flex)], tip: Vec3 = [0.52, -0.02, z * (0.03 - clamp * 0.02 + flex)];
+          shapedLimb(h, root, elbow, 0.045, [1.15, 1.05, 0.95, 0.85], mand, { flat: 0.45, keel: 0.6 });
+          shapedLimb(h, elbow, tip, 0.038, [0.95, 0.8, 0.6, 0.3], mand, { flat: 0.45, keel: 0.6 });
+          for (const k of [0.35, 0.65]) h.cone(0.013, 0.05, [elbow[0] + (tip[0] - elbow[0]) * k, -0.01, elbow[2] + (tip[2] - elbow[2]) * k - z * 0.025], mand, [z * Math.PI / 2, 0, 0], 4); // teeth on its inner edge
+        }
+      });
+    });
+    // the legs: the great forelegs knuckling, the hind legs smaller; their hips go with the body's roll and dip
     for (const z of [1, -1]) {
-      gLeg(c, [0.16, y + 0.08, z * 0.26], [0.36, 0, z * 0.42], p.phase + (z > 0 ? 0 : 0.5), walking, 0.36, 0.38, 0.085, [-0.3, 0.6, z], 0.1, second); // the great forelegs, knuckling
-      gLeg(c, [-0.36, y - 0.12, z * 0.14], [-0.4, 0, z * 0.3], p.phase + 0.5 + (z > 0 ? 0 : 0.5), walking, 0.2, 0.2, 0.045, [0.5, 0.6, z], undefined, second);
+      const lift = roll * z * 0.26;
+      gLeg(c, [0.16, y + 0.08 - lift, z * 0.26], [0.36, 0, z * 0.42], p.phase + (z > 0 ? 0 : 0.5), walking, 0.36, 0.38, 0.085, [-0.3, 0.6, z], 0.1, second);
+      gLeg(c, [-0.36, y - 0.12 - lift * 0.5 + rear * 0.3, z * 0.14], [-0.4, 0, z * 0.3], p.phase + 0.5 + (z > 0 ? 0 : 0.5), walking, 0.2, 0.2, 0.045, [0.5, 0.6, z], undefined, second);
     }
   }, G);
 }
