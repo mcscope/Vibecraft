@@ -1591,7 +1591,7 @@ export class World {
     // in reach at a run: a striker doesn't stop on a dime, it keeps its line and strikes in passing, carried on past
     // alongside; at a walk it just pulls up (coasts to a stop). Riding out to come round again is the player's call
     if (!u.airborne && !wpn.throws && tu && Math.hypot(u.vx, u.vy) > u.stats.speed * 1.1) { const [px, py] = passBeside(u, tu, 4); this.moveTo(u, px, py, 0, true, true); }
-    this.face(u, tx - u.x, ty - u.y);
+    if (!u.airborne) this.face(u, tx - u.x, ty - u.y); // (in the air it faces the way it's flying: a swoop strikes in passing)
     if (u.cooldown > 0 || u.exhausted) return true;
     if (!u.airborne && !this.facingWithin(u, tx - u.x, ty - u.y, Math.PI * 0.2)) return true; // still swinging round to bear on it
     if (u.cal < wpn.attackCalories) { u.exhausted = true; return true; }
