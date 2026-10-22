@@ -42,7 +42,7 @@ const drag = (): number => K.gravity / 45 ** 2; // (read when it flies: physics 
 const ZOOM_ANGLE = 0.5;
 
 /** Metres short of its target it aims its dive to bottom out, to run in level the rest of the way (a charge). */
-const RUN_IN = 6;
+const RUN_IN = 8;
 
 /**
  * A striker in the air going for something on the ground dives on it, honestly: it flies over at its height till the
@@ -57,7 +57,7 @@ export function diveAt(w: World, u: Unit, t: Unit, dt: number, face: (dx: number
   const dist = Math.hypot(t.x - u.x, t.y - u.y);
   let v = u.flySpeed * M_PER_TILE; // (from whatever speed it has)
   // (close, it flies on through, as a charger runs on past: it never stops in the air)
-  const past = (): [number, number] => dist > reach * 2 ? [t.x, t.y] : [u.x + Math.cos(u.flyDir) * 3, u.y + Math.sin(u.flyDir) * 3];
+  const past = (): [number, number] => dist > reach ? [t.x, t.y] : [u.x + Math.cos(u.flyDir) * 3, u.y + Math.sin(u.flyDir) * 3]; // (homing in till it's in reach)
   if (u.diveRun) {
     // the run in: level, straight at it, slowing only to drag; past it (it's behind), the run is over
     const ahead = Math.cos(Math.atan2(t.y - u.y, t.x - u.x) - u.flyDir);
@@ -77,8 +77,10 @@ export function diveAt(w: World, u: Unit, t: Unit, dt: number, face: (dx: number
     return drop <= 0.05 && dist <= reach; // low and on it anyway: it strikes in passing
   }
   u.diving = true;
-  // (pulling out over the last 2 m of the drop: it flattens as it comes down, so its speed turns forward smoothly)
-  const th = Math.min(DIVE_MAX, Math.max(0.2, angle), 0.2 + (DIVE_MAX - 0.2) * Math.min(1, Math.max(0, drop) / 2));
+  // (pulling out, nearly down at it and within reach: it strikes as it passes, and runs on level)
+  if (dist <= reach && drop <= 0.5) { u.diving = false; u.diveRun = true; u.alt = strikeAlt; return true; }
+  // (pulling out over the last 5 m of the drop: it flattens as it comes down, so its speed turns forward smoothly)
+  const th = Math.min(DIVE_MAX, Math.max(0.2, angle), 0.2 + (DIVE_MAX - 0.2) * Math.min(1, Math.max(0, drop) / 5));
   v = Math.max(0, v + (K.gravity * Math.sin(th) - drag() * v * v) * dt);
   u.diveAngle = th;
   u.alt = Math.max(strikeAlt, u.alt - v * Math.sin(th) * dt);
