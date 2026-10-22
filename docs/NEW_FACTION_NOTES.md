@@ -50,8 +50,8 @@ The user's decisions so far, as given. Nothing here is designed beyond what they
 - The roster details, buildings, names.
 - Does the mother change inside a shell, or in place?
 
-## Art status (the user's view, 2026-10-21)
+## Art status (the user's view, 2026-10-22)
 
-- **Most complete:** the Vimmer, then the Dragon Fly.
-- **Next:** the Goliath Charger and the Whipweld.
-- **Prototype art that won't ship:** the mothers and everything else. These need big changes before they're ready.
+- **Design complete:** the Charger, the Vimmer, the Whipweld, the Dragon Fly, the mothers and the Slinger.
+- **Not close to design complete:** the Micropike and the Goliath Charger. For the Goliath, the whole concept doesn't feel right yet, not just its walk. The stag-bull body, the three trial torsos (geode, ram wedge, bellows) and the crutch-walk are all open to change.
+- **Not yet reviewed:** the eggs, larvae and caterpillars.
