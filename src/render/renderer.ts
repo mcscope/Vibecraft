@@ -724,9 +724,11 @@ export class Renderer {
     const up = anim === 'walk' || anim === 'charge' || anim === 'attack' || anim.startsWith('carry');
     const was = this.posture.get(id);
     if (!was) { this.posture.set(id, { up, at: -Infinity }); return {}; }
-    if (was.up !== up) { was.up = up; was.at = this.time; }
-    // (stopping, it stays up a few seconds before it sits: held at the top of its rise till then)
-    const SIT_AFTER = 2, k = (this.time - was.at - (up ? 0 : SIT_AFTER)) / RISE;
+    // (stopping, it stays up a couple of seconds before it sits: held at the top of its rise till then. Moving again
+    // before it has sat (between blows, say), it's still up: no getting up to do)
+    const SIT_AFTER = 2;
+    if (was.up !== up) { const sat = !was.up && this.time - was.at >= SIT_AFTER; was.up = up; was.at = up && !sat ? -Infinity : this.time; }
+    const k = (this.time - was.at - (up ? 0 : SIT_AFTER)) / RISE;
     if (k >= 1) return {};
     return { anim: 'rise', progress: up ? Math.max(0, k) : Math.min(0.999, 1 - Math.max(0, k)), time: undefined, walked: undefined };
   }
