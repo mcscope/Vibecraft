@@ -496,6 +496,8 @@ export class Renderer {
         const k = spec && spec.stats.mass !== u.stats.mass ? Math.cbrt(u.stats.mass / spec.stats.mass) : 1;
         const f: { anim: ArtAnim } & FrameTime = u.stats.flight && !u.airborne && this.lift(u.id) > 6 ? { anim: 'fly' as const, time: this.time } : unitFrame(u);
         if (f.walked !== undefined) f.walked /= k; // (drawn bigger, it strides further)
+        // (recovering after a throw, one that reloads by hand shows it: its 'reload' over the rest of its recovery)
+        if (art.anims.reload && f.anim === 'idle' && u.cooldown > 0.02) Object.assign(f, { anim: 'reload' as const, progress: Math.min(0.999, Math.max(0, 1 - u.cooldown / Math.max(0.1, u.stats.cooldown - 0.45))), time: undefined, walked: undefined });
         if (art.anims.rise) Object.assign(f, this.rising(u.id, f.anim));
         const frame = unitSprite(art, f.anim, u.heading, f);
         this.setFrame(sp, frame);
@@ -721,7 +723,7 @@ export class Renderer {
    */
   private rising(id: number, anim: ArtAnim): Partial<{ anim: ArtAnim } & FrameTime> {
     const RISE = 0.45;
-    const up = anim === 'walk' || anim === 'charge' || anim === 'attack' || anim.startsWith('carry');
+    const up = anim === 'walk' || anim === 'charge' || anim === 'attack' || anim === 'reload' || anim.startsWith('carry');
     const was = this.posture.get(id);
     if (!was) { this.posture.set(id, { up, at: -Infinity, sat: false }); return {}; }
     // (stopping, it stays up a couple of seconds before it sits. It gets up again only if it actually sat)
