@@ -45,6 +45,13 @@ The new faction feels overpowered in play. Not investigated yet. What we know:
 
 - **Charges are probably too strong, but wait for playtests before changing them.** Combat swings on who charges: whoever charges almost always wins, a tiny unit into a huge one or a huge one into a tiny one, and a charge does far more damage than a normal blow. Fights take on a dogfight feel of who will charge, but the controls may not be precise enough to dogfight well. Frogs bump each other for small damage just hopping around.
 - **What's good about it:** nobody is helpless. Villagers can charge a maceman and smash him with their bodies, which gives a fun early villager defence. That isn't Age of Empires, where a 10-damage maceman crushes 4-damage villagers. It also makes pikes, the strong anti-charge unit, matter a lot. Some counters are extreme ("enormous boulder, giant razor blades, gossamer newspaper"), which may be fine. The user hopes to surprise playtesters with small units charging big ones to death.
+- **The hold-force cap is "a little pretend" (the user, 2026-10-21; noted, not acted on).**
+  - How it works: a blow's collision energy is capped by what the striker's body can hold behind its weapon (muscle hold force × blow depth). A set shaft (a planted pike, a couched lance) is the exception, capped by what the shaft takes before it buckles.
+  - What's real: how stiffly the body is coupled to the point of contact decides how much of its mass goes into a hit.
+  - What's invented: the formula and constants, the all-or-nothing switch, and the cap applying to body blows (a charger ramming, a Goliath slamming, a Vimmer diving) where no arm is involved.
+  - The effect: a Vimmer's dive speed barely counts. Its collision part maxes at +30 damage, reached at 3.9 m/s against an 80 kg target.
+  - The idea: split blows by what makes contact. Weapon blows keep a holding limit; body blows get the full collision. Tune charges through the bodies instead.
+  - The catch: the cap is also what keeps charges in check, so removing it makes charges far stronger. Decide alongside the charge playtests, with arena runs before and after.
 - **Macemen may have no point** (see above). This is a balance question.
 - **The new faction may have the highest skill ceiling.** Depending on play, it's either very vulnerable or unbeatable. Like the Fenfolk, it rewards careful micro: what changes into what, being ready to change and to tend, eggs that can't take a new order. Done well, the payoff is explosive production. It should feel fragile in a good way; **larvae should be very fragile.**
 - **The computer players are weak,** so whichever faction you play feels overpowered. The arena helps with unit-against-unit balance, but not with build orders, rushes or cheese.
