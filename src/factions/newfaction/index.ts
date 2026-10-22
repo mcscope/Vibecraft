@@ -208,11 +208,13 @@ function spikeBody(c: ModelBuilder, armed: boolean, tint: string): void {
 
 /** A charger's build: its legs (hip height standing, thigh, shin, the foot bone from toes up to ankle), how wide it
  *  stands, how thick its legs, its body's size and colour, and how far it strides walking and running. */
-interface ChargerBuild { H: number; thigh: number; shin: number; foot: [number, number, number]; hipZ: number; footZ: number; thighR: number; shinR: number; body: number; tint: string; walk: number; run: number; goliath?: boolean; whip?: number }
+interface ChargerBuild { H: number; thigh: number; shin: number; foot: [number, number, number]; hipZ: number; footZ: number; thighR: number; shinR: number; body: number; tint: string; walk: number; run: number; goliath?: boolean; whip?: number; trebuchet?: boolean }
 const CHARGER: ChargerBuild = { H: 0.62, thigh: 0.3, shin: 0.32, foot: [-0.07, 0.21, 0], hipZ: 0.09, footZ: 0.11, thighR: 0.055, shinR: 0.035, body: 0.7, tint: '#7fbf4a', walk: 0.22, run: 0.34 };
 // the T2 lasher: the charger's legs and body, and two whip arms held back along its torso (the user's design); `whip`:
 // metres of lash (its attack.whip)
 const LASHER: ChargerBuild = { H: 0.6, thigh: 0.29, shin: 0.31, foot: [-0.07, 0.2, 0], hipZ: 0.1, footZ: 0.12, thighR: 0.06, shinR: 0.038, body: 0.8, tint: '#2a8a96', walk: 0.21, run: 0.33, whip: 2 };
+// the T2 slinger: the charger's build, its body the arm of a trebuchet (the user's design)
+const SLINGER: ChargerBuild = { ...CHARGER, H: 0.6, body: 0.75, tint: '#3ab0bc', trebuchet: true };
 // the T3 goliath: hulking and low, wide on short massive legs, armoured (the user's: ultralisk vibes)
 // (its legs gnarled but organic, thick for its weight, splayed to a wide stance)
 const GOLIATH: ChargerBuild = { H: 0.44, thigh: 0.38, shin: 0.4, foot: [0.06, 0.14, 0], hipZ: 0.22, footZ: 0.36, thighR: 0.095, shinR: 0.075, body: 1.15, tint: '#9a3aa6', walk: 0.18, run: 0.28, goliath: true };
@@ -241,7 +243,7 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
   // its body rides lowest over a planted foot, highest in the stride (running: up in the moment both feet are off)
   const bob = running ? -0.06 + 0.07 * Math.max(0, Math.sin((p.phase * 2 - 0.35) * TAU)) : walking ? -0.03 + Math.abs(Math.cos(p.phase * TAU)) * 0.025 : 0;
     // (striking, a battering ram: drawn back on its legs, then slammed forward level and hard, spike first)
-    const hit = p.anim === 'attack' && !k.whip ? p.phase : -1;
+    const hit = p.anim === 'attack' && !k.whip && !k.trebuchet ? p.phase : -1;
     const ramX = hit < 0 ? 0 : hit < 0.38 ? -0.22 * Math.sin((hit / 0.38) * Math.PI / 2) : hit < 0.5 ? -0.22 + 0.67 * ((hit - 0.38) / 0.12) : 0.45 * (1 - (hit - 0.5) / 0.5) ** 2; // (exaggerated: far back, then a long hard slam, as far as its legs reach)
     const ramTilt = hit < 0 ? 0 : hit < 0.38 ? 0.25 * Math.sin((hit / 0.38) * Math.PI / 2) : hit < 0.5 ? 0.25 - 0.45 * ((hit - 0.38) / 0.12) : -0.2 * (1 - (hit - 0.5) / 0.5) ** 2; // (rearing back, then driving down into it)
   const ramShift = ramX * k.body / 0.7; // (the hips go with the body: the whole of it lunges, its feet planted)
@@ -290,10 +292,20 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
     }
     // the body, slung between the hips: leaning into a run; striking, it rams forward, the spike first
     // (a lasher doesn't ram: it dips its torso down as it lashes)
+    // (a trebuchet's throw: wound back nose up, its tail and the crystal in the sling at its tip held low behind; then
+    // its head plunges like a counterweight, whipping the tail up over its back, the crystal loosed at the top; and it
+    // swings back upright)
+    const tp = p.anim === 'attack' && k.trebuchet ? p.phase : -1;
+    const treb = tp < 0 ? 0 : tp < 0.3 ? 0.55 * Math.sin((tp / 0.3) * Math.PI / 2) : tp < 0.55 ? 0.55 - 2.75 * ((tp - 0.3) / 0.25) ** 2 : -2.2 * (1 - (tp - 0.55) / 0.45) ** 2;
     const dip = k.whip ? Math.sin(Math.min(1, p.phase / 0.7) * Math.PI) * (p.anim === 'attack' ? 1 : 0) : 0;
-    c.joint([ramShift + 0.08 * spear, H + bob + 0.04 - 0.08 * dip - 0.07 * spear, 0], [0, 0, tilt + ramTilt + (running ? (spear ? -0.02 : -0.15) : 0) - 0.35 * dip], (t) => t.joint([0, 0, 0], [0, 0, 0], (q) => {
+    c.joint([ramShift + 0.08 * spear, H + bob + 0.04 - 0.08 * dip - 0.07 * spear, 0], [0, 0, tilt + ramTilt + treb + (running ? (spear ? -0.02 : -0.15) : 0) - 0.35 * dip], (t) => t.joint([0, 0, 0], [0, 0, 0], (q) => {
       if (k.goliath) goliathBody(q, p, k.tint);
-      else spikeBody(q, k.whip ? false : p.armed, k.tint);
+      else spikeBody(q, k.whip || k.trebuchet ? false : p.armed, k.tint);
+      if (k.trebuchet) { // the sling at its tail tip, the crystal in it till it's loosed
+        q.limb([-0.66, 0, 0], [-0.78, -0.04, 0], 0.008, { color: '#5a4a3a', tex: 'leather' });
+        q.sphere([0.03, 0.02, 0.03], [-0.8, -0.05, 0], { color: '#3a2e24', tex: 'leather' });
+        if (p.armed && (tp < 0 || tp < 0.5)) q.crystal(0.08, [-0.8, -0.04, 0], [0, 0, Math.PI / 2]);
+      }
       if (k.whip) whipArms(q, p, (k.whip / LOOK.lasher.scale(mass)) / k.body, k.tint);
     }, k.body));
   }, (k.goliath ? LOOK.goliath : k.whip ? LOOK.lasher : LOOK.charger).scale(mass));
@@ -837,7 +849,7 @@ const flier = unit({ id: 'flier', name: 'Vimmer', mass: 120, physique: { muscle:
 const whipweld = unit({ id: 'whipweld', name: 'Whipweld', mass: 150, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 3,
   attack: { style: 'strike', crystalMass: 4, whip: 2 }, description: 'T2: on two running legs, two whip arms held back along its torso; it dips and lashes one out, its crystal at the tip, a long reach.', model: (b, p) => drawCharger(b, p, 150, LASHER) }, 'lasher');
 const slinger = unit({ id: 'slinger', name: 'Slinger', mass: 60, physique: { muscle: 0.5, frame: 0.3, reserve: 0.2 }, refinement: 3,
-  attack: { style: 'throw', crystalMass: 0.5, ammo: 8, sling: 0.6 }, description: 'T2: a slinger.', model: (b, p) => bug(b, p, '#3ab0bc', 60, 'sling') }, 'bug');
+  attack: { style: 'throw', crystalMass: 0.5, ammo: 8, sling: 0.6 }, description: 'T2: the charger\'s build; its body is a trebuchet\'s arm: it rears back, plunges its head and whips its tail over, loosing the crystal from a sling at its tip.', model: (b, p) => drawCharger(b, p, 60, SLINGER) }, 'charger');
 const dragonFly = unit({ id: 'dragon-fly', name: 'Dragon Fly', mass: 500, physique: { muscle: 0.5, frame: 0.3, reserve: 0.2 }, refinement: 4, flight: true,
   attack: { style: 'throw', crystalMass: 6, ammo: 10 }, // PLACEHOLDER: its fire (a conversion of crystal) is still to design
   description: 'T3: a fire-breathing dragon with butterfly wings, insectoid and reptilian.', model: (b, p) => drawDragonFly(b, p, 500) }, 'dragon');

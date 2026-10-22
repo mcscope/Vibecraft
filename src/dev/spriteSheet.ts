@@ -7,7 +7,9 @@ import type { ArtAnim } from '../art/contract';
 export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
   if (params.get('faction')) return roster(params);
   const id = params.get('unit') ?? 'lynx', anim = (params.get('anim') ?? 'attack') as ArtAnim, scale = +(params.get('scale') ?? 2);
-  const faction = PLAYABLE.find((f) => f.units.some((u) => u.id === id));
+  // (&from=newfaction: which faction's, when two share an id)
+  const from = params.get('from');
+  const faction = PLAYABLE.find((f) => (!from || f.id === from) && f.units.some((u) => u.id === id));
   const out = document.createElement('div');
   out.style.cssText = 'position:fixed;inset:0;background:#7a8a5a;color:#fff;font:14px sans-serif;padding:8px;overflow:auto;z-index:10';
   document.body.appendChild(out);
