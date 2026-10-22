@@ -782,14 +782,22 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
     };
     const abAt: V3 = o.waist ? [-0.3, y0 + 0.12, 0] : [-0.12, y0 + 0.08, 0];
     if (o.waist) c.limb([-0.12, y0 + 0.04, 0], abAt, 0.06, plate, 0.05); // a wasp's waist
-    c.joint(abAt, [0, 0, pitch + (walking ? Math.sin(t * 2) * 0.03 : 0)], (abs) => abs.joint([0, 0, 0], [0, 0, 0], (ab) => {
-      const g = o.girth ?? 1; // (how stout it is, side to side and through)
+    // (laying: the abdomen swings down till its tip meets the ground, pulses, an egg swells out of the tip, and it lifts again)
+    const lay = p.anim === 'lay' ? p.phase : -1, ease2 = (x: number) => { const c2 = Math.max(0, Math.min(1, x)); return c2 * c2 * (3 - 2 * c2); };
+    const layDown = lay < 0 ? 0 : lay < 0.35 ? ease2(lay / 0.35) : lay < 0.8 ? 1 : 1 - ease2((lay - 0.8) / 0.2);
+    const layDip = layDown * Math.max(0, -pitch) * 0.8; // (swung down as far as it's raised: a T1's, on the ground already, lays where it lies)
+    c.joint(abAt, [0, 0, pitch + layDip + (walking ? Math.sin(t * 2) * 0.03 : 0)], (abs) => abs.joint([0, 0, 0], [0, 0, 0], (ab) => {
+      const g = (o.girth ?? 1) * (1 + (lay > 0.3 && lay < 0.85 ? Math.sin(lay * Math.PI * 8) * 0.035 : 0)); // (how stout it is; laying, it pulses)
       ab.loft(shape.map(([x, w, up, down, keel]) => ({ at: centre(x, up), w: w * g, up: up * g, down: down * g, keel })), under);
       for (const [from, to] of (detail > 0.5 ? [[0, 3], [2, 5], [4, 6]] : [[0, 3], [3, 6]]) as Array<[number, number]>) {
         ab.loft(shape.slice(from, to + 1).map(([x, w, up, , keel], i, all) => {
           const end = i === 0 || i === all.length - 1 ? 0.6 : 1; // (each plate's ends tuck in)
           return { at: centre(x, up * g, 0.02), w: w * g * 1.04 * end, up: (up * g + 0.015) * end, down: 0.04 * (w / 0.3), keel, flat: 0.15 };
         }), plate);
+      }
+      if (lay > 0.4 && lay < 0.95) { // the egg, swelling out of its tip
+        const e = Math.min(1, (lay - 0.4) / 0.4), tip = centre(-0.88, 0.06);
+        ab.sphere([0.07 * e, 0.09 * e, 0.07 * e], [tip[0] - 0.05 * e, tip[1], tip[2]], { color: '#e8e0f0', tex: 'none', rough: 0.85 });
       }
       for (const [x, rz0] of [[-0.3, 0.31], [-0.56, 0.27]] as const) for (const z of [1, -1]) {
         const rz = rz0 * g;
@@ -800,7 +808,9 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
     }, o.abdomen ?? 1.4));
     // neck, and a big head with its great crest sweeping back
     const nk = o.neck ?? 1;
-    const head: [number, number, number] = [0.14 + 0.32 * nk, y0 + 0.05 + 0.45 * nk, 0], mid: V3 = [0.14 + 0.16 * nk, y0 + 0.05 + 0.25 * nk, 0];
+    // (striking, her head darts forward and down, the neck following: peaking as the blow lands)
+    const jab = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0;
+    const head: [number, number, number] = [0.14 + 0.32 * nk + 0.3 * jab, y0 + 0.05 + 0.45 * nk - 0.28 * jab, 0], mid: V3 = [0.14 + 0.16 * nk + 0.14 * jab, y0 + 0.05 + 0.25 * nk - 0.08 * jab, 0];
     // (slim against her great abdomen, but shaped: tapering segments, a collar at each joint, spines down its back)
     shapedLimb(c, [0.14, y0 + 0.05, 0], mid, 0.08, [1.5, 1.1, 0.8, 0.7, 0.8], plate, { flat: 0.3, keel: 0.4 }); // (swelling at its base)
     shapedLimb(c, mid, head, 0.06, [0.95, 0.8, 0.72, 0.7, 0.85], plate, { flat: 0.2, keel: 0.3 });
@@ -809,7 +819,7 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
       const at: V3 = [from[0] + (to[0] - from[0]) * k, from[1] + (to[1] - from[1]) * k + 0.06, 0];
       c.cone(0.018, 0.06, at, plate, [0, 0, 0.5], 4);
     }
-    c.joint(head, [0, 0, 0], (hs) => hs.joint([0, 0, 0], [0, 0, 0], (h) => motherHead(h, o.headStyle ?? 'shortShovel', o.crest ?? 1, headMat, under, p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0), o.head ?? 1));
+    c.joint(head, [0, 0, -0.5 * jab], (hs) => hs.joint([0, 0, 0], [0, 0, 0], (h) => motherHead(h, o.headStyle ?? 'shortShovel', o.crest ?? 1, headMat, under, jab), o.head ?? 1)); // (the snout tipped down into it)
     // four legs, all off the central thorax: the great hind pair just behind its middle, under the arched abdomen's
     // weight, the forelegs just ahead; her weight balanced between them
     for (const z of [1, -1]) {

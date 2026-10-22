@@ -17,7 +17,7 @@ export const PX_PER_UNIT = 32 * Math.SQRT2 / UNITS_PER_TILE;
 export type BakedAnim = ArtAnim;
 
 const FRAMES: Record<BakedAnim, number> = {
-  idle: 4, walk: 8, charge: 8, brace: 2, stagger: 4, fly: 8, leap: 8, climb: 8, soar: 4, glide: 4, land: 4, bankL: 1, bankR: 1, swoop: 1, rise: 6, reload: 8, attack: 8, cut: 8, gather: 6, eat: 4, tired: 2, die: 6, carryFood: 8, carryWood: 8, carryCrystal: 8,
+  idle: 4, walk: 8, charge: 8, brace: 2, stagger: 4, fly: 8, leap: 8, climb: 8, soar: 4, glide: 4, land: 4, bankL: 1, bankR: 1, swoop: 1, rise: 6, reload: 8, lay: 8, attack: 8, cut: 8, gather: 6, eat: 4, tired: 2, die: 6, carryFood: 8, carryWood: 8, carryCrystal: 8,
 };
 const FPS: Partial<Record<BakedAnim, number>> = { idle: 2.5, walk: 8, charge: 8, brace: 1.5, stagger: 6, fly: 6, leap: 10, climb: 6, soar: 2, glide: 2, land: 4, gather: 7, eat: 4, tired: 1.5, carryFood: 8, carryWood: 8, carryCrystal: 8 };
 
@@ -34,6 +34,8 @@ export interface UnitBakeOptions {
   sidearm?: boolean;
   /** Its model draws its whole leap itself (no springy squash and tip from the baker). */
   ownLeap?: boolean;
+  /** It lays eggs (or spawns young) from its body: also bake 'lay', played as each comes out. */
+  lay?: boolean;
   /** Between throws it reloads by hand (or tail): also bake 'reload', played while it recovers. */
   reload?: boolean;
   /** It rests in a squat and gets up to move: also bake getting up ('rise', played backward to sit down). */
@@ -393,6 +395,7 @@ export class Baker {
     if (opts.brace && !opts.dummy) anims.push('brace');
     if (opts.rises && !opts.dummy) anims.push('rise');
     if (opts.reload && !opts.dummy) anims.push('reload');
+    if (opts.lay && !opts.dummy) anims.push('lay');
     if (opts.sidearm && !opts.dummy) anims.push('cut');
     if (withCarry && !opts.dummy) anims.push('carryFood', 'carryWood', 'carryCrystal');
     if (opts.fly && !opts.dummy) anims.push('fly', 'leap', 'climb', 'soar', 'glide', 'land', 'bankL', 'bankR', 'swoop'); // (a bank: one still frame a side)
@@ -446,7 +449,7 @@ export class Baker {
       for (let di = r0; di < r0 + nr; di++) {
         const theta = (BAKED_DIRS[di] * Math.PI) / 4;
         for (let f = f0; f < f0 + nc; f++) {
-          const phase = anim === 'die' || anim === 'rise' || anim === 'reload' ? f / (n - 1) : f / n;
+          const phase = anim === 'die' || anim === 'rise' || anim === 'reload' || anim === 'lay' ? f / (n - 1) : f / n;
           this.clearStage();
           const body = new THREE.Group();
           this.stage.add(body);

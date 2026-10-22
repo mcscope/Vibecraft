@@ -4,7 +4,7 @@
 
 import type { TeamColors } from '../../art/contract';
 
-export type AnimName = 'idle' | 'walk' | 'rise' | 'reload' | 'fly' | 'leap' | 'climb' | 'soar' | 'glide' | 'land' | 'attack' | 'cut' | 'gather' | 'eat' | 'tired' | 'die';
+export type AnimName = 'idle' | 'walk' | 'rise' | 'reload' | 'lay' | 'fly' | 'leap' | 'climb' | 'soar' | 'glide' | 'land' | 'attack' | 'cut' | 'gather' | 'eat' | 'tired' | 'die';
 
 export interface Pose {
   anim: AnimName;

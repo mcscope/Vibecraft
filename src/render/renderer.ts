@@ -6,6 +6,7 @@ import { DT, type Building, type Order, type ResourceNode, type Unit, type World
 import { Camera, isoX, isoY, TILE_H, TILE_W } from './camera';
 import { isUnderfoot, parcelPos } from '../sim/abilities/underfoot';
 import { LEAP_TIME } from '../sim/abilities/flight';
+import { metamorphCost } from '../sim/abilities/metamorph';
 import { M_PER_TILE } from '../sim/physics';
 import { buildingSprite, unitShadow, unitSprite, UNITS_PER_TILE, type ArtAnim, type FrameTime, type Sprite, type UnitArt } from '../art/contract';
 import { gpuTexture, setFrameReader } from '../art/gpu';
@@ -496,6 +497,12 @@ export class Renderer {
         const k = spec && spec.stats.mass !== u.stats.mass ? Math.cbrt(u.stats.mass / spec.stats.mass) : 1;
         const f: { anim: ArtAnim } & FrameTime = u.stats.flight && !u.airborne && this.lift(u.id) > 6 ? { anim: 'fly' as const, time: this.time } : unitFrame(u);
         if (f.walked !== undefined) f.walked /= k; // (drawn bigger, it strides further)
+        // (one that lays from its body shows it over the last moments before each comes out)
+        if (art.anims.lay && u.brood.length && (f.anim === 'idle' || f.anim === 'walk')) {
+          const from = this.world.specOf(u.owner, u.specId), to = this.world.specOf(u.owner, u.brood[0].into);
+          const left = from && to ? metamorphCost(from.stats, to.stats, true).sec - u.brood[0].t : Infinity, LAY = 0.8;
+          if (left < LAY) Object.assign(f, { anim: 'lay' as const, progress: Math.min(0.999, 1 - left / LAY), time: undefined, walked: undefined });
+        }
         // (recovering after a throw, one that reloads by hand shows it: its 'reload' over the rest of its recovery)
         if (art.anims.reload && f.anim === 'idle' && u.cooldown > 0.02) Object.assign(f, { anim: 'reload' as const, progress: Math.min(0.999, Math.max(0, 1 - u.cooldown / Math.max(0.1, u.stats.cooldown - 0.45))), time: undefined, walked: undefined });
         if (art.anims.rise) Object.assign(f, this.rising(u.id, f.anim, u.engage > 0 || u.order.kind === 'attack'));
