@@ -180,6 +180,8 @@ export interface Unit {
   launchT: number;
   /** Diving on a target (sim/abilities/flight.ts diveAt), and how steeply (radians below level). */
   diving: boolean; diveAngle: number;
+  /** A height it's going up or down to this tick (chasing a target in the air), and the tick it was set. */
+  altGoal: number; altGoalTick: number;
   /** A melee blow on its way: it lands at the swing's moment of contact (`at`, a tick), on its target if still in reach. */
   blow: { at: number; target: number; damage: number; shaft: boolean; reach: number } | null;
   /** Pulled out of a dive, running in level on its target at the dive's speed. */
@@ -1014,7 +1016,7 @@ export class World {
       food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
       order: { kind: 'idle' }, resume: null, queue: [], engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
-      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, diveSpeed: 0, flyDir: 0, bank: 0, launchT: 0, walked: 0, diving: false, diveAngle: 0, blow: null, diveRun: false, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', cutting: false, facing: Math.PI / 4, turnTick: -1, turnLeft: 0, faceTo: null, brood: [], autoBrood: null,
+      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, diveSpeed: 0, flyDir: 0, bank: 0, launchT: 0, walked: 0, diving: false, diveAngle: 0, altGoal: 0, altGoalTick: -1, blow: null, diveRun: false, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', cutting: false, facing: Math.PI / 4, turnTick: -1, turnLeft: 0, faceTo: null, brood: [], autoBrood: null,
       dummy: !!spec.dummy,
       carter: spec.role === 'carter',
       gatherAcc: 0,
@@ -1540,7 +1542,12 @@ export class World {
     }
     // a striker in the air dives on one on the ground, and strikes only once it's down at it (flight.ts)
     // (on the ground, it takes off to dive rather than walking up to strike)
-    if (!u.airborne && u.stats.flight && !wpn.throws && tu && !tu.airborne && !holding && edge > range) takeOff(u);
+    if (!u.airborne && u.stats.flight && !wpn.throws && tu && !holding && (edge > range || tu.airborne)) takeOff(u);
+    // (one in the air: it goes up after it, matching its height, and strikes when it's close in the air)
+    if (u.airborne && !wpn.throws && tu && tu.airborne && !holding) {
+      u.altGoal = tu.alt; u.altGoalTick = this.tick;
+      if (edge > range - 0.05 || Math.abs(tu.alt - u.alt) > 1.5) { this.moveTo(u, tx, ty, 0.05); return true; }
+    }
     if (u.airborne && !wpn.throws && tu && !tu.airborne && !holding && !diveAt(this, u, tu, DT, (fx, fy) => this.face(u, fx, fy))) return true;
     if (edge > range - 0.05) {
       if (holding) { this.face(u, tx - u.x, ty - u.y); return true; } // out of reach: it faces it and waits (units, buildings, flying or not)
@@ -1591,7 +1598,7 @@ export class World {
       return true;
     }
     // a melee flier striking a building, or one in the air within reach, lands to strike
-    if (u.airborne && !wpn.throws && (!tu || tu.airborne)) u.airborne = false; // (a building, or one in the air within reach: it lands to strike)
+    if (u.airborne && !wpn.throws && !tu) u.airborne = false; // (a building: it lands to strike)
     // in reach at a run: a striker doesn't stop on a dime, it keeps its line and strikes in passing, carried on past
     // alongside; at a walk it just pulls up (coasts to a stop). Riding out to come round again is the player's call
     if (!u.airborne && !wpn.throws && tu && Math.hypot(u.vx, u.vy) > u.stats.speed * 1.1) { const [px, py] = passBeside(u, tu, 4); this.moveTo(u, px, py, 0, true, true); }

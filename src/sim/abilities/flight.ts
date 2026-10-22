@@ -212,7 +212,10 @@ export function tickFlight(w: World, u: Unit, _moved: boolean, dt: number, face:
     // a burst off the ground (wings pounding) for the first couple of metres, then a steady climb
     // (trying it without the take-off burst: set LAUNCH_BURST to 2 for 3 m/s off the ground, easing to 1)
     const rate = CLIMB_RATE * (1 + LAUNCH_BURST * Math.max(0, 1 - u.alt / (LAUNCH_HEIGHT * 1.5)));
-    const climb = u.launchT <= LAUNCH_WINDUP ? 0 : Math.min(rate * dt, Math.max(0, u.stats.flyHeight - u.alt)); // (crouched, winding up: still on the ground)
+    // (chasing one in the air, it goes to that one's height, up to its own ceiling, down as fast as it likes)
+    const goal = u.altGoalTick === w.tick ? Math.min(u.altGoal, u.stats.flyHeight) : u.stats.flyHeight;
+    if (u.alt > goal + 0.2) u.alt = Math.max(goal, u.alt - 4 * dt);
+    const climb = u.launchT <= LAUNCH_WINDUP ? 0 : Math.min(rate * dt, Math.max(0, goal - u.alt)); // (crouched, winding up: still on the ground)
     u.alt += climb;
     const soaring = u.alt >= u.stats.flyHeight - 1e-6; // up at its ceiling it rides the air
     u.cal -= (soaring ? soarBurn(u.stats) : flightBurn(u.stats)) * dt + u.stats.mass * CLIMB_CAL_PER_KG_M * climb;
@@ -227,7 +230,7 @@ export function tickFlight(w: World, u: Unit, _moved: boolean, dt: number, face:
  * enough: within shoulder height (0.8 of its body's) plus its weapon's reach, held straight up.
  */
 export const canReach = (attacker: Unit, target: Unit): boolean =>
-  !target.airborne || attacker.throws || target.alt <= verticalReach(attacker);
+  !target.airborne || attacker.throws || target.alt <= verticalReach(attacker) || (attacker.airborne && Math.abs(target.alt - attacker.alt) <= 1.5); // (or alongside it in the air)
 
 /** Metres up a striker can hit: its shoulders plus its reach (arm and any shaft) beyond its body. */
 export const verticalReach = (u: Unit): number => 0.8 * bodyHeight(u.stats.mass) + Math.max(0, u.stats.range - u.stats.radius) * M_PER_TILE;
