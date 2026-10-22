@@ -180,6 +180,8 @@ export interface Unit {
   launchT: number;
   /** Diving on a target (sim/abilities/flight.ts diveAt), and how steeply (radians below level). */
   diving: boolean; diveAngle: number;
+  /** A melee blow on its way: it lands at the swing's moment of contact (`at`, a tick), on its target if still in reach. */
+  blow: { at: number; target: number; damage: number; shaft: boolean; reach: number } | null;
   /** Pulled out of a dive, running in level on its target at the dive's speed. */
   diveRun: boolean;
   /** Tick a flier last steered toward a goal (otherwise it circles). */
@@ -1012,7 +1014,7 @@ export class World {
       food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
       order: { kind: 'idle' }, resume: null, queue: [], engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
-      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, diveSpeed: 0, flyDir: 0, bank: 0, launchT: 0, walked: 0, diving: false, diveAngle: 0, diveRun: false, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', cutting: false, facing: Math.PI / 4, turnTick: -1, turnLeft: 0, faceTo: null, brood: [], autoBrood: null,
+      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, diveSpeed: 0, flyDir: 0, bank: 0, launchT: 0, walked: 0, diving: false, diveAngle: 0, blow: null, diveRun: false, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', cutting: false, facing: Math.PI / 4, turnTick: -1, turnLeft: 0, faceTo: null, brood: [], autoBrood: null,
       dummy: !!spec.dummy,
       carter: spec.role === 'carter',
       gatherAcc: 0,
@@ -1258,6 +1260,7 @@ export class World {
 
   private tickUnit(u: Unit): void {
     if (u.dummy) { u.animT += DT; this.coast(u); return; } // inert, but a body: shoved, it slides to a stop
+    if (u.blow && this.tick >= u.blow.at) this.strike(u);
     const st = u.stats;
     if (u.wild || u.tame) u.cal = st.maxCalories; // they graze
     if (u.cooldown > 0) u.cooldown -= DT;
@@ -1619,9 +1622,31 @@ export class World {
     } else {
       // the blow carries the collision too: ½·μ·v² of the two bodies' closing speed, whoever is moving
       // (a charge onto a set point, or a charger's own weapon, hits as hard as the bodies meet)
-      this.land(u, targetId, tu ?? null, tx, ty, wpn.damage, true);
+      this.swingAt(u, targetId, wpn.damage, true, range);
     }
     return true;
+  }
+
+  /** Share of a swing at which the weapon meets its target (where the strike animations make contact). */
+  private static readonly CONTACT = 0.4;
+
+  /** A melee blow begins: it lands at the swing's moment of contact (a flier striking in passing lands it at once). */
+  private swingAt(u: Unit, targetId: number, damage: number, shaft: boolean, reach: number): void {
+    u.blow = { at: this.tick + (u.airborne ? 0 : Math.round((u.swing * World.CONTACT) / DT)), target: targetId, damage, shaft, reach };
+    if (u.airborne) this.strike(u);
+  }
+
+  /** The blow lands, if its target is still there and in reach (a little more than the weapon's: it follows through); else it misses. */
+  private strike(u: Unit): void {
+    const b = u.blow!;
+    u.blow = null;
+    const tu = this.units.get(b.target), tb = tu ? undefined : this.buildings.get(b.target);
+    if (!tu && !tb) return;
+    let tx: number, ty: number, edge: number;
+    if (tu) { tx = tu.x; ty = tu.y; edge = Math.hypot(tx - u.x, ty - u.y) - tu.stats.radius; }
+    else { const bd = tb!; tx = bd.ox + bd.size / 2; ty = bd.oy + bd.size / 2; edge = Math.hypot(Math.max(bd.ox, Math.min(u.x, bd.ox + bd.size)) - u.x, Math.max(bd.oy, Math.min(u.y, bd.oy + bd.size)) - u.y); }
+    if (edge > b.reach + 0.3 || (tu && !canReach(u, tu))) return; // (it got away: the blow falls short)
+    this.land(u, b.target, tu ?? null, tx, ty, b.damage, b.shaft);
   }
 
   /** A blow of `damage` lands on `targetId` at (tx, ty), carrying the collision (`shaft`: struck with its shaft, which may be set). */
@@ -1668,7 +1693,7 @@ export class World {
     u.swing = Math.min(0.45, sa.cooldown * 0.8);
     u.cutting = true;
     this.events.push({ type: 'attack', x: u.x, y: u.y, owner: u.owner, specId: u.specId, style: 'strike', kg: sa.crystalMass });
-    this.land(u, cut.id, cut, cut.x, cut.y, sa.damage, false);
+    this.swingAt(u, cut.id, sa.damage, false, sa.range);
     return true;
   }
 
