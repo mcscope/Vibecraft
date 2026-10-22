@@ -61,7 +61,7 @@ export function diveAt(w: World, u: Unit, t: Unit, dt: number, face: (dx: number
   if (u.diveRun) {
     // the run in: level, straight at it, slowing only to drag; past it (it's behind), the run is over
     const ahead = Math.cos(Math.atan2(t.y - u.y, t.x - u.x) - u.flyDir);
-    if (ahead < -0.2 && dist > reach) { u.diveRun = false; return false; }
+    if (ahead < -0.2 && dist > reach + RUN_IN / M_PER_TILE) { u.diveRun = false; return false; } // (only once it has flown on past: still turning in on it, it keeps coming)
     v = Math.max(airSpeed(u) * M_PER_TILE, v - drag() * v * v * dt);
     u.alt = strikeAlt;
     flyTo(w, u, ...past(), 0.01, v / M_PER_TILE / FLY_SPEED, dt, face);
