@@ -71,7 +71,9 @@ export async function runArena(params: URLSearchParams): Promise<void> {
   panel.style.width = `${PANEL_W}px`;
   document.body.appendChild(panel);
 
-  let budget = BUDGETS.includes(Number(params.get('budget'))) ? Number(params.get('budget')) : 1200;
+  // (&budget=1: one of each, for watching a duel; &high=1: fliers start up at their ceiling)
+  let budget = BUDGETS.includes(Number(params.get('budget'))) || Number(params.get('budget')) === 1 ? Number(params.get('budget')) : 1200;
+  const high = params.get('high') === '1';
   const scores = new Map<string, number>(); // `${i},${j}` → score
   let worker: Worker | null = null;
   const fillMatrix = () => {
@@ -135,6 +137,7 @@ export async function runArena(params: URLSearchParams): Promise<void> {
     if (fresh) loading.style.display = 'none';
     if (my !== staging) return; // another fight was picked meanwhile
     const [A, B] = stageFight(world, { owner: seat(a, 0), specId: a.id }, { owner: seat(b, 1), specId: b.id }, budget);
+    if (high) for (const id of [...A.ids, ...B.ids]) { const u = world.units.get(id); if (u?.stats.flight) { u.airborne = true; u.alt = u.stats.flyHeight; u.launchT = 99; } }
     input.player = A.owner;
     if (control) { world.enqueue({ player: A.owner, cmd: { type: 'stop', units: A.ids } }); input.setSelection(A.ids); } // yours: they wait for orders
     const hp = (s: ArenaSide) => s.ids.reduce((t, id) => t + (world.units.get(id)?.stats.maxHp ?? 0), 0);

@@ -53,9 +53,9 @@ const RUN_IN = 6;
  */
 export function diveAt(w: World, u: Unit, t: Unit, dt: number, face: (dx: number, dy: number) => void): boolean {
   const strikeAlt = 0.8 * bodyHeight(t.stats.mass) + Math.max(0, u.stats.range - u.stats.radius) * M_PER_TILE;
-  const reach = u.stats.range + t.stats.radius + u.stats.radius;
+  const reach = u.stats.range - 0.05 + t.stats.radius; // (the same reach the strike measures: its weapon's to the target's edge)
   const dist = Math.hypot(t.x - u.x, t.y - u.y);
-  let v = Math.max(u.flySpeed, airSpeed(u)) * M_PER_TILE;
+  let v = u.flySpeed * M_PER_TILE; // (from whatever speed it has)
   // (close, it flies on through, as a charger runs on past: it never stops in the air)
   const past = (): [number, number] => dist > reach * 2 ? [t.x, t.y] : [u.x + Math.cos(u.flyDir) * 3, u.y + Math.sin(u.flyDir) * 3];
   if (u.diveRun) {
@@ -161,7 +161,10 @@ export function flyTo(w: World, u: Unit, gx: number, gy: number, arrive: number,
   turn = Math.max(-max, Math.min(max, turn));
   u.flyDir += turn;
   u.bank = max > 0 ? turn / max : 0;
-  u.flySpeed = u.diving ? speed * FLY_SPEED : Math.max(speed * FLY_SPEED, u.flySpeed); // it keeps this pace when it coasts (and the extra a dive gave it, till it zooms it away)
+  // it keeps this pace when it coasts (and the extra a dive gave it, till it zooms it away); slower (a blow took its
+  // speed), it beats back up to it, not at once
+  const cruise = speed * FLY_SPEED;
+  u.flySpeed = u.diving ? cruise : u.flySpeed >= cruise ? u.flySpeed : Math.min(cruise, u.flySpeed + (3 / M_PER_TILE) * dt);
   glide(w, u, u.flySpeed, dt, face);
   u.flewTick = w.tick;
   return Math.hypot(gx - u.x, gy - u.y) <= arrive;

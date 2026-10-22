@@ -1289,6 +1289,7 @@ export class World {
     else if (u.exhausted && !moved) anim = 'tired';
     // in the air: a flight pose pitched to how it's moving: leaping off the ground, climbing, soaring level, or gliding down
     if (u.airborne && u.diveRun) anim = 'swoop';
+    else if (u.airborne && u.diving) anim = 'glide'; // (diving all the way down: no flare)
     else if (u.airborne) anim = u.launchT < LEAP_TIME && u.alt < LAUNCH_HEIGHT && u.vert >= 0 ? 'leap' : u.vert > 0 ? 'climb' : u.vert < 0 ? (u.alt < FLARE_HEIGHT ? 'land' : 'glide') : 'soar'; // the last few metres down: flaring to land
     if (anim !== u.anim) { u.anim = anim; u.animT = 0; } else u.animT += DT;
 
@@ -1635,7 +1636,9 @@ export class World {
       const d = Math.hypot(tx - u.x, ty - u.y) || 1, nx = (tx - u.x) / d, ny = (ty - u.y) / d;
       const impulse = Math.sqrt(2 * hit.mu * hit.delivered); // kg·m/s
       this.shove(tu, (nx * impulse) / tu.stats.mass, (ny * impulse) / tu.stats.mass);
-      this.shove(u, (-nx * impulse) / u.stats.mass, (-ny * impulse) / u.stats.mass);
+      // (a flier striking in passing: the blow takes it out of its flight speed, not a shove off its line)
+      if (u.airborne) u.flySpeed = Math.max(0, u.flySpeed - impulse / u.stats.mass / M_PER_TILE);
+      else this.shove(u, (-nx * impulse) / u.stats.mass, (-ny * impulse) / u.stats.mass);
     }
   }
 
