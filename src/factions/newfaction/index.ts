@@ -807,7 +807,7 @@ const larva1 = unit({ crawls: true, id: 'larva1', name: 'T1 Larva', mass: 15, ph
   digestsTrees: true, becomes: ['larva2', 'charger', 'micropike', 'mother1'], description: 'A small green larva. Gathers, then changes into a T1 form. Sent onto a tree, it turns the whole tree into food and is absorbed into it.',
   model: (b, p) => caterpillar(b, p, TIER[1], 15) }, 'caterpillar');
 const larva2 = unit({ crawls: true, id: 'larva2', name: 'T2 Larva', mass: 60, physique: LARVA, refinement: 2, workRefinement: 2, shell: 'cocoon',
-  becomes: ['larva3', 'flier', 'ground-attacker2', 'slinger', 'mother2'], description: 'A medium cyan larva. Gathers, then changes into a T2 form.',
+  becomes: ['larva3', 'flier', 'whipweld', 'slinger', 'mother2'], description: 'A medium cyan larva. Gathers, then changes into a T2 form.',
   model: (b, p) => caterpillar(b, p, TIER[2], 60) }, 'caterpillar');
 const larva3 = unit({ crawls: true, id: 'larva3', name: 'T3 Larva', mass: 179, physique: LARVA, refinement: 3, workRefinement: 3, shell: 'cocoon',
   becomes: ['dragon-fly', 'ground-attacker3', 'mother3'], description: 'A big purple larva. Gathers, then changes into a T3 form.',
@@ -834,7 +834,7 @@ const micropike = unit({ id: 'micropike', name: 'Micropike', mass: 35, physique:
   attack: { style: 'strike', crystalMass: 0.8, shaft: 1.5 }, description: 'T1: micropikes.', model: (b, p) => bug(b, p, '#6aa84a', 35, 'pike') }, 'bug');
 const flier = unit({ id: 'flier', name: 'Vimmer', mass: 120, physique: { muscle: 0.5, frame: 0.25, reserve: 0.25 }, refinement: 3, flight: { launch: 'backward' },
   attack: { style: 'strike', crystalMass: 2 }, description: 'T2: a dive bomber: it swoops down onto its target to strike, its dive behind the blow, and climbs away again.', model: (b, p) => drawVimmer(b, p, 120) }, 'vimmer');
-const groundAttacker2 = unit({ id: 'ground-attacker2', name: 'Whipweld', mass: 150, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 3,
+const groundAttacker2 = unit({ id: 'whipweld', name: 'Whipweld', mass: 150, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 3,
   attack: { style: 'strike', crystalMass: 4, whip: 2 }, description: 'T2: on two running legs, two whip arms held back along its torso; it dips and lashes one out, its crystal at the tip, a long reach.', model: (b, p) => drawCharger(b, p, 150, LASHER) }, 'lasher');
 const slinger = unit({ id: 'slinger', name: 'Slinger', mass: 60, physique: { muscle: 0.5, frame: 0.3, reserve: 0.2 }, refinement: 3,
   attack: { style: 'throw', crystalMass: 0.5, ammo: 8, sling: 0.6 }, description: 'T2: a slinger.', model: (b, p) => bug(b, p, '#3ab0bc', 60, 'sling') }, 'bug');
