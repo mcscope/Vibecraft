@@ -498,7 +498,7 @@ export class Renderer {
         if (f.walked !== undefined) f.walked /= k; // (drawn bigger, it strides further)
         // (recovering after a throw, one that reloads by hand shows it: its 'reload' over the rest of its recovery)
         if (art.anims.reload && f.anim === 'idle' && u.cooldown > 0.02) Object.assign(f, { anim: 'reload' as const, progress: Math.min(0.999, Math.max(0, 1 - u.cooldown / Math.max(0.1, u.stats.cooldown - 0.45))), time: undefined, walked: undefined });
-        if (art.anims.rise) Object.assign(f, this.rising(u.id, f.anim));
+        if (art.anims.rise) Object.assign(f, this.rising(u.id, f.anim, u.engage > 0 || u.order.kind === 'attack'));
         const frame = unitSprite(art, f.anim, u.heading, f);
         this.setFrame(sp, frame);
         if (Math.abs(sp.scale.x * frame.q - k) > 1e-3) sp.scale.set(k / frame.q);
@@ -721,9 +721,10 @@ export class Renderer {
    * One that rests in a squat gets up when it starts to move or strike (its 'rise', played forward) and sits back down
    * a few seconds after it stops (played backward), over RISE seconds.
    */
-  private rising(id: number, anim: ArtAnim): Partial<{ anim: ArtAnim } & FrameTime> {
+  private rising(id: number, anim: ArtAnim, fighting: boolean): Partial<{ anim: ArtAnim } & FrameTime> {
     const RISE = 0.45;
-    const up = anim === 'walk' || anim === 'charge' || anim === 'attack' || anim === 'reload' || anim.startsWith('carry');
+    const up = fighting || anim === 'walk' || // (in a fight it stays up)
+      anim === 'charge' || anim === 'attack' || anim === 'reload' || anim.startsWith('carry');
     const was = this.posture.get(id);
     if (!was) { this.posture.set(id, { up, at: -Infinity, sat: false }); return {}; }
     // (stopping, it stays up a couple of seconds before it sits. It gets up again only if it actually sat)
