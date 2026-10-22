@@ -717,7 +717,7 @@ export class Renderer {
 
   /**
    * One that rests in a squat gets up when it starts to move or strike (its 'rise', played forward) and sits back down
-   * when it stops (played backward), over RISE seconds, before its walk or after it.
+   * a few seconds after it stops (played backward), over RISE seconds.
    */
   private rising(id: number, anim: ArtAnim): Partial<{ anim: ArtAnim } & FrameTime> {
     const RISE = 0.45;
@@ -725,9 +725,10 @@ export class Renderer {
     const was = this.posture.get(id);
     if (!was) { this.posture.set(id, { up, at: -Infinity }); return {}; }
     if (was.up !== up) { was.up = up; was.at = this.time; }
-    const k = (this.time - was.at) / RISE;
+    // (stopping, it stays up a few seconds before it sits: held at the top of its rise till then)
+    const SIT_AFTER = 3, k = (this.time - was.at - (up ? 0 : SIT_AFTER)) / RISE;
     if (k >= 1) return {};
-    return { anim: 'rise', progress: up ? k : 1 - k, time: undefined, walked: undefined };
+    return { anim: 'rise', progress: up ? Math.max(0, k) : Math.min(0.999, 1 - Math.max(0, k)), time: undefined, walked: undefined };
   }
 
   /**
