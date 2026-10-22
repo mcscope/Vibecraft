@@ -149,7 +149,7 @@ export class Renderer {
   private segSprites = new Map<number, PixiSprite[]>();
   private trails = new Map<number, Array<[number, number]>>();
   /** A unit that rests in a squat (its art has 'rise'): whether it's up, and when that last changed (render time). */
-  private posture = new Map<number, { up: boolean; at: number }>();
+  private posture = new Map<number, { up: boolean; at: number; sat: boolean }>();
   private buildingSprites = new Map<number, PixiSprite>();
   private projSprites = new Map<number, PixiSprite>();
   private flagSprite: PixiSprite | null = null;
@@ -723,16 +723,12 @@ export class Renderer {
     const RISE = 0.45;
     const up = anim === 'walk' || anim === 'charge' || anim === 'attack' || anim.startsWith('carry');
     const was = this.posture.get(id);
-    if (!was) { this.posture.set(id, { up, at: -Infinity }); return {}; }
-    // (stopping, it stays up a couple of seconds before it sits: held at the top of its rise till then. Moving again,
-    // it gets up from as far down as it got: not at all if it hadn't begun to sit, between blows say)
+    if (!was) { this.posture.set(id, { up, at: -Infinity, sat: false }); return {}; }
+    // (stopping, it stays up a couple of seconds before it sits. It gets up again only if it actually sat)
     const SIT_AFTER = 2;
-    if (was.up !== up) {
-      const down = !was.up ? Math.max(0, Math.min(1, (this.time - was.at - SIT_AFTER) / RISE)) : 0;
-      was.up = up;
-      was.at = up ? this.time - (1 - down) * RISE : this.time;
-    }
+    if (was.up !== up) { was.at = up && !was.sat ? -Infinity : this.time; was.up = up; was.sat = false; }
     const k = (this.time - was.at - (up ? 0 : SIT_AFTER)) / RISE;
+    if (!up && k >= 0) was.sat = true; // (it has begun to sit)
     if (k >= 1) return {};
     return { anim: 'rise', progress: up ? Math.max(0, k) : Math.min(0.999, 1 - Math.max(0, k)), time: undefined, walked: undefined };
   }
