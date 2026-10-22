@@ -11,6 +11,7 @@
 import type { FactionSpec, UnitSpec } from '../types';
 import type { Section, ModelBuilder, Pose, Vec3 as V3 } from '../../kits/bake3d/types';
 import { aim, footAt, jointBetween, shapedLimb, span } from '../../kits/bake3d/gait';
+import { gStag } from './concepts';
 import type { Mat } from '../../kits/bake3d/types';
 
 type Unit = UnitSpec & { model: (b: ModelBuilder, p: Pose) => void };
@@ -208,16 +209,13 @@ function spikeBody(c: ModelBuilder, armed: boolean, tint: string): void {
 
 /** A charger's build: its legs (hip height standing, thigh, shin, the foot bone from toes up to ankle), how wide it
  *  stands, how thick its legs, its body's size and colour, and how far it strides walking and running. */
-interface ChargerBuild { H: number; thigh: number; shin: number; foot: [number, number, number]; hipZ: number; footZ: number; thighR: number; shinR: number; body: number; tint: string; walk: number; run: number; goliath?: boolean; whip?: number; trebuchet?: boolean }
+interface ChargerBuild { H: number; thigh: number; shin: number; foot: [number, number, number]; hipZ: number; footZ: number; thighR: number; shinR: number; body: number; tint: string; walk: number; run: number; whip?: number; trebuchet?: boolean }
 const CHARGER: ChargerBuild = { H: 0.62, thigh: 0.3, shin: 0.32, foot: [-0.07, 0.21, 0], hipZ: 0.09, footZ: 0.11, thighR: 0.055, shinR: 0.035, body: 0.7, tint: '#7fbf4a', walk: 0.22, run: 0.34 };
 // the T2 lasher: the charger's legs and body, and two whip arms held back along its torso (the user's design); `whip`:
 // metres of lash (its attack.whip)
 const LASHER: ChargerBuild = { H: 0.6, thigh: 0.29, shin: 0.31, foot: [-0.07, 0.2, 0], hipZ: 0.1, footZ: 0.12, thighR: 0.06, shinR: 0.038, body: 0.8, tint: '#2a8a96', walk: 0.21, run: 0.33, whip: 2 };
 // the T2 slinger: the charger's build, its body the arm of a trebuchet (the user's design)
 const SLINGER: ChargerBuild = { ...CHARGER, H: 0.6, body: 0.75, tint: '#3ab0bc', trebuchet: true };
-// the T3 goliath: hulking and low, wide on short massive legs, armoured (the user's: ultralisk vibes)
-// (its legs gnarled but organic, thick for its weight, splayed to a wide stance)
-const GOLIATH: ChargerBuild = { H: 0.44, thigh: 0.38, shin: 0.4, foot: [0.06, 0.14, 0], hipZ: 0.22, footZ: 0.36, thighR: 0.095, shinR: 0.075, body: 1.15, tint: '#9a3aa6', walk: 0.18, run: 0.28, goliath: true };
 
 /**
  * The chargers (the user's design): the Vimmer's body plan on two legs instead of wings: its central body slung
@@ -235,11 +233,11 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
   // up from the squat, its legs unfolding under it, the body lifting last)
   const ease = (x: number) => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c); };
   const upK = p.anim === 'rise' ? ease(p.phase) : walking || p.anim === 'attack' ? 1 : 0;
-  // (at rest a charger sits back like a tripod: on its folded legs, nose up, its tail barb on the ground; the goliath
-  // lies down. Charging, a charger is an outstretched spear: level, low, thrust forward, spike first)
-  const tripod = !k.goliath, restTilt = tripod ? 0.55 : 0;
-  const rest = tripod ? 0.25 * k.body / 0.7 : 0.1 * k.body + 0.01, H = rest - 0.04 + (k.H - rest + 0.04) * upK;
-  const tilt = restTilt * (1 - upK), spear = running && tripod ? 1 : 0;
+  // (at rest a charger sits back like a tripod: on its folded legs, nose up, its tail barb on the ground. Charging, it's
+  // an outstretched spear: level, low, thrust forward, spike first)
+  const restTilt = 0.55;
+  const rest = 0.25 * k.body / 0.7, H = rest - 0.04 + (k.H - rest + 0.04) * upK;
+  const tilt = restTilt * (1 - upK), spear = running ? 1 : 0;
   // its body rides lowest over a planted foot, highest in the stride (running: up in the moment both feet are off)
   const bob = running ? -0.06 + 0.07 * Math.max(0, Math.sin((p.phase * 2 - 0.35) * TAU)) : walking ? -0.03 + Math.abs(Math.cos(p.phase * TAU)) * 0.025 : 0;
     // (striking, a battering ram: drawn back on its legs, then slammed forward level and hard, spike first)
@@ -249,38 +247,11 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
   const ramShift = ramX * k.body / 0.7; // (the hips go with the body: the whole of it lunges, its feet planted)
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
     for (const S of [1, -1]) {
-      const back = k.goliath ? 0 : 0.11; // (a charger's legs attach well back along its body)
+      const back = 0.11; // (a charger's legs attach well back along its body)
       const hip: V = [-0.02 - back + ramShift, H + bob, S * k.hipZ], restFoot: V = [0.1 - 0.08 * upK - back, 0.01, S * (k.footZ + 0.05 * (1 - upK))];
       const ph = p.phase + (S > 0 ? 0 : 0.5);
       const foot = running ? footAt(restFoot, ph, k.run, 0.2, 0.35) : walking ? footAt(restFoot, ph, k.walk, 0.12, 0.55) : restFoot;
       const ankle: V = [foot[0] + k.foot[0], foot[1] + k.foot[1], foot[2]];
-      if (k.goliath) {
-        // gnarled but organic, built for its weight (a great beetle's legs): the knee up and out, so the legs splay to
-        // a wide stance under the heavy body; thick, lumpy, bowed segments with burls along them; a spined shin; a
-        // tarsus of knotted segments ending in a pair of hooked claws spread on the ground
-        const knee = jointBetween(hip, ankle, k.thigh, k.shin, [0.2, 1, S * 1.2]);
-        const bow = (a: V, b: V, out: number): V => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2 + out * 0.6, (a[2] + b[2]) / 2 + S * out];
-        const mid1 = bow(hip, knee, 0.035), mid2 = bow(knee, ankle, 0.03);
-        shapedLimb(c, hip, mid1, k.thighR, [1.25, 1.05, 1.2, 1.0], chitin, { flat: 0.2 });
-        shapedLimb(c, mid1, knee, k.thighR, [1.0, 1.12, 0.92, 0.95], chitin, { flat: 0.2 });
-        shapedLimb(c, knee, mid2, k.shinR, [1.15, 0.92, 1.05, 0.9], chitin, { flat: 0.35, keel: 0.4 });
-        shapedLimb(c, mid2, ankle, k.shinR, [0.9, 0.98, 0.82, 0.78], chitin, { flat: 0.35, keel: 0.4 });
-        for (const [j, r] of [[hip, k.thighR * 1.3], [mid1, k.thighR * 1.05], [knee, k.thighR * 1.15], [mid2, k.shinR * 0.95], [ankle, k.shinR * 0.95]] as const) c.sphere(r, j, chitin); // its joints and burls
-        for (const f of [0.3, 0.55, 0.8]) { // spines down the back of the shin
-          const at: V = [knee[0] + (ankle[0] - knee[0]) * f - 0.03, knee[1] + (ankle[1] - knee[1]) * f, knee[2] + (ankle[2] - knee[2]) * f + S * 0.02];
-          c.cone(0.018, 0.08, at, claw, [0, 0, 2.0], 4);
-        }
-        // the tarsus: knotted segments down to the ground, two hooked claws spread to bear the weight
-        let tp: V = ankle;
-        for (let i = 1; i <= 3; i++) {
-          const nx: V = [ankle[0] + (foot[0] - ankle[0]) * (i / 3), ankle[1] + (foot[1] + 0.03 - ankle[1]) * (i / 3), ankle[2] + (foot[2] - ankle[2]) * (i / 3)];
-          shapedLimb(c, tp, nx, k.shinR * 0.6, [1.0, 0.8, 0.95], chitin);
-          c.sphere(k.shinR * 0.55, nx, chitin);
-          tp = nx;
-        }
-        for (const dz of [-1, 1]) c.cone(0.018, 0.11, [foot[0] + 0.07, 0.03, foot[2] + dz * 0.05], claw, [dz * 0.4, dz * 0.5, -Math.PI / 2 - 0.3], 4);
-        continue;
-      }
       const knee = jointBetween(hip, ankle, k.thigh, k.shin, [1, 0.3, S * 0.4]); // (its knee forward, its ankle bending back)
       shapedLimb(c, hip, knee, k.thighR, [1.1, 1.4, 1.35, 1.0, 0.7], muscle); // the thigh, thick with muscle, tapering to the knee
       c.sphere(k.thighR * 0.75, knee, chitin);
@@ -300,48 +271,13 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
     const dip = k.whip ? Math.sin(Math.min(1, p.phase / 0.7) * Math.PI) * (p.anim === 'attack' ? 1 : 0) : 0;
     const bodyY = H + bob + 0.04 - 0.08 * dip - 0.07 * spear, bodyRot = tilt + ramTilt + treb + (running ? (spear ? -0.02 : -0.15) : 0) - 0.35 * dip;
     c.joint([ramShift + 0.08 * spear, bodyY, 0], [0, 0, bodyRot], (t) => t.joint([0, 0, 0], [0, 0, 0], (q) => {
-      if (k.goliath) goliathBody(q, p, k.tint);
-      else spikeBody(q, k.whip || k.trebuchet ? false : p.armed, k.tint);
+      spikeBody(q, k.whip || k.trebuchet ? false : p.armed, k.tint);
       if (k.trebuchet) trebuchetParts(q, p, tp, rp, k.tint, { y: bodyY, rot: bodyRot, scale: k.body });
       if (k.whip) whipArms(q, p, (k.whip / LOOK.lasher.scale(mass)) / k.body, k.tint);
     }, k.body));
-  }, (k.goliath ? LOOK.goliath : k.whip ? LOOK.lasher : LOOK.charger).scale(mass));
+  }, (k.whip ? LOOK.lasher : LOOK.charger).scale(mass));
 }
 
-/**
- * The Goliath's body, a Hercules beetle's (the user's): a great smooth glossy domed shell over its back, split by its
- * seam, a domed shield over its shoulders, and from it a long horn sweeping forward and curving down over a smaller
- * horn rising from its head: a pincer, the crystal set at the great horn's tip. Striking, it rams forward and the
- * horns close. In the family's dark chitin, glossy.
- */
-function goliathBody(c: ModelBuilder, p: Pose, tint: string): void {
-  type V = [number, number, number];
-  const shell: Mat = { color: '#1c2224', tex: 'none', rough: 0.12, metal: 0.55 };
-  const chitin: Mat = { color: '#1a2628', tex: 'leather', rough: 0.3, metal: 0.35 };
-  const sheen: Mat = { color: tint, tex: 'leather', rough: 0.3, metal: 0.4 };
-  const eye: Mat = { color: '#050608', tex: 'none', rough: 0.05, metal: 0.5 };
-  const pinch = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0;
-  // the shell over its back: broad, domed, smooth, rounded off behind; the seam down its middle
-  c.loft([[0.06, 0.16, 0.12, 0.05], [-0.06, 0.24, 0.22, 0.08], [-0.24, 0.26, 0.25, 0.09], [-0.42, 0.23, 0.21, 0.08], [-0.56, 0.15, 0.13, 0.06], [-0.64, 0.05, 0.05, 0.03]]
-    .map(([x, w, u, d]) => ({ at: [x, 0, 0] as V, w, up: u, down: d, flat: 0.15 })), shell);
-  c.limb([0.02, 0.15, 0], [-0.6, 0.08, 0], 0.008, sheen, 0.006); // the seam
-  c.loft([[0.0, 0.18, 0.1, 0.12], [-0.3, 0.22, 0.12, 0.14], [-0.55, 0.12, 0.08, 0.1]].map(([x, w, u, d]) => ({ at: [x, -0.02, 0] as V, w, up: u, down: d, keel: 0.2 })), chitin); // its underside
-  // the shield over its shoulders, domed, and the head beneath its front
-  c.loft([[0.04, 0.14, 0.1, 0.06], [0.14, 0.17, 0.15, 0.07], [0.26, 0.13, 0.12, 0.06], [0.32, 0.06, 0.06, 0.04]].map(([x, w, u, d]) => ({ at: [x, 0.02, 0] as V, w, up: u, down: d })), shell);
-  c.sphere([0.08, 0.06, 0.08], [0.34, -0.04, 0], chitin); // head
-  for (const z of [1, -1]) c.sphere(0.018, [0.37, -0.01, z * 0.065], eye);
-  // the horns: the great one sweeping forward from the shield and curving down, the small one rising from the head
-  const curve = (from: V, pts: number, f: (k: number) => V, r0: number, r1: number, mat: Mat): V => {
-    let prev = from;
-    for (let i = 1; i <= pts; i++) { const k = i / pts, next = f(k); c.limb(prev, next, r0 + (r1 - r0) * (k - 1 / pts), mat, r0 + (r1 - r0) * k); prev = next; }
-    return prev;
-  };
-  const dip = 0.06 * pinch; // (closing on a blow)
-  const tip = curve([0.22, 0.17, 0], 8, (k) => [0.22 + 0.62 * k, 0.17 + 0.1 * Math.sin(k * Math.PI * 0.9) - 0.2 * k * k - dip * k, 0], 0.05, 0.012, shell);
-  for (const k of [0.35, 0.55]) { const x = 0.22 + 0.62 * k, y = 0.17 + 0.1 * Math.sin(k * Math.PI * 0.9) - 0.2 * k * k - dip * k; c.cone(0.014, 0.05, [x, y - 0.04, 0], chitin, [0, 0, Math.PI], 4); } // teeth under it
-  curve([0.4, -0.05, 0], 6, (k) => [0.4 + 0.28 * k, -0.05 + 0.15 * k * k + dip * k, 0], 0.035, 0.01, shell);
-  if (p.armed) c.crystal(0.16, tip, [0, 0, -Math.PI * 0.62]);
-}
 
 /**
  * The lasher's two whip arms (the user's design), from its shoulders: at rest held back along its torso in swaying S
@@ -920,7 +856,7 @@ const dragonFly = unit({ id: 'dragon-fly', name: 'Dragon Fly', mass: 500, physiq
   attack: { style: 'throw', crystalMass: 6, ammo: 10 }, // PLACEHOLDER: its fire (a conversion of crystal) is still to design
   description: 'T3: a fire-breathing dragon with butterfly wings, insectoid and reptilian.', model: (b, p) => drawDragonFly(b, p, 500) }, 'dragon');
 const groundAttacker3 = unit({ id: 'ground-attacker3', name: 'Goliath Charger', mass: 600, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 4,
-  attack: { style: 'strike', crystalMass: 8 }, description: 'T3: a hulking charger like a Hercules beetle, low and wide on massive legs, a great horn over a small one.', model: (b, p) => drawCharger(b, p, 600, GOLIATH) }, 'goliath');
+  attack: { style: 'strike', crystalMass: 8 }, description: 'T3: a stag bull: hunched and front-heavy on two massive knuckle-walking forelegs, huge mandibles clamping its crystal.', model: (b, p) => gStag(b, p) }, 'goliath');
 
 export const units: Unit[] = [
   motherOf(1, 80), motherOf(2, 120), motherOf(3, 500), // (the T3 mother weighs a lot more: the user's)
