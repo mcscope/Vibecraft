@@ -298,10 +298,11 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
     const tp = p.anim === 'attack' && k.trebuchet ? p.phase : -1, rp = p.anim === 'reload' && k.trebuchet ? p.phase : -1;
     const treb = rp >= 0 ? 0.55 * Math.max(0, (rp - 0.7) / 0.3) : tp < 0 ? 0 : tp < 0.3 ? 0.55 * Math.sin((tp / 0.3) * Math.PI / 2) : tp < 0.55 ? 0.55 - 2.75 * ((tp - 0.3) / 0.25) ** 2 : -2.2 * (1 - (tp - 0.55) / 0.45) ** 2;
     const dip = k.whip ? Math.sin(Math.min(1, p.phase / 0.7) * Math.PI) * (p.anim === 'attack' ? 1 : 0) : 0;
-    c.joint([ramShift + 0.08 * spear, H + bob + 0.04 - 0.08 * dip - 0.07 * spear, 0], [0, 0, tilt + ramTilt + treb + (running ? (spear ? -0.02 : -0.15) : 0) - 0.35 * dip], (t) => t.joint([0, 0, 0], [0, 0, 0], (q) => {
+    const bodyY = H + bob + 0.04 - 0.08 * dip - 0.07 * spear, bodyRot = tilt + ramTilt + treb + (running ? (spear ? -0.02 : -0.15) : 0) - 0.35 * dip;
+    c.joint([ramShift + 0.08 * spear, bodyY, 0], [0, 0, bodyRot], (t) => t.joint([0, 0, 0], [0, 0, 0], (q) => {
       if (k.goliath) goliathBody(q, p, k.tint);
       else spikeBody(q, k.whip || k.trebuchet ? false : p.armed, k.tint);
-      if (k.trebuchet) trebuchetParts(q, p, tp, rp, k.tint);
+      if (k.trebuchet) trebuchetParts(q, p, tp, rp, k.tint, { y: bodyY, rot: bodyRot, scale: k.body });
       if (k.whip) whipArms(q, p, (k.whip / LOOK.lasher.scale(mass)) / k.body, k.tint);
     }, k.body));
   }, (k.goliath ? LOOK.goliath : k.whip ? LOOK.lasher : LOOK.charger).scale(mass));
@@ -394,7 +395,7 @@ function whipArms(c: ModelBuilder, p: Pose, len: number, tint: string): void {
  * counterweight: reloading, the arm swings up over its back to it, takes a crystal into the sling, and swings back down
  * low behind, cocked. Before a throw the arm is pulled down to the ground. `tp`, `rp`: the throw's and the reload's progress (-1 when not).
  */
-function trebuchetParts(q: ModelBuilder, p: Pose, tp: number, rp: number, tint: string): void {
+function trebuchetParts(q: ModelBuilder, p: Pose, tp: number, rp: number, tint: string, body: { y: number; rot: number; scale: number }): void {
   type V = [number, number, number];
   const chitin: Mat = { color: '#1a2628', tex: 'leather', rough: 0.3, metal: 0.35 };
   const sheen: Mat = { color: tint, tex: 'leather', rough: 0.3, metal: 0.4 };
@@ -414,17 +415,24 @@ function trebuchetParts(q: ModelBuilder, p: Pose, tp: number, rp: number, tint: 
   const arm = rp >= 0 ? 1.2 * reach - (rp > 0.55 ? 0.35 * ease((rp - 0.55) / 0.45) : 0) : tp >= 0 && tp < 0.3 ? -0.35 * ease(tp / 0.3) : 0;
   const curl = 3.2 * reach; // (curled, the long arm's tip comes over to hang its sling on the counterweight's pouch)
   const loaded = p.armed && (rp >= 0 ? rp > 0.5 : tp < 0 || tp < 0.5);
-  q.joint([-0.58, 0, 0], [0, 0, -arm], (a) => trebuchetArm(a, tp, loaded, curl, chitin, sheen, cord));
+  // (how high above the ground a point in the arm's own frame is: through the arm's swing, the body's tilt and size)
+  const groundY = (x: number, y: number): number => {
+    const ax = -0.58 + x * Math.cos(-arm) - y * Math.sin(-arm), ay = x * Math.sin(-arm) + y * Math.cos(-arm);
+    return body.y + body.scale * (ax * Math.sin(body.rot) + ay * Math.cos(body.rot));
+  };
+  q.joint([-0.58, 0, 0], [0, 0, -arm], (a) => trebuchetArm(a, tp, loaded, curl, chitin, sheen, cord, groundY));
   for (const z of [1, -1]) q.limb([-0.3, -0.06, z * 0.06], [-0.58, 0, z * 0.015], 0.008, chitin, 0.005); // struts
 }
 
 /** The slinger's throwing arm, from the tail's base (local origin) out along -x, with its sling. */
-function trebuchetArm(q: ModelBuilder, tp: number, loaded: boolean, curl: number, chitin: Mat, sheen: Mat, cord: Mat): void {
+function trebuchetArm(q: ModelBuilder, tp: number, loaded: boolean, curl: number, chitin: Mat, sheen: Mat, cord: Mat, groundY: (x: number, y: number) => number): void {
   type V = [number, number, number];
   let at: V = [0, 0, 0];
   for (let i = 1; i <= 8; i++) { // (a long arm: eight segments)
-    const th = curl * ((i - 0.5) / 8); // (curling: each segment turned up and over a little further than the last)
-    const nx: V = [at[0] - 0.16 * Math.cos(th), at[1] + 0.012 + 0.16 * Math.sin(th), 0];
+    let th = curl * ((i - 0.5) / 8); // (curling: each segment turned up and over a little further than the last)
+    const step = (a: number): V => [at[0] - 0.16 * Math.cos(a), at[1] + 0.012 + 0.16 * Math.sin(a), 0];
+    for (let k = 0; k < 40 && groundY(step(th)[0], step(th)[1]) < 0.035; k++) th += 0.06; // (never into the ground: it lies along it, dragging)
+    const nx = step(th);
     shapedLimb(q, at, nx, 0.038 * (1 - i * 0.08), [1.1, 0.85, 0.9, 1.05], i % 2 ? chitin : sheen, { flat: 0.3 });
     q.cone(0.012, 0.045, [nx[0] + 0.05, nx[1] + 0.03, 0], chitin, [0, 0, 0.6], 4);
     at = nx;
@@ -432,6 +440,7 @@ function trebuchetArm(q: ModelBuilder, tp: number, loaded: boolean, curl: number
   // the sling: a long cord swinging from the arm's end, its pouch, the crystal in it till it's loosed
   const swing = tp < 0 ? 0 : tp < 0.3 ? -0.3 * (tp / 0.3) : tp < 0.55 ? -0.3 + 1.6 * ((tp - 0.3) / 0.25) : 1.3 - 1.3 * ((tp - 0.55) / 0.45);
   const pouch: V = curl > 0.1 ? [at[0] + 0.06, at[1] - 0.15, 0] : [at[0] - 0.16 * Math.cos(swing), at[1] - 0.16 * Math.sin(-swing) - 0.04, 0]; // (curled over, its sling hangs down to the pouch)
+  for (let k = 0; k < 20 && groundY(pouch[0], pouch[1]) < 0.04; k++) pouch[1] += 0.02; // (resting on the ground, not in it)
   q.limb(at, pouch, 0.006, cord, 0.005);
   q.sphere([0.045, 0.028, 0.04], pouch, cord);
   if (loaded) q.crystal(0.09, [pouch[0], pouch[1] + 0.01, 0], [0, 0, Math.PI / 2]);
