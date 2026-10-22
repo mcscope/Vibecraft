@@ -240,9 +240,14 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
   const tilt = restTilt * (1 - upK), spear = running && tripod ? 1 : 0;
   // its body rides lowest over a planted foot, highest in the stride (running: up in the moment both feet are off)
   const bob = running ? -0.06 + 0.07 * Math.max(0, Math.sin((p.phase * 2 - 0.35) * TAU)) : walking ? -0.03 + Math.abs(Math.cos(p.phase * TAU)) * 0.025 : 0;
+    // (striking, a battering ram: drawn back on its legs, then slammed forward level and hard, spike first)
+    const hit = p.anim === 'attack' && !k.whip ? p.phase : -1;
+    const ramX = hit < 0 ? 0 : hit < 0.38 ? -0.22 * Math.sin((hit / 0.38) * Math.PI / 2) : hit < 0.5 ? -0.22 + 0.67 * ((hit - 0.38) / 0.12) : 0.45 * (1 - (hit - 0.5) / 0.5) ** 2; // (exaggerated: far back, then a long hard slam, as far as its legs reach)
+    const ramTilt = hit < 0 ? 0 : hit < 0.38 ? 0.25 * Math.sin((hit / 0.38) * Math.PI / 2) : hit < 0.5 ? 0.25 - 0.45 * ((hit - 0.38) / 0.12) : -0.2 * (1 - (hit - 0.5) / 0.5) ** 2; // (rearing back, then driving down into it)
+  const ramShift = ramX * k.body / 0.7; // (the hips go with the body: the whole of it lunges, its feet planted)
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
     for (const S of [1, -1]) {
-      const hip: V = [-0.02, H + bob, S * k.hipZ], restFoot: V = [0.1 - 0.08 * upK, 0.01, S * (k.footZ + 0.05 * (1 - upK))];
+      const hip: V = [-0.02 + ramShift, H + bob, S * k.hipZ], restFoot: V = [0.1 - 0.08 * upK, 0.01, S * (k.footZ + 0.05 * (1 - upK))];
       const ph = p.phase + (S > 0 ? 0 : 0.5);
       const foot = running ? footAt(restFoot, ph, k.run, 0.2, 0.35) : walking ? footAt(restFoot, ph, k.walk, 0.12, 0.55) : restFoot;
       const ankle: V = [foot[0] + k.foot[0], foot[1] + k.foot[1], foot[2]];
@@ -284,12 +289,8 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
     }
     // the body, slung between the hips: leaning into a run; striking, it rams forward, the spike first
     // (a lasher doesn't ram: it dips its torso down as it lashes)
-    // (striking, a battering ram: drawn back on its legs, then slammed forward level and hard, spike first)
-    const hit = p.anim === 'attack' && !k.whip ? p.phase : -1;
-    const ramX = hit < 0 ? 0 : hit < 0.38 ? -0.3 * Math.sin((hit / 0.38) * Math.PI / 2) : hit < 0.5 ? -0.3 + 1.0 * ((hit - 0.38) / 0.12) : 0.7 * (1 - (hit - 0.5) / 0.5) ** 2; // (exaggerated: far back, then a long hard slam)
-    const ramTilt = hit < 0 ? 0 : hit < 0.38 ? 0.25 * Math.sin((hit / 0.38) * Math.PI / 2) : hit < 0.5 ? 0.25 - 0.45 * ((hit - 0.38) / 0.12) : -0.2 * (1 - (hit - 0.5) / 0.5) ** 2; // (rearing back, then driving down into it)
     const dip = k.whip ? Math.sin(Math.min(1, p.phase / 0.7) * Math.PI) * (p.anim === 'attack' ? 1 : 0) : 0;
-    c.joint([ramX * k.body / 0.7 + 0.08 * spear, H + bob + 0.04 - 0.08 * dip - 0.07 * spear, 0], [0, 0, tilt + ramTilt + (running ? (spear ? -0.02 : -0.15) : 0) - 0.35 * dip], (t) => t.joint([0, 0, 0], [0, 0, 0], (q) => {
+    c.joint([ramShift + 0.08 * spear, H + bob + 0.04 - 0.08 * dip - 0.07 * spear, 0], [0, 0, tilt + ramTilt + (running ? (spear ? -0.02 : -0.15) : 0) - 0.35 * dip], (t) => t.joint([0, 0, 0], [0, 0, 0], (q) => {
       if (k.goliath) goliathBody(q, p, k.tint);
       else spikeBody(q, k.whip ? false : p.armed, k.tint);
       if (k.whip) whipArms(q, p, (k.whip / LOOK.lasher.scale(mass)) / k.body, k.tint);

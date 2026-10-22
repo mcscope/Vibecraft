@@ -496,7 +496,7 @@ export class Renderer {
         const k = spec && spec.stats.mass !== u.stats.mass ? Math.cbrt(u.stats.mass / spec.stats.mass) : 1;
         const f: { anim: ArtAnim } & FrameTime = u.stats.flight && !u.airborne && this.lift(u.id) > 6 ? { anim: 'fly' as const, time: this.time } : unitFrame(u);
         if (f.walked !== undefined) f.walked /= k; // (drawn bigger, it strides further)
-        if (art.anims.rise) Object.assign(f, this.rising(u.id, f.anim, u.order.kind !== 'idle'));
+        if (art.anims.rise) Object.assign(f, this.rising(u.id, f.anim));
         const frame = unitSprite(art, f.anim, u.heading, f);
         this.setFrame(sp, frame);
         if (Math.abs(sp.scale.x * frame.q - k) > 1e-3) sp.scale.set(k / frame.q);
@@ -719,10 +719,9 @@ export class Renderer {
    * One that rests in a squat gets up when it starts to move or strike (its 'rise', played forward) and sits back down
    * a few seconds after it stops (played backward), over RISE seconds.
    */
-  private rising(id: number, anim: ArtAnim, busy: boolean): Partial<{ anim: ArtAnim } & FrameTime> {
+  private rising(id: number, anim: ArtAnim): Partial<{ anim: ArtAnim } & FrameTime> {
     const RISE = 0.45;
-    // (up while it has anything to do, a fight between blows included; it sits only when it's idle)
-    const up = busy || anim === 'walk' || anim === 'charge' || anim === 'attack' || anim.startsWith('carry');
+    const up = anim === 'walk' || anim === 'charge' || anim === 'attack' || anim.startsWith('carry');
     const was = this.posture.get(id);
     if (!was) { this.posture.set(id, { up, at: -Infinity }); return {}; }
     if (was.up !== up) { was.up = up; was.at = this.time; }
