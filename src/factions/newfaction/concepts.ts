@@ -231,63 +231,77 @@ export function gPangolin(b: ModelBuilder, p: Pose): void {
  * slams its head down, the mandibles clamping.
  */
 /**
- * The Goliath's torso, in one of four directions (the user's to choose between; none a copy of any creature), in its
+ * The Goliath's torso, in one of three directions (the user's to choose between; none a copy of any creature), in its
  * body's frame (X: the model's x to the body's; Y: its centre line):
  *  - geode: a rough stony hide split along its back, crystal growing out of the cracks;
  *  - ram: overlapping armour plates stacked into a forward-driving wedge, heaviest at the front;
- *  - bellows: a ribbed, accordion torso that pumps, swelling as it breathes, squeezing as it strides and strikes;
- *  - ridge: a tall ridge of armoured spines along its back over a soft, pulsing underbelly.
+ *  - bellows: a ribbed, accordion torso that pumps, swelling as it breathes, squeezing as it strides and strikes.
  */
 function goliathTorso(bd: ModelBuilder, torso: GoliathTorso, X: (x: number) => number, Y: number, t: number, p: Pose, m: { shell: Mat; plate: Mat; edge: Mat; belly: Mat }): void {
   const fall = (x: number) => Y - (0.3 - x) * 0.18; // (hunched: falling away behind its shoulders)
   const crystal: Mat = { color: '#8fe6ff', rough: 0.12, metal: 0.15, emissive: '#2a8fc0' };
   if (torso === 'geode') {
-    const stone: Mat = { color: '#8a6a58', tex: 'stone', rough: 0.85 };
-    for (const z of [1, -1]) { // two great halves of stony hide, split apart along the back
+    // two great halves of rough stone hide, in two tones, cracked across, split apart along the back; inside the split a
+    // glowing seam, crystal clusters of mixed sizes growing out of it; smaller crystals breaking through at its shoulders
+    const stone: Mat = { color: '#8a6a58', tex: 'stone', rough: 0.85 }, stone2: Mat = { color: '#6a5246', tex: 'stone', rough: 0.9 };
+    const crack: Mat = { color: '#241814', tex: 'none', rough: 0.9 };
+    for (const z of [1, -1]) {
       bd.loft([[0.3, 0.12, 0.13, 0.12], [0.12, 0.2, 0.2, 0.15], [-0.12, 0.2, 0.19, 0.14], [-0.36, 0.15, 0.14, 0.1], [-0.52, 0.06, 0.06, 0.05]]
         .map(([x, w, u, d]) => ({ at: [X(x), fall(x), z * 0.07] as Vec3, w, up: u, down: d, flat: 0.15 })), stone);
-      for (const [x, s2] of [[0.15, 0.05], [-0.05, 0.08], [-0.22, 0.06], [-0.4, 0.04]] as const) bd.sphere([s2 * 1.4, s2, s2], [X(x), fall(x) + 0.2 * (1 - Math.abs(x) * 0.6), z * 0.19], stone); // lumps
+      for (const [x, s2, tone] of [[0.2, 0.06, 0], [0.04, 0.09, 1], [-0.14, 0.07, 0], [-0.3, 0.06, 1], [-0.44, 0.04, 0]] as const) bd.sphere([s2 * 1.5, s2, s2 * 1.1], [X(x), fall(x) + 0.19 * (1 - Math.abs(x) * 0.5), z * 0.2], tone ? stone2 : stone); // lumps
+      for (const x of [0.16, -0.02, -0.2, -0.36]) bd.limb([X(x), fall(x) + 0.2, z * 0.1], [X(x - 0.06), fall(x) + 0.02, z * 0.27], 0.007, crack, 0.004); // cracks across it
     }
-    for (const [x, len, lean] of [[0.2, 0.12, 0.3], [0.05, 0.18, -0.2], [-0.1, 0.22, 0.15], [-0.25, 0.16, -0.3], [-0.38, 0.1, 0.25]] as const) {
-      bd.crystal(len, [X(x), fall(x) + 0.12, 0], [lean, 0, -0.25]); // crystal growing out of the crack
-      bd.crystal(len * 0.6, [X(x) - 0.04, fall(x) + 0.1, lean * 0.15], [-lean, 0, 0.3]);
+    bd.loft([[0.28, 0.035, 0.05, 0.03], [0.05, 0.05, 0.07, 0.04], [-0.25, 0.045, 0.06, 0.035], [-0.48, 0.02, 0.03, 0.02]].map(([x, w, u, d]) => ({ at: [X(x), fall(x) + 0.08, 0] as Vec3, w, up: u, down: d })), crystal); // the glowing seam
+    for (const [x, len, lean, side] of [[0.22, 0.12, 0.3, 0.02], [0.12, 0.2, -0.25, -0.03], [0.02, 0.26, 0.1, 0.0], [-0.08, 0.16, -0.35, 0.03], [-0.18, 0.22, 0.3, -0.02], [-0.3, 0.14, -0.2, 0.02], [-0.4, 0.1, 0.35, 0.0]] as const) {
+      bd.crystal(len, [X(x), fall(x) + 0.12, side], [lean, 0, -0.25]); // a cluster growing from the crack
+      bd.crystal(len * 0.55, [X(x) - 0.03, fall(x) + 0.1, side + lean * 0.12], [-lean * 1.2, 0, 0.35]);
+      bd.crystal(len * 0.35, [X(x) + 0.03, fall(x) + 0.1, side - lean * 0.1], [lean * 0.8, 0, -0.6]);
     }
-    bd.loft([[0.25, 0.04, 0.02, 0.02], [-0.45, 0.03, 0.02, 0.02]].map(([x, w, u, d]) => ({ at: [X(x), fall(x) + 0.1, 0] as Vec3, w, up: u, down: d })), crystal); // the vein along the crack
+    for (const z of [1, -1]) for (const [dx, len] of [[0, 0.09], [0.05, 0.06]] as const) bd.crystal(len, [X(0.18 + dx), Y + 0.16, z * 0.27], [z * 0.6, 0, -0.2]); // breaking through at the shoulders
   } else if (torso === 'ram') {
-    // overlapping plates, smallest behind, each over the next, stacked into a wedge driving forward; a blunt crown in front
+    // overlapping plates, smallest behind, each over the next, stacked into a wedge driving forward: each keeled, its
+    // leading lip toothed; a heavy battering boss on the crown, scarred. Walking, the plates rock; striking, they
+    // telescope forward into the slam
+    const strike = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.5) * Math.PI) : 0, rock = p.anim === 'walk' ? Math.sin(t * 2) : 0;
     const plates: Array<[number, number, number]> = [[-0.5, 0.08, 0.08], [-0.36, 0.12, 0.12], [-0.2, 0.16, 0.16], [-0.03, 0.2, 0.2], [0.14, 0.23, 0.23]];
-    plates.forEach(([x, w, h], i) => {
-      bd.loft([0, 0.5, 1].map((k) => ({ at: [X(x + k * 0.2), fall(x + k * 0.2) + 0.02 * i, 0] as Vec3, w: w * (k === 0.5 ? 1 : 0.8), up: h * (k === 0.5 ? 1 : 0.7), down: 0.06 + 0.02 * i, flat: 0.35, keel: 0.3 })), i % 2 ? m.plate : m.shell);
-      bd.loft([0, 1].map((k) => ({ at: [X(x + 0.18 + k * 0.02), fall(x + 0.18) + 0.02 * i, 0] as Vec3, w: w * 0.85, up: h * 0.75, down: 0.02, flat: 0.5 })), m.edge); // its leading lip
+    plates.forEach(([x0, w, h], i) => {
+      const x = x0 + strike * 0.04 * (i + 1); // (telescoping forward)
+      bd.joint([X(x + 0.1), fall(x + 0.1) + 0.02 * i, 0], [0, 0, rock * 0.04 * (i % 2 ? 1 : -1)], (pl) => {
+        pl.loft([0, 0.5, 1].map((k) => ({ at: [(k - 0.5) * 0.2, 0, 0] as Vec3, w: w * (k === 0.5 ? 1 : 0.8), up: h * (k === 0.5 ? 1 : 0.7), down: 0.06 + 0.02 * i, flat: 0.35, keel: 0.3 })), i % 2 ? m.plate : m.shell);
+        pl.loft([-0.08, 0.08].map((xx) => ({ at: [xx, h * 0.95, 0] as Vec3, w: 0.012, up: 0.03, down: 0.005 })), m.edge); // its keel ridge
+        pl.loft([0, 1].map((k) => ({ at: [0.08 + k * 0.02, 0, 0] as Vec3, w: w * 0.85, up: h * 0.75, down: 0.02, flat: 0.5 })), m.edge); // its leading lip
+        for (let k = -2; k <= 2; k++) pl.cone(0.012, 0.04, [0.1, h * 0.5 * (1 - Math.abs(k) * 0.2), k * w * 0.3], m.edge, [0, 0, -Math.PI / 2], 4); // the lip's teeth
+      });
     });
-    bd.loft([[0.3, 0.2, 0.2, 0.1], [0.36, 0.16, 0.16, 0.08], [0.4, 0.08, 0.08, 0.05]].map(([x, w, u, d]) => ({ at: [X(x), fall(0.3) + 0.06, 0] as Vec3, w, up: u, down: d, flat: 0.6 })), m.edge); // the blunt crown
+    const cx = X(0.34 + strike * 0.2), cy = fall(0.3) + 0.06;
+    bd.loft([[-0.04, 0.2, 0.2, 0.1], [0.02, 0.17, 0.17, 0.09], [0.07, 0.09, 0.09, 0.05]].map(([x, w, u, d]) => ({ at: [cx + x, cy, 0] as Vec3, w, up: u, down: d, flat: 0.6 })), m.edge); // the blunt crown
+    bd.sphere([0.06, 0.1, 0.12], [cx + 0.07, cy, 0], m.plate); // its battering boss
+    for (const [dy, dz] of [[0.03, 0.04], [-0.04, -0.05], [0.05, -0.02]] as const) bd.limb([cx + 0.12, cy + dy, dz], [cx + 0.12, cy + dy - 0.03, dz + 0.04], 0.005, m.belly, 0.003); // scars
     bd.loft([[0.1, 0.18, 0.04, 0.1], [-0.4, 0.1, 0.03, 0.08]].map(([x, w, u, d]) => ({ at: [X(x), fall(x) - 0.08, 0] as Vec3, w, up: u, down: d })), m.belly);
-  } else if (torso === 'bellows') {
-    // ribbed rings, accordion-like, pumping: swelling as it breathes, squeezing on each stride and as it strikes
+  } else {
+    // bellows: ribbed rings, accordion-like, pumping (swelling as it breathes, squeezing on each stride and as it
+    // strikes), knobbed along each rib; pleats in the hide gathered between; vents along its sides that open as it pumps
     const pump = p.anim === 'walk' ? Math.sin(t * 2) : p.anim === 'attack' ? -Math.sin(Math.min(1, p.phase / 0.45) * Math.PI) : Math.sin(t);
-    const n = 8;
+    const n = 8, vent: Mat = { color: '#1a0806', tex: 'skin', rough: 0.9 };
+    const at = (k: number) => 0.24 - k * 0.74 * (1 - 0.1 * pump);
     for (let i = 0; i < n; i++) {
-      const k = i / (n - 1), x = 0.24 - k * 0.74 * (1 - 0.06 * pump), r = (0.2 - Math.abs(k - 0.35) * 0.18) * (1 + 0.08 * pump * Math.sin(k * Math.PI));
-      bd.sphere([0.04, r, r * 1.05], [X(x), fall(x), 0], i % 2 ? m.edge : m.plate); // a rib
-      if (i < n - 1) { const x2 = 0.24 - (k + 1 / (n - 1)) * 0.74 * (1 - 0.06 * pump); bd.loft([x, x2].map((xx, j) => ({ at: [X(xx), fall(xx), 0] as Vec3, w: r * (j ? 0.85 : 0.88), up: r * 0.85, down: r * 0.85 })), m.belly); } // the hide between, gathered in
+      const k = i / (n - 1), x = at(k), r = (0.2 - Math.abs(k - 0.35) * 0.18) * (1 + 0.14 * pump * Math.sin(k * Math.PI));
+      bd.sphere([0.045, r, r * 1.05], [X(x), fall(x), 0], i % 2 ? m.edge : m.plate); // a rib
+      for (let j = -2; j <= 2; j++) { const a = j * 0.45; bd.sphere(0.02, [X(x), fall(x) + Math.cos(a) * r, Math.sin(a) * r * 1.05], m.edge); } // knobs along it
+      if (i < n - 1) {
+        const x2 = at(k + 1 / (n - 1));
+        bd.loft([x, x2].map((xx, j) => ({ at: [X(xx), fall(xx), 0] as Vec3, w: r * (j ? 0.85 : 0.88), up: r * 0.85, down: r * 0.85 })), m.belly); // the hide between, gathered in
+        for (const z of [1, -1]) {
+          bd.limb([X((x + x2) / 2), fall(x) + r * 0.6, z * r * 0.55], [X((x + x2) / 2), fall(x) - r * 0.4, z * r * 0.75], 0.005, m.edge, 0.004); // a pleat
+          if (i % 2 === 0 && i < n - 2) bd.sphere([0.025, 0.035 * (0.6 + 0.5 * Math.max(0, pump)), 0.012], [X((x + x2) / 2), fall(x), z * r * 0.86], vent); // a vent, opening as it pumps
+        }
+      }
     }
     for (const z of [1, -1]) bd.limb([X(0.2), fall(0.2) + 0.12, z * 0.12], [X(-0.45), fall(-0.45) + 0.06, z * 0.05], 0.015, m.shell, 0.01); // a stiff spar each side
-  } else {
-    // a tall ridge of armoured spine plates along its back, over a soft, pale, pulsing underbelly
-    const soft: Mat = { color: '#d89a84', tex: 'skin', rough: 0.6 };
-    const pulse = 1 + Math.sin(t * (p.anim === 'walk' ? 2 : 1)) * 0.04;
-    bd.loft([[0.3, 0.12, 0.08, 0.12], [0.12, 0.2, 0.1, 0.2], [-0.12, 0.2, 0.09, 0.2], [-0.36, 0.15, 0.07, 0.15], [-0.52, 0.06, 0.04, 0.06]]
-      .map(([x, w, u, d]) => ({ at: [X(x), fall(x), 0] as Vec3, w: w * pulse, up: u, down: d * pulse, keel: 0.2 })), soft);
-    bd.loft([[0.3, 0.13, 0.11, 0.0], [0.12, 0.21, 0.14, 0.0], [-0.12, 0.21, 0.13, 0.0], [-0.36, 0.16, 0.1, 0.0], [-0.52, 0.06, 0.05, 0.0]]
-      .map(([x, w, u]) => ({ at: [X(x), fall(x) + 0.02, 0] as Vec3, w, up: u, down: 0.02, flat: 0.3 })), m.plate); // its armoured back
-    for (let i = 0; i < 7; i++) { // the spine plates, tallest over the shoulders
-      const x = 0.24 - i * 0.12, h = 0.24 - Math.abs(i - 1.5) * 0.03;
-      bd.loft([0, 0.5, 1].map((k) => ({ at: [X(x - k * 0.08), fall(x) + 0.12 + k * h * 0.4, 0] as Vec3, w: 0.014, up: h * (1 - k) * 0.5 + 0.01, down: 0.01 })), i % 2 ? m.shell : m.edge);
-    }
   }
 }
 
-export type GoliathTorso = 'geode' | 'ram' | 'bellows' | 'ridge';
+export type GoliathTorso = 'geode' | 'ram' | 'bellows';
 
 export function gStag(b: ModelBuilder, p: Pose, torso: GoliathTorso = 'geode'): void {
   const walking = p.anim === 'walk', t = p.phase * Math.PI * 2;
