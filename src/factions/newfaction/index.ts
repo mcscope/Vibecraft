@@ -247,7 +247,8 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
   const ramShift = ramX * k.body / 0.7; // (the hips go with the body: the whole of it lunges, its feet planted)
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
     for (const S of [1, -1]) {
-      const hip: V = [-0.02 + ramShift, H + bob, S * k.hipZ], restFoot: V = [0.1 - 0.08 * upK, 0.01, S * (k.footZ + 0.05 * (1 - upK))];
+      const back = k.goliath ? 0 : 0.11; // (a charger's legs attach well back along its body)
+      const hip: V = [-0.02 - back + ramShift, H + bob, S * k.hipZ], restFoot: V = [0.1 - 0.08 * upK - back, 0.01, S * (k.footZ + 0.05 * (1 - upK))];
       const ph = p.phase + (S > 0 ? 0 : 0.5);
       const foot = running ? footAt(restFoot, ph, k.run, 0.2, 0.35) : walking ? footAt(restFoot, ph, k.walk, 0.12, 0.55) : restFoot;
       const ankle: V = [foot[0] + k.foot[0], foot[1] + k.foot[1], foot[2]];
