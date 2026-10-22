@@ -52,8 +52,9 @@ const RUN_IN = 8;
  * as a charger's is). True while it can strike. Past it, it keeps its speed and zooms back up on it (tickFlight).
  */
 export function diveAt(w: World, u: Unit, t: Unit, dt: number, face: (dx: number, dy: number) => void): boolean {
-  const strikeAlt = 0.8 * bodyHeight(t.stats.mass) + Math.max(0, u.stats.range - u.stats.radius) * M_PER_TILE;
-  const reach = u.stats.range - 0.05 + t.stats.radius; // (the same reach the strike measures: its weapon's to the target's edge)
+  // (it strikes by flying into it: level with the middle of its body, its crystal in among it)
+  const strikeAlt = 0.5 * bodyHeight(t.stats.mass);
+  const reach = Math.min(u.stats.range - 0.05, 0.15) + t.stats.radius;
   const dist = Math.hypot(t.x - u.x, t.y - u.y);
   let v = u.flySpeed * M_PER_TILE; // (from whatever speed it has)
   // (close, it flies on through, as a charger runs on past: it never stops in the air)

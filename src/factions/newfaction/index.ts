@@ -102,7 +102,7 @@ function drawVimmer(b: ModelBuilder, p: Pose, mass: number): void {
     if (flying) {
       // beating (big strokes climbing, a shiver soaring); diving, folded tight back along its body, nose steeply down
       const flap = p.anim === 'fly' ? Math.sin(t) * 0.45 : p.anim === 'climb' ? Math.sin(t) * 0.7 : p.anim === 'soar' ? Math.sin(t) * 0.05 : 0;
-      o.joint([0, 0.6, 0], [0, 0, diving && p.style !== 'swoop' ? -0.9 : 0], (c) => vee(c, diving ? 0 : 1, flap)); // (swooping: pulled out level, still folded)
+      o.joint([0, 0.15, 0], [0, 0, diving && p.style !== 'swoop' ? -0.9 : 0], (c) => vee(c, diving ? 0 : 1, flap)); // (its body at its true height; swooping: pulled out level, still folded)
       return;
     }
     if (leaping && p.phase >= 0.2) {
