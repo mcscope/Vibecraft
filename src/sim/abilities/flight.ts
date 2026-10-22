@@ -200,7 +200,7 @@ export function tickFlight(w: World, u: Unit, _moved: boolean, dt: number, face:
   const travelling = flew && (u.order.kind === 'move' || u.order.kind === 'attackMove' || u.order.kind === 'attack' || u.engage > 0); // (a fight it took up itself, too)
   const nearFootGoal = flew && !travelling && Math.hypot(u.goalX - u.x, u.goalY - u.y) < LAND_APPROACH;
   const low = u.cal <= u.stats.maxCalories * LAND_FRACTION || u.exhausted;
-  const comingIn = low || (!fighting && (!flew || nearFootGoal));
+  const comingIn = low || (!fighting && (!flew || nearFootGoal) && u.launchT >= LEAP_TIME); // (once it springs, it finishes its leap)
   if (comingIn) {
     u.alt = Math.max(0, u.alt - (u.alt < FLARE_HEIGHT ? FLARE_DESCENT : DESCENT_RATE) * dt);
     u.cal -= soarBurn(u.stats) * dt; // gliding down
