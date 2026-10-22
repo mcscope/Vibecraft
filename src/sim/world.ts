@@ -1070,6 +1070,8 @@ export class World {
     for (const b of this.buildings.values()) this.tickBuilding(b);
     for (const u of this.units.values()) { u.px = u.x; u.py = u.y; u.busy = false; }
     for (const u of this.units.values()) this.tickUnit(u);
+    // blows land once every body has moved and acted this tick: two meeting in the same tick both land, whoever went first
+    for (const u of this.units.values()) if (u.blow && this.tick >= u.blow.at) this.strike(u);
     this.separate();
     for (const p of this.projectiles.values()) this.tickProjectile(p);
     if (this.parcels.length) runBelts(this, DT);
@@ -1262,7 +1264,6 @@ export class World {
 
   private tickUnit(u: Unit): void {
     if (u.dummy) { u.animT += DT; this.coast(u); return; } // inert, but a body: shoved, it slides to a stop
-    if (u.blow && this.tick >= u.blow.at) this.strike(u);
     const st = u.stats;
     if (u.wild || u.tame) u.cal = st.maxCalories; // they graze
     if (u.cooldown > 0) u.cooldown -= DT;
@@ -1513,7 +1514,8 @@ export class World {
       return false;
     }
     let tx: number, ty: number, edge: number;
-    if (tu) { tx = tu.x; ty = tu.y; edge = Math.sqrt((tx - u.x) ** 2 + (ty - u.y) ** 2) - tu.stats.radius; }
+    // (the gap as it stood at the start of the tick: both bodies judge it from the same moment, whichever acts first)
+    if (tu) { tx = tu.x; ty = tu.y; edge = Math.hypot(tu.px - u.px, tu.py - u.py) - tu.stats.radius; }
     else {
       const b = tb!;
       const cx = Math.max(b.ox, Math.min(u.x, b.ox + b.size)), cy = Math.max(b.oy, Math.min(u.y, b.oy + b.size));
@@ -1549,7 +1551,13 @@ export class World {
       if (edge > range - 0.05 || Math.abs(tu.alt - u.alt) > 1.5) { this.moveTo(u, tx, ty, 0.05); return true; }
     }
     if (u.airborne && !wpn.throws && tu && !tu.airborne && !holding && !diveAt(this, u, tu, DT, (fx, fy) => this.face(u, fx, fy))) return true;
-    if (edge > range - 0.05) {
+    // closing fast, it swings as the gap closes this tick (at a run two bodies cover more than a reach's margin a tick)
+    let lead = 0;
+    if (tu && !u.airborne && !wpn.throws) {
+      const d = Math.hypot(tx - u.x, ty - u.y) || 1;
+      lead = Math.max(0, ((u.vx - tu.vx) * (tx - u.x) + (u.vy - tu.vy) * (ty - u.y)) / d) * DT;
+    }
+    if (edge - lead > range - 0.05) {
       if (holding) { this.face(u, tx - u.x, ty - u.y); return true; } // out of reach: it faces it and waits (units, buildings, flying or not)
       if (u.airborne) { this.moveTo(u, tx, ty, 0.05); return true; }
       if (tu) {
@@ -1643,7 +1651,6 @@ export class World {
     const charging = !u.airborne && Math.hypot(u.vx, u.vy) > u.stats.speed * 1.1;
     if (charging) u.swing = 0;
     u.blow = { at: this.tick + (u.airborne || charging ? 0 : Math.round((u.swing * World.CONTACT) / DT)), target: targetId, damage, shaft, reach };
-    if (u.airborne || charging) this.strike(u);
   }
 
   /** The blow lands, if its target is still there and in reach (a little more than the weapon's: it follows through); else it misses. */
