@@ -319,8 +319,8 @@ export function gStag(b: ModelBuilder, p: Pose, torso: GoliathTorso = 'geode'): 
   // speed: reach × 2 ÷ duty a loop, the same for each leg.) Idle, it breathes; striking, it rears back on its
   // forelegs and slams its head down
   const bound = walking && p.style === 'charge', ph = ((p.phase % 1) + 1) % 1;
-  const FORE = bound ? { reach: 0.2, duty: 0.35, lift: 0.12 } : { reach: 0.14, duty: 0.6, lift: 0.1 };
-  const HIND = bound ? { reach: 0.14, duty: 0.245, lift: 0.08 } : { reach: 0.07, duty: 0.6, lift: 0.04 }; // (walking, two steps a loop)
+  const FORE = bound ? { reach: 0.28, duty: 0.35, lift: 0.16 } : { reach: 0.22, duty: 0.6, lift: 0.14 };
+  const HIND = bound ? { reach: 0.14, duty: 0.175, lift: 0.08 } : { reach: 0.0917, duty: 0.5, lift: 0.05 }; // (walking, two steps a loop; bounding, a short hard push)
   const sm = (x: number) => { const k = Math.max(0, Math.min(1, x)); return k * k * (3 - 2 * k); };
   let surge = 0, dip = p.anim === 'idle' ? Math.sin(t) * 0.01 : 0, pitch = 0, nod = 0;
   if (walking && !bound) {
