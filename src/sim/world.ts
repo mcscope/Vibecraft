@@ -729,7 +729,7 @@ export class World {
       case 'attackMove': return set(mine(cmd.units), { kind: 'attackMove', x: cmd.x, y: cmd.y, charge: cmd.charge || undefined, face: cmd.face });
       case 'metamorph':
         if (cmd.spawn) { for (const u of mine(cmd.units)) queueBrood(this, u, cmd.into); return; } // trained in its body: it carries on
-        for (const u of mine(cmd.units)) if (canBecome(this, u, cmd.into)) { refundMetamorph(u); beginMetamorph(this, u, cmd.into); }
+        for (const u of mine(cmd.units)) if (canBecome(this, u, cmd.into) && !(u.order.kind === 'metamorph' && u.order.into === cmd.into)) { refundMetamorph(u); beginMetamorph(this, u, cmd.into); }
         return;
       case 'autoSpawn': for (const u of mine(cmd.units)) if (!cmd.specId || canBecome(this, u, cmd.specId, true)) u.autoBrood = cmd.specId; return;
       case 'cancelSpawn': for (const u of mine(cmd.units)) cancelBrood(u, cmd.index); return;
@@ -1293,7 +1293,7 @@ export class World {
     if (reeling) anim = 'stagger';
     else if (((u.order.kind === 'gather' && u.order.phase === 'harvest') || (u.order.kind === 'build' && u.order.phase === 'chop')) && !moved && u.busy) anim = 'gather';
     else if ((u.order.kind === 'eatPack' || u.order.kind === 'resupply' || u.order.kind === 'graze') && !moved && u.busy) anim = 'eat';
-    else if (u.order.kind === 'metamorph') anim = 'eat'; // feeding its change
+    else if (u.order.kind === 'metamorph') anim = u.busy ? 'eat' : 'tired'; // feeding its change (or waiting on food for it)
     else if (u.exhausted && !moved) anim = 'tired';
     // in the air: a flight pose pitched to how it's moving: leaping off the ground, climbing, soaring level, or gliding down
     if (u.airborne && u.diveRun) anim = 'swoop';

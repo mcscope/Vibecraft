@@ -311,7 +311,7 @@ export class Hud {
       const owed = to && from ? Math.max(0, metamorphCost(from.stats, to.stats, true).food - u.food) : 0;
       btn.classList.toggle('short', owed > 0.05);
       const note = btn.querySelector<HTMLElement>('.need');
-      if (note) note.textContent = owed > 0.05 ? `needs ${need(owed)} more in its pack` : '';
+      if (note) note.textContent = owed > 0.05 ? `needs ${need(owed)} more` : '';
       btn.classList.toggle('auto', u.autoBrood === btn.dataset.train);
     });
     // laying or changing: the front of the queue, like a building's training bar
@@ -325,7 +325,7 @@ export class Hud {
       const c = from && to ? metamorphCost(from.stats, to.stats, job!.spawn, job!.mass) : null;
       grow.querySelector<HTMLElement>('i')!.style.width = c && job ? pct(job.t, c.sec) : '0%';
       const label = grow.querySelector<HTMLElement>('span');
-      if (label) label.textContent = !c || !job ? '' : job.t <= 0 && job.paid + 1e-6 < c.food ? `Waiting for ${need(c.food - job.paid)} ${food}${job.spawn ? ' in its pack' : ': in its pack, or Give it some'}` : `${to!.spec.name} ${Math.round((job.t / c.sec) * 100)}%`;
+      if (label) label.textContent = !c || !job ? '' : job.t <= 0 && job.paid + 1e-6 < c.food ? `Waiting for ${need(c.food - job.paid)} ${food}` : `${to!.spec.name} ${Math.round((job.t / c.sec) * 100)}%`;
     }
     const st = this.panel.querySelector('[data-state]');
     if (st) st.textContent = describeOrder(w, u);
@@ -554,6 +554,8 @@ export class Hud {
     for (const u of units) {
       const spec = w.specOf(u.owner, u.specId)?.spec, origin = w.specOf(u.owner, u.shellOf ?? u.specId)?.spec; // (a shell: what went into it)
       for (const id of spec?.spawns ?? []) if (!forms.has(`${id}:1`)) forms.set(`${id}:1`, [u, true]);
+      // (changing already, with no other form to become, like an egg: nothing to choose)
+      if (u.order.kind === 'metamorph' && (origin?.becomes?.length ?? 0) <= 1) continue;
       for (const id of origin?.becomes ?? []) if (!forms.has(`${id}:0`)) forms.set(`${id}:0`, [u, false]);
     }
     if (!forms.size) return '';
@@ -580,7 +582,7 @@ export class Hud {
   private growthQueue(u: Unit): string {
     const w = this.world, name = (id: string) => w.specOf(u.owner, id)?.spec.name ?? id;
     const chips = u.brood.map((b, i) => `<span class="q" data-brood="${i}" title="Click to cancel (its food goes back in the pack)">${name(b.into)}</span>`);
-    if (u.order.kind === 'metamorph') chips.unshift(`<span class="q" data-cmd="stop" title="Click to call it off (its food goes back in the pack)">→ ${name(u.order.into)}</span>`);
+    if (u.order.kind === 'metamorph') chips.unshift(`<span class="q">→ ${name(u.order.into)}</span>`); // (a change goes on: only another change replaces it)
     if (!chips.length && !u.order) return '';
     return `<div class="queue">${chips.join('') || '<em>Idle</em>'}</div><div class="bar train" data-bar="grow"><i></i><span></span></div>`;
   }

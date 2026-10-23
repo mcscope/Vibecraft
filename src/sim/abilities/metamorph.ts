@@ -80,7 +80,7 @@ export function runMetamorph(w: World, u: Unit, o: { into: string; paid: number;
     o.paid += want;
     for (const l of ls) { const k = Math.min(l.have, want); l.take(k); want -= k; }
   }
-  if (o.paid + 1e-6 >= due) o.t += dt; // fed: the change goes on (eaten, it pauses when the food runs out)
+  if (o.paid + 1e-6 >= due) { o.t += dt; u.busy = true; } // fed: the change goes on (eaten, it pauses when the food runs out)
   if (o.t < cost.sec || o.paid + 1e-6 < cost.food) return false;
   swapInto(w, u, o.into); // done: the new form, where the old body stood
   return false;

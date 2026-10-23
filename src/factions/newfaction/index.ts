@@ -30,7 +30,7 @@ const LOOK = {
   caterpillar: { scale: (m: number) => 1.2 * Math.cbrt(m / 15), length: 0.24 }, // (a long body: its collision circle is its width)
   egg: { scale: (m: number) => Math.cbrt(m / 15), length: 0.42 },
   bug: { scale: (m: number) => Math.cbrt(m / 40), length: 0.85 },
-  mother: { scale: (m: number) => 1.4 * Math.cbrt(m / 40), length: 1.25 },
+  mother: { scale: (m: number) => 1.4 * Math.cbrt(m / 40) * Math.pow(Math.min(1, 120 / m), 0.2), length: 1.25 }, // (the T3 drawn smaller than ∛ of her mass: the user found her too big)
   vimmer: { scale: (m: number) => 1.3 * Math.cbrt(m / 120), length: 0.75 },
   charger: { scale: (m: number) => Math.cbrt(m / 38), length: 0.5 },
   lasher: { scale: (m: number) => 1.45 * Math.cbrt(m / 150), length: 0.5 },
@@ -417,39 +417,54 @@ function caterpillar(b: ModelBuilder, p: Pose, color: string, mass: number): voi
 }
 
 /**
- * An egg: a whitish, folded, faceted shell (origami-like), tinted toward its larva, sized by tier (the user's). A cocoon
- * is the same shell. Growing ('grow', by how far its change has come) it swells, its tint deepens and a glow shows
- * through its crease; hatching ('hatch', its last moments) it shudders, the crease splits glowing, and its folded top
- * opens out petal by petal like an origami flower, the young one's head rising out of it.
+ * An egg: an origami steamed bun (the user's), its paper pleats spiralling up to a twisted knot, tinted toward its
+ * larva, sized by tier. A cocoon is the same bun. Waiting on food ('hungry') it's dark and sagging, barely breathing;
+ * fed, cooking ('grow'), it's bright and pulses, its pleats glowing; hatching ('hatch', its last moments) it shudders and
+ * its top opens out petal by petal, the young one's head rising out of it.
  */
-function origamiEgg(b: ModelBuilder, p: Pose, tint: string, mass: number): void {
-  const g = p.anim === 'grow' ? p.phase : p.anim === 'hatch' ? 1 : 0, h = p.anim === 'hatch' ? p.phase : 0;
+function origamiBun(b: ModelBuilder, p: Pose, tint: string, mass: number): void {
+  const t = p.phase * TAU, h = p.anim === 'hatch' ? p.phase : 0, hungry = p.anim === 'hungry', cooking = p.anim === 'grow' || p.anim === 'hatch';
   const sm = (x: number) => { const k = Math.max(0, Math.min(1, x)); return k * k * (3 - 2 * k); };
-  const paper: Mat = { color: mix('#f2efe6', tint, 0.4 + 0.3 * g), tex: 'none', rough: 0.85 };
-  const fold: Mat = { color: mix('#d9d4c4', tint, 0.55 + 0.3 * g), tex: 'none', rough: 0.85 };
-  const glow: Mat = { color: mix('#ffffff', tint, 0.4), tex: 'none', rough: 0.4, emissive: tint };
-  const breathe = 1 + (p.anim === 'idle' ? Math.sin(p.phase * TAU) * 0.02 : 0);
-  const shake = h > 0 && h < 0.4 ? Math.sin(h * 45) * 0.12 * (h / 0.4) : 0; // (shuddering before it splits)
+  const dim = (c: string) => (hungry ? mix(c, '#2a2520', 0.5) : c);
+  const pulse = p.anim === 'grow' ? Math.sin(t) : 0;
+  const paper: Mat = { color: dim(mix('#f4efe2', tint, 0.35)), tex: 'none', rough: 0.85 };
+  const fold: Mat = { color: dim(mix('#d8d0bc', tint, 0.55)), tex: 'none', rough: 0.85 };
+  const pleat: Mat = cooking ? { color: mix(mix('#ffffff', tint, 0.5), tint, 0.5 - 0.5 * pulse), tex: 'none', rough: 0.4, emissive: tint } : fold;
+  // its swell: pulsing as it cooks, sagging hungry, breathing at rest
+  const sx = 1 + (p.anim === 'grow' ? 0.05 * pulse : p.anim === 'idle' ? 0.015 * Math.sin(t) : hungry ? 0.008 * Math.sin(t) : 0);
+  const sy = (hungry ? 0.9 : 1) * (1 + (p.anim === 'grow' ? 0.08 * pulse : p.anim === 'idle' ? 0.02 * Math.sin(t) : 0));
+  const shake = h > 0 && h < 0.35 ? Math.sin(h * 45) * 0.12 * (h / 0.35) : 0; // (shuddering before it opens)
+  const N = 8, oct = Math.PI / N; // (eight pleats round an eight-sided bun)
   b.joint([0, 0, 0], [shake * 0.6, 0, shake], (e) => {
-    e.cylinder(0.2, 0.0, 0.3, [0, 0.05, 0], fold, undefined, 5); // folded bottom
-    e.cylinder(0.2, 0.2, 0.06, [0, 0.2, 0], paper, [0, Math.PI / 5, 0], 5); // the crease band
-    if (g > 0.2) e.cylinder(0.204, 0.204, 0.012 + 0.025 * Math.max(0, g - 0.2) + 0.03 * h, [0, 0.2, 0], glow, [0, Math.PI / 5, 0], 5); // the glow through it
-    if (h < 0.35) { e.cylinder(0.0, 0.2, 0.3, [0, 0.35, 0], paper, undefined, 5); return; } // folded top
-    // the top opens out, petal by petal: each of its five faces, hinged on its edge of the crease band
-    const rin = 0.2 * Math.cos(Math.PI / 5), L = Math.hypot(0.3, rin);
-    for (let i = 0; i < 5; i++) {
-      const t = (i / 5) * TAU + Math.PI / 5, sx = Math.sin(t), sz = Math.cos(t), k = sm((h - 0.35 - i * 0.05) / 0.4);
-      const shut: V3 = [-rin * sx, 0.3, -rin * sz], out: V3 = [sx * 0.85, 0.45, sz * 0.85];
+    e.cylinder(0.24 * sx, 0.21 * sx, 0.06 * sy, [0, 0.03 * sy, 0], fold, [0, oct, 0], N); // its flat underside
+    e.cylinder(0.17 * sx, 0.24 * sx, 0.12 * sy, [0, 0.12 * sy, 0], paper, [0, oct, 0], N); // the lower dome
+    const open = sm((h - 0.35) / 0.45);
+    if (open <= 0) {
+      e.cylinder(0.06 * sx, 0.17 * sx, 0.1 * sy, [0, 0.23 * sy, 0], paper, [0, oct, 0], N); // the upper dome
+      e.cylinder(0.0, 0.06 * sx, 0.07 * sy, [0, 0.315 * sy, 0], fold, [0, oct + 0.4, 0], N); // the twisted knot
+      for (let i = 0; i < N; i++) { // the pleats, spiralling up to the knot
+        const a = (i / N) * TAU, pt = (r: number, y: number, tw: number): V3 => [Math.cos(a + tw) * r * sx, y * sy, Math.sin(a + tw) * r * sx];
+        e.limb(pt(0.235, 0.07, 0), pt(0.18, 0.19, 0.25), 0.013, pleat, 0.011);
+        e.limb(pt(0.18, 0.19, 0.25), pt(0.05, 0.31, 0.6), 0.011, pleat, 0.006);
+      }
+      return;
+    }
+    // hatching: the top opens out, petal by petal, each pleat's panel hinged on the lower dome's rim
+    for (let i = 0; i < N; i++) {
+      const a = (i / N) * TAU, k = sm((h - 0.35 - i * 0.03) / 0.4), ca = Math.cos(a), sa = Math.sin(a);
+      const shut: V3 = [-0.13 * ca, 0.16, -0.13 * sa], out: V3 = [ca * 0.8, 0.5, sa * 0.8];
       const dir: V3 = [shut[0] + (out[0] - shut[0]) * k, shut[1] + (out[1] - shut[1]) * k, shut[2] + (out[2] - shut[2]) * k];
-      e.joint([rin * sx, 0.2, rin * sz], aim(dir, [Math.cos(t), 0, -Math.sin(t)]), (pt) =>
-        pt.loft([{ at: [0, 0, 0], w: 0.117, up: 0.006, down: 0.006 }, { at: [L, 0, 0], w: 0.005, up: 0.004, down: 0.004 }], paper));
+      e.joint([0.17 * ca * sx, 0.18 * sy, 0.17 * sa * sx], aim(dir, [-sa, 0, ca]), (pt) => {
+        pt.loft([{ at: [0, 0, 0], w: 0.07, up: 0.006, down: 0.006 }, { at: [0.2, 0, 0], w: 0.004, up: 0.004, down: 0.004 }], paper);
+        pt.limb([0, 0.008, 0], [0.18, 0.006, 0], 0.008, pleat, 0.004); // its pleat
+      });
     }
     const rise = sm((h - 0.5) / 0.45); // the young one's head, rising out
     if (rise > 0) {
-      e.sphere([0.11, 0.1 * (0.6 + 0.4 * rise), 0.11], [0, 0.2 + 0.14 * rise, 0], { color: mix(tint, '#ffffff', 0.15), tex: 'skin', rough: 0.35 });
-      for (const z of [1, -1]) e.sphere(0.022, [0.07, 0.24 + 0.15 * rise, z * 0.05], { color: '#141010', rough: 0.2 });
+      e.sphere([0.11, 0.1 * (0.6 + 0.4 * rise), 0.11], [0, 0.18 + 0.15 * rise, 0], { color: mix(tint, '#ffffff', 0.15), tex: 'skin', rough: 0.35 });
+      for (const z of [1, -1]) e.sphere(0.022, [0.07, 0.22 + 0.16 * rise, z * 0.05], { color: '#141010', rough: 0.2 });
     }
-  }, LOOK.egg.scale(mass) * breathe * (0.85 + 0.25 * g));
+  }, LOOK.egg.scale(mass));
 }
 
 /** PLACEHOLDER body for the units the user hasn't described: a segmented bug on six legs, sized by mass. */
@@ -853,11 +868,12 @@ const larva3 = unit({ crawls: true, tends: true, id: 'larva3', name: 'T3 Larva',
 // eggs: laid cheap (about 19.5 food each), sized by tier, then fed until they hatch into their tier's larva
 const egg = (tier: 1 | 2 | 3, mass: number) => unit({ id: `egg${tier}`, name: `T${tier} Egg`, mass, physique: EGG, refinement: tier, canGather: false,
   becomes: [`larva${tier}`], description: `A T${tier} egg. Give it food: it hatches into a T${tier} larva.`,
-  model: (b, p) => origamiEgg(b, p, TIER[tier], mass) }, 'egg');
+  model: (b, p) => origamiBun(b, p, TIER[tier], mass) }, 'egg');
 
 // the shell larvae change inside (at the larva's own mass): mostly frame, tough
-const cocoon = unit({ id: 'cocoon', name: 'Cocoon', mass: 15, physique: SHELL, canGather: false, description: 'A larva changing. Give it food to finish.',
-  model: (b, p) => origamiEgg(b, p, '#c8b88a', 15) }, 'egg'); // PLACEHOLDER look
+// (its spec at the biggest larva's mass: it's baked that size and drawn down for smaller ones, never blown up blurry)
+const cocoon = unit({ id: 'cocoon', name: 'Cocoon', mass: 179, physique: SHELL, canGather: false, description: 'A larva changing. Give it food to finish.',
+  model: (b, p) => origamiBun(b, p, '#c8b88a', 179) }, 'egg');
 
 // mothers: lay anything up to their own refinement (a mother carries at least her cheapest egg's price)
 const motherOf = (r: 1 | 2 | 3, mass: number) => unit({ id: `mother${r}`, name: `Mother (r${r})`, mass, physique: MOTHER, refinement: r,
