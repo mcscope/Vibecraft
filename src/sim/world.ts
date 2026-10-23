@@ -210,6 +210,8 @@ export interface Unit {
   brood: Array<{ into: string; t: number; paid: number }>;
   /** Like a building's auto-train: queue another of this whenever its queue is empty (or null). */
   autoBrood: string | null;
+  /** A long shaft breaking off from a body inside its point: that body's id while it runs, minus it while it turns back to reset (0: none). */
+  breakFrom: number;
   /** How it's actually been moving lately (tiles/s, smoothed over ~½ s): what an onlooker can see, and leads a throw by. */
   ovx: number; ovy: number;
   /** Which way a flier went this tick: +1 climbing, -1 coming down, 0 level. */
@@ -717,7 +719,7 @@ export class World {
         // shift-queued: after the current order (and anything queued before it)
         if (!cmd.queue) refundMetamorph(u); // a change called off: its food back in the pack
         if (cmd.queue && (u.order.kind !== 'idle' || u.queue.length)) { u.queue.push({ ...order } as Order); continue; }
-        u.order = { ...order } as Order; u.resume = null; u.engage = 0; u.path = []; u.repathIn = 0; u.queue = []; u.faceTo = null;
+        u.order = { ...order } as Order; u.resume = null; u.engage = 0; u.path = []; u.repathIn = 0; u.queue = []; u.faceTo = null; u.breakFrom = 0;
         u.stance = 'auto'; // a new order ends holding ground
       }
     };
@@ -1016,7 +1018,7 @@ export class World {
       food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
       order: { kind: 'idle' }, resume: null, queue: [], engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
-      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, diveSpeed: 0, flyDir: 0, bank: 0, launchT: 0, walked: 0, diving: false, diveAngle: 0, altGoal: 0, altGoalTick: -1, blow: null, diveRun: false, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', cutting: false, facing: Math.PI / 4, turnTick: -1, turnLeft: 0, faceTo: null, brood: [], autoBrood: null,
+      cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, diveSpeed: 0, flyDir: 0, bank: 0, launchT: 0, walked: 0, diving: false, diveAngle: 0, altGoal: 0, altGoalTick: -1, blow: null, diveRun: false, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', cutting: false, facing: Math.PI / 4, turnTick: -1, turnLeft: 0, faceTo: null, brood: [], autoBrood: null, breakFrom: 0,
       dummy: !!spec.dummy,
       carter: spec.role === 'carter',
       gatherAcc: 0,
@@ -1283,8 +1285,8 @@ export class World {
     const moved = reeling ? false : this.runOrder(u) || midStride(u, this.tick); // a hopper crouching between bounds is still on its way
     tickFlight(this, u, moved, DT, (fx, fy) => this.face(u, fx, fy));
     // a shaft going at an enemy is carried point-first: at any pace it moves in the charge pose (point levelled)
-    const atEnemy = st.minReach > 0 && (u.engage || u.order.kind === 'attack');
-    if (moved) anim = atEnemy || Math.hypot(u.vx, u.vy) > st.speed * 1.15 ? 'charge' : 'walk'; // flat out: a sprint, a charge
+    const atEnemy = st.minReach > 0 && !u.breakFrom && (u.engage || u.order.kind === 'attack');
+    if (moved) anim = atEnemy || (Math.hypot(u.vx, u.vy) > st.speed * 1.15 && !u.breakFrom) ? 'charge' : 'walk'; // flat out: a sprint, a charge (running from one, a run)
     if (u.swing > 0) anim = u.cutting ? 'cut' : 'attack';
     // point set, waiting (between its jabs too: the point stays on the enemy)
     else if (!moved && st.canPlant && (u.engage || u.order.kind === 'attack' || u.order.kind === 'attackMove' || u.stance === 'hold')) anim = 'brace';
@@ -1526,6 +1528,16 @@ export class World {
     // a flier in the air bombs: it flies right over the target and drops (sim/abilities/flight.ts)
     const range = u.airborne && wpn.throws ? BOMB_REACH : tb ? Math.max(wpn.range, 1) : wpn.range;
     this.cutWithSidearm(u, tu, edge, range); // (it strikes in passing; it goes on as it was)
+    // breaking off (below): it runs till that body is out past its reach, and as far again as it can come while the
+    // shaft is brought round (its pace over the turn), then it turns to face it and resets (the id goes negative)
+    if (u.breakFrom) {
+      const b = this.units.get(Math.abs(u.breakFrom));
+      const clear = range + Math.hypot(b?.ovx ?? 0, b?.ovy ?? 0) * (Math.PI / u.stats.turnRate);
+      if (!b) u.breakFrom = 0;
+      else if (u.breakFrom > 0 && Math.hypot(b.x - u.x, b.y - u.y) - b.stats.radius < clear) { this.breakOff(u, b); return true; }
+      else if (!this.facingWithin(u, b.x - u.x, b.y - u.y, Math.PI * 0.2)) { u.breakFrom = -b.id; this.face(u, b.x - u.x, b.y - u.y); return true; }
+      else u.breakFrom = 0;
+    }
     // closing on a target near enough, a body sprints; a striker runs on through it (a charge) rather
     // than pulling up, and a thrower brakes to stop at its range
     // sprint from far enough out to reach top speed by contact (v² = 2·a·d)
@@ -1589,8 +1601,8 @@ export class World {
     }
     if (tu && !canReach(u, tu)) return false; // a flier in the air: only thrown crystals reach it
     // too close for a long shaft: with any enemy body inside its point (its target or another, in the way of the
-    // shaft), it can't bring the point to bear on anyone; it backs off from that body, but a body steps backwards
-    // slowly (K.backstep of its pace), still facing it, so one that presses in can stay inside the point
+    // shaft), it can't bring the point to bear on anyone; it breaks off, turning and running to get out past its point
+    // and reset (holding its ground, it stands)
     const inside = tu && !wpn.throws && u.stats.minReach > 0 ? this.insidePoint(u) : undefined;
     if (inside && u.stats.sidearm) { // it fights it with the blade (cutWithSidearm), closing to the blade's reach
       if (Math.hypot(inside.x - u.x, inside.y - u.y) - inside.stats.radius > u.stats.sidearm.range) this.moveTo(u, inside.x, inside.y, u.stats.sidearm.range * 0.8);
@@ -1598,11 +1610,9 @@ export class World {
       return true;
     }
     if (inside) {
-      const d = Math.hypot(u.x - inside.x, u.y - inside.y) || 1;
-      this.face(u, inside.x - u.x, inside.y - u.y);
-      const back = u.stats.speed * K.backstep;
-      this.steer(u, ((u.x - inside.x) / d) * back, ((u.y - inside.y) / d) * back, (K.traction * K.gravity) / M_PER_TILE);
-      this.step1(u, u.vx * DT, u.vy * DT, Math.hypot(u.vx, u.vy) * DT, false);
+      if (holding) { this.face(u, inside.x - u.x, inside.y - u.y); return true; }
+      u.breakFrom = inside.id;
+      this.breakOff(u, inside);
       return true;
     }
     // a melee flier striking a building, or one in the air within reach, lands to strike
@@ -2210,7 +2220,7 @@ export class World {
         const airborneBound = !!st.gait && u.strideMul > 0 && v > 0.3;
         const springing = !!st.gait && u.strideMul === 0;
         // and it can't swing round faster than its weapon comes round (leverage), far slower with a planted shaft
-        const weapon = st.turnRate * (st.canPlant && v < 0.5 ? K.plantedTurnMul : 1);
+        const weapon = st.turnRate * (st.canPlant && v < 0.5 && !u.breakFrom ? K.plantedTurnMul : 1); // (breaking off, it's lifted)
         u.turnLeft = airborneBound ? 0 : springing ? Math.PI : DT * Math.min(spin, bend, weapon);
       }
       const step = Math.max(-u.turnLeft, Math.min(u.turnLeft, diff));
@@ -2334,6 +2344,12 @@ export class World {
    * The nearest enemy body on the ground inside u's shaft's point (closer than its minReach, and in front, where a
    * blow goes: between its hands and the point, not beside or behind it), if any.
    */
+  /** It turns its back on `b` and runs flat out straight away from it. */
+  private breakOff(u: Unit, b: Unit): void {
+    const d = Math.hypot(u.x - b.x, u.y - b.y) || 1;
+    this.moveTo(u, u.x + ((u.x - b.x) / d) * 2, u.y + ((u.y - b.y) / d) * 2, 0, true, true);
+  }
+
   private insidePoint(u: Unit): Unit | undefined {
     let best: Unit | undefined, bestD = u.stats.minReach;
     for (const e of this.units.values()) {

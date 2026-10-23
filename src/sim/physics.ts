@@ -105,8 +105,6 @@ export const K = {
   legPerHeight: 0.53,
   /** A body closing on a weapon that outreaches its own comes on at this share of its walking pace (not running onto the point). */
   closeInPace: 0.5,
-  /** A body steps backwards (still facing its enemy) at this share of its walking pace. */
-  backstep: 0.3,
   /** Calories per tile while sprinting, × walking's. */
   sprintCostMul: 4,
   /** Units sprint to close on an attack target this near (tiles)... */
