@@ -1562,11 +1562,13 @@ export class World {
       if (edge > range - 0.05 || Math.abs(tu.alt - u.alt) > 1.5) { this.moveTo(u, tx, ty, 0.05); return true; }
     }
     if (u.airborne && !wpn.throws && tu && !tu.airborne && !holding && !diveAt(this, u, tu, DT, (fx, fy) => this.face(u, fx, fy))) return true;
-    // closing fast, it swings as the gap closes this tick (at a run two bodies cover more than a reach's margin a tick)
+    // closing, it swings so the blow lands as the gap closes: a point already out in front (a shaft) as it closes this
+    // tick, any other blow as it will have closed by the swing's moment of contact
     let lead = 0;
     if (tu && !u.airborne && !wpn.throws) {
       const d = Math.hypot(tx - u.x, ty - u.y) || 1;
-      lead = Math.max(0, ((u.vx - tu.vx) * (tx - u.x) + (u.vy - tu.vy) * (ty - u.y)) / d) * DT;
+      const windup = u.stats.minReach > 0 ? 0 : Math.min(0.45, wpn.cooldown * 0.8) * World.CONTACT;
+      lead = Math.max(0, ((u.vx - tu.vx) * (tx - u.x) + (u.vy - tu.vy) * (ty - u.y)) / d) * (DT + windup);
     }
     if (edge - lead > range - 0.05) {
       if (holding) { this.face(u, tx - u.x, ty - u.y); return true; } // out of reach: it faces it and waits (units, buildings, flying or not)
@@ -1655,12 +1657,14 @@ export class World {
   /** Share of a swing at which the weapon meets its target (where the strike animations make contact). */
   private static readonly CONTACT = 0.4;
 
-  /** A melee blow begins: it lands at the swing's moment of contact (struck in passing, a flier's or a charge's, at once). */
+  /** A melee blow begins: it lands at the swing's moment of contact (a flier's in passing, or a shaft's point couched or planted, at once). */
   private swingAt(u: Unit, targetId: number, damage: number, shaft: boolean, reach: number): void {
-    // (at a run, a charge: the point is already out in front, and it lands as the charge arrives, in the charging pose)
-    const charging = !u.airborne && Math.hypot(u.vx, u.vy) > u.stats.speed * 1.1;
-    if (charging) u.swing = 0;
-    u.blow = { at: this.tick + (u.airborne || charging ? 0 : Math.round((u.swing * World.CONTACT) / DT)), target: targetId, damage, shaft, reach };
+    // (a shaft's point is already out in front: couched at a run, it lands as the charge arrives, in the charging pose;
+    // planted, standing, whatever comes on runs onto it. Any other blow is swung, at a run too, and lands at contact)
+    const v = Math.hypot(u.vx, u.vy), point = shaft && u.stats.minReach > 0;
+    const couched = point && !u.airborne && v > u.stats.speed * 1.1, planted = point && u.stats.canPlant && v * M_PER_TILE < 0.5;
+    if (couched || planted) u.swing = 0;
+    u.blow = { at: this.tick + (u.airborne || couched || planted ? 0 : Math.round((u.swing * World.CONTACT) / DT)), target: targetId, damage, shaft, reach };
   }
 
   /** The blow lands, if its target is still there and in reach (a little more than the weapon's: it follows through); else it misses. */
