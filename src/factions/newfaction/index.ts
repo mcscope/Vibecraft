@@ -416,16 +416,40 @@ function caterpillar(b: ModelBuilder, p: Pose, color: string, mass: number): voi
   }, LOOK.caterpillar.scale(mass));
 }
 
-/** An egg: a whitish, folded, faceted shell (origami-like), tinted toward its larva, sized by tier (the user's). */
+/**
+ * An egg: a whitish, folded, faceted shell (origami-like), tinted toward its larva, sized by tier (the user's). A cocoon
+ * is the same shell. Growing ('grow', by how far its change has come) it swells, its tint deepens and a glow shows
+ * through its crease; hatching ('hatch', its last moments) it shudders, the crease splits glowing, and its folded top
+ * opens out petal by petal like an origami flower, the young one's head rising out of it.
+ */
 function origamiEgg(b: ModelBuilder, p: Pose, tint: string, mass: number): void {
-  const paper: Mat = { color: mix('#f2efe6', tint, 0.4), tex: 'none', rough: 0.85 };
-  const fold: Mat = { color: mix('#d9d4c4', tint, 0.55), tex: 'none', rough: 0.85 };
+  const g = p.anim === 'grow' ? p.phase : p.anim === 'hatch' ? 1 : 0, h = p.anim === 'hatch' ? p.phase : 0;
+  const sm = (x: number) => { const k = Math.max(0, Math.min(1, x)); return k * k * (3 - 2 * k); };
+  const paper: Mat = { color: mix('#f2efe6', tint, 0.4 + 0.3 * g), tex: 'none', rough: 0.85 };
+  const fold: Mat = { color: mix('#d9d4c4', tint, 0.55 + 0.3 * g), tex: 'none', rough: 0.85 };
+  const glow: Mat = { color: mix('#ffffff', tint, 0.4), tex: 'none', rough: 0.4, emissive: tint };
   const breathe = 1 + (p.anim === 'idle' ? Math.sin(p.phase * TAU) * 0.02 : 0);
-  b.joint([0, 0, 0], [0, 0, 0], (e) => {
-    e.cylinder(0.0, 0.2, 0.3, [0, 0.35, 0], paper, undefined, 5); // folded top
-    e.cylinder(0.2, 0.0, 0.3, [0, 0.05 + 0.0, 0], fold, undefined, 5); // folded bottom
+  const shake = h > 0 && h < 0.4 ? Math.sin(h * 45) * 0.12 * (h / 0.4) : 0; // (shuddering before it splits)
+  b.joint([0, 0, 0], [shake * 0.6, 0, shake], (e) => {
+    e.cylinder(0.2, 0.0, 0.3, [0, 0.05, 0], fold, undefined, 5); // folded bottom
     e.cylinder(0.2, 0.2, 0.06, [0, 0.2, 0], paper, [0, Math.PI / 5, 0], 5); // the crease band
-  }, LOOK.egg.scale(mass) * breathe);
+    if (g > 0.2) e.cylinder(0.204, 0.204, 0.012 + 0.025 * Math.max(0, g - 0.2) + 0.03 * h, [0, 0.2, 0], glow, [0, Math.PI / 5, 0], 5); // the glow through it
+    if (h < 0.35) { e.cylinder(0.0, 0.2, 0.3, [0, 0.35, 0], paper, undefined, 5); return; } // folded top
+    // the top opens out, petal by petal: each of its five faces, hinged on its edge of the crease band
+    const rin = 0.2 * Math.cos(Math.PI / 5), L = Math.hypot(0.3, rin);
+    for (let i = 0; i < 5; i++) {
+      const t = (i / 5) * TAU + Math.PI / 5, sx = Math.sin(t), sz = Math.cos(t), k = sm((h - 0.35 - i * 0.05) / 0.4);
+      const shut: V3 = [-rin * sx, 0.3, -rin * sz], out: V3 = [sx * 0.85, 0.45, sz * 0.85];
+      const dir: V3 = [shut[0] + (out[0] - shut[0]) * k, shut[1] + (out[1] - shut[1]) * k, shut[2] + (out[2] - shut[2]) * k];
+      e.joint([rin * sx, 0.2, rin * sz], aim(dir, [Math.cos(t), 0, -Math.sin(t)]), (pt) =>
+        pt.loft([{ at: [0, 0, 0], w: 0.117, up: 0.006, down: 0.006 }, { at: [L, 0, 0], w: 0.005, up: 0.004, down: 0.004 }], paper));
+    }
+    const rise = sm((h - 0.5) / 0.45); // the young one's head, rising out
+    if (rise > 0) {
+      e.sphere([0.11, 0.1 * (0.6 + 0.4 * rise), 0.11], [0, 0.2 + 0.14 * rise, 0], { color: mix(tint, '#ffffff', 0.15), tex: 'skin', rough: 0.35 });
+      for (const z of [1, -1]) e.sphere(0.022, [0.07, 0.24 + 0.15 * rise, z * 0.05], { color: '#141010', rough: 0.2 });
+    }
+  }, LOOK.egg.scale(mass) * breathe * (0.85 + 0.25 * g));
 }
 
 /** PLACEHOLDER body for the units the user hasn't described: a segmented bug on six legs, sized by mass. */
@@ -816,13 +840,13 @@ const unit = (u: Omit<Unit, 'description'> & { description?: string }, look?: ke
   ({ description: '', ...u, ...(look ? { size: footprint(look, u.mass) } : {}) }) as Unit; // collision as wide as it's drawn
 
 // the larvae: 35 / 70 / 140 food, work refinement = refinement
-const larva1 = unit({ crawls: true, id: 'larva1', name: 'T1 Larva', mass: 15, physique: LARVA, refinement: 1, workRefinement: 1, shell: 'cocoon',
+const larva1 = unit({ crawls: true, tends: true, id: 'larva1', name: 'T1 Larva', mass: 15, physique: LARVA, refinement: 1, workRefinement: 1, shell: 'cocoon',
   digestsTrees: true, becomes: ['larva2', 'charger', 'micropike', 'mother1'], description: 'A small green larva. Gathers, then changes into a T1 form. Sent onto a tree, it turns the whole tree into food and is absorbed into it.',
   model: (b, p) => caterpillar(b, p, TIER[1], 15) }, 'caterpillar');
-const larva2 = unit({ crawls: true, id: 'larva2', name: 'T2 Larva', mass: 60, physique: LARVA, refinement: 2, workRefinement: 2, shell: 'cocoon',
+const larva2 = unit({ crawls: true, tends: true, id: 'larva2', name: 'T2 Larva', mass: 60, physique: LARVA, refinement: 2, workRefinement: 2, shell: 'cocoon',
   becomes: ['larva3', 'flier', 'whipweld', 'slinger', 'mother2'], description: 'A medium cyan larva. Gathers, then changes into a T2 form.',
   model: (b, p) => caterpillar(b, p, TIER[2], 60) }, 'caterpillar');
-const larva3 = unit({ crawls: true, id: 'larva3', name: 'T3 Larva', mass: 179, physique: LARVA, refinement: 3, workRefinement: 3, shell: 'cocoon',
+const larva3 = unit({ crawls: true, tends: true, id: 'larva3', name: 'T3 Larva', mass: 179, physique: LARVA, refinement: 3, workRefinement: 3, shell: 'cocoon',
   becomes: ['dragon-fly', 'ground-attacker3', 'mother3'], description: 'A big purple larva. Gathers, then changes into a T3 form.',
   model: (b, p) => caterpillar(b, p, TIER[3], 179) }, 'caterpillar');
 

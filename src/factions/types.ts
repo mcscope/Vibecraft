@@ -74,6 +74,8 @@ export interface UnitSpec {
   size?: number;
   /** Soft-bodied: it crawls under (and over) its own side's units: it never pushes or is pushed by them, only by enemies. */
   crawls?: boolean;
+  /** Left without orders (new, or done with one), it tends the nest: carries food to whoever of its side is waiting on it, gathering more in between. A Stop leaves it standing. */
+  tends?: boolean;
   /** It flies: walks short hops, takes off to go further, straight over everything; burns calories aloft (∝ mass, so endurance comes from its reserve); lands when it stops or runs low. A striker dives on its target. `height`: its ceiling (m); `launch: 'backward'`: it springs off the way it faces away from, flinging itself up and over, and banks round. */
   flight?: boolean | { height?: number; launch?: 'backward' };
   /** Can this unit harvest resource nodes? Default true. */

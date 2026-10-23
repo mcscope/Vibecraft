@@ -113,11 +113,10 @@ describe('metamorphosis', () => {
     expect(sh.stats.mass).toBe(fenStats.mass); // at the mass of what went in
     expect(sh.stats.maxHp).toBeGreaterThan(fenStats.maxHp); // its own makeup: mostly frame
     expect(sh.order.kind === 'metamorph' && sh.order.into).toBe('frog-knight');
-    // another order calls the brew off, refunding its food; it can start again
+    // any other order leaves the brew going: only another change replaces it
     w.enqueue({ player: 0, cmd: { type: 'move', units: [sh.id], x: 50, y: 40 } });
     w.step();
-    expect(sh.order.kind).toBe('move');
-    expect(sh.food).toBeCloseTo(cost.food, 3);
+    expect(sh.order.kind === 'metamorph' && sh.order.into).toBe('frog-knight');
     w.enqueue({ player: 0, cmd: { type: 'metamorph', units: [sh.id], into: 'frog-knight' } });
     w.step();
     expect(sh.order.kind === 'metamorph' && sh.order.from).toBe('fenling');

@@ -716,8 +716,8 @@ export class World {
     const mine = (ids: number[]) => mineAll(ids).filter((u) => !u.carter);
     const set = (units: Unit[], order: Order) => {
       for (const u of units) {
+        if (u.order.kind === 'metamorph') continue; // a body changing keeps on changing: only another change replaces it
         // shift-queued: after the current order (and anything queued before it)
-        if (!cmd.queue) refundMetamorph(u); // a change called off: its food back in the pack
         if (cmd.queue && (u.order.kind !== 'idle' || u.queue.length)) { u.queue.push({ ...order } as Order); continue; }
         u.order = { ...order } as Order; u.resume = null; u.engage = 0; u.path = []; u.repathIn = 0; u.queue = []; u.faceTo = null; u.breakFrom = 0;
         u.stance = 'auto'; // a new order ends holding ground
@@ -1016,7 +1016,7 @@ export class World {
       x, y, px: x, py: y,
       hp: s.stats.maxHp, cal: s.stats.maxCalories, exhausted: false,
       food: 0, wood: 0, crystal: 0, ammo: s.stats.loadoutCrystal,
-      order: { kind: 'idle' }, resume: null, queue: [], engage: 0,
+      order: spec.tends ? { kind: 'tend', g: null } : { kind: 'idle' }, resume: null, queue: [], engage: 0,
       path: [], goalX: x, goalY: y, repathIn: 0,
       cooldown: 0, swing: 0, anim: 'idle', animT: 0, heading: 1, busy: false, stuck: 0, stride: 0, strideTick: -1, airborne: false, alt: 0, diveSpeed: 0, flyDir: 0, bank: 0, launchT: 0, walked: 0, diving: false, diveAngle: 0, altGoal: 0, altGoalTick: -1, blow: null, diveRun: false, flewTick: -1, flySpeed: 0, vert: 0, vz: 0, vx: 0, vy: 0, steered: -1, strideMul: 1, staggered: 0, ovx: 0, ovy: 0, stance: 'auto', cutting: false, facing: Math.PI / 4, turnTick: -1, turnLeft: 0, faceTo: null, brood: [], autoBrood: null, breakFrom: 0,
       dummy: !!spec.dummy,
@@ -1359,7 +1359,7 @@ export class World {
   /** Complete the current order, returning to a resumed one if present. */
   /** @internal sim helper, also used by logistics */
   finish(u: Unit): void {
-    u.order = u.resume ?? u.queue.shift() ?? { kind: 'idle' };
+    u.order = u.resume ?? u.queue.shift() ?? (this.specOf(u.owner, u.specId)?.spec.tends && this.gathers(u, 'food') ? { kind: 'tend', g: null } : { kind: 'idle' });
     u.resume = null;
     u.path = [];
     u.repathIn = 0;

@@ -503,6 +503,13 @@ export class Renderer {
           const left = from && to ? metamorphCost(from.stats, to.stats, true).sec - u.brood[0].t : Infinity, LAY = 0.8;
           if (left < LAY) Object.assign(f, { anim: 'lay' as const, progress: Math.min(0.999, 1 - left / LAY), time: undefined, walked: undefined });
         }
+        // (one changing in place, an egg or a cocoon, grows by how far its change has come, and hatches in its last moments)
+        if (art.anims.grow && u.order.kind === 'metamorph') {
+          const o = u.order, from = this.world.specOf(u.owner, o.from ?? u.specId), to = this.world.specOf(u.owner, o.into);
+          const sec = from && to ? metamorphCost(from.stats, to.stats, false, u.stats.mass).sec : 0, HATCH = 1.2;
+          if (art.anims.hatch && sec - o.t < HATCH) Object.assign(f, { anim: 'hatch' as const, progress: Math.min(0.999, Math.max(0, 1 - (sec - o.t) / HATCH)), time: undefined, walked: undefined });
+          else Object.assign(f, { anim: 'grow' as const, progress: Math.min(0.999, sec > HATCH ? o.t / (sec - HATCH) : 0), time: undefined, walked: undefined });
+        }
         // (recovering after a throw, one that reloads by hand shows it: its 'reload' over the rest of its recovery)
         if (art.anims.reload && f.anim === 'idle' && u.cooldown > 0.02) Object.assign(f, { anim: 'reload' as const, progress: Math.min(0.999, Math.max(0, 1 - u.cooldown / Math.max(0.1, u.stats.cooldown - 0.45))), time: undefined, walked: undefined });
         if (art.anims.rise) Object.assign(f, this.rising(u.id, f.anim, u.engage > 0 || u.order.kind === 'attack'));

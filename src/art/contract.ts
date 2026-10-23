@@ -28,7 +28,7 @@ export interface Sprite {
 /** Model units a map tile spans (art is modelled in units of ~1 m; a tile is 2 m). */
 export const UNITS_PER_TILE = 2;
 
-export type ArtAnim = 'idle' | 'walk' | 'charge' | 'brace' | 'stagger' | 'fly' | 'leap' | 'climb' | 'soar' | 'glide' | 'land' | 'bankL' | 'bankR' | 'swoop' | 'rise' | 'reload' | 'lay' | 'attack' | 'cut' | 'gather' | 'eat' | 'tired' | 'die' | 'carryFood' | 'carryWood' | 'carryCrystal';
+export type ArtAnim = 'idle' | 'walk' | 'charge' | 'brace' | 'stagger' | 'fly' | 'leap' | 'climb' | 'soar' | 'glide' | 'land' | 'bankL' | 'bankR' | 'swoop' | 'rise' | 'reload' | 'lay' | 'grow' | 'hatch' | 'attack' | 'cut' | 'gather' | 'eat' | 'tired' | 'die' | 'carryFood' | 'carryWood' | 'carryCrystal';
 
 export interface AnimArt {
   /**
