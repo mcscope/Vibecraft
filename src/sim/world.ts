@@ -1528,13 +1528,12 @@ export class World {
     // a flier in the air bombs: it flies right over the target and drops (sim/abilities/flight.ts)
     const range = u.airborne && wpn.throws ? BOMB_REACH : tb ? Math.max(wpn.range, 1) : wpn.range;
     this.cutWithSidearm(u, tu, edge, range); // (it strikes in passing; it goes on as it was)
-    // breaking off (below): it runs till that body is out past its reach, and as far again as it can come while the
-    // shaft is brought round (its pace over the turn), then it turns to face it and resets (the id goes negative)
+    // breaking off (below): it runs till that body is out past its reach, then turns to face it and resets (the id
+    // goes negative). Whether it's round in time is down to how fast it turns and how fast that body comes on
     if (u.breakFrom) {
       const b = this.units.get(Math.abs(u.breakFrom));
-      const clear = range + Math.hypot(b?.ovx ?? 0, b?.ovy ?? 0) * (Math.PI / u.stats.turnRate);
       if (!b) u.breakFrom = 0;
-      else if (u.breakFrom > 0 && Math.hypot(b.x - u.x, b.y - u.y) - b.stats.radius < clear) { this.breakOff(u, b); return true; }
+      else if (u.breakFrom > 0 && Math.hypot(b.x - u.x, b.y - u.y) - b.stats.radius < range) { this.breakOff(u, b); return true; }
       else if (!this.facingWithin(u, b.x - u.x, b.y - u.y, Math.PI * 0.2)) { u.breakFrom = -b.id; this.face(u, b.x - u.x, b.y - u.y); return true; }
       else u.breakFrom = 0;
     }
@@ -1585,7 +1584,8 @@ export class World {
           // against a weapon that outreaches its own (it'll be struck first), it doesn't run onto the point: near that
           // reach it comes on at a deliberate walk, so the blow that meets it carries little of a collision, and pushes
           // inside where a long shaft can't be brought to bear
-          const outreached = !tu.throws && tu.stats.canAttack && tu.stats.range > range + 0.1 && !charging;
+          // (only while that weapon is pointed at it: one turned away, breaking off or coming round, it charges)
+          const outreached = !tu.throws && tu.stats.canAttack && tu.stats.range > range + 0.1 && !charging && this.facingWithin(tu, u.x - tu.x, u.y - tu.y, Math.PI * 0.2);
           if (outreached && edge < tu.stats.range + 2) { this.moveTo(u, tx, ty, 0.05, false, false, u.stats.speed * K.closeInPace); return true; }
           const [px, py] = u.cooldown > 0 ? passBeside(u, tu, 0) : [tx, ty];
           this.moveTo(u, px, py, 0.05, sprint && !outreached, !outreached);
