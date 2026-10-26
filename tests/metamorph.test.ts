@@ -113,7 +113,7 @@ describe('metamorphosis', () => {
     expect(sh.stats.mass).toBe(fenStats.mass); // at the mass of what went in
     expect(sh.stats.maxHp).toBeGreaterThan(fenStats.maxHp); // its own makeup: mostly frame
     expect(sh.order.kind === 'metamorph' && sh.order.into).toBe('frog-knight');
-    // any other order leaves the brew going: only another change replaces it
+    // once chosen, a change goes on to the end: any other order, or another change, leaves it going
     w.enqueue({ player: 0, cmd: { type: 'move', units: [sh.id], x: 50, y: 40 } });
     w.step();
     expect(sh.order.kind === 'metamorph' && sh.order.into).toBe('frog-knight');

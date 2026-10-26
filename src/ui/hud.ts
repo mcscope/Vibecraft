@@ -554,8 +554,7 @@ export class Hud {
     for (const u of units) {
       const spec = w.specOf(u.owner, u.specId)?.spec, origin = w.specOf(u.owner, u.shellOf ?? u.specId)?.spec; // (a shell: what went into it)
       for (const id of spec?.spawns ?? []) if (!forms.has(`${id}:1`)) forms.set(`${id}:1`, [u, true]);
-      // (changing already, with no other form to become, like an egg: nothing to choose)
-      if (u.order.kind === 'metamorph' && (origin?.becomes?.length ?? 0) <= 1) continue;
+      if (u.order.kind === 'metamorph') continue; // (changing already: its form is chosen)
       for (const id of origin?.becomes ?? []) if (!forms.has(`${id}:0`)) forms.set(`${id}:0`, [u, false]);
     }
     if (!forms.size) return '';

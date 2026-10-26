@@ -17,7 +17,7 @@ import { BOMB_REACH, canReach, diveAt, dropTime, FLARE_HEIGHT, FLY_SIGHT, flyTo,
 import { MatchStats } from './stats';
 import { eject, fitsInside, runGarrison, tickGarrison } from './garrison';
 import { digestsTrees, runDigest } from './abilities/digest';
-import { beginMetamorph, canBecome, cancelBrood, feedChange, foodOwed, nearestHungry, queueBrood, refundMetamorph, runMetamorph, tickBrood } from './abilities/metamorph';
+import { beginMetamorph, canBecome, cancelBrood, feedChange, foodOwed, nearestHungry, queueBrood, runMetamorph, tickBrood } from './abilities/metamorph';
 import { isUnderfoot, loadBelt, nearestBelt, roadFactor, routeBelts, runBelts, type BeltRoutes, type Parcel } from './abilities/underfoot';
 import { grow, grownEnough, livingStats, seedMaterials } from './abilities/living';
 import {
@@ -716,7 +716,7 @@ export class World {
     const mine = (ids: number[]) => mineAll(ids).filter((u) => !u.carter);
     const set = (units: Unit[], order: Order) => {
       for (const u of units) {
-        if (u.order.kind === 'metamorph') continue; // a body changing keeps on changing: only another change replaces it
+        if (u.order.kind === 'metamorph') continue; // a body changing keeps on changing, to the end
         // shift-queued: after the current order (and anything queued before it)
         if (cmd.queue && (u.order.kind !== 'idle' || u.queue.length)) { u.queue.push({ ...order } as Order); continue; }
         u.order = { ...order } as Order; u.resume = null; u.engage = 0; u.path = []; u.repathIn = 0; u.queue = []; u.faceTo = null; u.breakFrom = 0;
@@ -729,7 +729,7 @@ export class World {
       case 'attackMove': return set(mine(cmd.units), { kind: 'attackMove', x: cmd.x, y: cmd.y, charge: cmd.charge || undefined, face: cmd.face });
       case 'metamorph':
         if (cmd.spawn) { for (const u of mine(cmd.units)) queueBrood(this, u, cmd.into); return; } // trained in its body: it carries on
-        for (const u of mine(cmd.units)) if (canBecome(this, u, cmd.into) && !(u.order.kind === 'metamorph' && u.order.into === cmd.into)) { refundMetamorph(u); beginMetamorph(this, u, cmd.into); }
+        for (const u of mine(cmd.units)) if (canBecome(this, u, cmd.into) && u.order.kind !== 'metamorph') beginMetamorph(this, u, cmd.into); // (once chosen, a change goes on to the end)
         return;
       case 'autoSpawn': for (const u of mine(cmd.units)) if (!cmd.specId || canBecome(this, u, cmd.specId, true)) u.autoBrood = cmd.specId; return;
       case 'cancelSpawn': for (const u of mine(cmd.units)) cancelBrood(u, cmd.index); return;

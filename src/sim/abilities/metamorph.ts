@@ -169,11 +169,6 @@ export function nearestHungry(w: World, u: Unit): Unit | null {
   return best;
 }
 
-/** A change called off by another order: what it had paid goes back into the pack. */
-export function refundMetamorph(u: Unit): void {
-  if (u.order.kind === 'metamorph' && u.order.paid > 0) { u.food += u.order.paid; u.order.paid = 0; }
-}
-
 /** Queue a spawn in `u` (a parent whose spec `spawns` it), up to MAX_QUEUE. */
 export function queueBrood(w: World, u: Unit, into: string): void {
   if (canBecome(w, u, into, true) && u.brood.length < MAX_QUEUE) u.brood.push({ into, t: 0, paid: 0 });
