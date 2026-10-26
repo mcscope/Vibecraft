@@ -100,7 +100,7 @@ export type Order =
   /** Hungry with nowhere else to eat: eating straight from a food source until full. */
   | { kind: 'graze'; node: number }
   | { kind: 'attack'; target: number; charge?: boolean }
-  | { kind: 'gather'; node: number; nodeType: ResourceKind; phase: 'toNode' | 'harvest' | 'toDrop'; stopWhenArmed: boolean }
+  | { kind: 'gather'; node: number; nodeType: ResourceKind; phase: 'toNode' | 'harvest' | 'toDrop'; stopWhenArmed: boolean; browse?: [number, number] }
   /**
    * Tending the nest, until told otherwise: carrying food to whoever of its side is waiting on it (an egg, a cocoon, a
    * mother with an egg queued), gathering more in between (`g`: the gathering trip it's on), waiting full when nobody is.
@@ -1871,6 +1871,16 @@ export class World {
       // it gathers within reach (a flier may have settled short of it: it walks the rest)
       const reach = n.shard ? u.stats.radius + 0.45 : 0.85 + u.stats.radius;
       if ((n.x - u.x) ** 2 + (n.y - u.y) ** 2 > (reach + 0.35) ** 2) { o.phase = 'toNode'; return false; }
+      // a crawler browses: every few seconds it inches a little way round what it's eating, to a fresh spot
+      if (o.browse) {
+        if (this.moveTo(u, o.browse[0], o.browse[1], 0.1)) o.browse = undefined;
+        return u.x !== u.px || u.y !== u.py;
+      }
+      if (!n.shard && this.crawls(u) && (this.tick + u.id * 13) % 60 === 0) {
+        const a = Math.atan2(u.y - n.y, u.x - n.x) + (this.rng.next() < 0.5 ? 0.6 : -0.6), r = Math.max(0.3, reach - 0.15);
+        const bx = n.x + Math.cos(a) * r, by = n.y + Math.sin(a) * r;
+        if (!this.grid.isBlocked(Math.floor(bx), Math.floor(by))) { o.browse = [bx, by]; return false; }
+      }
       this.face(u, n.x - u.x, n.y - u.y);
       const boost = n.shard ? { mult: 1, from: null } : this.boostAt(u.owner, n.x, n.y, n.type);
       const rate = n.shard ? Math.max(2, u.stats.gatherRate * 4) : u.stats.gatherRate * boost.mult;
@@ -2307,7 +2317,9 @@ export class World {
       // a body turns itself toward where it's going (turnToward: as fast as its feet can spin its length round, and
       // its run bends no tighter than its grip holds), and its legs drive it the way it faces: only as hard as it's
       // lined up. So it slows to turn, and slower turns tighter; fast bodies sweep wide arcs. Nothing else.
-      this.turnToward(u, Math.atan2(ddy, ddx));
+      // (a crawler winds gently side to side as it goes, its body trailing in curves; straight in to the goal)
+      const weave = d > 1 && this.crawls(u) ? 0.35 * Math.sin(u.walked * 2.2 + u.id) : 0;
+      this.turnToward(u, Math.atan2(ddy, ddx) + weave);
       const fx = Math.cos(u.facing), fy = Math.sin(u.facing);
       // but no faster than a turn its grip holds will bring it round to the waypoint: an arc of radius r = v²/grip
       // reaches a point d off, θ off its line, if d ≥ 2·r·sin θ (one behind it needs the whole circle: d ≥ 2·r)
