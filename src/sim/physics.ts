@@ -126,7 +126,7 @@ export const K = {
   /** A change of velocity (m/s) bigger than this in one hit or collision knocks a 70 kg upright body off balance for a moment (staggered); see DerivedStats.balance. */
   staggerDv: 1.5,
   /** Bodies colliding: a jolt (change of velocity, m/s) under this is just jostling; it's how hard a body is jolted that injures it, like a fall... */
-  injuryDv: 3,
+  injuryDv: 4.5, // (about a 1 m fall, or a 16 km/h crash: where real injuries begin)
   /** ...above it, this share of ½·m·(jolt − injuryDv)² hurts the body. */
   bodyImpactEfficiency: 0.15,
   /** Share of a body's mass in the limb (or head) that swings with a blow. */
