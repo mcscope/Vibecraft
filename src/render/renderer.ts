@@ -2,7 +2,7 @@
 // between frames and are batched by the GPU, so thousands of trees and units
 // stay cheap. Reads simulation state, never writes it.
 import { Application, Container, ImageSource, Matrix, Rectangle, Sprite as PixiSprite, Text, Texture, type TextureSource } from 'pixi.js';
-import { DT, type Building, type Order, type ResourceNode, type Unit, type World, type WorldEvent } from '../sim/world';
+import { DT, type Building, type Order, type ResourceNode, type Unit, World, type WorldEvent } from '../sim/world';
 import { Camera, isoX, isoY, TILE_H, TILE_W } from './camera';
 import { isUnderfoot, parcelPos } from '../sim/abilities/underfoot';
 import { LEAP_TIME } from '../sim/abilities/flight';
@@ -47,6 +47,7 @@ export function unitFrame(u: Unit): { anim: ArtAnim } & FrameTime {
   switch (u.anim) {
     case 'leap': return { anim: 'leap', progress: Math.min(0.999, u.launchT / LEAP_TIME) }; // crouch, spring, up
     case 'swoop': return { anim: 'swoop', time: u.animT };
+    case 'give': return { anim: 'give', progress: Math.min(0.999, ((u.order.kind === 'give' || u.order.kind === 'tend' ? u.order.handT : 0) ?? 0) / World.HANDOVER) }; // (holding its load out)
     case 'fly': case 'climb': case 'soar': case 'glide': case 'land':
       // turning hard in level flight or climbing: banked into the turn
       if ((u.anim === 'soar' || u.anim === 'climb' || u.anim === 'fly') && Math.abs(u.bank) > 0.5) return { anim: u.bank > 0 ? 'bankL' : 'bankR', time: u.animT };

@@ -409,10 +409,15 @@ function caterpillar(b: ModelBuilder, p: Pose, color: string, mass: number): voi
       c.sphere(0.022, [at(seg), 0.2 + lift, 0], { team: 'primary', tex: 'none' }); // a team dot on each segment
     }
     if (!segs.includes(0)) return;
+    // giving: it rears its head up and over, takes the food off its back in its mouth, and dips to set it down in front
+    const give = p.anim === 'give' ? p.phase : -1, rear = give >= 0 ? Math.sin(Math.min(1, give / 0.9) * Math.PI) : 0;
     const eat = p.anim === 'gather' || p.anim === 'eat' ? Math.sin(p.phase * TAU * 2) * 0.03 : 0;
-    c.sphere(0.11, [0.22, 0.12 + eat, 0], skin); // head
-    for (const z of [1, -1]) c.sphere(0.018, [0.31, 0.15 + eat, z * 0.05], { color: '#111111' });
-    if (p.cargo) c.sphere([0.08, 0.06, 0.08], [0, 0.24, 0], { color: p.cargo === 'food' ? '#a83a4a' : p.cargo === 'wood' ? '#7a5634' : '#8fe6ff' });
+    const hx = 0.22 + 0.06 * rear, hy = 0.12 + eat + 0.1 * rear * (give < 0.5 ? 1 : 1 - (give - 0.5) * 2.2);
+    c.sphere(0.11, [hx, hy, 0], skin); // head
+    for (const z of [1, -1]) c.sphere(0.018, [hx + 0.09, hy + 0.03, z * 0.05], { color: '#111111' });
+    const food = { color: '#a83a4a', tex: 'skin' as const, rough: 0.5 };
+    if (give >= 0) { if (give < 0.92) { const k = Math.min(1, give / 0.45), mouth: V3 = [hx + 0.12, hy - 0.02, 0]; c.sphere([0.07, 0.055, 0.07], give < 0.45 ? [mouth[0] * k, 0.24 + (mouth[1] - 0.24) * k, 0] : mouth, food); } }
+    else if (p.cargo) c.sphere([0.08, 0.06, 0.08], [0, 0.24, 0], { color: p.cargo === 'food' ? '#a83a4a' : p.cargo === 'wood' ? '#7a5634' : '#8fe6ff' });
   }, LOOK.caterpillar.scale(mass));
 }
 
@@ -784,7 +789,8 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
     // neck, and a big head with its great crest sweeping back
     const nk = o.neck ?? 1;
     // (striking, her head darts forward and down, the neck following: peaking as the blow lands)
-    const jab = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0;
+    const give = p.anim === 'give' ? p.phase : -1; // (giving: her head dips forward and down and sets a food ball before her)
+    const jab = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : give >= 0 ? 0.75 * Math.sin(Math.min(1, give / 0.9) * Math.PI) : 0;
     const head: [number, number, number] = [0.14 + 0.32 * nk + 0.3 * jab, y0 + 0.05 + 0.45 * nk - 0.28 * jab, 0], mid: V3 = [0.14 + 0.16 * nk + 0.14 * jab, y0 + 0.05 + 0.25 * nk - 0.08 * jab, 0];
     // (slim against her great abdomen, but shaped: tapering segments, a collar at each joint, spines down its back)
     shapedLimb(c, [0.14, y0 + 0.05, 0], mid, 0.08, [1.5, 1.1, 0.8, 0.7, 0.8], plate, { flat: 0.3, keel: 0.4 }); // (swelling at its base)
@@ -794,7 +800,8 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
       const at: V3 = [from[0] + (to[0] - from[0]) * k, from[1] + (to[1] - from[1]) * k + 0.06, 0];
       c.cone(0.018, 0.06, at, plate, [0, 0, 0.5], 4);
     }
-    c.joint(head, [0, 0, -0.5 * jab], (hs) => hs.joint([0, 0, 0], [0, 0, 0], (h) => motherHead(h, o.headStyle ?? 'shortShovel', o.crest ?? 1, headMat, under, jab), o.head ?? 1)); // (the snout tipped down into it)
+    c.joint(head, [0, 0, -0.5 * jab], (hs) => hs.joint([0, 0, 0], [0, 0, 0], (h) => motherHead(h, o.headStyle ?? 'shortShovel', o.crest ?? 1, headMat, under, p.anim === 'attack' ? jab : 0), o.head ?? 1)); // (the snout tipped down into it)
+    if (give >= 0 && give < 0.92) c.sphere([0.06, 0.05, 0.06], [head[0] + 0.16, Math.max(0.05, head[1] - 0.06 - 0.25 * Math.max(0, give - 0.4)), 0], { color: '#a83a4a', tex: 'skin', rough: 0.5 }); // the food, set down
     // four legs, all off the central thorax: the great hind pair just behind its middle, under the arched abdomen's
     // weight, the forelegs just ahead; her weight balanced between them
     for (const z of [1, -1]) {

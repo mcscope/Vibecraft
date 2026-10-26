@@ -105,9 +105,9 @@ export type Order =
    * Tending the nest, until told otherwise: carrying food to whoever of its side is waiting on it (an egg, a cocoon, a
    * mother with an egg queued), gathering more in between (`g`: the gathering trip it's on), waiting full when nobody is.
    */
-  | { kind: 'tend'; g: Extract<Order, { kind: 'gather' }> | null }
+  | { kind: 'tend'; g: Extract<Order, { kind: 'gather' }> | null; handT?: number }
   | { kind: 'resupply'; building: number }
-  | { kind: 'give'; to: number }
+  | { kind: 'give'; to: number; handT?: number }
   | { kind: 'eatPack' }
   /** Carry wood to a construction site: from a stockpile, or straight from a tree. */
   | { kind: 'build'; site: number; phase: 'fetch' | 'chop' | 'deliver'; node: number }
@@ -122,7 +122,7 @@ export type Order =
    */
   | { kind: 'cart'; base: number; home: number; from?: number; pinned: boolean; phase: 'load' | 'deliver'; res: ResourceKind };
 
-export type UnitAnim = 'idle' | 'walk' | 'charge' | 'brace' | 'stagger' | 'fly' | 'leap' | 'climb' | 'soar' | 'glide' | 'land' | 'swoop' | 'attack' | 'cut' | 'gather' | 'eat' | 'tired';
+export type UnitAnim = 'idle' | 'walk' | 'give' | 'charge' | 'brace' | 'stagger' | 'fly' | 'leap' | 'climb' | 'soar' | 'glide' | 'land' | 'swoop' | 'attack' | 'cut' | 'gather' | 'eat' | 'tired';
 
 export interface Unit {
   id: number;
@@ -1286,7 +1286,9 @@ export class World {
     tickFlight(this, u, moved, DT, (fx, fy) => this.face(u, fx, fy));
     // a shaft going at an enemy is carried point-first: at any pace it moves in the charge pose (point levelled)
     const atEnemy = st.minReach > 0 && !u.breakFrom && (u.engage || u.order.kind === 'attack');
-    if (moved) anim = atEnemy || (Math.hypot(u.vx, u.vy) > st.speed * 1.15 && !u.breakFrom) ? 'charge' : 'walk'; // flat out: a sprint, a charge (running from one, a run)
+    const handing = (u.order.kind === 'give' || u.order.kind === 'tend') && (u.order.handT ?? 0) > 0;
+    if (handing) anim = 'give'; // (holding its load out to another)
+    else if (moved) anim = atEnemy || (Math.hypot(u.vx, u.vy) > st.speed * 1.15 && !u.breakFrom) ? 'charge' : 'walk'; // flat out: a sprint, a charge (running from one, a run)
     if (u.swing > 0) anim = u.cutting ? 'cut' : 'attack';
     // point set, waiting (between its jabs too: the point stays on the enemy)
     else if (!moved && st.canPlant && (u.engage || u.order.kind === 'attack' || u.order.kind === 'attackMove' || u.stance === 'hold')) anim = 'brace';
@@ -1933,7 +1935,7 @@ export class World {
     const to = nearestHungry(this, u), full = this.freeCapacity(u) < 1;
     // carrying food and someone's waiting: take it to them (once full, or with enough for them, or the trip's done)
     if (to && u.food >= 0.5 && (full || !o.g || o.g.phase === 'toDrop' || u.food >= foodOwed(this, to))) {
-      if (this.moveTo(u, to.x, to.y, u.stats.radius + to.stats.radius + 0.5)) { this.transfer(u, to); o.g = null; }
+      if (this.moveTo(u, to.x, to.y, u.stats.radius + to.stats.radius + 0.1) && this.handOver(u, to, o)) o.g = null; // (right up to it, and handed over)
       return u.x !== u.px || u.y !== u.py;
     }
     if (full) return false; // full and nobody waiting: it waits with the food
@@ -2036,11 +2038,22 @@ export class World {
   private runGive(u: Unit, toId: number): boolean {
     const to = this.units.get(toId);
     if (!to || to.owner !== u.owner) { this.finish(u); return false; }
-    const reach = u.stats.radius + to.stats.radius + 0.5;
-    if (!this.moveTo(u, to.x, to.y, reach)) return u.x !== u.px || u.y !== u.py;
-    this.transfer(u, to);
-    this.finish(u);
+    if (!this.moveTo(u, to.x, to.y, u.stats.radius + to.stats.radius + 0.1)) return u.x !== u.px || u.y !== u.py; // (right up to it)
+    if (this.handOver(u, to, u.order.kind === 'give' ? u.order : {})) this.finish(u);
     return false;
+  }
+
+  /** Seconds a hand-over takes: up close, it holds its load out to the other (the 'give' animation), then it passes. */
+  static readonly HANDOVER = 0.8;
+
+  /** A hand-over under way (`o.handT` seconds in): it faces the other and holds its load out; true once it's passed. */
+  private handOver(u: Unit, to: Unit, o: { handT?: number }): boolean {
+    this.face(u, to.x - u.x, to.y - u.y);
+    o.handT = (o.handT ?? 0) + DT;
+    if (o.handT < World.HANDOVER) return false;
+    this.transfer(u, to);
+    o.handT = 0;
+    return true;
   }
 
   /** Hand over the giver's cargo. Crystal tops up the receiver's weapon pack first, then its cargo. */

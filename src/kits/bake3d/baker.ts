@@ -17,7 +17,7 @@ export const PX_PER_UNIT = 32 * Math.SQRT2 / UNITS_PER_TILE;
 export type BakedAnim = ArtAnim;
 
 const FRAMES: Record<BakedAnim, number> = {
-  idle: 4, walk: 8, charge: 8, brace: 2, stagger: 4, fly: 8, leap: 8, climb: 8, soar: 4, glide: 4, land: 4, bankL: 1, bankR: 1, swoop: 1, rise: 6, reload: 8, lay: 8, grow: 8, hungry: 4, hatch: 8, attack: 8, cut: 8, gather: 6, eat: 4, tired: 2, die: 6, carryFood: 8, carryWood: 8, carryCrystal: 8,
+  idle: 4, walk: 8, charge: 8, brace: 2, stagger: 4, fly: 8, leap: 8, climb: 8, soar: 4, glide: 4, land: 4, bankL: 1, bankR: 1, swoop: 1, rise: 6, reload: 8, lay: 8, give: 8, grow: 8, hungry: 4, hatch: 8, attack: 8, cut: 8, gather: 6, eat: 4, tired: 2, die: 6, carryFood: 8, carryWood: 8, carryCrystal: 8,
 };
 const FPS: Partial<Record<BakedAnim, number>> = { idle: 2.5, walk: 8, charge: 8, brace: 1.5, stagger: 6, fly: 6, leap: 10, climb: 6, soar: 2, glide: 2, land: 4, gather: 7, eat: 4, tired: 1.5, carryFood: 8, carryWood: 8, carryCrystal: 8 };
 
@@ -36,6 +36,8 @@ export interface UnitBakeOptions {
   ownLeap?: boolean;
   /** It changes in place (an egg, a cocoon): also bake 'grow' (cooking: fed, the change going on), 'hungry' (waiting on food) and 'hatch' (its last moments). */
   grows?: boolean;
+  /** It hands loads to others (Give, tending): also bake 'give', played over a hand-over. */
+  gives?: boolean;
   /** It lays eggs (or spawns young) from its body: also bake 'lay', played as each comes out. */
   lay?: boolean;
   /** Between throws it reloads by hand (or tail): also bake 'reload', played while it recovers. */
@@ -398,6 +400,7 @@ export class Baker {
     if (opts.rises && !opts.dummy) anims.push('rise');
     if (opts.reload && !opts.dummy) anims.push('reload');
     if (opts.lay && !opts.dummy) anims.push('lay');
+    if (opts.gives && !opts.dummy) anims.push('give');
     if (opts.grows && !opts.dummy) anims.push('grow', 'hungry', 'hatch');
     if (opts.sidearm && !opts.dummy) anims.push('cut');
     if (withCarry && !opts.dummy) anims.push('carryFood', 'carryWood', 'carryCrystal');
@@ -452,7 +455,7 @@ export class Baker {
       for (let di = r0; di < r0 + nr; di++) {
         const theta = (BAKED_DIRS[di] * Math.PI) / 4;
         for (let f = f0; f < f0 + nc; f++) {
-          const phase = anim === 'die' || anim === 'rise' || anim === 'reload' || anim === 'lay' || anim === 'hatch' ? f / (n - 1) : f / n;
+          const phase = anim === 'die' || anim === 'rise' || anim === 'reload' || anim === 'lay' || anim === 'give' || anim === 'hatch' ? f / (n - 1) : f / n;
           this.clearStage();
           const body = new THREE.Group();
           this.stage.add(body);
