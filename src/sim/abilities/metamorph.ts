@@ -100,6 +100,7 @@ export function swapInto(w: World, u: Unit, into: string, mass?: number): Unit |
   n.hp = n.stats.maxHp * hpShare; n.cal = n.stats.maxCalories * calShare;
   n.food = u.food; n.wood = u.wood; n.crystal = u.crystal;
   n.ammo = 0; // born without crystal: it gets its own (what it was carrying arms it first)
+  if (n.stats.canAttack && n.order.kind === 'idle' && n.crystal < n.crystalMass) w.fetchCrystal(n); // (and goes for one: picked up, or mined)
   w.events.push({ type: 'metamorph', id: u.id, into: n.id, owner: u.owner, x: n.x, y: n.y, specId: u.specId, intoSpec: into, heading: u.heading });
   return n;
 }

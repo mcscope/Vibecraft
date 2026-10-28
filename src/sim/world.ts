@@ -1891,7 +1891,8 @@ export class World {
       } else want = this.gatherUnits(u, rate, n.amount);
       if (want > 0) {
         n.amount -= want;
-        if (o.stopWhenArmed) u.ammo += want; else this.carry(u, n.type, want);
+        if (o.stopWhenArmed) { const arm = Math.min(want, Math.max(0, u.stats.loadoutCrystal - u.ammo)); u.ammo += arm; if (want > arm) this.carry(u, n.type, want - arm); } // (mined a lump at a time: what's over goes in the pack)
+        else this.carry(u, n.type, want);
         if (!n.shard) this.stats.gather(u.owner, n.type, want);
         this.burnBoost(boost, want);
         u.cal -= K.gatherCalPerKg * want;
@@ -1994,6 +1995,19 @@ export class World {
     const order: Order = db < ds ? { kind: 'rearm', unit: bearer!.id } : { kind: 'gather', node: shard!.id, nodeType: 'crystal', phase: 'toNode', stopWhenArmed: true };
     if (detour) this.detour(u, order); else u.order = order;
     return true;
+  }
+
+  /**
+   * A body without its crystal goes and gets one (one just born, hatched or changed): the nearest spent crystal or bearer
+   * in sight, a building with crystal in stock, or else it mines a deposit itself. True if it found somewhere to.
+   */
+  fetchCrystal(u: Unit): boolean {
+    if (this.seekAmmo(u, false)) return true;
+    const b = this.nearestCache(u, (x) => x.stock.crystal >= u.crystalMass);
+    if (b) { u.order = { kind: 'resupply', building: b.id }; return true; }
+    const n = this.gathers(u, 'crystal') ? this.nearestNode(u, 'crystal', 40, false) : null;
+    if (n) { u.order = { kind: 'gather', node: n.id, nodeType: 'crystal', phase: 'toNode', stopWhenArmed: true }; return true; }
+    return false;
   }
 
   /** Take a crystal from a building to fight with (town bell, or a worker sent to attack). */

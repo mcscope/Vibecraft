@@ -397,14 +397,18 @@ function caterpillar(b: ModelBuilder, p: Pose, color: string, mass: number): voi
   // (drawn whole, the segments lie in a line behind the front one; in parts, each is drawn on its own at the origin)
   const segs = p.part === undefined ? [0, 1, 2] : [p.part];
   const at = (seg: number) => (p.part === undefined ? -seg * CATERPILLAR_GAP : 0);
+  // gathering, it rears up on its front segment alone (the rest of it stays down), head high, nibbling
+  const rise = p.anim === 'gather' ? 1 : 0;
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
     for (const seg of segs) {
       const lift = p.anim === 'walk' ? Math.max(0, Math.sin(crawl - seg * 2.1)) * 0.06 : 0; // (each segment heaves in turn)
       for (let k = 0; k < 2; k++) {
-        const x = at(seg) + 0.065 - k * 0.13, r = 0.1 - seg * 0.006 - k * 0.004;
-        c.sphere([r * 1.05, r, r], [x, r + lift, 0], skin);
-        c.sphere([r * 0.7, r * 0.35, r * 0.75], [x, r * 0.45 + lift, 0], belly);
-        for (const z of [1, -1]) c.limb([x, 0.06 + lift, z * r * 0.7], [x, 0.0, z * r * 1.0], 0.016, skin); // stubby legs
+        const x = at(seg) + 0.065 - k * 0.13 - (seg === 0 && k === 0 ? 0.03 * rise : 0), r = 0.1 - seg * 0.006 - k * 0.004;
+        const up = lift + (seg === 0 ? rise * (k === 0 ? 0.11 : 0.035) : 0);
+        c.sphere([r * 1.05, r, r], [x, r + up, 0], skin);
+        c.sphere([r * 0.7, r * 0.35, r * 0.75], [x, r * 0.45 + up, 0], belly);
+        if (!(seg === 0 && k === 0 && rise)) for (const z of [1, -1]) c.limb([x, 0.06 + up, z * r * 0.7], [x, 0.0, z * r * 1.0], 0.016, skin); // stubby legs
+        else for (const z of [1, -1]) c.limb([x, 0.08 + up, z * r * 0.7], [x + 0.06, 0.04 + up, z * r * 1.0], 0.016, skin); // (raised: its front legs held up, curled)
       }
       c.sphere(0.022, [at(seg), 0.2 + lift, 0], { team: 'primary', tex: 'none' }); // a team dot on each segment
     }
@@ -412,7 +416,7 @@ function caterpillar(b: ModelBuilder, p: Pose, color: string, mass: number): voi
     // giving: it rears its head up and over, takes the food off its back in its mouth, and dips to set it down in front
     const give = p.anim === 'give' ? p.phase : -1, rear = give >= 0 ? Math.sin(Math.min(1, give / 0.9) * Math.PI) : 0;
     const eat = p.anim === 'gather' || p.anim === 'eat' ? Math.sin(p.phase * TAU * 2) * 0.03 : 0;
-    const hx = 0.22 + 0.06 * rear, hy = 0.12 + eat + 0.1 * rear * (give < 0.5 ? 1 : 1 - (give - 0.5) * 2.2);
+    const hx = 0.22 + 0.06 * rear - 0.04 * rise, hy = 0.12 + eat + 0.1 * rear * (give < 0.5 ? 1 : 1 - (give - 0.5) * 2.2) + 0.2 * rise;
     c.sphere(0.11, [hx, hy, 0], skin); // head
     for (const z of [1, -1]) c.sphere(0.018, [hx + 0.09, hy + 0.03, z * 0.05], { color: '#111111' });
     const food = { color: '#a83a4a', tex: 'skin' as const, rough: 0.5 };
