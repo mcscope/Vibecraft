@@ -29,7 +29,6 @@ const TIER = { 1: '#5fae3a', 2: '#2fb8c4', 3: '#b04fb8' } as const;
 const LOOK = {
   caterpillar: { scale: (m: number) => 1.2 * Math.cbrt(m / 15), length: 0.24 }, // (a long body: its collision circle is its width)
   egg: { scale: (m: number) => Math.cbrt(m / 15), length: 0.42 },
-  bug: { scale: (m: number) => Math.cbrt(m / 40), length: 0.85 },
   mother: { scale: (m: number) => 1.4 * Math.cbrt(m / 40) * Math.pow(Math.min(1, 120 / m), 0.2), length: 1.25 }, // (the T3 drawn smaller than ∛ of her mass: the user found her too big)
   vimmer: { scale: (m: number) => 1.3 * Math.cbrt(m / 120), length: 0.75 },
   charger: { scale: (m: number) => Math.cbrt(m / 38), length: 0.5 },
@@ -188,34 +187,38 @@ function drawVimmer(b: ModelBuilder, p: Pose, mass: number): void {
  * front a cluster of glossy eyes over a round maw ringed with teeth, the crystal spike thrust out of it (when it has
  * one). `tint` colours its segment rims and barbs.
  */
-function spikeBody(c: ModelBuilder, armed: boolean, tint: string): void {
+function spikeBody(c: ModelBuilder, armed: boolean, tint: string, len = 1): void {
   type V = [number, number, number];
   const chitin: Mat = { color: '#1a2628', tex: 'leather', rough: 0.3, metal: 0.35 };
   const sheen: Mat = { color: tint, tex: 'leather', rough: 0.3, metal: 0.4 };
   const eye: Mat = { color: '#050608', tex: 'none', rough: 0.05, metal: 0.5 };
   const tooth: Mat = { color: '#d8d4c0', tex: 'none', rough: 0.5 };
   const maw: Mat = { color: '#3a0e10', tex: 'skin', rough: 0.8 };
+  // (`len`: drawn that much longer, a pike of a body: its trunk stretched, head and point pushed forward with it, as thick)
+  const X = (x: number) => x * len, dh = 0.25 * (len - 1);
   c.loft([[-0.58, 0.02, 0.02, 0.02], [-0.44, 0.06, 0.05, 0.05], [-0.28, 0.08, 0.07, 0.08], [-0.12, 0.1, 0.085, 0.1], [0.02, 0.11, 0.1, 0.1], [0.14, 0.08, 0.075, 0.075], [0.2, 0.055, 0.055, 0.055]]
-    .map(([x, w, up, down]) => ({ at: [x, 0, 0] as V, w, up, down, keel: 0.4 })), chitin);
-  for (const x of [-0.4, -0.26, -0.12, 0.02]) c.sphere([0.012, 0.09, 0.1], [x, 0, 0], sheen); // segment rims
-  for (let i = 0; i < 6; i++) c.cone(0.015, 0.07, [0.08 - i * 0.12, 0.08 - i * 0.004, 0], chitin, [0, 0, 0.6], 4); // spines down its back
-  c.cone(0.025, 0.1, [-0.62, 0, 0], sheen, [0, 0, Math.PI / 2], 4); // the tail barb
-  c.sphere([0.08, 0.07, 0.075], [0.25, 0, 0], chitin);
-  for (const [y, z] of [[0.045, 0.03], [0.045, -0.03], [0.06, 0], [0.025, 0.05], [0.025, -0.05], [0.07, 0.035], [0.07, -0.035]] as const) c.sphere(0.017, [0.29, y, z], eye);
-  c.sphere([0.02, 0.04, 0.04], [0.325, -0.02, 0], maw);
-  for (let k = 0; k < 8; k++) { const a = (k / 8) * TAU; c.cone(0.008, 0.035, [0.33, -0.02 + Math.cos(a) * 0.04, Math.sin(a) * 0.04], tooth, [a, 0, -Math.PI / 2 - 0.5], 4); }
-  if (armed) c.crystal(0.32, [0.33, -0.02, 0], [0, 0, -Math.PI / 2]);
+    .map(([x, w, up, down]) => ({ at: [X(x), 0, 0] as V, w, up, down, keel: 0.4 })), chitin);
+  for (let x = -0.4; x <= 0.03; x += 0.14 / len) c.sphere([0.012, 0.09, 0.1], [X(x), 0, 0], sheen); // segment rims
+  for (let i = 0; i < Math.round(6 * len); i++) c.cone(0.015, 0.07, [X(0.08) - i * 0.12, 0.08 - i * 0.004, 0], chitin, [0, 0, 0.6], 4); // spines down its back
+  c.cone(0.025, 0.1, [X(-0.62), 0, 0], sheen, [0, 0, Math.PI / 2], 4); // the tail barb
+  c.sphere([0.08, 0.07, 0.075], [0.25 + dh, 0, 0], chitin);
+  for (const [y, z] of [[0.045, 0.03], [0.045, -0.03], [0.06, 0], [0.025, 0.05], [0.025, -0.05], [0.07, 0.035], [0.07, -0.035]] as const) c.sphere(0.017, [0.29 + dh, y, z], eye);
+  c.sphere([0.02, 0.04, 0.04], [0.325 + dh, -0.02, 0], maw);
+  for (let k = 0; k < 8; k++) { const a = (k / 8) * TAU; c.cone(0.008, 0.035, [0.33 + dh, -0.02 + Math.cos(a) * 0.04, Math.sin(a) * 0.04], tooth, [a, 0, -Math.PI / 2 - 0.5], 4); }
+  if (armed) c.crystal(0.32, [0.33 + dh, -0.02, 0], [0, 0, -Math.PI / 2]);
 }
 
 /** A charger's build: its legs (hip height standing, thigh, shin, the foot bone from toes up to ankle), how wide it
  *  stands, how thick its legs, its body's size and colour, and how far it strides walking and running. */
-interface ChargerBuild { H: number; thigh: number; shin: number; foot: [number, number, number]; hipZ: number; footZ: number; thighR: number; shinR: number; body: number; tint: string; walk: number; run: number; whip?: number; trebuchet?: boolean }
+interface ChargerBuild { H: number; thigh: number; shin: number; foot: [number, number, number]; hipZ: number; footZ: number; thighR: number; shinR: number; body: number; tint: string; walk: number; run: number; whip?: number; trebuchet?: boolean; long?: number }
 const CHARGER: ChargerBuild = { H: 0.62, thigh: 0.3, shin: 0.32, foot: [-0.07, 0.21, 0], hipZ: 0.09, footZ: 0.11, thighR: 0.055, shinR: 0.035, body: 0.7, tint: '#7fbf4a', walk: 0.22, run: 0.34 };
 // the T2 lasher: the charger's legs and body, and two whip arms held back along its torso (the user's design); `whip`:
 // metres of lash (its attack.whip)
 const LASHER: ChargerBuild = { H: 0.6, thigh: 0.29, shin: 0.31, foot: [-0.07, 0.2, 0], hipZ: 0.1, footZ: 0.12, thighR: 0.06, shinR: 0.038, body: 0.8, tint: '#2a8a96', walk: 0.21, run: 0.33, whip: 2 };
 // the T2 slinger: the charger's build, its body the arm of a trebuchet (the user's design)
 const SLINGER: ChargerBuild = { ...CHARGER, H: 0.6, body: 0.75, tint: '#3ab0bc', trebuchet: true };
+// the T1 micropike: the charger, its body much longer (the user's design); `long`: how many times the charger's length
+const MICROPIKE: ChargerBuild = { ...CHARGER, H: 0.6, body: 0.62, tint: '#6aa84a', long: 1.9 };
 
 /**
  * The chargers (the user's design): the Vimmer's body plan on two legs instead of wings: its central body slung
@@ -232,12 +235,13 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
   // (squatting at rest: hips down so its body lies on the ground; up on its legs to walk, run or strike; 'rise' gets
   // up from the squat, its legs unfolding under it, the body lifting last)
   const ease = (x: number) => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c); };
-  const upK = p.anim === 'rise' ? ease(p.phase) : walking || p.anim === 'attack' ? 1 : 0;
+  const braced = p.style === 'brace'; // (a set point: up on its legs, its body level and low, the spike forward)
+  const upK = p.anim === 'rise' ? ease(p.phase) : walking || braced || p.anim === 'attack' ? 1 : 0;
   // (at rest a charger sits back like a tripod: on its folded legs, nose up, its tail barb on the ground. Charging, it's
   // an outstretched spear: level, low, thrust forward, spike first)
-  const restTilt = 0.55;
+  const restTilt = Math.asin(Math.sin(0.55) / (k.long ?? 1)); // (a longer body tips back less to bring its tail barb down)
   const rest = 0.25 * k.body / 0.7, H = rest - 0.04 + (k.H - rest + 0.04) * upK;
-  const tilt = restTilt * (1 - upK), spear = running ? 1 : 0;
+  const tilt = restTilt * (1 - upK), spear = running || braced ? 1 : 0;
   // its body rides lowest over a planted foot, highest in the stride (running: up in the moment both feet are off)
   const bob = running ? -0.06 + 0.07 * Math.max(0, Math.sin((p.phase * 2 - 0.35) * TAU)) : walking ? -0.03 + Math.abs(Math.cos(p.phase * TAU)) * 0.025 : 0;
     // (striking, a battering ram: drawn back on its legs, then slammed forward level and hard, spike first)
@@ -271,7 +275,7 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
     const dip = k.whip ? Math.sin(Math.min(1, p.phase / 0.7) * Math.PI) * (p.anim === 'attack' ? 1 : 0) : 0;
     const bodyY = H + bob + 0.04 - 0.08 * dip - 0.07 * spear, bodyRot = tilt + ramTilt + treb + (running ? (spear ? -0.02 : -0.15) : 0) - 0.35 * dip;
     c.joint([ramShift + 0.08 * spear, bodyY, 0], [0, 0, bodyRot], (t) => t.joint([0, 0, 0], [0, 0, 0], (q) => {
-      spikeBody(q, k.whip || k.trebuchet ? false : p.armed, k.tint);
+      spikeBody(q, k.whip || k.trebuchet ? false : p.armed, k.tint, k.long);
       if (k.trebuchet) trebuchetParts(q, p, tp, rp, k.tint, { y: bodyY, rot: bodyRot, scale: k.body });
       if (k.whip) whipArms(q, p, (k.whip / LOOK.lasher.scale(mass)) / k.body, k.tint);
     }, k.body));
@@ -475,34 +479,6 @@ function origamiBun(b: ModelBuilder, p: Pose, tint: string, mass: number): void 
     }
   }, LOOK.egg.scale(mass));
 }
-
-/** PLACEHOLDER body for the units the user hasn't described: a segmented bug on six legs, sized by mass. */
-function bug(b: ModelBuilder, p: Pose, color: string, mass: number, weapon: 'strike' | 'pike' | 'sling' | 'none' = 'none'): void {
-  const shell: Mat = { color, tex: 'leather', rough: 0.45 };
-  const t = p.phase * TAU, walking = p.anim === 'walk';
-  const jab = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : 0;
-  b.joint([0, 0, 0], [0, 0, 0], (c) => {
-    c.sphere([0.22, 0.13, 0.14], [-0.12, 0.3, 0], shell); // abdomen
-    c.sphere([0.13, 0.11, 0.11], [0.12, 0.32, 0], shell); // thorax
-    c.sphere(0.09, [0.28 + jab * 0.08, 0.36, 0], shell); // head
-    c.box([0.04, 0.03, 0.2], [0.12, 0.42, 0], { team: 'primary', tex: 'cloth' }); // team band
-    // six legs, a tripod gait on planted feet (front and back on one side with the middle on the other)
-    for (const [x, ph] of [[0.16, 0], [0.06, 0.5], [-0.04, 0]] as const) for (const z of [1, -1]) {
-      const hip: V3 = [x, 0.28, z * 0.08], kneeRest: V3 = [x + 0.08, 0.18, z * 0.22], rest: V3 = [x + 0.1, 0, z * 0.26];
-      const foot = walking ? footAt(rest, p.phase + ph + (z > 0 ? 0 : 0.5), 0.07, 0.05) : rest;
-      const knee = jointBetween(hip, foot, span(hip, kneeRest), span(kneeRest, rest), [0, 1, z]);
-      c.limb(hip, knee, 0.018, shell);
-      c.limb(knee, foot, 0.014, shell);
-    }
-    if (weapon === 'strike' && p.armed) c.crystal(0.16, [0.42 + jab * 0.12, 0.34, 0], [0, 0, -Math.PI / 2]);
-    if (weapon === 'pike' && p.armed) {
-      c.limb([0.05 + jab * 0.2, 0.36, 0.06], [0.95 + jab * 0.2, 0.42, 0.06], 0.012, { color: '#9a8a5a', tex: 'wood' });
-      c.crystal(0.1, [1.0 + jab * 0.2, 0.42, 0.06], [0, 0, -Math.PI / 2]);
-    }
-    if (weapon === 'sling') c.limb([0.2, 0.38, 0.08], [0.2 + Math.cos(t * 2) * 0.15, 0.6, 0.08], 0.008, { color: '#5a4a3a' });
-  }, LOOK.bug.scale(mass));
-}
-
 
 /**
  * The Dragon Fly (the user's): a reptilian dragon's body (a long neck, a horned head, scaly, a long tail, four clawed
@@ -895,7 +871,7 @@ const motherOf = (r: 1 | 2 | 3, mass: number) => unit({ id: `mother${r}`, name: 
 const charger = unit({ id: 'charger', name: 'Charger', mass: 38, physique: { muscle: 0.6, frame: 0.25, reserve: 0.15 }, refinement: 2,
   attack: { style: 'strike', crystalMass: 1.5 }, description: 'T1: a fast charging body, striding on two long legs.', model: (b, p) => drawCharger(b, p, 38) }, 'charger');
 const micropike = unit({ id: 'micropike', name: 'Micropike', mass: 35, physique: { muscle: 0.45, frame: 0.4, reserve: 0.15 }, refinement: 2,
-  attack: { style: 'strike', crystalMass: 0.8, shaft: 1.5 }, description: 'T1: micropikes.', model: (b, p) => bug(b, p, '#6aa84a', 35, 'pike') }, 'bug');
+  attack: { style: 'strike', crystalMass: 0.8, shaft: 1.5 }, description: 'T1: micropikes.', model: (b, p) => drawCharger(b, p, 35, MICROPIKE) }, 'charger');
 const flier = unit({ id: 'flier', name: 'Vimmer', mass: 120, physique: { muscle: 0.5, frame: 0.25, reserve: 0.25 }, refinement: 3, flight: { height: 20, launch: 'backward' }, // (a high ceiling: its dives are real drops, and it can climb after fliers)
   attack: { style: 'strike', crystalMass: 2 }, description: 'T2: a dive bomber: it swoops down onto its target to strike, its dive behind the blow, and climbs away again.', model: (b, p) => drawVimmer(b, p, 120) }, 'vimmer');
 const whipweld = unit({ id: 'whipweld', name: 'Whipweld', mass: 150, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 3,
