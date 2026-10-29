@@ -10,7 +10,7 @@ import { skirmish, type Scenario } from './scenarios';
 import { findPath } from './pathfinding';
 import { Logistics } from './logistics';
 import * as bearerAbility from './abilities/bearer';
-import { midStride, strideFactor } from './abilities/gait';
+import { boundLeft, midStride, strideFactor, takeoffIn } from './abilities/gait';
 import { nearestDropOff } from './abilities/dropoff';
 import { eating, isTamer, runPens, runTame } from './abilities/herding';
 import { BOMB_REACH, canReach, diveAt, dropTime, FLARE_HEIGHT, FLY_SIGHT, flyTo, heightBonus, LAUNCH_HEIGHT, LEAP_TIME, takeOff, tickFlight, walks } from './abilities/flight';
@@ -183,7 +183,7 @@ export interface Unit {
   /** A height it's going up or down to this tick (chasing a target in the air), and the tick it was set. */
   altGoal: number; altGoalTick: number;
   /** A melee blow on its way: it lands at the swing's moment of contact (`at`, a tick), on its target if still in reach. */
-  blow: { at: number; target: number; damage: number; shaft: boolean; reach: number } | null;
+  blow: { at: number; target: number; damage: number; shaft: boolean; reach: number; dur?: number; wait?: number } | null; // (a hopper's bound-blow: dur seconds to impact, the first `wait` of them crouched before it springs)
   /** Pulled out of a dive, running in level on its target at the dive's speed. */
   diveRun: boolean;
   /** Tick a flier last steered toward a goal (otherwise it circles). */
@@ -1482,6 +1482,7 @@ export class World {
     // charging at a spot: it runs for that spot, striking only what comes within reach on the way (and leaving it behind)
     const through = u.order.kind === 'attackMove' && !!u.order.charge;
     const reach = u.throws ? u.stats.radius + 1 : u.stats.range + 0.5; // (a thrower doesn't stop to throw: it runs, and smashes into what's in its path)
+    const had = u.engage !== 0;
     if (u.engage) {
       const p = this.entityPos(u.engage);
       // it keeps after what it's fighting while it's within its sight or its charge distance (the run-up it needs, its
@@ -1490,7 +1491,7 @@ export class World {
       if (p && (p[0] - u.x) ** 2 + (p[1] - u.y) ** 2 < keep * keep && this.attackTarget(u, u.engage)) return true;
       u.engage = 0;
     }
-    if ((this.tick + u.id) % 5 !== 0) return false;
+    if ((this.tick + u.id) % 5 !== 0 && !had) return false; // (its target just gone: it looks for the next at once, not turning back to its way first)
     const e = this.nearestEnemy(u, through ? reach : u.stats.sight, u.order.kind === 'attackMove');
     if (e) { u.engage = e; return this.attackTarget(u, e); }
     return false;
@@ -1567,12 +1568,16 @@ export class World {
     }
     if (u.airborne && !wpn.throws && tu && !tu.airborne && !holding && !diveAt(this, u, tu, DT, (fx, fy) => this.face(u, fx, fy))) return true;
     // closing, it swings so the blow lands as the gap closes: a point already out in front (a shaft) as it closes this
-    // tick, any other blow as it will have closed by the swing's moment of contact
+    // tick, any other blow as it will have closed by the swing's moment of contact, and a hopper's as its bound comes
+    // down (each body at the speed it's going this instant: a hopper crouched isn't closing, one in the air is fast)
     let lead = 0;
     if (tu && !u.airborne && !wpn.throws) {
       const d = Math.hypot(tx - u.x, ty - u.y) || 1;
+      // (a hopper on the ground: as far as its next bound will carry it)
+      const g = u.stats.gait, ku = g ? (u.strideMul > 0 ? u.strideMul : 1 / g.hop) : 1, kt = tu.stats.gait ? tu.strideMul : 1;
       const windup = u.stats.minReach > 0 ? 0 : Math.min(0.45, wpn.cooldown * 0.8) * World.CONTACT;
-      lead = Math.max(0, ((u.vx - tu.vx) * (tx - u.x) + (u.vy - tu.vy) * (ty - u.y)) / d) * (DT + windup);
+      const ahead = g ? (u.strideMul > 0 ? boundLeft(u) : g.hop * g.period) : DT + windup;
+      lead = Math.max(0, ((u.vx * ku - tu.vx * kt) * (tx - u.x) + (u.vy * ku - tu.vy * kt) * (ty - u.y)) / d) * ahead;
     }
     if (edge - lead > range - 0.05) {
       if (holding) { this.face(u, tx - u.x, ty - u.y); return true; } // out of reach: it faces it and waits (units, buildings, flying or not)
@@ -1668,7 +1673,23 @@ export class World {
     const v = Math.hypot(u.vx, u.vy), point = shaft && u.stats.minReach > 0;
     const couched = point && !u.airborne && v > u.stats.speed * 1.1, planted = point && u.stats.canPlant && v * M_PER_TILE < 0.5;
     if (couched || planted) u.swing = 0;
-    u.blow = { at: this.tick + (u.airborne || couched || planted ? 0 : Math.round((u.swing * World.CONTACT) / DT)), target: targetId, damage, shaft, reach };
+    // (a hopper in the air: its bound is the blow, landing as it comes down, or as it meets the target first, at the
+    // speed it's going this instant)
+    // (on the ground, it waits out its crouch and springs: the blow is that next bound)
+    let down = 0;
+    const tu = this.units.get(targetId), g = u.stats.gait, air = !!g && u.strideMul > 0;
+    if (!u.airborne && g) {
+      const vk = air ? u.strideMul : 1 / g.hop, wait = takeoffIn(u);
+      let flight = air ? boundLeft(u) : g.hop * g.period;
+      if (tu) {
+        const d = Math.hypot(tu.x - u.x, tu.y - u.y) || 1, edge = d - tu.stats.radius;
+        const closing = ((u.vx * vk - tu.vx) * (tu.x - u.x) + (u.vy * vk - tu.vy) * (tu.y - u.y)) / d;
+        if (closing > 0) flight = Math.min(flight, Math.max(0, edge - reach * 0.6) / closing);
+      }
+      down = Math.max(DT, wait + flight);
+      u.swing = down;
+    }
+    u.blow = { at: this.tick + (u.airborne || couched || planted ? 0 : down > 0 ? Math.round(down / DT) : Math.round((u.swing * World.CONTACT) / DT)), target: targetId, damage, shaft, reach, ...(down > 0 ? { dur: down, wait: air ? 0 : takeoffIn(u) } : {}) };
   }
 
   /** The blow lands, if its target is still there and in reach (a little more than the weapon's: it follows through); else it misses. */
@@ -2258,13 +2279,13 @@ export class World {
         const spin = Math.sqrt((2 * 6 * grip * Math.abs(diff)) / st.length);
         // on the move its run bends no tighter than its grip holds (v²/r ≤ grip: a turn rate of grip / v)
         const bend = v > 0.3 ? grip / v : Infinity;
-        // a bounding body aims each bound as it springs off (with its feet down it can face anywhere), and flies
-        // ballistic in between
+        // a bounding body aims each bound as it springs off (its feet down, it turns as a standing body does), and
+        // flies ballistic in between
         const airborneBound = !!st.gait && u.strideMul > 0 && v > 0.3;
         const springing = !!st.gait && u.strideMul === 0;
         // and it can't swing round faster than its weapon comes round (leverage), far slower with a planted shaft
         const weapon = st.turnRate * (st.canPlant && v < 0.5 && !u.breakFrom ? K.plantedTurnMul : 1); // (breaking off, it's lifted)
-        u.turnLeft = airborneBound ? 0 : springing ? Math.PI : DT * Math.min(spin, bend, weapon);
+        u.turnLeft = airborneBound ? 0 : springing ? DT * Math.min(spin, weapon) : DT * Math.min(spin, bend, weapon);
       }
       const step = Math.max(-u.turnLeft, Math.min(u.turnLeft, diff));
       u.facing += step; u.turnLeft -= Math.abs(step);

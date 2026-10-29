@@ -458,12 +458,14 @@ export function gHopper(b: ModelBuilder, p: Pose): void {
       crouch = 0; height = 4 * a * (1 - a) * 0.32 * big; pitch = 0.15 * (1 - 2 * a);
       footX = -0.32 * (1 - sm(a)) + 0.12 * Math.sin(Math.PI * a); footY = height * 0.55 + 0.08 * Math.sin(Math.PI * a);
     } else { const k = (ph - UP - AIR) / (1 - UP - AIR); crouch = 0.6 * Math.sin(Math.PI * k); pitch = -0.1 * Math.sin(Math.PI * k); } // (landing, taking the weight)
-  } else if (p.anim === 'attack') { // crouch, spring and slam ram first, then recoil
-    const a = p.phase;
-    crouch = a < 0.3 ? sm(a / 0.3) : a < 0.45 ? 1 - sm((a - 0.3) / 0.15) : 0.3 * (1 - sm((a - 0.6) / 0.4));
-    thrust = a < 0.3 ? -0.05 * sm(a / 0.3) : a < 0.48 ? -0.05 + 0.5 * sm((a - 0.3) / 0.18) : 0.45 * (1 - sm((a - 0.48) / 0.52));
-    height = a > 0.3 && a < 0.55 ? 0.12 * Math.sin(Math.PI * (a - 0.3) / 0.25) : 0;
-    pitch = a < 0.3 ? 0.15 * sm(a / 0.3) : a < 0.48 ? 0.15 - 0.35 * sm((a - 0.3) / 0.18) : -0.2 * (1 - sm((a - 0.48) / 0.52));
+  } else if (p.anim === 'attack') { // its bound is the blow: crouching (to 0.35), springing off nose up, the leg
+    // trailing, then coming down ram first, thrust forward into the impact (at 1)
+    const a = p.phase, f = Math.max(0, (a - 0.35) / 0.65);
+    crouch = a < 0.35 ? sm(a / 0.25) * (1 - sm((a - 0.28) / 0.07)) : 0;
+    height = a < 0.35 ? 0 : 4 * f * (1 - f) * 0.34 + 0.06 * f;
+    pitch = a < 0.35 ? 0.15 * crouch : 0.22 - 0.62 * sm((f - 0.2) / 0.75); // (nose up off the ground, nose down into the slam)
+    thrust = 0.42 * sm((f - 0.55) / 0.45);
+    if (a >= 0.35) { footX = -0.2 - 0.25 * sm(f / 0.5) + 0.1 * sm((f - 0.7) / 0.3); footY = height * 0.5; }
   }
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
     const hipY = 0.66 - 0.24 * crouch + height, hip: Vec3 = [thrust * 0.6, hipY, 0];

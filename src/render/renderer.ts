@@ -67,6 +67,11 @@ export function unitFrame(u: Unit): { anim: ArtAnim } & FrameTime {
       if (u.stats.gait) return { anim: 'charge', progress: u.stride };
       return { anim: 'charge', time: (u.animT * Math.hypot(u.vx, u.vy)) / 1.7, walked: u.walked * UNITS_PER_TILE };
     case 'attack': {
+      // (a hopper striking in the air: its bound is the blow, played over the bound, down at the landing)
+      if (u.blow?.dur) { // (crouched for its `wait`, then springing, to impact: the art's crouch is its first 0.35)
+        const b = u.blow, t = b.dur! - u.swing, w = b.wait ?? 0;
+        return { anim: 'attack', progress: Math.min(0.999, Math.max(0, t < w ? 0.35 * (t / w) : 0.35 + 0.65 * ((t - w) / Math.max(DT, b.dur! - w)))) };
+      }
       const dur = Math.min(0.45, u.stats.cooldown * 0.8);
       return { anim: 'attack', progress: 1 - u.swing / dur };
     }

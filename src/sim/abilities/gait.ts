@@ -26,6 +26,22 @@ export function strideFactor(u: Unit, tick: number, dt: number): number {
   return grounded ? 0 : 1 / g.hop;
 }
 
+/** Seconds until a hopper in the air comes down (0 on the ground, or for a steady walker). */
+export function boundLeft(u: Unit): number {
+  const g = u.stats.gait;
+  if (!g || u.strideMul <= 0) return 0;
+  const up = (1 - g.hop) * (2 / 3);
+  return Math.max(0, (up + g.hop - u.stride) * g.period);
+}
+
+/** Seconds until a hopper on the ground springs off again (0 in the air, or for a steady walker). */
+export function takeoffIn(u: Unit): number {
+  const g = u.stats.gait;
+  if (!g || u.strideMul > 0) return 0;
+  const up = (1 - g.hop) * (2 / 3);
+  return (u.stride < up ? up - u.stride : 1 - u.stride + up) * g.period;
+}
+
 /** A hopper crouching between bounds is still on its way (shows its walk). */
 export const midStride = (u: Unit, tick: number): boolean => u.strideTick === tick;
 
