@@ -56,7 +56,7 @@ export function stageFight(w: World, a: { owner: number; specId: string }, b: { 
     const n = Math.max(1, Math.round(budget / arenaCost(w, side.owner, side.specId)));
     const ids: number[] = [];
     for (let i = 0; i < n; i++) {
-      const u = w.spawnAt(side.owner, side.specId, x + (i % 4) * 0.8 * dir, ARENA_Y + Math.floor(i / 4) * 0.9 - n / 8);
+      const u = w.spawnAt(side.owner, side.specId, x + Math.floor(i / 4) * 0.9 * dir, ARENA_Y + (i % 4) * 0.8 - 1.2); // (rows of four across, one behind another)
       if (u) { u.order = { kind: 'idle' }; ids.push(u.id); }
     }
     return { owner: side.owner, specId: side.specId, n, ids };
