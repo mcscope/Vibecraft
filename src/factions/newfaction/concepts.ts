@@ -447,28 +447,28 @@ export function gHopper(b: ModelBuilder, p: Pose): void {
   const edge: Mat = { color: '#2a120c', tex: 'none', rough: 0.2, metal: 0.4 }, belly: Mat = { color: '#7a3424', tex: 'leather', rough: 0.4 };
   const leg: Mat = { color: '#7a3424', tex: 'leather', rough: 0.35 };
   const moving = p.anim === 'walk', ph = ((p.phase % 1) + 1) % 1, t = p.phase * Math.PI * 2;
-  const big = p.style === 'charge' ? 1.35 : 1; // (charging: bigger bounds)
+  const big = p.style === 'charge' ? 1.45 : 1; // (charging: bigger bounds)
   // the bound (UP: its crouch-and-push share; then in the air; then landing), as the gait plays it (gait hop 0.55)
   const UP = 0.3, AIR = 0.55;
   let crouch = 0.65 + 0.03 * Math.sin(t), height = 0, pitch = 0, footX = 0, footY = 0, thrust = 0;
   if (moving) {
-    if (ph < UP) { const k = ph / UP; crouch = k < 0.7 ? sm(k / 0.7) : 1 - sm((k - 0.7) / 0.3); pitch = 0.12 * crouch; } // (sinking, then springing)
+    if (ph < UP) { const k = ph / UP; crouch = k < 0.7 ? sm(k / 0.7) : 1 - sm((k - 0.7) / 0.3); pitch = 0.2 * crouch; } // (sinking deep, then springing)
     else if (ph < UP + AIR) { // in the air: up and over, the leg trailing then swinging forward to land
       const a = (ph - UP) / AIR;
-      crouch = 0; height = 4 * a * (1 - a) * 0.32 * big; pitch = 0.15 * (1 - 2 * a);
-      footX = -0.32 * (1 - sm(a)) + 0.12 * Math.sin(Math.PI * a); footY = height * 0.55 + 0.08 * Math.sin(Math.PI * a);
-    } else { const k = (ph - UP - AIR) / (1 - UP - AIR); crouch = 0.6 * Math.sin(Math.PI * k); pitch = -0.1 * Math.sin(Math.PI * k); } // (landing, taking the weight)
+      crouch = 0; height = 4 * a * (1 - a) * 0.55 * big; pitch = 0.3 * (1 - 2 * a);
+      footX = -0.45 * (1 - sm(a)) + 0.14 * Math.sin(Math.PI * a); footY = height * 0.5 + 0.1 * Math.sin(Math.PI * a);
+    } else { const k = (ph - UP - AIR) / (1 - UP - AIR); crouch = 0.8 * Math.sin(Math.PI * k); pitch = -0.2 * Math.sin(Math.PI * k); } // (landing hard, taking the weight)
   } else if (p.anim === 'attack') { // its bound is the blow: crouching (to 0.35), springing off nose up, the leg
     // trailing, then coming down ram first, thrust forward into the impact (at 1)
     const a = p.phase, f = Math.max(0, (a - 0.35) / 0.65);
     crouch = a < 0.35 ? sm(a / 0.25) * (1 - sm((a - 0.28) / 0.07)) : 0;
-    height = a < 0.35 ? 0 : 4 * f * (1 - f) * 0.34 + 0.06 * f;
-    pitch = a < 0.35 ? 0.15 * crouch : 0.22 - 0.62 * sm((f - 0.2) / 0.75); // (nose up off the ground, nose down into the slam)
+    height = a < 0.35 ? 0 : 4 * f * (1 - f) * 0.6 + 0.06 * f;
+    pitch = a < 0.35 ? 0.22 * crouch : 0.35 - 0.85 * sm((f - 0.2) / 0.75); // (nose up off the ground, nose down into the slam)
     thrust = 0.42 * sm((f - 0.55) / 0.45);
-    if (a >= 0.35) { footX = -0.2 - 0.25 * sm(f / 0.5) + 0.1 * sm((f - 0.7) / 0.3); footY = height * 0.5; }
+    if (a >= 0.35) { footX = -0.25 - 0.3 * sm(f / 0.5) + 0.12 * sm((f - 0.7) / 0.3); footY = height * 0.5; }
   }
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
-    const hipY = 0.66 - 0.24 * crouch + height, hip: Vec3 = [thrust * 0.6, hipY, 0];
+    const hipY = 0.66 - 0.32 * crouch + height, hip: Vec3 = [thrust * 0.6, hipY, 0];
     // the body over its hip: a long level ram, banded with armour plates, a spine ridge down its back, a heavy blunt
     // boss in front capped with its crystal, tapering behind to a tail
     c.joint([thrust, hipY + 0.14, 0], [0, 0, pitch], (bd) => {
