@@ -4,6 +4,7 @@
 import type { FactionSpec } from '../factions/types';
 import type { Command } from '../sim/commands';
 import { isUnderfoot } from '../sim/abilities/underfoot';
+import { foodOwed } from '../sim/abilities/metamorph';
 import type { Building, Unit, World } from '../sim/world';
 
 export interface AiTurn {
@@ -141,4 +142,50 @@ export function beltLine(w: World, x: number, y: number, home: Building): Array<
     else if (line.length) return null; // blocked partway
   }
   return null;
+}
+
+/**
+ * A brood (units that lay young, and young that change into other forms: UnitSpec.spawns, becomes): keep the parents
+ * laying (cheap first, the best they can once the economy's going), keep a core of gatherers tending the nest, and
+ * change the rest: into more parents (a few: about one per ten young), up a tier, or into the best fighter for the food.
+ * A few changes at a time, so the eggs aren't starved. A no-op for a faction without them.
+ */
+export function useBrood(t: AiTurn, minutes: number): void {
+  const { w, player, faction } = t;
+  const specs = faction.units ?? [];
+  if (!specs.some((u) => u.spawns?.length) || !specs.some((u) => u.becomes?.length)) return;
+  const mine = w.unitsOf(player);
+  const spec = (id: string) => w.specOf(player, id);
+  const parents = mine.filter((u) => spec(u.specId)?.spec.spawns?.length);
+  const changers = mine.filter((u) => spec(u.specId)?.spec.becomes?.length && !u.shellOf && spec(u.specId)!.spec.tends);
+  const changing = mine.filter((u) => u.order.kind === 'metamorph').length;
+  const want = Math.min(10, 3 + Math.floor(minutes * 0.75)); // gatherers it keeps
+  // the parents lay: the cheapest while the economy's small, the best they can once it's going; not while more young
+  // wait on food than there are hands to bring it. With too few young to tend them, the parents tend them themselves
+  const waiting = mine.filter((u) => u.order.kind === 'metamorph' && foodOwed(w, u) > 0.05).length;
+  const hands = changers.length + (changers.length < 2 ? parents.length : 0);
+  for (const p of parents) {
+    const lays = (spec(p.specId)!.spec.spawns ?? []).filter((id) => spec(id));
+    const pick = waiting >= Math.max(2, hands) ? null : changers.length < want ? lays[0] : lays[lays.length - 1];
+    if (p.autoBrood !== (pick ?? null)) t.out.push({ type: 'autoSpawn', units: [p.id], specId: pick ?? null });
+    if (changers.length < 2 && waiting > 0 && p.order.kind !== 'tend' && !p.engage) t.out.push({ type: 'tend', units: [p.id] });
+  }
+  // the fighters' worth for the food (Lanchester: health × damage a second ÷ cost²)
+  const worth = (id: string) => { const s = spec(id)?.stats; return s && s.canAttack ? (s.maxHp * (s.damage / s.cooldown)) / Math.max(1, s.foodCost) ** 2 : 0; };
+  let free = Math.max(0, Math.max(2, Math.floor(changers.length / 4)) - changing), spare = changers.length - want;
+  for (const u of changers.sort((a, b) => b.food - a.food)) {
+    if (free <= 0 || spare <= 0) break;
+    if (u.order.kind === 'metamorph' || u.engage) continue;
+    const forms = (spec(u.specId)!.spec.becomes ?? []).filter((id) => spec(id));
+    const parentForm = forms.find((id) => spec(id)!.spec.spawns?.length);
+    const upTier = forms.find((id) => spec(id)!.spec.becomes?.length && spec(id)!.spec.tends);
+    const fighters = forms.filter((id) => spec(id)!.stats.canAttack && !spec(id)!.spec.spawns?.length).sort((a, b) => worth(b) - worth(a));
+    let into: string | undefined;
+    if (parentForm && minutes >= 3 && parents.length < Math.min(3, 1 + Math.floor(changers.length / 10))) into = parentForm; // (a parent is dear: a few, once there's food to feed them)
+    else if (upTier && minutes >= 5 && changers.filter((c) => c.specId === u.specId).length > want / 2) into = upTier;
+    else into = fighters[0];
+    if (!into) continue;
+    t.out.push({ type: 'metamorph', units: [u.id], into });
+    free--; spare--;
+  }
 }

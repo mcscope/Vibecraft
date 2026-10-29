@@ -15,7 +15,7 @@ import { TICK_RATE, type Building, type Unit, type World } from '../sim/world';
 import { isWall } from '../sim/abilities/wall';
 import { isUnderfoot } from '../sim/abilities/underfoot';
 import { capacity } from '../sim/garrison';
-import { useBearers, useBelts, useHerds, type AiTurn } from './abilities';
+import { useBearers, useBelts, useBrood, useHerds, type AiTurn } from './abilities';
 
 export type Difficulty = 'easy' | 'hard';
 export const DIFFICULTIES: Difficulty[] = ['easy', 'hard'];
@@ -184,7 +184,10 @@ export class SkirmishAI {
     const stock = w.stockOf(this.player);
     const hostiles = this.visibleHostiles(w);
     this.look(w, hostiles);
-    const home: [number, number] | null = tc ? [tc.ox + tc.size / 2, tc.oy + tc.size / 2] : null;
+    // (no town center, a side in the field like a brood: home is where its units are, its parents' if it has them)
+    const layers = units.filter((u) => w.specOf(this.player, u.specId)?.spec.spawns?.length), herd = layers.length ? layers : units;
+    const home: [number, number] | null = tc ? [tc.ox + tc.size / 2, tc.oy + tc.size / 2] : herd.length ? [herd.reduce((n, u) => n + u.x, 0) / herd.length, herd.reduce((n, u) => n + u.y, 0) / herd.length] : null;
+    const homeOff = (tc?.size ?? 0) / 2 + 2; // (just off home, beside the town center)
 
     // ── Construction: a build order derived from the faction, gated on worker count.
     const plan = (this.plan ??= SkirmishAI.buildOrder(faction, P.buildGap));
@@ -253,6 +256,7 @@ export class SkirmishAI {
     };
     useBearers(turn);
     useHerds(turn);
+    useBrood(turn, minutes);
     this.lastBelt = useBelts(turn, this.lastBelt);
 
     // ── Hauling without carts: a building whose order waits on supplies gets a worker
@@ -533,7 +537,7 @@ export class SkirmishAI {
         const danger = hostiles.some((e) => w.armed(e) && (e.x - scout.x) ** 2 + (e.y - scout.y) ** 2 < 8 * 8);
         const arrived = !there || Math.hypot(scout.x - there[0], scout.y - there[1]) < 6 || scout.order.kind === 'idle' || (danger && scout.hp < scout.stats.maxHp * 0.6);
         if (arrived) {
-          out.push({ type: 'move', units: [scout.id], x: home[0], y: home[1] + tc!.size / 2 + 2 });
+          out.push({ type: 'move', units: [scout.id], x: home[0], y: home[1] + homeOff });
           this.scout = null; this.nextScout = w.tick + every;
         }
       } else if (this.scout !== null) { this.scout = null; this.nextScout = w.tick + every; } // died: try again later
@@ -557,7 +561,7 @@ export class SkirmishAI {
         if (!(u.order.kind === 'attack' && u.order.target === best.id)) out.push({ type: 'attack', units: [u.id], target: best.id, charge: charger || undefined });
       }
       if (hurt.length) {
-        out.push({ type: 'move', units: hurt, x: home[0], y: home[1] + tc!.size / 2 + 2 });
+        out.push({ type: 'move', units: hurt, x: home[0], y: home[1] + homeOff });
         for (const id of hurt) this.attacking.delete(id);
       }
     }
@@ -572,14 +576,22 @@ export class SkirmishAI {
       for (const e of hostiles) if (this.foe(w, e.owner) && w.armed(e) && (e.x - gx) ** 2 + (e.y - gy) ** 2 < 12 * 12) theirs += power(e);
       const homeDist = Math.hypot(gx - home[0], gy - home[1]);
       if (theirs > ours * 1.8 && homeDist > 18) {
-        out.push({ type: 'move', units: wave.map((u) => u.id), x: home[0], y: home[1] + tc!.size / 2 + 2 });
+        out.push({ type: 'move', units: wave.map((u) => u.id), x: home[0], y: home[1] + homeOff });
         for (const u of wave) this.attacking.delete(u.id);
         this.waveSize = Math.min(P.maxWave, Math.max(this.waveSize, wave.length + 4)); // come back bigger
       }
     }
     if (target) {
-      const stalled = army.filter((u) => this.attacking.has(u.id) && u.order.kind === 'idle' && u.engage === 0).map((u) => u.id);
-      if (stalled.length) out.push({ type: 'attackMove', units: stalled, x: target[0], y: target[1] });
+      // an attack that's arrived and found no one to fight goes for the nearest enemy building it knows (an attack-move
+      // fights what it meets, and stops there); one with none near goes on to where the enemy is
+      const stalled = army.filter((u) => this.attacking.has(u.id) && u.order.kind === 'idle' && u.engage === 0);
+      const onward: number[] = [];
+      for (const u of stalled) {
+        let best: number | null = null, bestD = 10 * 10; // (within sight: one it's seen go is forgotten, see look())
+        for (const [id, k] of this.knownBuildings) { const d = (k.x - u.x) ** 2 + (k.y - u.y) ** 2; if (d < bestD) { bestD = d; best = id; } }
+        if (best !== null) out.push({ type: 'attack', units: [u.id], target: best }); else onward.push(u.id);
+      }
+      if (onward.length) out.push({ type: 'attackMove', units: onward, x: target[0], y: target[1] });
     }
     return out;
   }
