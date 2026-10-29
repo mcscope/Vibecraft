@@ -1075,7 +1075,11 @@ export class World {
     for (const u of this.units.values()) { u.px = u.x; u.py = u.y; u.busy = false; }
     for (const u of this.units.values()) this.tickUnit(u);
     // blows land once every body has moved and acted this tick: two meeting in the same tick both land, whoever went first
-    for (const u of this.units.values()) if (u.blow && (this.tick >= u.blow.at || (u.blow.dur && this.reached(u, u.blow)))) this.strike(u);
+    // (and each is reckoned from how the bodies were meeting, before any of them lands: a blow landing first doesn't
+    // slow the other it's met by)
+    const landing: Array<() => void> = [];
+    for (const u of this.units.values()) if (u.blow && (this.tick >= u.blow.at || (u.blow.dur && this.reached(u, u.blow)))) { const f = this.strike(u); if (f) landing.push(f); }
+    for (const f of landing) f();
     this.separate();
     for (const p of this.projectiles.values()) this.tickProjectile(p);
     if (this.parcels.length) runBelts(this, DT);
@@ -1579,7 +1583,9 @@ export class World {
       const ku = g ? (u.strideMul > 0 ? u.strideMul : 1 / g.hop) : 1, kt = tu.stats.gait ? tu.strideMul : 1;
       const windup = u.stats.minReach > 0 ? 0 : Math.min(0.45, wpn.cooldown * 0.8) * World.CONTACT;
       const ahead = g ? (u.strideMul > 0 ? boundLeft(u) : g.hop * g.period) : DT + windup;
-      lead = Math.max(0, ((u.vx * ku - tu.vx * kt) * (tx - u.x) + (u.vy * ku - tu.vy * kt) * (ty - u.y)) / d) * ahead;
+      // (only closing fast, at a run: creeping in, it judges its reach as it stands, or it'd stop and start every tick)
+      const fast = ((u.vx - tu.vx) * (tx - u.x) + (u.vy - tu.vy) * (ty - u.y)) / d >= u.stats.speed * 0.9;
+      if (fast) lead = Math.max(0, ((u.vx * ku - tu.vx * kt) * (tx - u.x) + (u.vy * ku - tu.vy * kt) * (ty - u.y)) / d) * ahead;
     }
     if (edge - lead > range - 0.05) {
       if (holding) { this.face(u, tx - u.x, ty - u.y); return true; } // out of reach: it faces it and waits (units, buildings, flying or not)
@@ -1702,7 +1708,7 @@ export class World {
   }
 
   /** The blow lands, if its target is still there and in reach (a little more than the weapon's: it follows through); else it misses. */
-  private strike(u: Unit): void {
+  private strike(u: Unit): (() => void) | undefined {
     const b = u.blow!;
     u.blow = null;
     if (b.dur) u.swing = 0; // (a bound-blow is done at impact: the rest of the bound is just the bound)
@@ -1712,12 +1718,17 @@ export class World {
     if (tu) { tx = tu.x; ty = tu.y; edge = Math.hypot(tx - u.x, ty - u.y) - tu.stats.radius; }
     else { const bd = tb!; tx = bd.ox + bd.size / 2; ty = bd.oy + bd.size / 2; edge = Math.hypot(Math.max(bd.ox, Math.min(u.x, bd.ox + bd.size)) - u.x, Math.max(bd.oy, Math.min(u.y, bd.oy + bd.size)) - u.y); }
     if (edge > b.reach + 0.3 || (tu && !canReach(u, tu))) return; // (it got away: the blow falls short)
-    this.land(u, b.target, tu ?? null, tx, ty, b.damage, b.shaft);
+    return this.land(u, b.target, tu ?? null, tx, ty, b.damage, b.shaft);
   }
 
   /** A blow of `damage` lands on `targetId` at (tx, ty), carrying the collision (`shaft`: struck with its shaft, which may be set). */
-  private land(u: Unit, targetId: number, tu: Unit | null, tx: number, ty: number, damage: number, shaft: boolean): void {
+  /** A blow reckoned now (its collision as the bodies are meeting), landed when the returned function is called. */
+  private land(u: Unit, targetId: number, tu: Unit | null, tx: number, ty: number, damage: number, shaft: boolean): () => void {
     const hit = collisionEnergy(u, tu, tx, ty, shaft);
+    return () => this.landHit(u, targetId, tu, tx, ty, damage, hit);
+  }
+
+  private landHit(u: Unit, targetId: number, tu: Unit | null, tx: number, ty: number, damage: number, hit: ReturnType<typeof collisionEnergy>): void {
     u.diveSpeed = 0; // (the dive is spent on the blow)
     // two bodies meeting share the crush; a point planted in the ground puts all of it on whoever runs onto it
     this.damage(targetId, damage + hit.delivered * (hit.grounded ? 1 : K.crushShare) * K.damageScale, tx, ty);
