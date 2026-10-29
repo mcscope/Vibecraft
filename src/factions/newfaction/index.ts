@@ -11,7 +11,6 @@
 import type { FactionSpec, UnitSpec } from '../types';
 import type { Section, ModelBuilder, Pose, Vec3 as V3 } from '../../kits/bake3d/types';
 import { aim, footAt, jointBetween, shapedLimb, span } from '../../kits/bake3d/gait';
-import { gStag } from './concepts';
 import type { Mat } from '../../kits/bake3d/types';
 
 type Unit = UnitSpec & { model: (b: ModelBuilder, p: Pose) => void };
@@ -872,6 +871,83 @@ const motherOf = (r: 1 | 2 | 3, mass: number) => unit({ id: `mother${r}`, name: 
   spawns: ['egg1', 'egg2', 'egg3'].slice(0, r), attack: { style: 'strike', crystalMass: 1 }, // PLACEHOLDER attack (a side with no buildings needs something that can fight)
   description: `Lays eggs up to T${r}, and carries food to them.`, model: (b, p) => mother(b, p, mass, r) }, 'mother');
 
+/**
+ * The Goliath Charger (the user's idea, 2026-10-29): a single-leg mega hopper battering ram. Its body is the ram-wedge
+ * torso, the crystal set in its battering boss; under its middle one massive hopping leg (a thick thigh, a long shin,
+ * a broad three-toed foot to balance on). It goes in heavy bounds, played by stride (UnitSpec.gait): sinking into a
+ * crouch and springing, the leg trailing in flight then swinging forward, landing and absorbing the weight. It strikes by
+ * crouching, springing and slamming in ram first; at rest it sits crouched low on its folded leg.
+ */
+/** The hopper's bound (its UnitSpec.gait, shared with its art so the two always match): long legs, long bounds. */
+/** The Goliath's drawn scale (a baked unit is a metre: its model's units × this). */
+const GOLIATH_G = 2.4;
+const HOPPER_GAIT = { hop: 0.65, period: 1.8 }; // (1.17 s in the air a bound: up 1.7 m)
+
+function gHopper(b: ModelBuilder, p: Pose, gait = HOPPER_GAIT): void {
+  const sm = (x: number) => { const k = Math.max(0, Math.min(1, x)); return k * k * (3 - 2 * k); };
+  const shell: Mat = { color: '#b04a2c', tex: 'none', rough: 0.15, metal: 0.35 }, plate: Mat = { color: '#5a2418', tex: 'leather', rough: 0.25, metal: 0.35 };
+  const edge: Mat = { color: '#2a120c', tex: 'none', rough: 0.2, metal: 0.4 }, belly: Mat = { color: '#7a3424', tex: 'leather', rough: 0.4 };
+  const leg: Mat = { color: '#7a3424', tex: 'leather', rough: 0.35 };
+  const moving = p.anim === 'walk', ph = ((p.phase % 1) + 1) % 1, t = p.phase * Math.PI * 2;
+  // the bound as the sim plays it (sim/abilities/gait.ts): crouching and pushing off for UP of it, then in the air for
+  // AIR, then landing; in the air it flies as a thrown body does, its apex g·t²/8 above where it left the ground (in
+  // metres, which a baked unit is: ÷ G into this model's units). Charging, the same bounds cover more ground
+  const UP = (1 - gait.hop) * (2 / 3), AIR = gait.hop, APEX = (9.8 * (gait.hop * gait.period) ** 2) / 8 / GOLIATH_G;
+  let crouch = 0.65 + 0.03 * Math.sin(t), height = 0, pitch = 0, footX = 0, footY = 0, thrust = 0;
+  if (moving) {
+    if (ph < UP) { const k = ph / UP; crouch = k < 0.7 ? sm(k / 0.7) : 1 - sm((k - 0.7) / 0.3); pitch = 0.2 * crouch; } // (sinking deep, then springing)
+    else if (ph < UP + AIR) { // in the air: up and over, the leg trailing then swinging forward to land
+      const a = (ph - UP) / AIR;
+      crouch = 0; height = 4 * a * (1 - a) * APEX; pitch = 0.3 * (1 - 2 * a);
+      footX = -0.45 * (1 - sm(a)) + 0.14 * Math.sin(Math.PI * a); footY = height * 0.5 + 0.1 * Math.sin(Math.PI * a);
+    } else { const k = (ph - UP - AIR) / (1 - UP - AIR); crouch = 0.8 * Math.sin(Math.PI * k); pitch = -0.2 * Math.sin(Math.PI * k); } // (landing hard, taking the weight)
+  } else if (p.anim === 'slam') { // its bound is the blow (played over that bound): crouching (to 0.35), then the bound
+    // (its arc the sim's, at its apex g·t²/8), nose up off the ground, coming over ram first and thrust forward
+    const a = p.phase, f = Math.max(0, (a - 0.35) / 0.65);
+    crouch = a < 0.35 ? sm(a / 0.25) * (1 - sm((a - 0.28) / 0.07)) : 0;
+    height = a < 0.35 ? 0 : 4 * f * (1 - f) * APEX;
+    pitch = a < 0.35 ? 0.22 * crouch : 0.3 - 0.75 * sm((f - 0.1) / 0.5); // (ram first by mid-flight: it may meet the target there)
+    thrust = 0.42 * sm((f - 0.15) / 0.4);
+    if (a >= 0.35) { footX = -0.25 - 0.3 * sm(f / 0.5) + 0.12 * sm((f - 0.7) / 0.3); footY = height * 0.5; }
+  } else if (p.anim === 'attack') { // standing, it strikes without leaving the ground: crouching, then lunging ram first
+    const a = p.phase;
+    crouch = a < 0.35 ? 0.7 * sm(a / 0.35) : 0.7 * (1 - sm((a - 0.35) / 0.2)) * (a < 0.55 ? 1 : 0);
+    thrust = a < 0.35 ? -0.08 * sm(a / 0.35) : a < 0.55 ? -0.08 + 0.5 * sm((a - 0.35) / 0.2) : 0.42 * (1 - sm((a - 0.55) / 0.45));
+    pitch = a < 0.35 ? 0.15 * sm(a / 0.35) : a < 0.55 ? 0.15 - 0.4 * sm((a - 0.35) / 0.2) : -0.25 * (1 - sm((a - 0.55) / 0.45));
+  }
+  b.joint([0, 0, 0], [0, 0, 0], (c) => {
+    const hipY = 0.88 - 0.42 * crouch + height, hip: V3 = [thrust * 0.6, hipY, 0];
+    // the body over its hip: a long level ram, banded with armour plates, a spine ridge down its back, a heavy blunt
+    // boss in front capped with its crystal, tapering behind to a tail
+    c.joint([thrust, hipY + 0.14, 0], [0, 0, pitch], (bd) => {
+      const prof = [[-0.9, 0.04], [-0.7, 0.11], [-0.4, 0.18], [0, 0.21], [0.35, 0.22], [0.52, 0.2]] as const;
+      bd.loft(prof.map(([x, w]) => ({ at: [x, 0, 0] as V3, w, up: w, down: w * 0.9 })), belly);
+      const girth = (x: number) => { for (let j = 1; j < prof.length; j++) if (x <= prof[j][0]) { const [x0, r0] = prof[j - 1], [x1, r1] = prof[j]; return r0 + ((x - x0) / (x1 - x0)) * (r1 - r0); } return prof[prof.length - 1][1]; };
+      for (let i = 0; i < 9; i++) { // overlapping armour bands down its whole length, each over the next toward the front
+        const x = -0.78 + i * 0.15, r = girth(x + 0.1) + 0.015;
+        bd.loft([0, 1].map((k) => ({ at: [x + k * 0.13, 0.01, 0] as V3, w: r * (k ? 1 : 0.9), up: r * (k ? 1 : 0.9), down: r * 0.88 * (k ? 1 : 0.9) })), i % 2 ? plate : shell);
+        bd.loft([0, 1].map((k) => ({ at: [x + 0.13 + k * 0.02, 0.01, 0] as V3, w: r * 1.02, up: r * 1.02, down: r * 0.9 })), edge); // its lip
+        bd.cone(0.03, 0.09, [x + 0.08, r + 0.03, 0], edge, [0, 0, -0.5], 4); // the spine ridge
+      }
+      bd.loft([[0.54, 0.25, 0.25, 0.23], [0.62, 0.26, 0.26, 0.24], [0.68, 0.2, 0.2, 0.18]].map(([x, w, u, d]) => ({ at: [x, 0, 0] as V3, w, up: u, down: d, flat: 0.5 })), edge); // the blunt boss
+      bd.crystal(0.24, [0.7, 0, 0], [0, 0, -Math.PI / 2]); // its crystal, capping the boss, point forward
+      for (const [y, z] of [[0.1, 0.1], [0.1, -0.1], [-0.08, 0.1], [-0.08, -0.1]] as const) bd.crystal(0.11, [0.66, y, z], [z * 2.5, 0, -Math.PI / 2 + y * 1.5]); // and a ring of smaller ones round it
+    });
+    // the one leg: a thick thigh from a heavy haunch, its knee forward, a long shin, the ankle back, a broad foot
+    const foot: V3 = [footX, footY, 0], ankle: V3 = [foot[0] - 0.12, foot[1] + 0.16, 0];
+    const knee = jointBetween(hip, ankle, 0.56, 0.58, [1, 0.35, 0]); // (long legs: long bounds)
+    c.sphere([0.17, 0.14, 0.17], [hip[0], hip[1] + 0.04, 0], plate); // the haunch, under the ram
+    shapedLimb(c, hip, knee, 0.13, [1.2, 1.35, 1.2, 0.9, 0.7], leg, { flat: 0.2 });
+    c.sphere(0.09, knee, edge);
+    shapedLimb(c, knee, ankle, 0.085, [1.0, 0.85, 0.7, 0.6, 0.65], leg, { flat: 0.3, keel: 0.4 });
+    c.sphere(0.06, ankle, edge);
+    shapedLimb(c, ankle, foot, 0.06, [1.0, 0.9, 0.8, 0.9], leg, { flat: 0.4 });
+    for (const [dz, l] of [[-0.11, 0.17], [0, 0.22], [0.11, 0.17]] as const) // three broad toes, splayed, to balance on
+      shapedLimb(c, foot, [foot[0] + l * 0.95, Math.max(0.01, foot[1] - 0.02), dz + dz * 0.6], 0.035, [1.0, 0.9, 0.6, 0.3], edge, { flat: 0.6 });
+    c.cone(0.03, 0.12, [foot[0] - 0.08, foot[1] + 0.02, 0], edge, [0, 0, Math.PI / 2 + 0.3], 4); // a back spur
+  }, GOLIATH_G);
+}
+
 // offshoots, one refinement up (PLACEHOLDER bodies, attacks and names)
 const charger = unit({ id: 'charger', name: 'Charger', mass: 38, physique: { muscle: 0.6, frame: 0.25, reserve: 0.15 }, refinement: 2,
   attack: { style: 'strike', crystalMass: 1.5 }, description: 'T1: a fast charging body, striding on two long legs.', model: (b, p) => drawCharger(b, p, 38) }, 'charger');
@@ -887,8 +963,8 @@ const slinger = unit({ id: 'slinger', name: 'Slinger', mass: 130, // (a T2's siz
 const dragonFly = unit({ id: 'dragon-fly', name: 'Dragon Fly', mass: 500, physique: { muscle: 0.5, frame: 0.3, reserve: 0.2 }, refinement: 4, flight: true,
   attack: { style: 'throw', crystalMass: 6, ammo: 10 }, // PLACEHOLDER: its fire (a conversion of crystal) is still to design
   description: 'T3: a fire-breathing dragon with butterfly wings, insectoid and reptilian.', model: (b, p) => drawDragonFly(b, p, 500) }, 'dragon');
-const groundAttacker3 = unit({ id: 'ground-attacker3', name: 'Goliath Charger', mass: 600, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 4,
-  attack: { style: 'strike', crystalMass: 8 }, description: 'T3: a stag bull: hunched and front-heavy on two massive knuckle-walking forelegs, huge mandibles clamping its crystal.', model: (b, p) => gStag(b, p, 'bellows') }, 'goliath'); // (bellows for now, to try in the arena: the torso is not yet chosen)
+const groundAttacker3 = unit({ id: 'ground-attacker3', name: 'Goliath Charger', mass: 600, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 4, gait: HOPPER_GAIT,
+  attack: { style: 'strike', crystalMass: 8 }, description: 'T3: a single-leg hopper battering ram.', model: (b, p) => gHopper(b, p) }, 'goliath');
 
 export const units: Unit[] = [
   motherOf(1, 80), motherOf(2, 120), motherOf(3, 500), // (the T3 mother weighs a lot more: the user's)

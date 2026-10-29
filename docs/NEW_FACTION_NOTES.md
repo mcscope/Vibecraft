@@ -53,5 +53,5 @@ The user's decisions so far, as given. Nothing here is designed beyond what they
 ## Art status (the user's view, 2026-10-22)
 
 - **Design complete:** the Charger, the Vimmer, the Whipweld, the Dragon Fly, the mothers and the Slinger.
-- **Not close to design complete:** the Micropike and the Goliath Charger. For the Goliath, the whole concept doesn't feel right yet, not just its walk. The stag-bull body, the three trial torsos (geode, ram wedge, bellows) and the crutch-walk are all open to change.
+- **In progress:** the Goliath Charger is now the user's single-leg mega hopper battering ram (2026-10-29): it bounds, its bound is its blow, and its leaps' height comes from its bound's air time. The stag bull and its trial torsos are gone. The Micropike is the charger with a much longer body; it stabs, and braces with its tail on the ground.
 - **Not yet reviewed:** the eggs, larvae and caterpillars.
