@@ -433,3 +433,57 @@ export function gMole(b: ModelBuilder, p: Pose): void {
     for (const [x, ph] of [[0.0, 0.5], [-0.3, 0]] as const) for (const z of [1, -1]) gLeg(c, [x, y - 0.1, z * 0.2], [x - 0.06, 0, z * 0.44], p.phase + ph + (z > 0 ? 0 : 0.5), walking, 0.2, 0.24, 0.05, [-0.3, 1, z], undefined, second);
   }, G);
 }
+
+/**
+ * A Goliath concept (the user's idea, 2026-10-29): a single-leg mega hopper battering ram. Its body is the ram-wedge
+ * torso, the crystal set in its battering boss; under its middle one massive hopping leg (a thick thigh, a long shin,
+ * a broad three-toed foot to balance on). It goes in heavy bounds, played by stride (UnitSpec.gait): sinking into a
+ * crouch and springing, the leg trailing in flight then swinging forward, landing and absorbing the weight. It strikes by
+ * crouching, springing and slamming in ram first; at rest it sits crouched low on its folded leg.
+ */
+export function gHopper(b: ModelBuilder, p: Pose): void {
+  const sm = (x: number) => { const k = Math.max(0, Math.min(1, x)); return k * k * (3 - 2 * k); };
+  const shell: Mat = { color: '#b04a2c', tex: 'none', rough: 0.15, metal: 0.35 }, plate: Mat = { color: '#5a2418', tex: 'leather', rough: 0.25, metal: 0.35 };
+  const edge: Mat = { color: '#2a120c', tex: 'none', rough: 0.2, metal: 0.4 }, belly: Mat = { color: '#7a3424', tex: 'leather', rough: 0.4 };
+  const leg: Mat = { color: '#7a3424', tex: 'leather', rough: 0.35 };
+  const moving = p.anim === 'walk', ph = ((p.phase % 1) + 1) % 1, t = p.phase * Math.PI * 2;
+  const big = p.style === 'charge' ? 1.35 : 1; // (charging: bigger bounds)
+  // the bound (UP: its crouch-and-push share; then in the air; then landing), as the gait plays it (gait hop 0.55)
+  const UP = 0.3, AIR = 0.55;
+  let crouch = 0.65 + 0.03 * Math.sin(t), height = 0, pitch = 0, footX = 0, footY = 0, thrust = 0;
+  if (moving) {
+    if (ph < UP) { const k = ph / UP; crouch = k < 0.7 ? sm(k / 0.7) : 1 - sm((k - 0.7) / 0.3); pitch = 0.12 * crouch; } // (sinking, then springing)
+    else if (ph < UP + AIR) { // in the air: up and over, the leg trailing then swinging forward to land
+      const a = (ph - UP) / AIR;
+      crouch = 0; height = 4 * a * (1 - a) * 0.32 * big; pitch = 0.15 * (1 - 2 * a);
+      footX = -0.32 * (1 - sm(a)) + 0.12 * Math.sin(Math.PI * a); footY = height * 0.55 + 0.08 * Math.sin(Math.PI * a);
+    } else { const k = (ph - UP - AIR) / (1 - UP - AIR); crouch = 0.6 * Math.sin(Math.PI * k); pitch = -0.1 * Math.sin(Math.PI * k); } // (landing, taking the weight)
+  } else if (p.anim === 'attack') { // crouch, spring and slam ram first, then recoil
+    const a = p.phase;
+    crouch = a < 0.3 ? sm(a / 0.3) : a < 0.45 ? 1 - sm((a - 0.3) / 0.15) : 0.3 * (1 - sm((a - 0.6) / 0.4));
+    thrust = a < 0.3 ? -0.05 * sm(a / 0.3) : a < 0.48 ? -0.05 + 0.5 * sm((a - 0.3) / 0.18) : 0.45 * (1 - sm((a - 0.48) / 0.52));
+    height = a > 0.3 && a < 0.55 ? 0.12 * Math.sin(Math.PI * (a - 0.3) / 0.25) : 0;
+    pitch = a < 0.3 ? 0.15 * sm(a / 0.3) : a < 0.48 ? 0.15 - 0.35 * sm((a - 0.3) / 0.18) : -0.2 * (1 - sm((a - 0.48) / 0.52));
+  }
+  b.joint([0, 0, 0], [0, 0, 0], (c) => {
+    const hipY = 0.82 - 0.3 * crouch + height, hip: Vec3 = [thrust * 0.6, hipY, 0];
+    // the body over its hip: the ram wedge, the crystal its battering boss's face
+    c.joint([thrust, hipY + 0.12, 0], [0, 0, pitch], (bd) => {
+      goliathTorso(bd, 'ram', (x) => x + 0.02, 0, t, p, { shell, plate, edge, belly });
+      bd.crystal(0.18, [0.42, -0.03, 0], [0, 0, -Math.PI / 2]); // (the crystal: the ram's face)
+      for (const z of [1, -1]) bd.sphere(0.022, [0.33, 0.06, z * 0.15], { color: '#0a0806', rough: 0.1, metal: 0.4 }); // eyes, set in the crown
+    });
+    // the one leg: a thick thigh from a heavy haunch, its knee forward, a long shin, the ankle back, a broad foot
+    const foot: Vec3 = [footX, footY, 0], ankle: Vec3 = [foot[0] - 0.12, foot[1] + 0.16, 0];
+    const knee = jointBetween(hip, ankle, 0.48, 0.5, [1, 0.35, 0]);
+    c.sphere([0.2, 0.17, 0.2], [hip[0], hip[1] + 0.02, 0], plate); // the haunch
+    shapedLimb(c, hip, knee, 0.13, [1.2, 1.35, 1.2, 0.9, 0.7], leg, { flat: 0.2 });
+    c.sphere(0.09, knee, edge);
+    shapedLimb(c, knee, ankle, 0.085, [1.0, 0.85, 0.7, 0.6, 0.65], leg, { flat: 0.3, keel: 0.4 });
+    c.sphere(0.06, ankle, edge);
+    shapedLimb(c, ankle, foot, 0.06, [1.0, 0.9, 0.8, 0.9], leg, { flat: 0.4 });
+    for (const [dz, l] of [[-0.11, 0.17], [0, 0.22], [0.11, 0.17]] as const) // three broad toes, splayed, to balance on
+      shapedLimb(c, foot, [foot[0] + l * 0.95, Math.max(0.01, foot[1] - 0.02), dz + dz * 0.6], 0.035, [1.0, 0.9, 0.6, 0.3], edge, { flat: 0.6 });
+    c.cone(0.03, 0.12, [foot[0] - 0.08, foot[1] + 0.02, 0], edge, [0, 0, Math.PI / 2 + 0.3], 4); // a back spur
+  }, G);
+}

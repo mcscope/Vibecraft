@@ -362,7 +362,9 @@ const leadAlt = (u: Unit, t: number): number => Math.max(0.3, Math.min(u.stats.f
  */
 function collisionEnergy(u: Unit, t: Unit | null, tx: number, ty: number, shaft = true): { delivered: number; mu: number; grounded: boolean } {
   const dx = tx - u.x, dy = ty - u.y, d = Math.hypot(dx, dy) || 1;
-  const rvx = u.vx - (t?.vx ?? 0), rvy = u.vy - (t?.vy ?? 0);
+  // (each at the speed it's going this instant: a bounding body mid-leap is going faster than its average)
+  const ku = u.stats.gait ? u.strideMul : 1, kt = t?.stats.gait ? t.strideMul : 1;
+  const rvx = u.vx * ku - (t?.vx ?? 0) * kt, rvy = u.vy * ku - (t?.vy ?? 0) * kt;
   const closing = ((rvx * dx + rvy * dy) / d) * M_PER_TILE + u.diveSpeed; // m/s (and a swooping flier's dive)
   if (closing <= 0) return { delivered: 0, mu: 0, grounded: false };
   const mu = t ? (u.stats.mass * t.stats.mass) / (u.stats.mass + t.stats.mass) : u.stats.mass;
