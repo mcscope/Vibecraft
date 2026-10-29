@@ -462,14 +462,19 @@ export function gHopper(b: ModelBuilder, p: Pose, gait = HOPPER_GAIT): void {
       crouch = 0; height = 4 * a * (1 - a) * APEX; pitch = 0.3 * (1 - 2 * a);
       footX = -0.45 * (1 - sm(a)) + 0.14 * Math.sin(Math.PI * a); footY = height * 0.5 + 0.1 * Math.sin(Math.PI * a);
     } else { const k = (ph - UP - AIR) / (1 - UP - AIR); crouch = 0.8 * Math.sin(Math.PI * k); pitch = -0.2 * Math.sin(Math.PI * k); } // (landing hard, taking the weight)
-  } else if (p.anim === 'attack') { // its bound is the blow: crouching (to 0.35), springing off nose up, the leg
-    // trailing, then coming down ram first, thrust forward into the impact (at 1)
+  } else if (p.anim === 'slam') { // its bound is the blow (played over that bound): crouching (to 0.35), then the bound
+    // (its arc the sim's, at its apex g·t²/8), nose up off the ground, coming over ram first and thrust forward
     const a = p.phase, f = Math.max(0, (a - 0.35) / 0.65);
     crouch = a < 0.35 ? sm(a / 0.25) * (1 - sm((a - 0.28) / 0.07)) : 0;
-    height = a < 0.35 ? 0 : 4 * f * (1 - f) * APEX; // (a bound like any other)
-    pitch = a < 0.35 ? 0.22 * crouch : 0.35 - 0.85 * sm((f - 0.2) / 0.75); // (nose up off the ground, nose down into the slam)
-    thrust = 0.42 * sm((f - 0.55) / 0.45);
+    height = a < 0.35 ? 0 : 4 * f * (1 - f) * APEX;
+    pitch = a < 0.35 ? 0.22 * crouch : 0.3 - 0.75 * sm((f - 0.1) / 0.5); // (ram first by mid-flight: it may meet the target there)
+    thrust = 0.42 * sm((f - 0.15) / 0.4);
     if (a >= 0.35) { footX = -0.25 - 0.3 * sm(f / 0.5) + 0.12 * sm((f - 0.7) / 0.3); footY = height * 0.5; }
+  } else if (p.anim === 'attack') { // standing, it strikes without leaving the ground: crouching, then lunging ram first
+    const a = p.phase;
+    crouch = a < 0.35 ? 0.7 * sm(a / 0.35) : 0.7 * (1 - sm((a - 0.35) / 0.2)) * (a < 0.55 ? 1 : 0);
+    thrust = a < 0.35 ? -0.08 * sm(a / 0.35) : a < 0.55 ? -0.08 + 0.5 * sm((a - 0.35) / 0.2) : 0.42 * (1 - sm((a - 0.55) / 0.45));
+    pitch = a < 0.35 ? 0.15 * sm(a / 0.35) : a < 0.55 ? 0.15 - 0.4 * sm((a - 0.35) / 0.2) : -0.25 * (1 - sm((a - 0.55) / 0.45));
   }
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
     const hipY = 0.88 - 0.42 * crouch + height, hip: Vec3 = [thrust * 0.6, hipY, 0];

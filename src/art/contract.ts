@@ -28,7 +28,7 @@ export interface Sprite {
 /** Model units a map tile spans (art is modelled in units of ~1 m; a tile is 2 m). */
 export const UNITS_PER_TILE = 2;
 
-export type ArtAnim = 'idle' | 'walk' | 'give' | 'charge' | 'brace' | 'stagger' | 'fly' | 'leap' | 'climb' | 'soar' | 'glide' | 'land' | 'bankL' | 'bankR' | 'swoop' | 'rise' | 'reload' | 'lay' | 'grow' | 'hungry' | 'hatch' | 'attack' | 'cut' | 'gather' | 'eat' | 'tired' | 'die' | 'carryFood' | 'carryWood' | 'carryCrystal';
+export type ArtAnim = 'idle' | 'walk' | 'give' | 'slam' | 'charge' | 'brace' | 'stagger' | 'fly' | 'leap' | 'climb' | 'soar' | 'glide' | 'land' | 'bankL' | 'bankR' | 'swoop' | 'rise' | 'reload' | 'lay' | 'grow' | 'hungry' | 'hatch' | 'attack' | 'cut' | 'gather' | 'eat' | 'tired' | 'die' | 'carryFood' | 'carryWood' | 'carryCrystal';
 
 export interface AnimArt {
   /**
@@ -146,7 +146,7 @@ export interface MusicSpec {
 
 export function anim(art: UnitArt, a: ArtAnim): AnimArt {
   const flight = a === 'leap' || a === 'climb' || a === 'soar' || a === 'glide' || a === 'land';
-  return art.anims[a] ?? (flight ? art.anims.fly : undefined) ?? (a.startsWith('carry') || a === 'fly' || a === 'charge' || flight ? art.anims.walk : undefined) ?? (a === 'stagger' ? art.anims.tired : undefined) ?? (a === 'cut' ? art.anims.attack : undefined) ?? (a === 'give' ? art.anims.gather : undefined) ?? art.anims.idle;
+  return art.anims[a] ?? (flight ? art.anims.fly : undefined) ?? (a.startsWith('carry') || a === 'fly' || a === 'charge' || flight ? art.anims.walk : undefined) ?? (a === 'stagger' ? art.anims.tired : undefined) ?? (a === 'cut' || a === 'slam' ? art.anims.attack : undefined) ?? (a === 'give' ? art.anims.gather : undefined) ?? art.anims.idle;
 }
 
 /** The frame to show for a unit facing map octant 0..7. `progress` (0..1) for one-shot anims, else `time` in seconds. */

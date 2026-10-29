@@ -1075,7 +1075,7 @@ export class World {
     for (const u of this.units.values()) { u.px = u.x; u.py = u.y; u.busy = false; }
     for (const u of this.units.values()) this.tickUnit(u);
     // blows land once every body has moved and acted this tick: two meeting in the same tick both land, whoever went first
-    for (const u of this.units.values()) if (u.blow && this.tick >= u.blow.at) this.strike(u);
+    for (const u of this.units.values()) if (u.blow && (this.tick >= u.blow.at || (u.blow.dur && this.reached(u, u.blow)))) this.strike(u);
     this.separate();
     for (const p of this.projectiles.values()) this.tickProjectile(p);
     if (this.parcels.length) runBelts(this, DT);
@@ -1285,6 +1285,7 @@ export class World {
     const reeling = u.staggered > 0;
     if (reeling) u.staggered = Math.max(0, u.staggered - DT);
     const moved = reeling ? false : this.runOrder(u) || midStride(u, this.tick); // a hopper crouching between bounds is still on its way
+    if (st.gait && !midStride(u, this.tick)) u.strideMul = 0; // (a hopper that stops comes down: it isn't left in the air)
     tickFlight(this, u, moved, DT, (fx, fy) => this.face(u, fx, fy));
     // a shaft going at an enemy is carried point-first: at any pace it moves in the charge pose (point levelled)
     const atEnemy = st.minReach > 0 && !u.breakFrom && (u.engage || u.order.kind === 'attack');
@@ -1574,7 +1575,8 @@ export class World {
     if (tu && !u.airborne && !wpn.throws) {
       const d = Math.hypot(tx - u.x, ty - u.y) || 1;
       // (a hopper on the ground: as far as its next bound will carry it)
-      const g = u.stats.gait, ku = g ? (u.strideMul > 0 ? u.strideMul : 1 / g.hop) : 1, kt = tu.stats.gait ? tu.strideMul : 1;
+      const g = midStride(u, this.tick - 1) ? u.stats.gait : undefined; // (a hopper standing strikes as anyone standing does)
+      const ku = g ? (u.strideMul > 0 ? u.strideMul : 1 / g.hop) : 1, kt = tu.stats.gait ? tu.strideMul : 1;
       const windup = u.stats.minReach > 0 ? 0 : Math.min(0.45, wpn.cooldown * 0.8) * World.CONTACT;
       const ahead = g ? (u.strideMul > 0 ? boundLeft(u) : g.hop * g.period) : DT + windup;
       lead = Math.max(0, ((u.vx * ku - tu.vx * kt) * (tx - u.x) + (u.vy * ku - tu.vy * kt) * (ty - u.y)) / d) * ahead;
@@ -1630,7 +1632,8 @@ export class World {
     if (u.airborne && !wpn.throws && !tu) u.airborne = false; // (a building: it lands to strike)
     // in reach at a run: a striker doesn't stop on a dime, it keeps its line and strikes in passing, carried on past
     // alongside; at a walk it just pulls up (coasts to a stop). Riding out to come round again is the player's call
-    if (!u.airborne && !wpn.throws && tu && Math.hypot(u.vx, u.vy) > u.stats.speed * 1.1) { const [px, py] = passBeside(u, tu, 4); this.moveTo(u, px, py, 0, true, true); }
+    if (!u.airborne && !wpn.throws && tu && (u.blow?.dur || (u.stats.gait && u.strideMul > 0))) this.moveTo(u, tx, ty, 0, true, true); // (a hopper in the air finishes its bound, and one striking with its bound keeps bounding into it)
+    else if (!u.airborne && !wpn.throws && tu && Math.hypot(u.vx, u.vy) > u.stats.speed * 1.1) { const [px, py] = passBeside(u, tu, 4); this.moveTo(u, px, py, 0, true, true); }
     if (!u.airborne) this.face(u, tx - u.x, ty - u.y); // (in the air it faces the way it's flying: a swoop strikes in passing)
     if (u.cooldown > 0 || u.exhausted) return true;
     if (!u.airborne && !this.facingWithin(u, tx - u.x, ty - u.y, Math.PI * 0.2)) return true; // still swinging round to bear on it
@@ -1677,7 +1680,7 @@ export class World {
     // speed it's going this instant)
     // (on the ground, it waits out its crouch and springs: the blow is that next bound)
     let down = 0;
-    const tu = this.units.get(targetId), g = u.stats.gait, air = !!g && u.strideMul > 0;
+    const tu = this.units.get(targetId), g = midStride(u, this.tick) || midStride(u, this.tick - 1) ? u.stats.gait : undefined, air = !!g && u.strideMul > 0; // (only one on its way bounds its blow)
     if (!u.airborne && g) {
       const vk = air ? u.strideMul : 1 / g.hop, wait = takeoffIn(u);
       let flight = air ? boundLeft(u) : g.hop * g.period;
@@ -1692,10 +1695,17 @@ export class World {
     u.blow = { at: this.tick + (u.airborne || couched || planted ? 0 : down > 0 ? Math.round(down / DT) : Math.round((u.swing * World.CONTACT) / DT)), target: targetId, damage, shaft, reach, ...(down > 0 ? { dur: down, wait: air ? 0 : takeoffIn(u) } : {}) };
   }
 
+  /** Has a hopper's bound-blow reached its target (the body within its reach)? It lands then, not waiting for its time. */
+  private reached(u: Unit, b: NonNullable<Unit['blow']>): boolean {
+    const t = this.units.get(b.target);
+    return !!t && Math.hypot(t.x - u.x, t.y - u.y) - t.stats.radius <= b.reach;
+  }
+
   /** The blow lands, if its target is still there and in reach (a little more than the weapon's: it follows through); else it misses. */
   private strike(u: Unit): void {
     const b = u.blow!;
     u.blow = null;
+    if (b.dur) u.swing = 0; // (a bound-blow is done at impact: the rest of the bound is just the bound)
     const tu = this.units.get(b.target), tb = tu ? undefined : this.buildings.get(b.target);
     if (!tu && !tb) return;
     let tx: number, ty: number, edge: number;

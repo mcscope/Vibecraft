@@ -68,9 +68,11 @@ export function unitFrame(u: Unit): { anim: ArtAnim } & FrameTime {
       return { anim: 'charge', time: (u.animT * Math.hypot(u.vx, u.vy)) / 1.7, walked: u.walked * UNITS_PER_TILE };
     case 'attack': {
       // (a hopper striking in the air: its bound is the blow, played over the bound, down at the landing)
-      if (u.blow?.dur) { // (crouched for its `wait`, then springing, to impact: the art's crouch is its first 0.35)
-        const b = u.blow, t = b.dur! - u.swing, w = b.wait ?? 0;
-        return { anim: 'attack', progress: Math.min(0.999, Math.max(0, t < w ? 0.35 * (t / w) : 0.35 + 0.65 * ((t - w) / Math.max(DT, b.dur! - w)))) };
+      if (u.blow?.dur && u.stats.gait) { // (its bound is the blow: crouched for its `wait`, the art's first 0.35, then the
+        // bound itself, played by how far through the air it really is, so the art's arc is the sim's)
+        const b = u.blow, g = u.stats.gait, t = b.dur! - u.swing, w = b.wait ?? 0, up = (1 - g.hop) * (2 / 3);
+        const air = u.strideMul > 0 ? Math.min(1, Math.max(0, (u.stride - up) / g.hop)) : t < w ? 0 : 1;
+        return { anim: 'slam', progress: Math.min(0.999, t < w ? 0.35 * (t / Math.max(DT, w)) : 0.35 + 0.65 * air) };
       }
       const dur = Math.min(0.45, u.stats.cooldown * 0.8);
       return { anim: 'attack', progress: 1 - u.swing / dur };

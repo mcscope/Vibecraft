@@ -8,14 +8,14 @@ import { caterpillarSegments, units as allUnits } from './index';
 const hopFrames = (u: (typeof allUnits)[number]) => {
   if (!u.gait) return undefined;
   const n = Math.max(8, Math.round((u.gait.period ?? 1) * 12));
-  return { walk: n, charge: n, attack: 16 };
+  return { walk: n, charge: n, slam: n };
 };
 
 export async function bakeArt(team: TeamColors, onProgress?: (f: number, label: string) => void, only?: string[]): Promise<FactionArt> {
   const baker = new Baker();
   const units = only ? allUnits.filter((u) => only.includes(u.id)) : allUnits;
   const carry = (id: string) => id.startsWith('larva') || id.startsWith('mother');
-  const opts = (u: (typeof allUnits)[number]) => ({ withCarry: carry(u.id), fly: !!u.flight, brace: !!u.attack?.shaft, ownLeap: u.id === 'flier', reload: u.id === 'slinger', lay: u.id.startsWith('mother'), gives: carry(u.id), grows: u.id.startsWith('egg') || u.id === 'cocoon', rises: u.id === 'charger' || u.id === 'micropike' || u.id === 'whipweld' || u.id === 'slinger', segments: u.id.startsWith('larva') ? caterpillarSegments(u.mass) : undefined, frames: hopFrames(u) });
+  const opts = (u: (typeof allUnits)[number]) => ({ withCarry: carry(u.id), fly: !!u.flight, brace: !!u.attack?.shaft, ownLeap: u.id === 'flier', reload: u.id === 'slinger', lay: u.id.startsWith('mother'), gives: carry(u.id), slam: !!u.gait, grows: u.id.startsWith('egg') || u.id === 'cocoon', rises: u.id === 'charger' || u.id === 'micropike' || u.id === 'whipweld' || u.id === 'slinger', segments: u.id.startsWith('larva') ? caterpillarSegments(u.mass) : undefined, frames: hopFrames(u) });
   const total = units.reduce((n, u) => n + Baker.frameCount(opts(u)), 0) + 1;
   let done = 0;
   // PLACEHOLDER flag: an egg; PLACEHOLDER music
