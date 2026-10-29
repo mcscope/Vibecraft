@@ -466,17 +466,27 @@ export function gHopper(b: ModelBuilder, p: Pose): void {
     pitch = a < 0.3 ? 0.15 * sm(a / 0.3) : a < 0.48 ? 0.15 - 0.35 * sm((a - 0.3) / 0.18) : -0.2 * (1 - sm((a - 0.48) / 0.52));
   }
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
-    const hipY = 0.82 - 0.3 * crouch + height, hip: Vec3 = [thrust * 0.6, hipY, 0];
-    // the body over its hip: the ram wedge, the crystal its battering boss's face
-    c.joint([thrust, hipY + 0.12, 0], [0, 0, pitch], (bd) => {
-      goliathTorso(bd, 'ram', (x) => x + 0.02, 0, t, p, { shell, plate, edge, belly });
-      bd.crystal(0.18, [0.42, -0.03, 0], [0, 0, -Math.PI / 2]); // (the crystal: the ram's face)
-      for (const z of [1, -1]) bd.sphere(0.022, [0.33, 0.06, z * 0.15], { color: '#0a0806', rough: 0.1, metal: 0.4 }); // eyes, set in the crown
+    const hipY = 0.66 - 0.24 * crouch + height, hip: Vec3 = [thrust * 0.6, hipY, 0];
+    // the body over its hip: a long level ram, banded with armour plates, a spine ridge down its back, a heavy blunt
+    // boss in front capped with its crystal, tapering behind to a tail
+    c.joint([thrust, hipY + 0.14, 0], [0, 0, pitch], (bd) => {
+      const prof = [[-0.9, 0.04], [-0.7, 0.11], [-0.4, 0.18], [0, 0.21], [0.35, 0.22], [0.52, 0.2]] as const;
+      bd.loft(prof.map(([x, w]) => ({ at: [x, 0, 0] as Vec3, w, up: w, down: w * 0.9 })), belly);
+      const girth = (x: number) => { for (let j = 1; j < prof.length; j++) if (x <= prof[j][0]) { const [x0, r0] = prof[j - 1], [x1, r1] = prof[j]; return r0 + ((x - x0) / (x1 - x0)) * (r1 - r0); } return prof[prof.length - 1][1]; };
+      for (let i = 0; i < 9; i++) { // overlapping armour bands down its whole length, each over the next toward the front
+        const x = -0.78 + i * 0.15, r = girth(x + 0.1) + 0.015;
+        bd.loft([0, 1].map((k) => ({ at: [x + k * 0.13, 0.01, 0] as Vec3, w: r * (k ? 1 : 0.9), up: r * (k ? 1 : 0.9), down: r * 0.88 * (k ? 1 : 0.9) })), i % 2 ? plate : shell);
+        bd.loft([0, 1].map((k) => ({ at: [x + 0.13 + k * 0.02, 0.01, 0] as Vec3, w: r * 1.02, up: r * 1.02, down: r * 0.9 })), edge); // its lip
+        bd.cone(0.03, 0.09, [x + 0.08, r + 0.03, 0], edge, [0, 0, -0.5], 4); // the spine ridge
+      }
+      bd.loft([[0.54, 0.25, 0.25, 0.23], [0.62, 0.26, 0.26, 0.24], [0.68, 0.2, 0.2, 0.18]].map(([x, w, u, d]) => ({ at: [x, 0, 0] as Vec3, w, up: u, down: d, flat: 0.5 })), edge); // the blunt boss
+      bd.crystal(0.24, [0.7, 0, 0], [0, 0, -Math.PI / 2]); // its crystal, capping the boss, point forward
+      for (const [y, z] of [[0.1, 0.1], [0.1, -0.1], [-0.08, 0.1], [-0.08, -0.1]] as const) bd.crystal(0.11, [0.66, y, z], [z * 2.5, 0, -Math.PI / 2 + y * 1.5]); // and a ring of smaller ones round it
     });
     // the one leg: a thick thigh from a heavy haunch, its knee forward, a long shin, the ankle back, a broad foot
     const foot: Vec3 = [footX, footY, 0], ankle: Vec3 = [foot[0] - 0.12, foot[1] + 0.16, 0];
-    const knee = jointBetween(hip, ankle, 0.48, 0.5, [1, 0.35, 0]);
-    c.sphere([0.2, 0.17, 0.2], [hip[0], hip[1] + 0.02, 0], plate); // the haunch
+    const knee = jointBetween(hip, ankle, 0.42, 0.44, [1, 0.35, 0]);
+    c.sphere([0.17, 0.14, 0.17], [hip[0], hip[1] + 0.04, 0], plate); // the haunch, under the ram
     shapedLimb(c, hip, knee, 0.13, [1.2, 1.35, 1.2, 0.9, 0.7], leg, { flat: 0.2 });
     c.sphere(0.09, knee, edge);
     shapedLimb(c, knee, ankle, 0.085, [1.0, 0.85, 0.7, 0.6, 0.65], leg, { flat: 0.3, keel: 0.4 });
