@@ -9,7 +9,7 @@ Most models still use plain `limb` tubes. Candidates, roughly most visible first
 - **Humans (Meadowfolk `human()` in body.ts; 34 plain limbs across body.ts and index.ts).** Thighs and calves, upper arms and forearms, the neck. They're the most-seen units, so this would make the biggest difference. Calf muscle, a tapering forearm, and trousers and boots that swell and pinch.
 - **Mounts and wildlife (`quadLegs` in Meadowfolk body.ts, `legs` in kits/animals.ts).** A horse's or lynx's leg is the classic case: a heavy, muscled forearm and gaskin over thin cannons. One change here upgrades every four-legged animal at once, wildlife included.
 - **Fenfolk (32 plain limbs, plus 9 in rig.ts).** The herons' long legs and S-necks (a thin shank, a feathered thigh, a neck swelling at its base), the bog toad's big hind legs, the pack tortoise's pillar legs, and the fenlings' frog legs in rig.ts.
-- **The new faction's other units:**
+- **The Wildwelds' other units:**
   - the chargers' and the Whipweld's thighs (now a tube plus a bulge sphere);
   - the Goliath's mech legs (thin segments with a flat or keeled section);
   - the Vimmer's wing spars and the Dragon Fly's legs;

@@ -30,9 +30,9 @@ Things noticed while building the tutorial and the computer players that could i
 
 - **Herons took some damage from macemen** (94 HP in 30 s of bombing). That may be from landing or flying low, or maces reaching low fliers. Worth checking that it's intended.
 
-## The new faction may be overpowered (noted 2026-10-21, not acted on)
+## The Wildwelds may be overpowered (noted 2026-10-21, not acted on)
 
-The new faction feels overpowered in play. Not investigated yet. What we know:
+The Wildwelds feel overpowered in play. Not investigated yet. What we know:
 
 - **The whip isn't meant as a buff.** On the T2 Whipweld (2 m whip), equal 1200-food fights against every combat unit averaged +0.52 with the whip and +0.46 without. The whip adds reach (1.69 tiles instead of 0.69) and speed (9.7 m/s instead of 5.9), but not damage, which is capped by muscle. It recovers 0.2 s slower. Leave it as physics gives it.
 - **Refinement is likely the main reason.** Its fighters are refined 2–4 (the Dragon Fly is 4), so a budget buys more of them than of mostly-refinement-1 Meadowfolk. Refined units are meant to win equal-budget fights, since the arena doesn't count what reaching that refinement cost. For this faction that cost is time: laying, changing, and the mother tiers that gate it.
@@ -53,7 +53,7 @@ The new faction feels overpowered in play. Not investigated yet. What we know:
   - The idea: split blows by what makes contact. Weapon blows keep a holding limit; body blows get the full collision. Tune charges through the bodies instead.
   - The catch: the cap is also what keeps charges in check, so removing it makes charges far stronger. Decide alongside the charge playtests, with arena runs before and after.
 - **Macemen may have no point** (see above). This is a balance question.
-- **The new faction may have the highest skill ceiling.** Depending on play, it's either very vulnerable or unbeatable. Like the Fenfolk, it rewards careful micro: what changes into what, being ready to change and to tend, eggs that can't take a new order. Done well, the payoff is explosive production. It should feel fragile in a good way; **larvae should be very fragile.**
+- **The Wildwelds may have the highest skill ceiling.** Depending on play, it's either very vulnerable or unbeatable. Like the Fenfolk, it rewards careful micro: what changes into what, being ready to change and to tend, eggs that can't take a new order. Done well, the payoff is explosive production. It should feel fragile in a good way; **larvae should be very fragile.**
 - **The computer players are weak,** so whichever faction you play feels overpowered. The arena helps with unit-against-unit balance, but not with build orders, rushes or cheese.
 - **Strategic depth is lower than Age of Empires or StarCraft:** fewer units, and less commitment to a tech tree. A T3 mother can make anything in T3, with no flier-or-ground choice. To build a Great Hall you need every building beneath it, so there's little branching. Scouting what an opponent is building matters less, and builds are mostly "build the next thing, as many villagers as you can". There are some choices: reedguard or bog toads, fenlings and pack bearers, lancers or pikemen.
 - **That's acceptable for a small browser RTS:** shorter games, a bit swingy and cheesy, is fun. Still worth thinking about where it could gain depth, and about a meta with room for many good strategies against it.

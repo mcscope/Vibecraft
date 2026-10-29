@@ -1,6 +1,6 @@
 # Faction ideas (the user's brainstorm, 2026-10-21)
 
-These are ideas for later, not decisions. The current line-up: a normal, slightly boring Age of Empires faction (Meadowfolk), adorable froglings (Fenfolk), and nightmarish bugs (the new faction; "Nightmare Bugs" is not their official name).
+These are ideas for later, not decisions. The current line-up: a normal, slightly boring Age of Empires faction (Meadowfolk), adorable froglings (Fenfolk), and nightmarish bugs (the Wildwelds).
 
 ## Next: a hyper-cute cartoon faction
 

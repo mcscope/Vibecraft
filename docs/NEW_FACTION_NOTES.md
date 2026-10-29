@@ -1,4 +1,4 @@
-# New faction: notes
+# Wildwelds: notes
 
 The user's decisions so far, as given. Nothing here is designed beyond what they said. Ask before adding names, flavor or specifics.
 

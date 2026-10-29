@@ -974,7 +974,7 @@ export const units: Unit[] = [
 
 export const newFaction: FactionSpec = {
   id: 'newfaction',
-  name: 'New Faction', // PLACEHOLDER: not named yet
+  name: 'Wildwelds',
   workerId: 'mother1', // it starts with one r1 mother, in the field (no buildings)
   startWorkers: 1,
   units,
