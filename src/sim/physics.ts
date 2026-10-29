@@ -286,7 +286,8 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   const maxCalories = K.calPerReserveKg * reserveMass + K.calPerKg * mass;
   // work refinement w: gathers, walks and carries w× as much (applied below)
   const workRefinement = Math.max(1, (spec.workRefinement ?? 1) + techWork);
-  const speed = clamp(K.baseSpeed * Math.pow(muscleRel, 0.8) * massSpeedFactor(mass), K.minSpeed, K.maxSpeed) * workRefinement;
+  // (its legs' pace, from their length; it cruises at that, as it sprints, no faster than its burst allows: below)
+  const legPace = clamp(K.baseSpeed * Math.pow(muscleRel, 0.8) * massSpeedFactor(mass), K.minSpeed, K.maxSpeed) * workRefinement;
   const wheeled = !!spec.wheeled;
   const carryCapacity = Math.max(1, K.carryPerMuscleKg * muscleMass * (wheeled ? K.wheelCarry : 1) * workRefinement);
 
@@ -345,8 +346,11 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
   const height = bodyHeight(mass), leg = K.legPerHeight * height, upright = 0.18 * height;
   const length = spec.length ? Math.max(0.2, Math.min(12, spec.length)) : upright; // an upright body: its depth, ~0.18 of its height
   const gallop = spec.wheeled || spec.flight ? 1 : Math.sqrt((leg + Math.max(upright, length)) / (leg + upright));
-  const sprintTiles = speed * K.sprintPerCruise * gallop * burstLimit(mass), runUpTiles = ((sprintTiles * M_PER_TILE) ** 2 / (2 * K.traction * K.gravity)) / M_PER_TILE;
+  const sprintTiles = legPace * K.sprintPerCruise * gallop * burstLimit(mass), runUpTiles = ((sprintTiles * M_PER_TILE) ** 2 / (2 * K.traction * K.gravity)) / M_PER_TILE;
   const sight = Math.max(10, range + 3, runUpTiles + range + 1);
+  // a heavy body cruises within the same burst as it sprints, so it keeps a sprint well above its cruise (an elephant
+  // still runs ~3.5× its walk): it lumbers along, and charges
+  const speed = legPace * burstLimit(mass);
 
   const gatherRate = (spec.canGather ?? true) ? K.gatherKgPerSec * Math.sqrt(muscleMass / 18) * workRefinement : 0;
 
