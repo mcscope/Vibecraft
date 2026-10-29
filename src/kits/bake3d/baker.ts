@@ -34,6 +34,8 @@ export interface UnitBakeOptions {
   sidearm?: boolean;
   /** Its model draws its whole leap itself (no springy squash and tip from the baker). */
   ownLeap?: boolean;
+  /** Frames for some of its animations instead of the usual (a long hop's bound wants more, or it plays jerky). */
+  frames?: Partial<Record<BakedAnim, number>>;
   /** It changes in place (an egg, a cocoon): also bake 'grow' (cooking: fed, the change going on), 'hungry' (waiting on food) and 'hatch' (its last moments). */
   grows?: boolean;
   /** It hands loads to others (Give, tending): also bake 'give', played over a hand-over. */
@@ -433,7 +435,7 @@ export class Baker {
     this.aim(ext, r, h);
     const shadowCrops = new Map<BakedAnim, Crop[]>();
     for (const [anim, shadowPass] of anims.flatMap((a) => (AIR_POSES.has(a) ? [[a, false], [a, true]] : [[a, false]]) as Array<[BakedAnim, boolean]>)) {
-      const n = FRAMES[anim];
+      const n = opts.frames?.[anim] ?? FRAMES[anim];
       // in the air the body is baked without its shadow (it's drawn lifted to its height) and, in a second pass, its
       // shadow alone: the renderer lays that on the ground, falling away from the sun as it climbs
       this.ground.visible = !AIR_POSES.has(anim) || shadowPass;
@@ -556,7 +558,7 @@ export class Baker {
     const q = this.q;
     const out: Partial<Record<BakedAnim, AnimArt>> = {};
     const sprites = (anim: BakedAnim, list: Crop[]): Sprite[][] => {
-      const n = FRAMES[anim], frames: Sprite[][] = [];
+      const n = opts.frames?.[anim] ?? FRAMES[anim], frames: Sprite[][] = [];
       for (let di = 0; di < rows; di++) frames.push(list.slice(di * n, di * n + n).map((c) => ({ img: imgs[c.page ?? 0], sx: c.dx, sy: c.dy, sw: c.w, sh: c.h, ax: c.ax, ay: c.ay, q })));
       return frames;
     };
