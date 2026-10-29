@@ -235,24 +235,29 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
   // (squatting at rest: hips down so its body lies on the ground; up on its legs to walk, run or strike; 'rise' gets
   // up from the squat, its legs unfolding under it, the body lifting last)
   const ease = (x: number) => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c); };
-  const braced = p.style === 'brace'; // (a set point: up on its legs, its body level and low, the spike forward)
-  const upK = p.anim === 'rise' ? ease(p.phase) : walking || braced || p.anim === 'attack' ? 1 : 0;
+  // (braced, a set pike: crouched on its legs, its tail-end set on the ground, its body angled up, the point forward)
+  const braced = p.style === 'brace';
+  const upK = p.anim === 'rise' ? ease(p.phase) : braced ? 0.6 : walking || p.anim === 'attack' ? 1 : 0;
   // (at rest a charger sits back like a tripod: on its folded legs, nose up, its tail barb on the ground. Charging, it's
   // an outstretched spear: level, low, thrust forward, spike first)
   const restTilt = Math.asin(Math.sin(0.55) / (k.long ?? 1)); // (a longer body tips back less to bring its tail barb down)
   const rest = 0.25 * k.body / 0.7, H = rest - 0.04 + (k.H - rest + 0.04) * upK;
-  const tilt = restTilt * (1 - upK), spear = running || braced ? 1 : 0;
+  const tail = 0.66 * (k.long ?? 1) * k.body; // (its tail barb's tip, behind its middle)
+  const tilt = braced ? Math.asin(Math.min(0.9, (H + 0.02) / tail)) : restTilt * (1 - upK), spear = running ? 1 : 0;
   // its body rides lowest over a planted foot, highest in the stride (running: up in the moment both feet are off)
   const bob = running ? -0.06 + 0.07 * Math.max(0, Math.sin((p.phase * 2 - 0.35) * TAU)) : walking ? -0.03 + Math.abs(Math.cos(p.phase * TAU)) * 0.025 : 0;
     // (striking, a battering ram: drawn back on its legs, then slammed forward level and hard, spike first)
     const hit = p.anim === 'attack' && !k.whip && !k.trebuchet ? p.phase : -1;
-    const ramX = hit < 0 ? 0 : hit < 0.38 ? -0.22 * Math.sin((hit / 0.38) * Math.PI / 2) : hit < 0.5 ? -0.22 + 0.67 * ((hit - 0.38) / 0.12) : 0.45 * (1 - (hit - 0.5) / 0.5) ** 2; // (exaggerated: far back, then a long hard slam, as far as its legs reach)
-    const ramTilt = hit < 0 ? 0 : hit < 0.38 ? 0.25 * Math.sin((hit / 0.38) * Math.PI / 2) : hit < 0.5 ? 0.25 - 0.45 * ((hit - 0.38) / 0.12) : -0.2 * (1 - (hit - 0.5) / 0.5) ** 2; // (rearing back, then driving down into it)
+    // (a long pike stabs instead: a short draw back, a quick thrust level along its length, and back)
+    const stab = k.long !== undefined;
+    const ramX = hit < 0 ? 0 : stab ? (hit < 0.25 ? -0.08 * Math.sin((hit / 0.25) * Math.PI / 2) : hit < 0.4 ? -0.08 + 0.43 * ((hit - 0.25) / 0.15) : 0.35 * (1 - (hit - 0.4) / 0.6) ** 2) : hit < 0.38 ? -0.22 * Math.sin((hit / 0.38) * Math.PI / 2) : hit < 0.5 ? -0.22 + 0.67 * ((hit - 0.38) / 0.12) : 0.45 * (1 - (hit - 0.5) / 0.5) ** 2; // (exaggerated: far back, then a long hard slam, as far as its legs reach)
+    const ramTilt = hit < 0 || stab ? 0 : hit < 0.38 ? 0.25 * Math.sin((hit / 0.38) * Math.PI / 2) : hit < 0.5 ? 0.25 - 0.45 * ((hit - 0.38) / 0.12) : -0.2 * (1 - (hit - 0.5) / 0.5) ** 2; // (rearing back, then driving down into it)
   const ramShift = ramX * k.body / 0.7; // (the hips go with the body: the whole of it lunges, its feet planted)
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
     for (const S of [1, -1]) {
       const back = 0.11; // (a charger's legs attach well back along its body)
-      const hip: V = [-0.02 - back + ramShift, H + bob, S * k.hipZ], restFoot: V = [0.1 - 0.08 * upK - back, 0.01, S * (k.footZ + 0.05 * (1 - upK))];
+      // (a stab is thrust from the hips, the feet planted: the hips go only a little way with it)
+      const hip: V = [-0.02 - back + ramShift * (stab ? 0.3 : 1), H + bob, S * k.hipZ], restFoot: V = [0.1 - 0.08 * upK - back, 0.01, S * (k.footZ + 0.05 * (1 - upK))];
       const ph = p.phase + (S > 0 ? 0 : 0.5);
       const foot = running ? footAt(restFoot, ph, k.run, 0.2, 0.35) : walking ? footAt(restFoot, ph, k.walk, 0.12, 0.55) : restFoot;
       const ankle: V = [foot[0] + k.foot[0], foot[1] + k.foot[1], foot[2]];
