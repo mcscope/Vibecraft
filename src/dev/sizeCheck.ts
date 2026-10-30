@@ -51,7 +51,9 @@ export function runSizeCheck(): void {
     }
     y += rowH[i];
   });
-  cv.style.cssText = 'position:fixed;left:0;top:0;z-index:10';
-  document.body.appendChild(cv);
+  const box = document.createElement('div'); // (scrolls: the sheet is bigger than a window)
+  box.style.cssText = 'position:fixed;inset:0;overflow:auto;z-index:10;background:#6f7f50';
+  box.appendChild(cv);
+  document.body.appendChild(box);
   document.title = 'sizecheck ready';
 }
