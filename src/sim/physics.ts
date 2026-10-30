@@ -294,7 +294,9 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0, techGro
   const wheeled = !!spec.wheeled;
   const carryCapacity = Math.max(1, K.carryPerMuscleKg * muscleMass * (wheeled ? K.wheelCarry : 1) * workRefinement);
 
-  const atk = spec.attack;
+  // (grown, it's the whole of it scaled up, its gear too: lengths with its height, its crystal with its mass)
+  const gl = Math.cbrt(grown);
+  const atk = spec.attack && grown !== 1 ? { ...spec.attack, crystalMass: spec.attack.crystalMass * grown, ...(spec.attack.shaft ? { shaft: spec.attack.shaft * gl } : {}), ...(spec.attack.sling ? { sling: spec.attack.sling * gl } : {}), ...(spec.attack.whip ? { whip: spec.attack.whip * gl } : {}) } : spec.attack;
   const canAttack = !!atk;
   const throwing = atk?.style === 'throw';
   const crystalMass = Math.min(carryCapacity, Math.max(LIMITS.minCrystal, atk?.crystalMass ?? LIMITS.minCrystal));
