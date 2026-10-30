@@ -255,6 +255,15 @@ export class Baker {
     return steps >= n / 2 && d > 0.05 ? (d * n) / steps : undefined;
   }
 
+  /** A model's extent in a pose, in metres (a unit is a metre): front (+x) and back, height, width (dev: sim vs art checks). */
+  dims(build: (b: ModelBuilder, pose: Pose) => void, team: TeamColors, pose: Pose): { front: number; back: number; top: number; width: number } {
+    this.clearStage();
+    build(new Builder(team, this.stage), pose);
+    this.stage.updateMatrixWorld(true);
+    const all = new THREE.Box3().setFromObject(this.stage);
+    return { front: all.max.x, back: -all.min.x, top: all.max.y, width: all.max.z - all.min.z };
+  }
+
   private measure(build: (b: ModelBuilder, pose: Pose) => void, team: TeamColors, poses: Pose[]): { r: number; h: number } {
     let r = 0.3, h = 0.3;
     const box = new THREE.Box3();
