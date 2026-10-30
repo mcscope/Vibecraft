@@ -1724,6 +1724,9 @@ export class World {
     if (tu) { tx = tu.x; ty = tu.y; edge = Math.hypot(tx - u.x, ty - u.y) - tu.stats.radius; }
     else { const bd = tb!; tx = bd.ox + bd.size / 2; ty = bd.oy + bd.size / 2; edge = Math.hypot(Math.max(bd.ox, Math.min(u.x, bd.ox + bd.size)) - u.x, Math.max(bd.oy, Math.min(u.y, bd.oy + bd.size)) - u.y); }
     if (edge > b.reach + 0.3 || (tu && !canReach(u, tu))) return; // (it got away: the blow falls short)
+    // (a hopper's bound-blow comes down with its fall: from the top of its bound, g × half its time in the air, as a
+    // diving flier's blow carries its dive)
+    if (b.dur && u.stats.gait) u.diveSpeed = (K.gravity * u.stats.gait.hop * u.stats.gait.period) / 2;
     return this.land(u, b.target, tu ?? null, tx, ty, b.damage, b.shaft);
   }
 
