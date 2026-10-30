@@ -3,6 +3,7 @@
 // maceman alongside for scale. A look at a change, not the change.
 import { units as wildwelds } from '../factions/newfaction';
 import { units as meadowfolk } from '../factions/meadowfolk';
+import { units as fenfolk } from '../factions/fenfolk';
 import { TEAM_COLORS } from '../render/artbank';
 import { Baker } from '../kits/bake3d/baker';
 import type { ModelBuilder, Pose } from '../kits/bake3d/types';
@@ -11,6 +12,8 @@ import type { Sprite } from '../art/contract';
 /** How much bigger (×, each way) to draw it for the typical volume for its mass: ∛(typical ÷ its volume per kg). */
 const RESCALE: Record<string, number> = {
   mother1: 1.01, mother2: 0.79, mother3: 0.83, egg1: 1.14, egg2: 1.14, egg3: 1.14, larva1: 0.99, larva2: 0.99, larva3: 0.99, cocoon: 1.14,
+  // Fenfolk (?mode=sizecheck&faction=fenfolk)
+  fenling: 1.02, reedguard: 1.0, 'bog-toad': 0.7, 'pack-tortoise': 0.49, 'great-siege-heron': 0.7,
   charger: 1.52, micropike: 1.91, flier: 1.66, whipweld: 1.93, slinger: 1.89, 'dragon-fly': 1.33, 'ground-attacker3': 0.8,
 };
 
@@ -22,7 +25,8 @@ export function runSizeCheck(): void {
   const ref = shot(mace.model, 1, 'idle', 0);
   type Row = { name: string; before: Sprite[]; after: Sprite[] };
   const rows: Row[] = [];
-  for (const u of wildwelds) {
+  const list = new URLSearchParams(location.search).get('faction') === 'fenfolk' ? fenfolk : wildwelds;
+  for (const u of list) {
     const k = RESCALE[u.id];
     if (!k) continue;
     const walks = !u.id.startsWith('egg') && u.id !== 'cocoon';
