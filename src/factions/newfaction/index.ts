@@ -209,8 +209,8 @@ function spikeBody(c: ModelBuilder, armed: boolean, tint: string, len = 1): void
 
 /** A charger's build: its legs (hip height standing, thigh, shin, the foot bone from toes up to ankle), how wide it
  *  stands, how thick its legs, its body's size and colour, and how far it strides walking and running. */
-interface ChargerBuild { H: number; thigh: number; shin: number; foot: [number, number, number]; hipZ: number; footZ: number; thighR: number; shinR: number; body: number; tint: string; walk: number; run: number; whip?: number; trebuchet?: boolean; long?: number; sling?: number }
-const CHARGER: ChargerBuild = { H: 0.62, thigh: 0.3, shin: 0.32, foot: [-0.07, 0.21, 0], hipZ: 0.09, footZ: 0.11, thighR: 0.055, shinR: 0.035, body: 0.7, tint: '#7fbf4a', walk: 0.22, run: 0.34 };
+interface ChargerBuild { /** How far its ram slams forward (body units; 0.45 default), to its sim reach. */ ram?: number; H: number; thigh: number; shin: number; foot: [number, number, number]; hipZ: number; footZ: number; thighR: number; shinR: number; body: number; tint: string; walk: number; run: number; whip?: number; trebuchet?: boolean; long?: number; sling?: number }
+const CHARGER: ChargerBuild = { ram: 0.89, H: 0.62, thigh: 0.3, shin: 0.32, foot: [-0.07, 0.21, 0], hipZ: 0.09, footZ: 0.11, thighR: 0.055, shinR: 0.035, body: 0.7, tint: '#7fbf4a', walk: 0.22, run: 0.34 };
 // the T2 lasher: the charger's legs and body, and two whip arms held back along its torso (the user's design); `whip`:
 // metres of lash (its attack.whip)
 const LASHER: ChargerBuild = { H: 0.6, thigh: 0.29, shin: 0.31, foot: [-0.07, 0.2, 0], hipZ: 0.1, footZ: 0.12, thighR: 0.06, shinR: 0.038, body: 0.8, tint: '#2a8a96', walk: 0.21, run: 0.33, whip: 2 };
@@ -250,7 +250,7 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
     const hit = p.anim === 'attack' && !k.whip && !k.trebuchet ? p.phase : -1;
     // (a long pike stabs instead: a short draw back, a quick thrust level along its length, and back)
     const stab = k.long !== undefined;
-    const ramX = hit < 0 ? 0 : stab ? (hit < 0.25 ? -0.08 * Math.sin((hit / 0.25) * Math.PI / 2) : hit < 0.4 ? -0.08 + 0.43 * ((hit - 0.25) / 0.15) : 0.35 * (1 - (hit - 0.4) / 0.6) ** 2) : hit < 0.38 ? -0.22 * Math.sin((hit / 0.38) * Math.PI / 2) : hit < 0.5 ? -0.22 + 0.67 * ((hit - 0.38) / 0.12) : 0.45 * (1 - (hit - 0.5) / 0.5) ** 2; // (exaggerated: far back, then a long hard slam, as far as its legs reach)
+    const ramX = hit < 0 ? 0 : stab ? (hit < 0.25 ? -0.08 * Math.sin((hit / 0.25) * Math.PI / 2) : hit < 0.4 ? -0.08 + 0.43 * ((hit - 0.25) / 0.15) : 0.35 * (1 - (hit - 0.4) / 0.6) ** 2) : hit < 0.38 ? -0.22 * Math.sin((hit / 0.38) * Math.PI / 2) : hit < 0.5 ? -0.22 + ((k.ram ?? 0.45) + 0.22) * ((hit - 0.38) / 0.12) : (k.ram ?? 0.45) * (1 - (hit - 0.5) / 0.5) ** 2; // (exaggerated: far back, then a long hard slam, as far as its legs reach)
     const ramTilt = hit < 0 || stab ? 0 : hit < 0.38 ? 0.25 * Math.sin((hit / 0.38) * Math.PI / 2) : hit < 0.5 ? 0.25 - 0.45 * ((hit - 0.38) / 0.12) : -0.2 * (1 - (hit - 0.5) / 0.5) ** 2; // (rearing back, then driving down into it)
   const ramShift = ramX * k.body / 0.7; // (the hips go with the body: the whole of it lunges, its feet planted)
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
@@ -701,12 +701,12 @@ function motherHead(h: ModelBuilder, style: MotherHead, crestK: number, plate: M
 
 /** A variation on the T3 mother's form (for concepts): how steeply her abdomen rises, how far it curls over, its size, a
  *  wasp's waist before it, how many legs she stands on (2: upright on her hind pair, forelegs as mantis arms), her head's size. */
-export interface MotherForm { pitch?: number; curl?: number; abdomen?: number; waist?: boolean; legs?: 2 | 4 | 6; head?: number; girth?: number; neck?: number; crest?: number; headStyle?: MotherHead; detail?: number; crawl?: number; fore?: number; leg?: number }
+export interface MotherForm { /** Extra forward on its head's strike (model units), to its sim reach. */ jab?: number; pitch?: number; curl?: number; abdomen?: number; waist?: boolean; legs?: 2 | 4 | 6; head?: number; girth?: number; neck?: number; crest?: number; headStyle?: MotherHead; detail?: number; crawl?: number; fore?: number; leg?: number }
 /** The T2 mother: the T3 simplified and made smaller, crawling (concept T2a, the user's), her forelegs tucked in. */
 /** The T1 mother: the plainest and smallest, low on four sprawled legs, no crest but its stub (concept T1a, the user's). */
-const T1_MOTHER: MotherForm = { legs: 4, pitch: 0.28, curl: 0, // (her abdomen resting on the ground)
+const T1_MOTHER: MotherForm = { jab: 0.445, legs: 4, pitch: 0.28, curl: 0, // (her abdomen resting on the ground)
   abdomen: 0.8, crest: 0.25, detail: 0.2, crawl: 0.9, fore: 0.65, leg: 0.65 };
-const T2_MOTHER: MotherForm = { legs: 4, pitch: -0.7, curl: 0.3, abdomen: 1.0, crest: 0.6, detail: 0.6, crawl: 0.6, fore: 0.65 };
+const T2_MOTHER: MotherForm = { jab: 0.396, legs: 4, pitch: -0.7, curl: 0.3, abdomen: 1.0, crest: 0.6, detail: 0.6, crawl: 0.6, fore: 0.65 };
 
 export type MotherHead = 'duck' | 'hammer' | 'shovel' | 'helmet' | 'mantis' | 'frill' | 'mantisFrill' | 'shortShovel';
 
@@ -776,7 +776,7 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
     // (striking, her head darts forward and down, the neck following: peaking as the blow lands)
     const give = p.anim === 'give' ? p.phase : -1; // (giving: her head dips forward and down and sets a food ball before her)
     const jab = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) : give >= 0 ? 0.75 * Math.sin(Math.min(1, give / 0.9) * Math.PI) : 0;
-    const head: [number, number, number] = [0.14 + 0.32 * nk + 0.3 * jab, y0 + 0.05 + 0.45 * nk - 0.28 * jab, 0], mid: V3 = [0.14 + 0.16 * nk + 0.14 * jab, y0 + 0.05 + 0.25 * nk - 0.08 * jab, 0];
+    const head: [number, number, number] = [0.14 + 0.32 * nk + (0.3 + (o.jab ?? 0.133)) * jab, y0 + 0.05 + 0.45 * nk - 0.28 * jab, 0], mid: V3 = [0.14 + 0.16 * nk + 0.14 * jab, y0 + 0.05 + 0.25 * nk - 0.08 * jab, 0];
     // (slim against her great abdomen, but shaped: tapering segments, a collar at each joint, spines down its back)
     shapedLimb(c, [0.14, y0 + 0.05, 0], mid, 0.08, [1.5, 1.1, 0.8, 0.7, 0.8], plate, { flat: 0.3, keel: 0.4 }); // (swelling at its base)
     shapedLimb(c, mid, head, 0.06, [0.95, 0.8, 0.72, 0.7, 0.85], plate, { flat: 0.2, keel: 0.3 });

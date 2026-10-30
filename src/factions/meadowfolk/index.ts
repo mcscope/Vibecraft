@@ -26,6 +26,7 @@ const IRON: Mat = { color: '#8d939a', tex: 'metal' };
 const GEM: Mat = { color: '#8fe6ff', rough: 0.12, metal: 0.15, emissive: '#2a8fc0' };
 
 const villagerLook: HumanLook = {
+  step: 0.44, // (it steps in to strike: as far as the sim's reach)
   skin: '#c99a76', hair: '#4a3020', head: 'hood', scale: 0.95, beard: true,
   tunic: { color: '#b48c52', tex: 'cloth' }, trousers: { color: '#7d6c4c', tex: 'cloth' }, boots: LEATHER,
 };
@@ -92,7 +93,7 @@ const maceman: MeadowUnit = {
   refinement: 1.42, // as refined as its building affords
   model(b, p) {
     const look: HumanLook = {
-      skin: '#c08e6c', hair: '#3a2a1c', head: 'helmet', scale: 1.02, bulk: 1.15, tabard: true, pads: true, beard: true,
+      skin: '#c08e6c', hair: '#3a2a1c', head: 'helmet', scale: 1.02, bulk: 1.15, tabard: true, pads: true, beard: true, step: 0.41,
       tunic: IRON, trousers: { color: '#4a4038', tex: 'cloth' }, boots: LEATHER,
     };
     human(b, p, look, armAngle(p), (h) => {
@@ -136,7 +137,7 @@ const pikeman: MeadowUnit = {
     const stance = braced ? { ...look, stance: 'lunge' as const } : look;
     const arm = braced ? 0.55 + thrust * 0.55 : moving ? 0.35 : armAngle(p) * 0.4;
     const aim = braced ? 0.42 - thrust * 0.3 : moving ? (p.style === 'charge' ? 0.2 : 0) : 0.05; // radians above level (a charge: the baker tips the body 0.2 forward)
-    const slide = thrust * 0.6, back = braced ? 1.5 : 1.0;
+    const slide = thrust * 1.05, back = braced ? 1.5 : 1.0; // (its jab reaches as far as the sim's reach for it)
     human(b, p, stance, arm, (h) => {
       if (!p.armed) return;
       // the hand's frame turns with the arm (arm + 0.25) and the body's lean: undo that, so the pike holds its own aim
@@ -223,10 +224,15 @@ const lynx: MeadowUnit = {
         const chop = t < 0.4 ? 0.3 + (t / 0.4) * 2.9 : t < 0.65 ? 3.2 - ((t - 0.4) / 0.25) * 3.1 : 0.1 + ((t - 0.65) / 0.35) * 0.3;
         r.joint([0, 0.81, 0], [leanOut, 0, 0], (rr) => rr.joint([0, -0.81, 0], [0, 0, 0], (rider) => {
           human(rider, { ...p, anim: p.anim === 'walk' ? 'idle' : cut ? 'attack' : p.anim }, look, cut ? 2.4 : armAngle(p, 'lance'), (h) => {
-            const thrust = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) * 0.35 : 0;
-            h.limb([-0.6 + thrust, 0, 0], [1.9 + thrust, 0, 0], 0.03, WOOD, 0.022);
-            h.cone(0.06, 0.12, [-0.05 + thrust, 0, 0], IRON, [0, 0, -Math.PI / 2], 10);
-            if (p.armed) h.crystal(0.36, [1.88 + thrust, 0, 0], [0, 0, -Math.PI / 2]);
+            // (its lance its real 3 m, a quarter of it behind the grip, as the sim has it: ÷ the rider's 0.9 scale)
+            // (striking, it levels the lance at the target, the hand's frame turned back to level: arm + 0.25 and the lean)
+            const thrust = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase / 0.6) * Math.PI) * 0.53 : 0; // (to its sim reach)
+            const level = p.anim === 'attack' ? -(armAngle(p, 'lance') + 0.25) + torsoLean(p, look) : 0;
+            h.joint([0, 0, 0], [0, 0, level], (l) => {
+              l.limb([-0.83 + thrust, 0, 0], [2.5 + thrust, 0, 0], 0.03, WOOD, 0.022);
+              l.cone(0.06, 0.12, [-0.05 + thrust, 0, 0], IRON, [0, 0, -Math.PI / 2], 10);
+              if (p.armed) l.crystal(0.36, [2.48 + thrust, 0, 0], [0, 0, -Math.PI / 2]);
+            });
           }, cut ? (h) => h.joint([0, 0, 0], [-0.9, 0, -1.0], sword) : undefined, cut ? chop : undefined);
         }));
         // sheathed at the left hip when it isn't drawn

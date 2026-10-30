@@ -71,7 +71,7 @@ const reedguard: FenUnit = {
         // when braced, level as it runs, easing to level through the jab
         const lean = p.style === 'brace' ? 0.1 : p.style === 'charge' ? 0.2 : lunge;
         const aim = attacking ? 0.2 * (1 - thrust) - 0.05 * thrust : p.style === 'brace' ? 0.2 : 0;
-        const slide = thrust * 0.8;
+        const slide = thrust * 0.21; // (its jab reaches as far as the sim's reach for it)
         // (and the hop's pitch: mid-bound the body tips, the spear mustn't dip into the ground with it)
         h.joint([0, 0, 0], [0, 0, aim - (arm + 0.25 - 0.12 + hop(p).pitch) + lean], (s) => {
           s.limb([-0.6 + slide, 0, 0], [1.85 + slide, 0, 0], 0.017, WILLOW);
@@ -109,7 +109,7 @@ const bogToad: FenUnit = {
     outer.joint([0, 0, 0], [0, 0, 0], (b) => {
     const ph = p.phase;
     const hop = p.anim === 'walk' && ph > 1 / 3 && ph < 5 / 6 ? Math.sin(((ph - 1 / 3) / 0.5) * Math.PI) * 0.32 : 0;
-    const lunge = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase * 1.3) * Math.PI) * 0.45 : 0;
+    const lunge = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase * 1.3) * Math.PI) * 0.3 : 0; // (to its sim reach)
     // haunches and forelegs
     for (const z of [1, -1]) {
       b.sphere([0.32, 0.28, 0.24], [-0.35, 0.3 + hop * 0.4, 0.42 * z], toadSkin);

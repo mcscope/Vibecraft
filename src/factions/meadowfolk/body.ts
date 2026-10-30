@@ -58,6 +58,9 @@ export interface HumanLook {
   beard?: boolean;
   /** 'lunge': set low behind a braced weapon: feet wide, front knee bent, back leg straight, hips dropped, leaning in. */
   stance?: 'lunge';
+  /** Metres it steps in as it strikes (front foot forward, the back one planted), so the blow reaches as far as the sim's
+   *  reach for it (measured: ?mode=artcheck). */
+  step?: number;
 }
 
 /** Hip drop (model units) and forward lean (radians) of a lunge. */
@@ -94,8 +97,11 @@ export function human(
   const lean = torsoLean(p, look);
   const skin: Mat = { color: look.skin, tex: 'skin', rough: 0.7 };
   const hipY = 0.9;
+  // (striking, it steps in: in with the chop, back after; its back foot stays where it was)
+  const sp = p.anim === 'attack' && look.step ? p.phase : -1;
+  const st = sp < 0 ? 0 : ((look.step ?? 0) / s) * (sp < 0.25 ? 0 : sp < 0.55 ? (sp - 0.25) / 0.3 : sp < 0.7 ? 1 : 1 - (sp - 0.7) / 0.3);
 
-  b.joint([0, 0, 0], [0, 0, 0], (b) => {
+  b.joint([st, 0, 0], [0, 0, 0], (b) => {
     // ── legs
     for (const side of [1, -1]) {
       const z = 0.1 * side * bulk;
@@ -116,6 +122,10 @@ export function human(
         const ph = (t + (side > 0 ? 0 : 0.5)) % 1, S = 0.42; // (long steps: it covers ground by its stride, not by scurrying)
         const k = ph < 0.5 ? ph / 0.5 : (ph - 0.5) / 0.5, e = k * k * (3 - 2 * k);
         ankle = ph < 0.5 ? [S - 2 * S * k, 0.055, z] : [-S + 2 * S * e, 0.055 + Math.sin(Math.PI * k) * 0.12, z];
+        knee = kneeBetween(hip, ankle, 0.44, 0.42);
+      } else if (st > 0) {
+        // stepping in: the front foot forward with the body, the back one left where it stood
+        ankle = side > 0 ? [0.3 * st, 0.055, z] : [-st, 0.055, z];
         knee = kneeBetween(hip, ankle, 0.44, 0.42);
       } else {
         // a lunge: the near (left) leg forward with its knee bent over the foot, the other straight out behind
