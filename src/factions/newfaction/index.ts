@@ -1046,16 +1046,16 @@ function gHopper(b: ModelBuilder, p: Pose, gait = HOPPER_GAIT): void {
 // which is about the volume 15 kg of body fills)
 const charger = { ...unit({ id: 'charger', name: 'Charger', mass: 15, physique: { muscle: 0.6, frame: 0.25, reserve: 0.15 }, refinement: 2,
   attack: { style: 'strike', crystalMass: 1.5 }, description: 'T1: a fast charging body, striding on two long legs.', model: (b, p) => drawCharger(b, p, 38) }, 'charger'), size: footprint('charger', 38) };
-const micropike = { ...unit({ id: 'micropike', name: 'Micropike', mass: 35, physique: { muscle: 0.45, frame: 0.4, reserve: 0.15 }, refinement: 2,
+const micropike = { ...unit({ id: 'micropike', name: 'Micropike', mass: 35, physique: { muscle: 0.6, frame: 0.25, reserve: 0.15 }, refinement: 2,
   attack: { style: 'strike', crystalMass: 0.8, shaft: 1.5 }, description: 'T1: micropikes.', model: (b, p) => drawMicropike(b, p, 35) }, 'charger'), size: 0.6 }; // (its collision as wide as it is drawn)
 const flier = unit({ id: 'flier', name: 'Vimmer', mass: 120, physique: { muscle: 0.5, frame: 0.25, reserve: 0.25 }, refinement: 3, flight: { height: 20, launch: 'backward' }, // (a high ceiling: its dives are real drops, and it can climb after fliers)
   attack: { style: 'strike', crystalMass: 2 }, description: 'T2: a dive bomber: it swoops down onto its target to strike, its dive behind the blow, and climbs away again.', model: (b, p) => drawVimmer(b, p, 120) }, 'vimmer');
-const whipweld = unit({ id: 'whipweld', name: 'Whipweld', mass: 150, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 3,
+const whipweld = unit({ id: 'whipweld', name: 'Whipweld', mass: 150, physique: { muscle: 0.5, frame: 0.35, reserve: 0.15 }, refinement: 3,
   attack: { style: 'strike', crystalMass: 4, whip: 2 }, description: 'T2: on two running legs, two whip arms held back along its torso; it dips and lashes one out, its crystal at the tip, a long reach.', model: (b, p) => drawCharger(b, p, 150, LASHER) }, 'lasher');
 const slinger = unit({ id: 'slinger', name: 'Slinger', mass: 130, // (a T2's size, as the Vimmer and the Whipweld)
   physique: { muscle: 0.7, frame: 0.2, reserve: 0.1 }, refinement: 3, // (searched for its best within the engine, 2026-10-30)
   attack: { style: 'throw', crystalMass: 0.4, ammo: 14, sling: SLINGER.sling }, description: 'T2: the charger\'s build; its body is a trebuchet\'s arm: it rears back, plunges its head and whips its tail over, loosing the crystal from a sling at its tip.', model: (b, p) => drawCharger(b, p, 130, SLINGER) }, 'charger');
-const dragonFly = unit({ id: 'dragon-fly', name: 'Dragon Fly', mass: 500, physique: { muscle: 0.5, frame: 0.3, reserve: 0.2 }, refinement: 4, flight: true,
+const dragonFly = unit({ id: 'dragon-fly', name: 'Dragon Fly', mass: 500, physique: { muscle: 0.55, frame: 0.35, reserve: 0.1 }, refinement: 4, flight: true,
   attack: { style: 'throw', crystalMass: 6, ammo: 10 }, // PLACEHOLDER: its fire (a conversion of crystal) is still to design
   description: 'T3: a fire-breathing dragon with butterfly wings, insectoid and reptilian.', model: (b, p) => drawDragonFly(b, p, 500) }, 'dragon');
 const groundAttacker3 = unit({ id: 'ground-attacker3', name: 'Goliath Charger', mass: 600, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 4, gait: HOPPER_GAIT,

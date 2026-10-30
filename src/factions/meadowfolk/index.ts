@@ -60,7 +60,7 @@ const slinger: MeadowUnit = {
   description: 'Light skirmisher who whirls a sling of crystal chips. Fragile, but hits from range — then has to collect the spent crystals.',
   mass: 32, size: 0.47, // (its collision as wide as it's drawn)
   refinement: 1.42, // as refined as its building affords
-  physique: { muscle: 0.5, frame: 0.25, reserve: 0.25 },
+  physique: { muscle: 0.75, frame: 0.1, reserve: 0.15 },
   attack: { style: 'throw', crystalMass: 0.3, ammo: 12, sling: 1.0 }, // light stones: the sling's leverage pays on them
   model(b, p) {
     const look: HumanLook = {
@@ -88,7 +88,7 @@ const maceman: MeadowUnit = {
   name: 'Crystal Maceman',
   description: 'Infantry in mail with a shield, swinging a 2 kg crystal-headed mace. Hard to stop.',
   mass: 80, size: 0.79, // (its collision as wide as it's drawn)
-  physique: { muscle: 0.45, frame: 0.45, reserve: 0.1 },
+  physique: { muscle: 0.45, frame: 0.4, reserve: 0.15 },
   attack: { style: 'strike', crystalMass: 2 },
   refinement: 1.42, // as refined as its building affords
   model(b, p) {
@@ -120,7 +120,7 @@ const pikeman: MeadowUnit = {
   description: 'A steady soldier behind a 3-metre crystal-tipped pike. Strikes first, and anything that charges onto the set pike drives it home with its own weight: the answer to Lynx Lancers and other heavy chargers. Slow to swing, and no match for a swarm.',
   mass: 62, size: 0.59, // (its collision as wide as it's drawn)
   refinement: 1.42, // as refined as its building affords
-  physique: { muscle: 0.45, frame: 0.4, reserve: 0.15 },
+  physique: { muscle: 0.45, frame: 0.45, reserve: 0.1 },
   attack: { style: 'strike', crystalMass: 1.5, shaft: 3 },
   model(b, p) {
     const look: HumanLook = {
@@ -252,7 +252,7 @@ const hurlhorn: MeadowUnit = {
   description: 'A shaggy war-beast carrying a throwing-arm on its back. Lobs 9 kg crystals across the field, a dozen to a load. Helpless up close.',
   mass: 400, size: 1.44, // (its collision as wide as it's drawn)
   length: 2.9, // m nose to tail: a long body, it wheels
-  physique: { muscle: 0.55, frame: 0.3, reserve: 0.15 },
+  physique: { muscle: 0.55, frame: 0.35, reserve: 0.1 },
   attack: { style: 'throw', crystalMass: 9, ammo: 12 },
   refinement: 2.5, // as refined as its building affords
   model(outer, p) {
