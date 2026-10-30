@@ -106,7 +106,7 @@ export const LESSONS: Lesson[] = [
     title: 'Charges',
     you: meadowfolk, foe: fenfolk, look: [24, 26],
     text: `<p>A charge turns speed into damage. A running body adds the <b>collision</b> to its blow: ½·μ·v². A couched lance takes the whole impact, so a charging lancer hits many times harder than a standing one.</p>
-<p><b>Try:</b> select the lancers, press <kbd>C</kbd> and right-click the fenlings (top). The lancers sprint in, strike, and ride on through. Then pull them out and charge again.</p>
+<p><b>Try:</b> select the lancers, press <kbd>C</kbd> and right-click the fenlings (top). The lancers sprint in, strike, and ride on through. Standing in a fight, they only swing, so pull them out: right-click open ground and they run clear, sprinting while enemies are close. Then charge again.</p>
 <p>Now try the <b>reedguards</b> (bottom). Their spears are planted, so your charge runs onto their points and the impact comes back into your lynx. Up close, your lancers cut with their swords instead.</p>`,
     setup(w) {
       wait(w, block(w, 0, 'lynx', 4, 14, 26, 2));
