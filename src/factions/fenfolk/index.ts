@@ -51,7 +51,7 @@ const reedguard: FenUnit = {
   name: 'Reedguard',
   description: 'A stout fenling behind a woven reed shield, bracing a long crystal-tipped reed spear. Cheap, sturdy, and in the way: anything that charges onto the spear drives it home with its own weight.',
   mass: 38, size: 0.73, // (its collision as wide as it's drawn)
-  physique: { muscle: 0.35, frame: 0.55, reserve: 0.1 },
+  physique: { muscle: 0.6, frame: 0.3, reserve: 0.1 },
   attack: { style: 'strike', crystalMass: 1, shaft: 2.5 },
   gait: { hop: 0.76, period: 0.85 }, // heavier bounds behind the shield
   model(b, p) {
@@ -99,7 +99,7 @@ const bogToad: FenUnit = {
   description: 'A huge marsh toad with a fenling on its back. Lunges and slams with its crystal-studded jaw: brutal up close.',
   mass: 400, size: 2.22, // (its collision as wide as it's drawn) // horse-sized: a fenling rides it
   length: 2.4, // m nose to tail: a long body, it wheels
-  physique: { muscle: 0.55, frame: 0.3, reserve: 0.15 },
+  physique: { muscle: 0.7, frame: 0.2, reserve: 0.1 },
   attack: { style: 'strike', crystalMass: 2.5 },
   refinement: 2.0, // as refined as the Toad Wallow allows (2.05): a big body bred well
   gait: { hop: 0.5, period: 1.1 }, // great lumbering leaps: airborne 1/3–5/6 of each stride
@@ -256,7 +256,7 @@ const greatSiegeHeron: FenUnit = {
   name: 'Great Siege Heron',
   description: 'The eldest of the siege herons, vast as a reed hut, its basket heaped with twelve great crystals. Slow to rise and hungry in the air, but one pass can flatten a hall.',
   mass: 540, size: 1.42, // (its collision as wide as it's drawn)
-  physique: { muscle: 0.45, frame: 0.2, reserve: 0.35 },
+  physique: { muscle: 0.45, frame: 0.35, reserve: 0.2 },
   attack: { style: 'throw', crystalMass: 8, ammo: 12 },
   refinement: 2.4, // as refined as the Elder Mound can raise (its capital supports up to 2.42)
   flight: { height: 18 }, // a siege bird climbs high: each crystal falls 18 m, but holding up there burns calories 3× as fast
