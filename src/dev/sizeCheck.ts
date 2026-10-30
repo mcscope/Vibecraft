@@ -11,7 +11,7 @@ import type { Sprite } from '../art/contract';
 /** How much bigger (×, each way) to draw it for the typical volume for its mass: ∛(typical ÷ its volume per kg). */
 const RESCALE: Record<string, number> = {
   mother1: 1.01, mother2: 0.79, mother3: 0.83, egg1: 1.14, egg2: 1.14, egg3: 1.14, larva1: 0.99, larva2: 0.99, larva3: 0.99, cocoon: 1.14,
-  charger: 2.07, micropike: 1.91, flier: 1.66, whipweld: 1.93, slinger: 1.89, 'dragon-fly': 1.33, 'ground-attacker3': 0.8,
+  charger: 1.52, micropike: 1.91, flier: 1.66, whipweld: 1.93, slinger: 1.89, 'dragon-fly': 1.33, 'ground-attacker3': 0.8,
 };
 
 export function runSizeCheck(): void {
