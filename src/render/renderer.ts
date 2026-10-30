@@ -756,7 +756,9 @@ export class Renderer {
     if (was.up !== up) { was.at = up && !was.sat ? -Infinity : now; was.up = up; was.sat = false; }
     const k = (now - was.at - (up ? 0 : SIT_AFTER)) / RISE;
     if (!up && k >= 0) was.sat = true; // (it has begun to sit)
-    if (k >= 1) return {};
+    // (up and standing still, as between blows, it shows itself standing: the end of its rise, not its idle, which is
+    // its sitting rest)
+    if (k >= 1) return up && (anim === 'idle' || anim === 'tired') ? { anim: 'rise', progress: 0.999, time: undefined, walked: undefined } : {};
     return { anim: 'rise', progress: up ? Math.max(0, k) : Math.min(0.999, 1 - Math.max(0, k)), time: undefined, walked: undefined };
   }
 
