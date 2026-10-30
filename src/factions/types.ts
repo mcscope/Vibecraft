@@ -214,6 +214,9 @@ export interface TechSpec {
   refinement: number;
   /** Which refinement it raises: 'combat' (training cost ÷ r, default) or 'work' (gather rate, speed and carry). */
   channel?: 'combat' | 'work';
+  /** Its combat refinement comes as size instead of price: the same value, but every body of the unit grows by it (r
+   *  new over r before), the ones already in the field included, at the price they were. */
+  grows?: boolean;
 }
 
 /** What a faction calls a resource (lowercase). */

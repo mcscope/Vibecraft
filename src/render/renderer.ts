@@ -502,7 +502,7 @@ export class Renderer {
         // a bird still off the ground (taking off, gliding in to land) keeps its wings spread
         // a body at another mass than its spec's (a shell takes what went into it) is drawn to its size: ∛ of the mass
         const spec = this.world.specOf(u.owner, u.specId);
-        const k = spec && spec.stats.mass !== u.stats.mass ? Math.cbrt(u.stats.mass / spec.stats.mass) : 1;
+        const k = spec && spec.spec.mass !== u.stats.mass ? Math.cbrt(u.stats.mass / spec.spec.mass) : 1;
         const f: { anim: ArtAnim } & FrameTime = u.stats.flight && !u.airborne && this.lift(u.id) > 6 ? { anim: 'fly' as const, time: this.time } : unitFrame(u);
         if (f.walked !== undefined) f.walked /= k; // (drawn bigger, it strides further)
         // (one that lays from its body shows it over the last moments before each comes out)
@@ -726,7 +726,7 @@ export class Renderer {
       const sp = P.get(this.texture(sh));
       sp.anchor.set(sh.ax / sh.sw, sh.ay / sh.sh);
       sp.position.set(gx, gy);
-      const spec = w.specOf(u.owner, u.specId), k = spec && spec.stats.mass !== u.stats.mass ? Math.cbrt(u.stats.mass / spec.stats.mass) : 1;
+      const spec = w.specOf(u.owner, u.specId), k = spec && spec.spec.mass !== u.stats.mass ? Math.cbrt(u.stats.mass / spec.spec.mass) : 1;
       sp.scale.set(k / sh.q); sp.tint = 0xffffff; sp.alpha = 1;
     }
     P.end();
@@ -771,7 +771,7 @@ export class Renderer {
     let segs = this.segSprites.get(u.id);
     if (!segs) { segs = art.segments!.map(() => { const s = new PixiSprite(); this.objects.addChild(s); return s; }); this.segSprites.set(u.id, segs); }
     const spec = this.world.specOf(u.owner, u.specId);
-    const k = spec && spec.stats.mass !== u.stats.mass ? Math.cbrt(u.stats.mass / spec.stats.mass) : 1;
+    const k = spec && spec.spec.mass !== u.stats.mass ? Math.cbrt(u.stats.mass / spec.spec.mass) : 1;
     const f = unitFrame(u), moving = f.anim === 'walk' || f.anim === 'charge' || f.anim.startsWith('carry');
     if (f.walked !== undefined) f.walked /= k;
     art.segments!.forEach((seg, i) => {

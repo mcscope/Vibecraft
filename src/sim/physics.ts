@@ -265,8 +265,11 @@ function massSpeedFactor(m: number): number {
 }
 
 /** `techRefinement`: refinement added by the owner's researched technologies. */
-export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): DerivedStats {
-  const mass = clampMass(spec.mass);
+export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0, techGrow = 0): DerivedStats {
+  // (refinement researched to grow, techGrow of techRefinement, comes as size: the body r ÷ (r without it) the mass, at the
+  // price it was: TechSpec.grows)
+  const grown = Math.max(1, (spec.refinement ?? 1) + techRefinement) / Math.max(1, (spec.refinement ?? 1) + techRefinement - techGrow);
+  const mass = clampMass(spec.mass * grown);
   const physique = normalizePhysique(spec.physique);
   const muscleMass = mass * physique.muscle;
   const frameMass = mass * physique.frame;
@@ -333,7 +336,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0): Derive
 
   const sizeRel = Math.cbrt(mass / 70);
   // its footprint: as wide as it's drawn (spec.size, metres across), else from its mass
-  const radius = spec.size ? clamp(spec.size / 2 / M_PER_TILE, 0.05, 1.5) : clamp(0.25 * sizeRel, 0.05, 0.8); // (as small as a small body is drawn)
+  const radius = spec.size ? clamp((spec.size * Math.cbrt(grown)) / 2 / M_PER_TILE, 0.05, 1.5) : clamp(0.25 * sizeRel, 0.05, 0.8); // (as small as a small body is drawn)
   // a flier's wings grow with its mass like a bird's (span ≈ 1.17·m^0.39 m, from bird allometry)
   const wingspan = spec.flight ? (1.17 * mass ** 0.39) / M_PER_TILE : 0;
   const reach = radius + 0.35 + 0.1 * Math.cbrt(crystalMass) + (shaft * 0.75) / M_PER_TILE + whip / M_PER_TILE; // a shaft held a quarter of the way along: ¾ of it reaches forward; a whip its whole length

@@ -59,6 +59,8 @@ export interface PlayerState {
   refine: Record<string, number>;
   /** Work refinement added by technologies. */
   refineWork: Record<string, number>;
+  /** Of `refine`, what came from techs that grow (TechSpec.grows): delivered as size, not price. */
+  refineGrow: Record<string, number>;
   /** Technologies researched or in progress. */
   techs: string[];
   researched: string[];
@@ -493,7 +495,7 @@ export class World {
       // two players may bring different factions under the same id: give the later one its own key
       const key = this.factions.has(p.faction.id) && this.factions.get(p.faction.id) !== p.faction ? `${p.faction.id}#${i}` : p.faction.id;
       this.factions.set(key, p.faction);
-      this.players.push({ id: i, name: p.name, factionId: key, defeated: false, refine: {}, refineWork: {}, techs: [], researched: [] });
+      this.players.push({ id: i, name: p.name, factionId: key, defeated: false, refine: {}, refineWork: {}, refineGrow: {}, techs: [], researched: [] });
       for (const s of p.faction.units) this.unitSpecs.set(`${i}/${s.id}`, { spec: s, stats: derive(s) });
       for (const b of p.faction.buildings ?? []) this.buildingStats.set(`${key}/${b.id}`, deriveBuilding(b, p.faction));
     });
@@ -531,7 +533,7 @@ export class World {
     this.wildsId = id;
     const wilds: FactionSpec = { id: 'wilds', name: 'The Wilds', workerId: '', units: specs };
     this.factions.set(wilds.id, wilds);
-    this.players.push({ id, name: 'Wilds', factionId: wilds.id, defeated: false, refine: {}, refineWork: {}, techs: [], researched: [], neutral: true });
+    this.players.push({ id, name: 'Wilds', factionId: wilds.id, defeated: false, refine: {}, refineWork: {}, refineGrow: {}, techs: [], researched: [], neutral: true });
     for (const s of specs) this.unitSpecs.set(`${id}/${s.id}`, { spec: s, stats: derive(s) });
     const dens: Array<[number, number]> = [];
     factions.forEach((f, owner) => {
@@ -1033,12 +1035,14 @@ export class World {
   private refreshStats(owner: number, unitId: string): void {
     const s = this.specOf(owner, unitId);
     if (!s) return;
-    const stats = derive(s.spec, this.players[owner].refine[unitId] ?? 0, this.players[owner].refineWork[unitId] ?? 0);
+    const P = this.players[owner];
+    const stats = derive(s.spec, P.refine[unitId] ?? 0, P.refineWork[unitId] ?? 0, P.refineGrow[unitId] ?? 0);
     this.unitSpecs.set(`${owner}/${unitId}`, { spec: s.spec, stats });
     for (const u of this.units.values()) {
       if (u.owner !== owner || u.specId !== unitId) continue;
       // (a shell is at the mass of what went into it: it keeps that mass)
-      const own = u.stats.mass === s.stats.mass ? stats : derive({ ...s.spec, mass: u.stats.mass }, this.players[owner].refine[unitId] ?? 0, this.players[owner].refineWork[unitId] ?? 0);
+      // (one that grows: those in the field grow too, at the price they were)
+      const own = u.stats.mass === s.stats.mass ? stats : derive({ ...s.spec, mass: u.stats.mass }, P.refine[unitId] ?? 0, P.refineWork[unitId] ?? 0, P.refineGrow[unitId] ?? 0);
       u.hp *= own.maxHp / u.stats.maxHp;
       u.stats = own;
     }
@@ -1171,6 +1175,7 @@ export class World {
           if (t) {
             const ch = t.channel === 'work' ? p.refineWork : p.refine;
             ch[t.unit] = (ch[t.unit] ?? 0) + t.refinement;
+            if (t.grows && t.channel !== 'work') p.refineGrow[t.unit] = (p.refineGrow[t.unit] ?? 0) + t.refinement; // (as size)
             p.researched.push(t.id);
             this.refreshStats(b.owner, t.unit);
             this.events.push({ type: 'researched', owner: b.owner, techId: t.id });
