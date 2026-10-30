@@ -32,7 +32,7 @@ const LOOK = {
   vimmer: { scale: (m: number) => 1.3 * Math.cbrt(m / 120), length: 1.48 }, // (standing on its wings, that wide)
   charger: { scale: (m: number) => Math.cbrt(m / 38), length: 0.41 },
   lasher: { scale: (m: number) => 1.45 * Math.cbrt(m / 150), length: 0.47 },
-  goliath: { scale: (m: number) => 2.6 * Math.cbrt(m / 600), length: 0.48 }, // (collision: its body; wings overlap others, as fliers' do)
+  goliath: { scale: (m: number) => 2.6 * Math.cbrt(m / 600), length: 0.385 }, // (collision: its body; wings overlap others, as fliers' do)
   dragon: { scale: (m: number) => 2.0 * Math.cbrt(m / 500), length: 0.65 }, // 500 kg: ~4.5 m snout to tail-tip (collision: its body; wings overlap others, as fliers' do)
 } as const;
 /** A caterpillar's trailing segments, as model units behind its front (for the baker). */
@@ -217,8 +217,50 @@ const LASHER: ChargerBuild = { H: 0.6, thigh: 0.29, shin: 0.31, foot: [-0.07, 0.
 // the T2 slinger: the charger's build, its body the arm of a trebuchet (the user's design)
 // (`sling`: metres of throwing arm and cord past its own reach, its attack.sling: the art draws the arm that long)
 const SLINGER: ChargerBuild = { ...CHARGER, H: 0.6, body: 0.75, tint: '#3ab0bc', trebuchet: true, sling: 2 };
-// the T1 micropike: the charger, its body much longer (the user's design); `long`: how many times the charger's length
-const MICROPIKE: ChargerBuild = { ...CHARGER, H: 0.6, body: 0.62, tint: '#6aa84a', long: 1.9 };
+// the T1 micropike: a tripod (the user's design): its pike of a body (the charger's, `long` times its length) hanging
+// down between two long, tall legs; its own colour (drawMicropike)
+const MICROPIKE: ChargerBuild = { ...CHARGER, H: 1.32, thigh: 0.66, shin: 0.7, foot: [-0.09, 0.26, 0], hipZ: 0.08, footZ: 0.15, thighR: 0.05, shinR: 0.032, body: 0.62, tint: '#c98a2e', walk: 0.34, run: 0.5, long: 1.9 };
+
+/**
+ * The micropike (the user's design): a tripod. Its pike of a body hangs straight down between two long, tall legs that
+ * join it near its butt, its point just off the ground: two feet and the point. It walks with the pike hanging,
+ * swaying; to fight it sets: crouched on its legs, the pike swung up from its butt and levelled at the enemy (braced, a
+ * little raised; charging, level and running); it strikes by stabbing, the pike driven out along its length and back.
+ */
+function drawMicropike(b: ModelBuilder, p: Pose, mass: number): void {
+  type V = [number, number, number];
+  const k = MICROPIKE, len = k.long ?? 1;
+  const chitin: Mat = { color: '#1a2628', tex: 'leather', rough: 0.3, metal: 0.35 };
+  const muscle: Mat = { color: mix('#3a2a18', k.tint, 0.35), tex: 'leather', rough: 0.4, metal: 0.2 };
+  const claw: Mat = { color: '#0e1210', tex: 'none', rough: 0.4 };
+  const sm = (x: number) => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c); };
+  const walking = p.anim === 'walk', running = walking && p.style === 'charge', braced = p.style === 'brace', hit = p.anim === 'attack' ? p.phase : -1;
+  // the pike's angle above level (hanging: straight down), how low it crouches, and a stab's thrust along the pike
+  const angle = braced ? 0.18 : running || hit >= 0 ? 0 : -Math.PI / 2 + (walking ? 0.1 * Math.sin(p.phase * TAU * 2) : 0);
+  const crouch = braced ? 0.3 : hit >= 0 ? 0.25 : running ? 0.12 : 0;
+  const thrust = hit < 0 ? 0 : hit < 0.25 ? -0.08 * sm(hit / 0.25) : hit < 0.4 ? -0.08 + 1.29 * sm((hit - 0.25) / 0.15) : 1.21 * (1 - sm((hit - 0.4) / 0.6)); // (to its sim reach)
+  const bob = running ? -0.05 + 0.06 * Math.max(0, Math.sin((p.phase * 2 - 0.35) * TAU)) : walking ? -0.03 + Math.abs(Math.cos(p.phase * TAU)) * 0.03 : 0;
+  const H = k.H * (1 - crouch) + bob;
+  b.joint([0, 0, 0], [0, 0, 0], (c) => {
+    // the two long legs, from the pike's butt
+    for (const S of [1, -1]) {
+      const hip: V = [thrust * 0.45, H, S * k.hipZ], restFoot: V = [0.04, 0.01, S * k.footZ]; // (lunging into a stab, its feet planted)
+      const ph = p.phase + (S > 0 ? 0 : 0.5);
+      const foot = running ? footAt(restFoot, ph, k.run, 0.22, 0.35) : walking ? footAt(restFoot, ph, k.walk, 0.14, 0.55) : restFoot;
+      const ankle: V = [foot[0] + k.foot[0], foot[1] + k.foot[1], foot[2]];
+      const knee = jointBetween(hip, ankle, k.thigh, k.shin, [1, 0.3, S * 0.5]);
+      shapedLimb(c, hip, knee, k.thighR, [1.1, 1.35, 1.3, 1.0, 0.7], muscle);
+      c.sphere(k.thighR * 0.75, knee, chitin);
+      shapedLimb(c, knee, ankle, k.shinR, [1.0, 0.85, 0.72, 0.66, 0.7], chitin, { flat: 0.3 });
+      c.sphere(k.shinR * 0.7, ankle, chitin);
+      shapedLimb(c, ankle, foot, k.shinR * 0.65, [1.0, 0.85, 0.75, 0.8], chitin);
+      for (const dz of [-0.03, 0, 0.03]) c.cone(0.012, 0.07, [foot[0] + 0.05, 0.01, foot[2] + dz], claw, [0, dz * 4, -Math.PI / 2], 4); // toes
+    }
+    c.sphere([0.07, 0.07, 0.11], [thrust * 0.45, H + 0.02, 0], muscle); // the joint where the legs meet the pike's butt
+    // the pike: its butt at the hips, swung from there; hanging, its point just off the ground
+    c.joint([thrust, H + 0.02, 0], [0, 0, angle], (t) => t.joint([0.62 * len * k.body, 0, 0], [0, 0, 0], (q) => spikeBody(q, p.armed, k.tint, len), k.body));
+  }, LOOK.charger.scale(mass));
+}
 
 /**
  * The chargers (the user's design): the Vimmer's body plan on two legs instead of wings: its central body slung
@@ -235,29 +277,23 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
   // (squatting at rest: hips down so its body lies on the ground; up on its legs to walk, run or strike; 'rise' gets
   // up from the squat, its legs unfolding under it, the body lifting last)
   const ease = (x: number) => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c); };
-  // (braced, a set pike: crouched on its legs, its tail-end set on the ground, its body angled up, the point forward)
-  const braced = p.style === 'brace';
-  const upK = p.anim === 'rise' ? ease(p.phase) : braced ? 0.6 : walking || p.anim === 'attack' ? 1 : 0;
+  const upK = p.anim === 'rise' ? ease(p.phase) : walking || p.anim === 'attack' ? 1 : 0;
   // (at rest a charger sits back like a tripod: on its folded legs, nose up, its tail barb on the ground. Charging, it's
   // an outstretched spear: level, low, thrust forward, spike first)
-  const restTilt = Math.asin(Math.sin(0.55) / (k.long ?? 1)); // (a longer body tips back less to bring its tail barb down)
+  const restTilt = 0.55;
   const rest = 0.25 * k.body / 0.7, H = rest - 0.04 + (k.H - rest + 0.04) * upK;
-  const tail = 0.66 * (k.long ?? 1) * k.body; // (its tail barb's tip, behind its middle)
-  const tilt = braced ? Math.asin(Math.min(0.9, (H + 0.02) / tail)) : restTilt * (1 - upK), spear = running ? 1 : 0;
+  const tilt = restTilt * (1 - upK), spear = running ? 1 : 0;
   // its body rides lowest over a planted foot, highest in the stride (running: up in the moment both feet are off)
   const bob = running ? -0.06 + 0.07 * Math.max(0, Math.sin((p.phase * 2 - 0.35) * TAU)) : walking ? -0.03 + Math.abs(Math.cos(p.phase * TAU)) * 0.025 : 0;
     // (striking, a battering ram: drawn back on its legs, then slammed forward level and hard, spike first)
     const hit = p.anim === 'attack' && !k.whip && !k.trebuchet ? p.phase : -1;
-    // (a long pike stabs instead: a short draw back, a quick thrust level along its length, and back)
-    const stab = k.long !== undefined;
-    const ramX = hit < 0 ? 0 : stab ? (hit < 0.25 ? -0.08 * Math.sin((hit / 0.25) * Math.PI / 2) : hit < 0.4 ? -0.08 + 0.43 * ((hit - 0.25) / 0.15) : 0.35 * (1 - (hit - 0.4) / 0.6) ** 2) : hit < 0.38 ? -0.22 * Math.sin((hit / 0.38) * Math.PI / 2) : hit < 0.5 ? -0.22 + ((k.ram ?? 0.45) + 0.22) * ((hit - 0.38) / 0.12) : (k.ram ?? 0.45) * (1 - (hit - 0.5) / 0.5) ** 2; // (exaggerated: far back, then a long hard slam, as far as its legs reach)
-    const ramTilt = hit < 0 || stab ? 0 : hit < 0.38 ? 0.25 * Math.sin((hit / 0.38) * Math.PI / 2) : hit < 0.5 ? 0.25 - 0.45 * ((hit - 0.38) / 0.12) : -0.2 * (1 - (hit - 0.5) / 0.5) ** 2; // (rearing back, then driving down into it)
+    const ramX = hit < 0 ? 0 : hit < 0.38 ? -0.22 * Math.sin((hit / 0.38) * Math.PI / 2) : hit < 0.5 ? -0.22 + ((k.ram ?? 0.45) + 0.22) * ((hit - 0.38) / 0.12) : (k.ram ?? 0.45) * (1 - (hit - 0.5) / 0.5) ** 2; // (exaggerated: far back, then a long hard slam, as far as its legs reach)
+    const ramTilt = hit < 0 ? 0 : hit < 0.38 ? 0.25 * Math.sin((hit / 0.38) * Math.PI / 2) : hit < 0.5 ? 0.25 - 0.45 * ((hit - 0.38) / 0.12) : -0.2 * (1 - (hit - 0.5) / 0.5) ** 2; // (rearing back, then driving down into it)
   const ramShift = ramX * k.body / 0.7; // (the hips go with the body: the whole of it lunges, its feet planted)
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
     for (const S of [1, -1]) {
       const back = 0.11; // (a charger's legs attach well back along its body)
-      // (a stab is thrust from the hips, the feet planted: the hips go only a little way with it)
-      const hip: V = [-0.02 - back + ramShift * (stab ? 0.3 : 1), H + bob, S * k.hipZ], restFoot: V = [0.1 - 0.08 * upK - back, 0.01, S * (k.footZ + 0.05 * (1 - upK))];
+      const hip: V = [-0.02 - back + ramShift, H + bob, S * k.hipZ], restFoot: V = [0.1 - 0.08 * upK - back, 0.01, S * (k.footZ + 0.05 * (1 - upK))];
       const ph = p.phase + (S > 0 ? 0 : 0.5);
       const foot = running ? footAt(restFoot, ph, k.run, 0.2, 0.35) : walking ? footAt(restFoot, ph, k.walk, 0.12, 0.55) : restFoot;
       const ankle: V = [foot[0] + k.foot[0], foot[1] + k.foot[1], foot[2]];
@@ -280,7 +316,7 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
     const dip = k.whip ? Math.sin(Math.min(1, p.phase / 0.7) * Math.PI) * (p.anim === 'attack' ? 1 : 0) : 0;
     const bodyY = H + bob + 0.04 - 0.08 * dip - 0.07 * spear, bodyRot = tilt + ramTilt + treb + (running ? (spear ? -0.02 : -0.15) : 0) - 0.35 * dip;
     c.joint([ramShift + 0.08 * spear, bodyY, 0], [0, 0, bodyRot], (t) => t.joint([0, 0, 0], [0, 0, 0], (q) => {
-      spikeBody(q, k.whip || k.trebuchet ? false : p.armed, k.tint, k.long);
+      spikeBody(q, k.whip || k.trebuchet ? false : p.armed, k.tint);
       if (k.trebuchet) trebuchetParts(q, p, tp, rp, k.tint, { y: bodyY, rot: bodyRot, scale: k.body }, ((k.sling ?? 1.6) / (k.body * LOOK.charger.scale(mass)) - 0.16) / 8);
       if (k.whip) whipArms(q, p, (k.whip / LOOK.lasher.scale(mass)) / k.body, k.tint);
     }, k.body));
@@ -919,32 +955,34 @@ function gHopper(b: ModelBuilder, p: Pose, gait = HOPPER_GAIT): void {
     pitch = a < 0.35 ? 0.15 * sm(a / 0.35) : a < 0.55 ? 0.15 - 0.4 * sm((a - 0.35) / 0.2) : -0.25 * (1 - sm((a - 0.55) / 0.45));
   }
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
-    const hipY = 0.88 - 0.42 * crouch + height, hip: V3 = [thrust * 0.6, hipY, 0];
+    const hipY = 1.18 - 0.55 * crouch + height, hip: V3 = [thrust * 0.6, hipY, 0];
+    // (lanky, the user's: a thinner barrel, a little longer, on a longer, leaner leg; the same size overall)
+    const W = 0.62, L = 1.12;
     // the body over its hip: a long level ram, banded with armour plates, a spine ridge down its back, a heavy blunt
     // boss in front capped with its crystal, tapering behind to a tail
-    c.joint([thrust, hipY + 0.14, 0], [0, 0, pitch], (bd) => {
-      const prof = [[-0.9, 0.04], [-0.7, 0.11], [-0.4, 0.18], [0, 0.21], [0.35, 0.22], [0.52, 0.2]] as const;
+    c.joint([thrust, hipY + 0.1, 0], [0, 0, pitch], (bd) => {
+      const prof = ([[-0.9, 0.04], [-0.7, 0.11], [-0.4, 0.18], [0, 0.21], [0.35, 0.22], [0.52, 0.2]] as const).map(([x, w]) => [x * L, w * W] as const);
       bd.loft(prof.map(([x, w]) => ({ at: [x, 0, 0] as V3, w, up: w, down: w * 0.9 })), belly);
       const girth = (x: number) => { for (let j = 1; j < prof.length; j++) if (x <= prof[j][0]) { const [x0, r0] = prof[j - 1], [x1, r1] = prof[j]; return r0 + ((x - x0) / (x1 - x0)) * (r1 - r0); } return prof[prof.length - 1][1]; };
       for (let i = 0; i < 9; i++) { // overlapping armour bands down its whole length, each over the next toward the front
-        const x = -0.78 + i * 0.15, r = girth(x + 0.1) + 0.015;
-        bd.loft([0, 1].map((k) => ({ at: [x + k * 0.13, 0.01, 0] as V3, w: r * (k ? 1 : 0.9), up: r * (k ? 1 : 0.9), down: r * 0.88 * (k ? 1 : 0.9) })), i % 2 ? plate : shell);
-        bd.loft([0, 1].map((k) => ({ at: [x + 0.13 + k * 0.02, 0.01, 0] as V3, w: r * 1.02, up: r * 1.02, down: r * 0.9 })), edge); // its lip
-        bd.cone(0.03, 0.09, [x + 0.08, r + 0.03, 0], edge, [0, 0, -0.5], 4); // the spine ridge
+        const x = (-0.78 + i * 0.15) * L, r = girth(x + 0.1) + 0.012;
+        bd.loft([0, 1].map((k) => ({ at: [x + k * 0.13 * L, 0.01, 0] as V3, w: r * (k ? 1 : 0.9), up: r * (k ? 1 : 0.9), down: r * 0.88 * (k ? 1 : 0.9) })), i % 2 ? plate : shell);
+        bd.loft([0, 1].map((k) => ({ at: [x + 0.13 * L + k * 0.02, 0.01, 0] as V3, w: r * 1.02, up: r * 1.02, down: r * 0.9 })), edge); // its lip
+        bd.cone(0.022, 0.07, [x + 0.08, r + 0.02, 0], edge, [0, 0, -0.5], 4); // the spine ridge
       }
-      bd.loft([[0.54, 0.25, 0.25, 0.23], [0.62, 0.26, 0.26, 0.24], [0.68, 0.2, 0.2, 0.18]].map(([x, w, u, d]) => ({ at: [x, 0, 0] as V3, w, up: u, down: d, flat: 0.5 })), edge); // the blunt boss
-      bd.crystal(0.24, [0.7, 0, 0], [0, 0, -Math.PI / 2]); // its crystal, capping the boss, point forward
-      for (const [y, z] of [[0.1, 0.1], [0.1, -0.1], [-0.08, 0.1], [-0.08, -0.1]] as const) bd.crystal(0.11, [0.66, y, z], [z * 2.5, 0, -Math.PI / 2 + y * 1.5]); // and a ring of smaller ones round it
+      bd.loft([[0.54, 0.25, 0.25, 0.23], [0.62, 0.26, 0.26, 0.24], [0.68, 0.2, 0.2, 0.18]].map(([x, w, u, d]) => ({ at: [x * L, 0, 0] as V3, w: w * W, up: u * W, down: d * W, flat: 0.5 })), edge); // the blunt boss
+      bd.crystal(0.24, [0.7 * L, 0, 0], [0, 0, -Math.PI / 2]); // its crystal, capping the boss, point forward
+      for (const [y, z] of [[0.1, 0.1], [0.1, -0.1], [-0.08, 0.1], [-0.08, -0.1]] as const) bd.crystal(0.09, [0.66 * L, y * W, z * W], [z * 2.5, 0, -Math.PI / 2 + y * 1.5]); // and a ring of smaller ones round it
     });
-    // the one leg: a thick thigh from a heavy haunch, its knee forward, a long shin, the ankle back, a broad foot
-    const foot: V3 = [footX, footY, 0], ankle: V3 = [foot[0] - 0.12, foot[1] + 0.16, 0];
-    const knee = jointBetween(hip, ankle, 0.56, 0.58, [1, 0.35, 0]); // (long legs: long bounds)
-    c.sphere([0.17, 0.14, 0.17], [hip[0], hip[1] + 0.04, 0], plate); // the haunch, under the ram
-    shapedLimb(c, hip, knee, 0.13, [1.2, 1.35, 1.2, 0.9, 0.7], leg, { flat: 0.2 });
-    c.sphere(0.09, knee, edge);
-    shapedLimb(c, knee, ankle, 0.085, [1.0, 0.85, 0.7, 0.6, 0.65], leg, { flat: 0.3, keel: 0.4 });
-    c.sphere(0.06, ankle, edge);
-    shapedLimb(c, ankle, foot, 0.06, [1.0, 0.9, 0.8, 0.9], leg, { flat: 0.4 });
+    // the one leg: a long lean thigh from its haunch, its knee forward, a long shin, the ankle back, a broad foot
+    const foot: V3 = [footX, footY, 0], ankle: V3 = [foot[0] - 0.16, foot[1] + 0.22, 0];
+    const knee = jointBetween(hip, ankle, 0.76, 0.8, [1, 0.35, 0]); // (long legs: long bounds)
+    c.sphere([0.11, 0.09, 0.11], [hip[0], hip[1] + 0.03, 0], plate); // the haunch, under the ram
+    shapedLimb(c, hip, knee, 0.085, [1.2, 1.35, 1.2, 0.9, 0.7], leg, { flat: 0.2 });
+    c.sphere(0.06, knee, edge);
+    shapedLimb(c, knee, ankle, 0.055, [1.0, 0.85, 0.7, 0.6, 0.65], leg, { flat: 0.3, keel: 0.4 });
+    c.sphere(0.042, ankle, edge);
+    shapedLimb(c, ankle, foot, 0.04, [1.0, 0.9, 0.8, 0.9], leg, { flat: 0.4 });
     for (const [dz, l] of [[-0.11, 0.17], [0, 0.22], [0.11, 0.17]] as const) // three broad toes, splayed, to balance on
       shapedLimb(c, foot, [foot[0] + l * 0.95, Math.max(0.01, foot[1] - 0.02), dz + dz * 0.6], 0.035, [1.0, 0.9, 0.6, 0.3], edge, { flat: 0.6 });
     c.cone(0.03, 0.12, [foot[0] - 0.08, foot[1] + 0.02, 0], edge, [0, 0, Math.PI / 2 + 0.3], 4); // a back spur
@@ -956,8 +994,8 @@ function gHopper(b: ModelBuilder, p: Pose, gait = HOPPER_GAIT): void {
 // which is about the volume 15 kg of body fills)
 const charger = { ...unit({ id: 'charger', name: 'Charger', mass: 15, physique: { muscle: 0.6, frame: 0.25, reserve: 0.15 }, refinement: 2,
   attack: { style: 'strike', crystalMass: 1.5 }, description: 'T1: a fast charging body, striding on two long legs.', model: (b, p) => drawCharger(b, p, 38) }, 'charger'), size: footprint('charger', 38) };
-const micropike = unit({ id: 'micropike', name: 'Micropike', mass: 35, physique: { muscle: 0.45, frame: 0.4, reserve: 0.15 }, refinement: 2,
-  attack: { style: 'strike', crystalMass: 0.8, shaft: 1.5 }, description: 'T1: micropikes.', model: (b, p) => drawCharger(b, p, 35, MICROPIKE) }, 'charger');
+const micropike = { ...unit({ id: 'micropike', name: 'Micropike', mass: 35, physique: { muscle: 0.45, frame: 0.4, reserve: 0.15 }, refinement: 2,
+  attack: { style: 'strike', crystalMass: 0.8, shaft: 1.5 }, description: 'T1: micropikes.', model: (b, p) => drawMicropike(b, p, 35) }, 'charger'), size: 0.78 }; // (its collision its tripod's stance, as drawn)
 const flier = unit({ id: 'flier', name: 'Vimmer', mass: 120, physique: { muscle: 0.5, frame: 0.25, reserve: 0.25 }, refinement: 3, flight: { height: 20, launch: 'backward' }, // (a high ceiling: its dives are real drops, and it can climb after fliers)
   attack: { style: 'strike', crystalMass: 2 }, description: 'T2: a dive bomber: it swoops down onto its target to strike, its dive behind the blow, and climbs away again.', model: (b, p) => drawVimmer(b, p, 120) }, 'vimmer');
 const whipweld = unit({ id: 'whipweld', name: 'Whipweld', mass: 150, physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 }, refinement: 3,
