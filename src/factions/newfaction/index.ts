@@ -955,47 +955,76 @@ function gHopper(b: ModelBuilder, p: Pose, gait = HOPPER_GAIT): void {
   // AIR, then landing; in the air it flies as a thrown body does, its apex g·t²/8 above where it left the ground (in
   // metres, which a baked unit is: ÷ G into this model's units). Charging, the same bounds cover more ground
   const UP = (1 - gait.hop) * (2 / 3), AIR = gait.hop, APEX = (9.8 * (gait.hop * gait.period) ** 2) / 8 / GOLIATH_G;
-  let crouch = 0.65 + 0.03 * Math.sin(t), height = 0, pitch = 0, footX = 0, footY = 0, thrust = 0;
-  if (moving) {
-    if (ph < UP) { const k = ph / UP; crouch = k < 0.7 ? sm(k / 0.7) : 1 - sm((k - 0.7) / 0.3); pitch = 0.2 * crouch; } // (sinking deep, then springing)
-    else if (ph < UP + AIR) { // in the air: up and over, the leg trailing then swinging forward to land
-      const a = (ph - UP) / AIR;
-      crouch = 0; height = 4 * a * (1 - a) * APEX; pitch = 0.3 * (1 - 2 * a);
-      footX = -0.45 * (1 - sm(a)) + 0.14 * Math.sin(Math.PI * a); footY = height * 0.5 + 0.1 * Math.sin(Math.PI * a);
-    } else { const k = (ph - UP - AIR) / (1 - UP - AIR); crouch = 0.8 * Math.sin(Math.PI * k); pitch = -0.2 * Math.sin(Math.PI * k); } // (landing hard, taking the weight)
-  } else if (p.anim === 'slam') { // its bound is the blow (played over that bound): crouching (to 0.35), then the bound
-    // (its arc the sim's, at its apex g·t²/8), nose up off the ground, coming over ram first and thrust forward
+  // posed by the classic principles (Thomas and Johnston's): anticipation (it sinks, flattens and dips its nose before it
+  // springs), squash and stretch keeping its volume (sx along its body, sy up and down, its width 1 ÷ both), stretched
+  // through its fastest moments (as a smear frame), slow in and out round the top and the settle, its body along its
+  // arc, and follow-through (it rocks past level after it lands; its tail lags its turns, below). Timing is the sim's
+  type Pose5 = { crouch: number; height: number; pitch: number; footX: number; footY: number; thrust: number; sx: number; sy: number };
+  const bound = (q0: number): Pose5 => {
+    const q = ((q0 % 1) + 1) % 1, o: Pose5 = { crouch: 0, height: 0, pitch: 0, footX: 0, footY: 0, thrust: 0, sx: 1, sy: 1 };
+    if (q < UP) {
+      const k = q / UP;
+      if (k < 0.7) { const c = sm(k / 0.7); o.crouch = c; o.pitch = -0.1 * Math.sin((Math.PI * k) / 0.7) + 0.05 * c; o.sy = 1 - 0.18 * c; o.sx = 1 + 0.06 * c; } // (anticipation: sinking, flattening, nose dipping)
+      else { const u = sm((k - 0.7) / 0.3); o.crouch = 1 - u; o.pitch = 0.05 + 0.33 * u; o.sx = 1.06 + 0.16 * u; o.sy = 1 - 0.18 * (1 - u); } // (the push: springing, stretching along its launch)
+    } else if (q < UP + AIR) {
+      const a = (q - UP) / AIR;
+      o.height = 4 * a * (1 - a) * APEX; o.pitch = 0.38 * (1 - 2 * a); // (along its arc)
+      o.sx = 1 + 0.22 * (1 - sm(a / 0.35)) + 0.12 * sm((a - 0.6) / 0.4); // (stretched off the ground, easing round the top, stretching again as it falls)
+      o.footX = -0.5 * (1 - sm((a - 0.15) / 0.85)) + 0.14 * Math.sin(Math.PI * a); o.footY = o.height * 0.5 + 0.1 * Math.sin(Math.PI * a); // (the leg trailing, swinging through late)
+    } else {
+      const k = (q - UP - AIR) / (1 - UP - AIR);
+      o.crouch = 0.9 * Math.sin(Math.PI * Math.min(1, k / 0.5)) * (k < 0.5 ? 1 : 1 - sm((k - 0.5) / 0.5)); // (taking the weight)
+      o.sy = 1 - 0.26 * Math.sin(Math.PI * Math.min(1, k / 0.45)) + 0.07 * Math.sin(Math.PI * Math.max(0, (k - 0.45) / 0.55)); // (squashed by the impact, overshooting, settling)
+      o.sx = 1 + 0.12 * Math.sin(Math.PI * Math.min(1, k / 0.45));
+      o.pitch = -0.38 * Math.exp(-k * 4) * Math.cos(k * 7); // (its nose comes down with the landing, rocks back past level, settles)
+    }
+    return o;
+  };
+  let o: Pose5 = { crouch: 0.65 + 0.03 * Math.sin(t), height: 0, pitch: 0, footX: 0, footY: 0, thrust: 0, sx: 1, sy: 1 + 0.02 * Math.sin(t) }, bend = 0;
+  if (moving) { o = bound(ph); bend = Math.max(-0.3, Math.min(0.3, (o.pitch - bound(ph - 0.04).pitch) * 2)); }
+  else if (p.anim === 'slam') { // its bound is the blow: crouching (to 0.35), then the bound (its arc the sim's), coming
+    // over ram first, stretched into the impact, squashed by it at contact (the end)
     const a = p.phase, f = Math.max(0, (a - 0.35) / 0.65);
-    crouch = a < 0.35 ? sm(a / 0.25) * (1 - sm((a - 0.28) / 0.07)) : 0;
-    height = a < 0.35 ? 0 : 4 * f * (1 - f) * APEX;
-    pitch = a < 0.35 ? 0.22 * crouch : 0.3 - 0.75 * sm((f - 0.1) / 0.5); // (ram first by mid-flight: it may meet the target there)
-    thrust = 0.42 * sm((f - 0.15) / 0.4);
-    if (a >= 0.35) { footX = -0.25 - 0.3 * sm(f / 0.5) + 0.12 * sm((f - 0.7) / 0.3); footY = height * 0.5; }
-  } else if (p.anim === 'attack') { // standing, it strikes without leaving the ground: crouching, then lunging ram first
+    if (a < 0.35) { const c = a < 0.28 ? sm(a / 0.25) : 1 - sm((a - 0.28) / 0.07); o = { ...o, crouch: c, pitch: 0.22 * c - 0.08 * Math.sin((Math.PI * a) / 0.35), sy: 1 - 0.2 * c, sx: 1 + 0.07 * c + (a > 0.28 ? 0.2 * sm((a - 0.28) / 0.07) : 0) }; }
+    else {
+      o = { ...o, crouch: 0, height: 4 * f * (1 - f) * APEX, pitch: 0.35 - 0.8 * sm((f - 0.1) / 0.5), thrust: 0.42 * sm((f - 0.15) / 0.4) };
+      o.sx = f < 0.85 ? 1.27 - 0.1 * sm(f / 0.4) + 0.12 * sm((f - 0.5) / 0.35) : 1.29 - 0.42 * sm((f - 0.85) / 0.15); // (stretched into it)
+      o.sy = f < 0.85 ? 1 : 1 - 0.2 * sm((f - 0.85) / 0.15); // (and squashed at contact)
+      o.footX = -0.25 - 0.3 * sm(f / 0.5) + 0.12 * sm((f - 0.7) / 0.3); o.footY = o.height * 0.5;
+    }
+    bend = a > 0.35 ? -0.2 * Math.sin(Math.PI * Math.min(1, (a - 0.35) / 0.5)) : 0; // (its tail dragging after the lunge)
+  } else if (p.anim === 'attack') { // standing, it strikes without leaving the ground: crouching (squashed), then lunging
+    // ram first (stretched, the fastest moment), then settling back past level
     const a = p.phase;
-    crouch = a < 0.35 ? 0.7 * sm(a / 0.35) : 0.7 * (1 - sm((a - 0.35) / 0.2)) * (a < 0.55 ? 1 : 0);
-    thrust = a < 0.35 ? -0.08 * sm(a / 0.35) : a < 0.55 ? -0.08 + 0.5 * sm((a - 0.35) / 0.2) : 0.42 * (1 - sm((a - 0.55) / 0.45));
-    pitch = a < 0.35 ? 0.15 * sm(a / 0.35) : a < 0.55 ? 0.15 - 0.4 * sm((a - 0.35) / 0.2) : -0.25 * (1 - sm((a - 0.55) / 0.45));
+    o.crouch = a < 0.35 ? 0.7 * sm(a / 0.35) : 0.7 * (1 - sm((a - 0.35) / 0.2)) * (a < 0.55 ? 1 : 0);
+    o.thrust = a < 0.35 ? -0.08 * sm(a / 0.35) : a < 0.55 ? -0.08 + 0.5 * sm((a - 0.35) / 0.2) : 0.42 * (1 - sm((a - 0.55) / 0.45));
+    o.pitch = a < 0.35 ? 0.15 * sm(a / 0.35) : a < 0.55 ? 0.15 - 0.4 * sm((a - 0.35) / 0.2) : -0.25 * Math.exp(-(a - 0.55) * 5) * Math.cos((a - 0.55) * 9);
+    o.sy = a < 0.35 ? 1 - 0.16 * sm(a / 0.35) : a < 0.55 ? 0.84 + 0.16 * sm((a - 0.35) / 0.2) : 1;
+    o.sx = a < 0.35 ? 1 + 0.05 * sm(a / 0.35) : a < 0.55 ? 1.05 + 0.2 * Math.sin((Math.PI * (a - 0.35)) / 0.2) : 1;
+    bend = a > 0.35 && a < 0.75 ? -0.18 * Math.sin((Math.PI * (a - 0.35)) / 0.4) : 0;
   }
+  const { crouch, height, pitch, footX, footY, thrust, sx, sy } = o, sz = 1 / (sx * sy); // (its volume kept)
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
     const hipY = 1.18 - 0.55 * crouch + height, hip: V3 = [thrust * 0.6, hipY, 0];
     // (lanky, the user's: a thinner barrel, a little longer, on a longer, leaner leg; the same size overall)
-    const W = 0.62, L = 1.12;
+    const W = 0.62, L = 1.12 * sx;
+    // its tail lags the body's turns: the rear bends after it (follow-through and overlapping action)
+    const lag = (x: number) => (x < 0 ? (bend * x * x) / (0.9 * L) : 0);
     // the body over its hip: a long level ram, banded with armour plates, a spine ridge down its back, a heavy blunt
     // boss in front capped with its crystal, tapering behind to a tail
     c.joint([thrust, hipY + 0.1, 0], [0, 0, pitch], (bd) => {
       const prof = ([[-0.9, 0.04], [-0.7, 0.11], [-0.4, 0.18], [0, 0.21], [0.35, 0.22], [0.52, 0.2]] as const).map(([x, w]) => [x * L, w * W] as const);
-      bd.loft(prof.map(([x, w]) => ({ at: [x, 0, 0] as V3, w, up: w, down: w * 0.9 })), belly);
+      bd.loft(prof.map(([x, w]) => ({ at: [x, lag(x), 0] as V3, w: w * sz, up: w * sy, down: w * 0.9 * sy })), belly);
       const girth = (x: number) => { for (let j = 1; j < prof.length; j++) if (x <= prof[j][0]) { const [x0, r0] = prof[j - 1], [x1, r1] = prof[j]; return r0 + ((x - x0) / (x1 - x0)) * (r1 - r0); } return prof[prof.length - 1][1]; };
       for (let i = 0; i < 9; i++) { // overlapping armour bands down its whole length, each over the next toward the front
         const x = (-0.78 + i * 0.15) * L, r = girth(x + 0.1) + 0.012;
-        bd.loft([0, 1].map((k) => ({ at: [x + k * 0.13 * L, 0.01, 0] as V3, w: r * (k ? 1 : 0.9), up: r * (k ? 1 : 0.9), down: r * 0.88 * (k ? 1 : 0.9) })), i % 2 ? plate : shell);
-        bd.loft([0, 1].map((k) => ({ at: [x + 0.13 * L + k * 0.02, 0.01, 0] as V3, w: r * 1.02, up: r * 1.02, down: r * 0.9 })), edge); // its lip
-        bd.cone(0.022, 0.07, [x + 0.08, r + 0.02, 0], edge, [0, 0, -0.5], 4); // the spine ridge
+        bd.loft([0, 1].map((k) => ({ at: [x + k * 0.13 * L, 0.01 + lag(x + k * 0.13 * L), 0] as V3, w: r * sz * (k ? 1 : 0.9), up: r * sy * (k ? 1 : 0.9), down: r * 0.88 * sy * (k ? 1 : 0.9) })), i % 2 ? plate : shell);
+        bd.loft([0, 1].map((k) => ({ at: [x + 0.13 * L + k * 0.02, 0.01 + lag(x + 0.13 * L), 0] as V3, w: r * 1.02 * sz, up: r * 1.02 * sy, down: r * 0.9 * sy })), edge); // its lip
+        bd.cone(0.022, 0.07, [x + 0.08, r * sy + 0.02 + lag(x + 0.08), 0], edge, [0, 0, -0.5], 4); // the spine ridge
       }
-      bd.loft([[0.54, 0.25, 0.25, 0.23], [0.62, 0.26, 0.26, 0.24], [0.68, 0.2, 0.2, 0.18]].map(([x, w, u, d]) => ({ at: [x * L, 0, 0] as V3, w: w * W, up: u * W, down: d * W, flat: 0.5 })), edge); // the blunt boss
+      bd.loft([[0.54, 0.25, 0.25, 0.23], [0.62, 0.26, 0.26, 0.24], [0.68, 0.2, 0.2, 0.18]].map(([x, w, u, d]) => ({ at: [x * L, 0, 0] as V3, w: w * W * sz, up: u * W * sy, down: d * W * sy, flat: 0.5 })), edge); // the blunt boss
       bd.crystal(0.24, [0.7 * L, 0, 0], [0, 0, -Math.PI / 2]); // its crystal, capping the boss, point forward
-      for (const [y, z] of [[0.1, 0.1], [0.1, -0.1], [-0.08, 0.1], [-0.08, -0.1]] as const) bd.crystal(0.09, [0.66 * L, y * W, z * W], [z * 2.5, 0, -Math.PI / 2 + y * 1.5]); // and a ring of smaller ones round it
+      for (const [y, z] of [[0.1, 0.1], [0.1, -0.1], [-0.08, 0.1], [-0.08, -0.1]] as const) bd.crystal(0.09, [0.66 * L, y * W * sy, z * W * sz], [z * 2.5, 0, -Math.PI / 2 + y * 1.5]); // and a ring of smaller ones round it
     });
     // the one leg: a long lean thigh from its haunch, its knee forward, a long shin, the ankle back, a broad foot
     const foot: V3 = [footX, footY, 0], ankle: V3 = [foot[0] - 0.16, foot[1] + 0.22, 0];
