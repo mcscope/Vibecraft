@@ -30,7 +30,7 @@ const fenling: FenUnit = {
   id: 'fenling',
   name: 'Fenling',
   description: 'Small, tireless marsh folk. Every fenling gathers, builds and slings crystal stones; alone they are frail, together a flood.',
-  mass: 32,
+  mass: 32, size: 0.65, // (its collision as wide as it's drawn)
   physique: { muscle: 0.5, frame: 0.22, reserve: 0.28 },
   attack: { style: 'throw', crystalMass: 0.3, ammo: 6, sling: 0.6 }, // light stones: the sling's leverage pays on them
   workRefinement: 1.4, // nimble: gathers, wades and carries 40% more
@@ -50,7 +50,7 @@ const reedguard: FenUnit = {
   id: 'reedguard',
   name: 'Reedguard',
   description: 'A stout fenling behind a woven reed shield, bracing a long crystal-tipped reed spear. Cheap, sturdy, and in the way: anything that charges onto the spear drives it home with its own weight.',
-  mass: 38,
+  mass: 38, size: 0.73, // (its collision as wide as it's drawn)
   physique: { muscle: 0.35, frame: 0.55, reserve: 0.1 },
   attack: { style: 'strike', crystalMass: 1, shaft: 2.5 },
   gait: { hop: 0.76, period: 0.85 }, // heavier bounds behind the shield
@@ -97,7 +97,7 @@ const bogToad: FenUnit = {
   id: 'bog-toad',
   name: 'Bog Toad',
   description: 'A huge marsh toad with a fenling on its back. Lunges and slams with its crystal-studded jaw: brutal up close.',
-  mass: 400, // horse-sized: a fenling rides it
+  mass: 400, size: 2.22, // (its collision as wide as it's drawn) // horse-sized: a fenling rides it
   length: 2.4, // m nose to tail: a long body, it wheels
   physique: { muscle: 0.55, frame: 0.3, reserve: 0.15 },
   attack: { style: 'strike', crystalMass: 2.5 },
@@ -147,7 +147,7 @@ const packTortoise: FenUnit = {
   id: 'pack-tortoise',
   name: 'Pack Tortoise',
   description: 'An ancient war-tortoise in bolted iron, a crystal reliquary chained to its back. Fenlings that run dry come to it for more, like crystals on the ground.',
-  mass: 160,
+  mass: 160, size: 2.52, // (its collision as wide as it's drawn)
   length: 1.6, // m nose to tail: a long body, it wheels
   physique: { muscle: 0.45, frame: 0.47, reserve: 0.08 }, // a tortoise: half shell, slow and hard to hurt, still strong enough to haul
   refinement: 1.5,
@@ -255,7 +255,7 @@ const greatSiegeHeron: FenUnit = {
   id: 'great-siege-heron',
   name: 'Great Siege Heron',
   description: 'The eldest of the siege herons, vast as a reed hut, its basket heaped with twelve great crystals. Slow to rise and hungry in the air, but one pass can flatten a hall.',
-  mass: 540,
+  mass: 540, size: 1.42, // (its collision as wide as it's drawn)
   physique: { muscle: 0.45, frame: 0.2, reserve: 0.35 },
   attack: { style: 'throw', crystalMass: 8, ammo: 12 },
   refinement: 2.4, // as refined as the Elder Mound can raise (its capital supports up to 2.42)

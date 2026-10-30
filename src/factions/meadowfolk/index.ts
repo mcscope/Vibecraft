@@ -34,7 +34,7 @@ const villager: MeadowUnit = {
   id: 'villager',
   name: 'Villager',
   description: 'Gathers berries, wood and crystal, hauls them home and raises buildings, and can defend itself with a crystal-headed hammer.',
-  mass: 45,
+  mass: 45, size: 0.56, // (its collision as wide as it's drawn)
   refinement: 2.07, // as refined as its building affords
   physique: { muscle: 0.4, frame: 0.35, reserve: 0.25 },
   attack: { style: 'strike', crystalMass: 1 },
@@ -57,7 +57,7 @@ const slinger: MeadowUnit = {
   id: 'slinger',
   name: 'Slinger',
   description: 'Light skirmisher who whirls a sling of crystal chips. Fragile, but hits from range — then has to collect the spent crystals.',
-  mass: 32,
+  mass: 32, size: 0.47, // (its collision as wide as it's drawn)
   refinement: 1.42, // as refined as its building affords
   physique: { muscle: 0.5, frame: 0.25, reserve: 0.25 },
   attack: { style: 'throw', crystalMass: 0.3, ammo: 12, sling: 1.0 }, // light stones: the sling's leverage pays on them
@@ -86,7 +86,7 @@ const maceman: MeadowUnit = {
   id: 'maceman',
   name: 'Crystal Maceman',
   description: 'Infantry in mail with a shield, swinging a 2 kg crystal-headed mace. Hard to stop.',
-  mass: 80,
+  mass: 80, size: 0.79, // (its collision as wide as it's drawn)
   physique: { muscle: 0.45, frame: 0.45, reserve: 0.1 },
   attack: { style: 'strike', crystalMass: 2 },
   refinement: 1.42, // as refined as its building affords
@@ -117,7 +117,7 @@ const pikeman: MeadowUnit = {
   id: 'pikeman',
   name: 'Pikeman',
   description: 'A steady soldier behind a 3-metre crystal-tipped pike. Strikes first, and anything that charges onto the set pike drives it home with its own weight: the answer to Lynx Lancers and other heavy chargers. Slow to swing, and no match for a swarm.',
-  mass: 62,
+  mass: 62, size: 0.59, // (its collision as wide as it's drawn)
   refinement: 1.42, // as refined as its building affords
   physique: { muscle: 0.45, frame: 0.4, reserve: 0.15 },
   attack: { style: 'strike', crystalMass: 1.5, shaft: 3 },
@@ -155,7 +155,7 @@ const lynx: MeadowUnit = {
   id: 'lynx',
   name: 'Lynx Lancer',
   description: 'A lancer riding a great lynx, crystal-tipped lance couched. Fast and fierce, but eats like a horse.',
-  mass: 320,
+  mass: 320, size: 0.76, // (its collision as wide as it's drawn)
   length: 2.6, // m nose to tail: a long body, it wheels
   physique: { muscle: 0.6, frame: 0.28, reserve: 0.12 },
   attack: { style: 'strike', crystalMass: 5, shaft: 3, sidearm: { crystalMass: 1.5 } }, // the couched lance it's drawn with, and a sword for close in
@@ -244,7 +244,7 @@ const hurlhorn: MeadowUnit = {
   id: 'hurlhorn',
   name: 'Hurlhorn',
   description: 'A shaggy war-beast carrying a throwing-arm on its back. Lobs 9 kg crystals across the field, a dozen to a load. Helpless up close.',
-  mass: 400,
+  mass: 400, size: 1.44, // (its collision as wide as it's drawn)
   length: 2.9, // m nose to tail: a long body, it wheels
   physique: { muscle: 0.55, frame: 0.3, reserve: 0.15 },
   attack: { style: 'throw', crystalMass: 9, ammo: 12 },
@@ -309,7 +309,7 @@ const mule: MeadowUnit = {
   id: 'mule',
   name: 'Mule Cart',
   description: 'A small, patient mule hauling a two-wheeled cart. Keeps outlying buildings stocked from the town center.',
-  mass: 80,
+  mass: 80, size: 1.2, // (its collision as wide as it's drawn)
   refinement: 2.07, // as refined as its building affords
   length: 1.8, // m nose to tail: a long body, it wheels
   physique: { muscle: 0.55, frame: 0.3, reserve: 0.15 },

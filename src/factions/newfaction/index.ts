@@ -27,13 +27,13 @@ const TIER = { 1: '#5fae3a', 2: '#2fb8c4', 3: '#b04fb8' } as const;
  */
 const LOOK = {
   caterpillar: { scale: (m: number) => 1.2 * Math.cbrt(m / 15), length: 0.24 }, // (a long body: its collision circle is its width)
-  egg: { scale: (m: number) => Math.cbrt(m / 15), length: 0.42 },
-  mother: { scale: (m: number) => 1.4 * Math.cbrt(m / 40) * Math.pow(Math.min(1, 120 / m), 0.2), length: 1.25 }, // (the T3 drawn smaller than ∛ of her mass: the user found her too big)
-  vimmer: { scale: (m: number) => 1.3 * Math.cbrt(m / 120), length: 0.75 },
-  charger: { scale: (m: number) => Math.cbrt(m / 38), length: 0.5 },
-  lasher: { scale: (m: number) => 1.45 * Math.cbrt(m / 150), length: 0.5 },
-  goliath: { scale: (m: number) => 2.6 * Math.cbrt(m / 600), length: 0.9 }, // (collision: its body; wings overlap others, as fliers' do)
-  dragon: { scale: (m: number) => 2.0 * Math.cbrt(m / 500), length: 0.9 }, // 500 kg: ~4.5 m snout to tail-tip (collision: its body; wings overlap others, as fliers' do)
+  egg: { scale: (m: number) => Math.cbrt(m / 15), length: 0.63 },
+  mother: { scale: (m: number) => 0.95 * Math.cbrt(m / 40) * Math.pow(Math.min(1, 120 / m), 0.2), length: 1.25 }, // (drawn smaller, the T3 smaller still than ∛ of her mass: the user found them too big)
+  vimmer: { scale: (m: number) => 1.3 * Math.cbrt(m / 120), length: 1.48 }, // (standing on its wings, that wide)
+  charger: { scale: (m: number) => Math.cbrt(m / 38), length: 0.41 },
+  lasher: { scale: (m: number) => 1.45 * Math.cbrt(m / 150), length: 0.47 },
+  goliath: { scale: (m: number) => 2.6 * Math.cbrt(m / 600), length: 0.48 }, // (collision: its body; wings overlap others, as fliers' do)
+  dragon: { scale: (m: number) => 2.0 * Math.cbrt(m / 500), length: 0.65 }, // 500 kg: ~4.5 m snout to tail-tip (collision: its body; wings overlap others, as fliers' do)
 } as const;
 /** A caterpillar's trailing segments, as model units behind its front (for the baker). */
 export const caterpillarSegments = (mass: number): number[] => [1, 2].map((k) => k * CATERPILLAR_GAP * LOOK.caterpillar.scale(mass));
@@ -792,7 +792,7 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
     for (const z of [1, -1]) {
       const ph = p.phase + (z > 0 ? 0 : 0.5); // (each hind leg steps with the foreleg across from it)
       const lk = o.leg ?? 1; // (smaller legs: thinner, sprawling less)
-      const sp = (1 + 0.9 * cr) * (0.6 + 0.4 * lk); // (sprawling, its feet far out to the sides)
+      const sp = (1 + 0.45 * cr) * (0.6 + 0.4 * lk); // (sprawling, its feet out to the sides: not so far as to be wider than long)
       const hip: V3 = [-0.1, y0 - 0.04, z * 0.16], kneeRest: V3 = [0.02, y0 + 0.12 + 0.3 * cr * lk * lk, z * 0.5 * sp], ankleRest: V3 = [-0.24, 0.2, z * 0.6 * sp], rest: V3 = [legs === 2 ? -0.04 : -0.16, 0, z * (legs === 2 ? 0.42 : 0.62) * sp];
       const foot = walking ? footAt(rest, legs === 2 ? p.phase + (z > 0 ? 0 : 0.5) : ph, 0.12, 0.06) : rest;
       const ankle: V3 = [foot[0] + ankleRest[0] - rest[0], foot[1] + ankleRest[1], foot[2] + ankleRest[2] - rest[2]];
@@ -868,9 +868,11 @@ const cocoon = unit({ id: 'cocoon', name: 'Cocoon', mass: 179, physique: SHELL, 
   model: (b, p) => origamiBun(b, p, '#c8b88a', 179) }, 'egg');
 
 // mothers: lay anything up to their own refinement (a mother carries at least her cheapest egg's price)
-const motherOf = (r: 1 | 2 | 3, mass: number) => unit({ id: `mother${r}`, name: `Mother (r${r})`, mass, physique: MOTHER, refinement: r,
+// (each tier's form is its own shape: its collision as wide as that tier is drawn, × its drawn scale)
+const MOTHER_WIDTH = { 1: 1.62, 2: 1.715, 3: 1.4 } as const;
+const motherOf = (r: 1 | 2 | 3, mass: number) => ({ ...unit({ id: `mother${r}`, name: `Mother (r${r})`, mass, physique: MOTHER, refinement: r,
   spawns: ['egg1', 'egg2', 'egg3'].slice(0, r), attack: { style: 'strike', crystalMass: 1 }, // PLACEHOLDER attack (a side with no buildings needs something that can fight)
-  description: `Lays eggs up to T${r}, and carries food to them.`, model: (b, p) => mother(b, p, mass, r) }, 'mother');
+  description: `Lays eggs up to T${r}, and carries food to them.`, model: (b, p) => mother(b, p, mass, r) }, 'mother'), size: LOOK.mother.scale(mass) * MOTHER_WIDTH[r] });
 
 /**
  * The Goliath Charger (the user's idea, 2026-10-29): a single-leg mega hopper battering ram. Its body is the ram-wedge
