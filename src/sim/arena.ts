@@ -45,7 +45,7 @@ export const entryKey = (e: ArenaEntry) => `${e.faction.id}:${e.id}`;
 export interface ArenaSide { owner: number; specId: string; n: number; ids: number[] }
 
 /** What a unit costs against the arena budget: its food. Crystal (weapons, ammo) is free here. */
-export const arenaCost = (w: World, owner: number, specId: string) => w.specOf(owner, specId)!.stats.foodCost;
+export const arenaCost = (w: World, owner: number, specId: string) => { const st = w.specOf(owner, specId)!.stats; return Math.round(st.foodCost * st.refinement); }; // (TRIAL: every unit at its refinement-1 price)
 
 /** Clear the field and line both sides up, each with `budget` worth of its unit, charging each other. */
 export function stageFight(w: World, a: { owner: number; specId: string }, b: { owner: number; specId: string }, budget: number): [ArenaSide, ArenaSide] {
