@@ -256,12 +256,29 @@ export class Baker {
   }
 
   /** A model's extent in a pose, in metres (a unit is a metre): front (+x) and back, height, width (dev: sim vs art checks). */
-  dims(build: (b: ModelBuilder, pose: Pose) => void, team: TeamColors, pose: Pose): { front: number; back: number; top: number; width: number } {
+  dims(build: (b: ModelBuilder, pose: Pose) => void, team: TeamColors, pose: Pose): { front: number; back: number; top: number; width: number; volume: number } {
     this.clearStage();
     build(new Builder(team, this.stage), pose);
     this.stage.updateMatrixWorld(true);
     const all = new THREE.Box3().setFromObject(this.stage);
-    return { front: all.max.x, back: -all.min.x, top: all.max.y, width: all.max.z - all.min.z };
+    // its volume (m³), parts that overlap counted once: points sampled through its box, the share inside any of its
+    // meshes (a ray from the point crosses a closed mesh's skin an odd number of times when it's inside)
+    const meshes: Array<{ m: THREE.Mesh; box: THREE.Box3 }> = [];
+    this.stage.traverse((o) => { if (o instanceof THREE.Mesh) { const m = o.material as THREE.Material; m.side = THREE.DoubleSide; meshes.push({ m: o, box: new THREE.Box3().setFromObject(o) }); } });
+    const ray = new THREE.Raycaster(), dir = new THREE.Vector3(0.577, 0.577, 0.577), pt = new THREE.Vector3();
+    let seed = 7, inside = 0;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const N = 4000, size = all.getSize(new THREE.Vector3());
+    for (let i = 0; i < N; i++) {
+      pt.set(all.min.x + rnd() * size.x, all.min.y + rnd() * size.y, all.min.z + rnd() * size.z);
+      for (const { m, box } of meshes) {
+        if (!box.containsPoint(pt)) continue;
+        ray.set(pt, dir);
+        if (ray.intersectObject(m, false).length % 2 === 1) { inside++; break; }
+      }
+    }
+    const volume = (inside / N) * size.x * size.y * size.z;
+    return { front: all.max.x, back: -all.min.x, top: all.max.y, width: all.max.z - all.min.z, volume };
   }
 
   private measure(build: (b: ModelBuilder, pose: Pose) => void, team: TeamColors, poses: Pose[]): { r: number; h: number } {

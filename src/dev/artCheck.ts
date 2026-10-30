@@ -10,7 +10,7 @@ import type { Pose } from '../kits/bake3d/types';
 
 export function runArtCheck(): void {
   const baker = new Baker(), team = TEAM_COLORS[0];
-  const rows: string[] = ['unit                         mass | height art/sim | length art | width art / collision | attack reaches art / sim (from its centre)'];
+  const rows: string[] = ['unit                         mass | height art/sim | length art | width art / collision | attack reaches art / sim (from its centre) | volume art / its mass at 1000 kg/m³'];
   for (const [fid, list] of [['meadowfolk', meadowfolk], ['fenfolk', fenfolk], ['wildwelds', wildwelds]] as const) for (const u of list) {
     const st = derive(u);
     const pose = (anim: Pose['anim'], phase: number): Pose => ({ anim, phase, team, armed: true, cargo: null });
@@ -20,7 +20,7 @@ export function runArtCheck(): void {
     if (st.canAttack) for (let k = 0; k < 8; k++) reach = Math.max(reach, baker.dims(u.model, team, pose('attack', k / 7)).front);
     const simH = bodyHeight(u.mass), coll = st.radius * 2 * M_PER_TILE, simReach = st.range * M_PER_TILE;
     const flag = (a: number, b: number) => (b > 0 && (a / b > 1.35 || a / b < 0.74) ? ' ◀' : '');
-    rows.push(`${(fid + ':' + u.id).padEnd(28)} ${String(u.mass).padStart(4)} | ${rest.top.toFixed(2)} / ${simH.toFixed(2)}${flag(rest.top, simH)} | ${(rest.front + rest.back).toFixed(2)} | ${rest.width.toFixed(2)} / ${coll.toFixed(2)}${flag(Math.max(rest.width, Math.min(rest.width, rest.front + rest.back)), coll)} | ${st.canAttack ? `${reach.toFixed(2)} / ${simReach.toFixed(2)}${u.attack?.style === 'throw' ? ' (throws)' : flag(reach, simReach)}` : '-'}`);
+    rows.push(`${(fid + ':' + u.id).padEnd(28)} ${String(u.mass).padStart(4)} | ${rest.top.toFixed(2)} / ${simH.toFixed(2)}${flag(rest.top, simH)} | ${(rest.front + rest.back).toFixed(2)} | ${rest.width.toFixed(2)} / ${coll.toFixed(2)}${flag(Math.max(rest.width, Math.min(rest.width, rest.front + rest.back)), coll)} | ${st.canAttack ? `${reach.toFixed(2)} / ${simReach.toFixed(2)}${u.attack?.style === 'throw' ? ' (throws)' : flag(reach, simReach)}` : '-'} | ${(rest.volume * 1000).toFixed(0)} L / ${u.mass} L = ${(rest.volume * 1000 / u.mass).toFixed(2)}×${rest.volume * 1000 / u.mass > 2 || rest.volume * 1000 / u.mass < 0.5 ? ' ◀' : ''}`);
   }
   baker.dispose();
   const pre = document.createElement('pre');
