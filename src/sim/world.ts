@@ -1346,7 +1346,8 @@ export class World {
       case 'metamorph': return runMetamorph(this, u, o, DT);
       case 'move': {
         const pass = u.queue.length > 0; // more orders after this one: ride on through the waypoint, don't pull up
-        if (this.moveTo(u, o.x, o.y, pass ? 0.8 : 0.3, false, pass)) { this.finish(u); u.faceTo = o.face ?? null; }
+        // (sent off with an enemy close by, it runs: getting clear of a fight, to come back in at a charge)
+        if (this.moveTo(u, o.x, o.y, pass ? 0.8 : 0.3, !u.airborne && this.enemyNear(u, K.sprintRange), pass)) { this.finish(u); u.faceTo = o.face ?? null; }
         return u.x !== u.px || u.y !== u.py;
       }
       case 'attackMove': {
@@ -1857,6 +1858,12 @@ export class World {
     }
     if (hit) this.damage(hit, p.damage, p.tx, p.ty);
     this.dropShard(p.tx, p.ty, p.crystalKg);
+  }
+
+  /** Is an enemy body that fights (not a wild animal) within `radius` tiles of `u`? */
+  private enemyNear(u: Unit, radius: number): boolean {
+    for (const e of this.units.values()) if (e.owner !== u.owner && !e.wild && !e.dummy && e.stats.canAttack && (e.x - u.x) ** 2 + (e.y - u.y) ** 2 < radius * radius) return true;
+    return false;
   }
 
   private nearestEnemy(u: Unit, radius: number, includeDummies: boolean): number {
