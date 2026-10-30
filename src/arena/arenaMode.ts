@@ -4,7 +4,7 @@
 import { PLAYABLE } from '../factions';
 import type { DerivedStats } from '../sim/physics';
 import { World, DT, TICK_RATE } from '../sim/world';
-import { ARENA_SECONDS, ARENA_X, ARENA_Y, alive, arenaCost, arenaRoster, arenaScenario, arenaScore, entryKey, fightOver, stageFight, strength, type ArenaEntry, type ArenaSide } from '../sim/arena';
+import { ARENA_SECONDS, ARENA_X, ARENA_Y, alive, arenaCost, arenaRoster, arenaScenario, arenaScore, entryKey, fightOver, setRefinement, stageFight, strength, type ArenaEntry, type ArenaSide } from '../sim/arena';
 import { ArtBank, TEAM_COLORS } from '../render/artbank';
 import { Renderer } from '../render/renderer';
 import { Input } from '../ui/input';
@@ -73,6 +73,9 @@ export async function runArena(params: URLSearchParams): Promise<void> {
 
   // (&budget=1: one of each, for watching a duel; &high=1: fliers start up at their ceiling)
   let budget = BUDGETS.includes(Number(params.get('budget'))) || Number(params.get('budget')) === 1 ? Number(params.get('budget')) : 1200;
+  // refinement researched on top, each side (the fight being watched only: the matrix is of the designs as they are)
+  const REFINE = [0, 0.5, 1, 1.5, 2, 3];
+  const refine = [+(params.get('refA') ?? 0) || 0, +(params.get('refB') ?? 0) || 0];
   const high = params.get('high') === '1';
   const scores = new Map<string, number>(); // `${i},${j}` → score
   let worker: Worker | null = null;
@@ -100,6 +103,7 @@ export async function runArena(params: URLSearchParams): Promise<void> {
     <p class="arena-help">Equal food budgets (crystal is free). Each cell: the share of its budget the winner keeps, <b class="win">+ row wins</b>, <b class="lose">− column wins</b>. Click a cell to watch it live.</p>
     <div class="arena-controls">
       Budget <select class="arena-budget">${BUDGETS.map((b) => `<option value="${b}"${b === budget ? ' selected' : ''}>${b}</option>`).join('')}</select>
+      ${[0, 1].map((k) => `Refine ${k ? 'B' : 'A'} <select class="arena-refine" data-side="${k}" title="Refinement researched on top for this side, as its faction's research gives it: cheaper, or bigger at the price">${REFINE.map((r) => `<option value="${r}"${r === refine[k] ? ' selected' : ''}>+${r}</option>`).join('')}</select>`).join(' ')}
       <span class="arena-speed">${[0.5, 1, 2, 4].map((s) => `<button data-speed="${s}">${s}×</button>`).join('')}</span>
       <button class="arena-pause">Pause</button>
       <button class="arena-rematch">Rematch</button>
@@ -136,6 +140,7 @@ export async function runArena(params: URLSearchParams): Promise<void> {
     await Promise.all([bank.ensureUnits(seat(a, 0), [a.id]), bank.ensureUnits(seat(b, 1), [b.id])]);
     if (fresh) loading.style.display = 'none';
     if (my !== staging) return; // another fight was picked meanwhile
+    setRefinement(world, seat(a, 0), a.id, refine[0]); setRefinement(world, seat(b, 1), b.id, refine[1]);
     const [A, B] = stageFight(world, { owner: seat(a, 0), specId: a.id }, { owner: seat(b, 1), specId: b.id }, budget);
     if (high) for (const id of [...A.ids, ...B.ids]) { const u = world.units.get(id); if (u?.stats.flight) { u.airborne = true; u.alt = u.stats.flyHeight; u.launchT = 99; } }
     input.player = A.owner;
@@ -145,7 +150,7 @@ export async function runArena(params: URLSearchParams): Promise<void> {
     panel.querySelectorAll('td.sel').forEach((td) => td.classList.remove('sel'));
     cell(i, j).classList.add('sel');
     look();
-    history.replaceState(null, "", `?mode=arena&a=${entryKey(a)}&b=${entryKey(b)}&budget=${budget}${control ? "&control=1" : ""}`);
+    history.replaceState(null, "", `?mode=arena&a=${entryKey(a)}&b=${entryKey(b)}&budget=${budget}${control ? "&control=1" : ""}${refine[0] ? `&refA=${refine[0]}` : ''}${refine[1] ? `&refB=${refine[1]}` : ''}`);
     drawStats();
   };
 
@@ -158,6 +163,7 @@ export async function runArena(params: URLSearchParams): Promise<void> {
     if (t.closest('.arena-rematch') && fight) stage(fight.i, fight.j);
     if (t.closest('.arena-control input')) { control = (t as HTMLInputElement).checked; if (fight) stage(fight.i, fight.j); }
   });
+  panel.querySelectorAll<HTMLSelectElement>('.arena-refine').forEach((s) => s.addEventListener('change', () => { refine[+s.dataset.side!] = +s.value; if (fight) stage(fight.i, fight.j); }));
   panel.querySelector<HTMLSelectElement>('.arena-budget')!.addEventListener('change', (e) => {
     budget = +(e.target as HTMLSelectElement).value;
     for (let i = 0; i < roster.length; i++) for (let j = 0; j < roster.length; j++) { scores.delete(`${i},${j}`); paintCell(i, j); }

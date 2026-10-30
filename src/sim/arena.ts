@@ -45,7 +45,17 @@ export const entryKey = (e: ArenaEntry) => `${e.faction.id}:${e.id}`;
 export interface ArenaSide { owner: number; specId: string; n: number; ids: number[] }
 
 /** What a unit costs against the arena budget: its food. Crystal (weapons, ammo) is free here. */
-export const arenaCost = (w: World, owner: number, specId: string) => { const st = w.specOf(owner, specId)!.stats; return Math.round(st.foodCost * st.refinement); }; // (TRIAL: every unit at its refinement-1 price)
+// (every unit at its own refinement-1 price, its design's refinement undone; refinement researched on top, set with
+// setRefinement, still counts: cheaper, or for a unit whose research grows it, bigger at the price)
+export const arenaCost = (w: World, owner: number, specId: string) => { const s = w.specOf(owner, specId)!; return Math.round(s.stats.foodCost * (s.spec.refinement ?? 1)); };
+
+/** As if `extra` refinement had been researched for a unit type on a side: grown, if its faction's research grows it, else cheaper. */
+export function setRefinement(w: World, owner: number, specId: string, extra: number): void {
+  const p = w.players[owner], grows = (w.factionOf(owner).techs ?? []).some((t) => t.unit === specId && t.grows);
+  p.refine[specId] = extra;
+  p.refineGrow[specId] = grows ? extra : 0;
+  w.refreshStats(owner, specId);
+}
 
 /** Clear the field and line both sides up, each with `budget` worth of its unit, charging each other. */
 export function stageFight(w: World, a: { owner: number; specId: string }, b: { owner: number; specId: string }, budget: number): [ArenaSide, ArenaSide] {

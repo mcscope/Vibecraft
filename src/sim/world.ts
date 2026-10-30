@@ -1032,7 +1032,7 @@ export class World {
   }
 
   /** Re-derive a unit type's stats after a technology; existing units keep their HP fraction. */
-  private refreshStats(owner: number, unitId: string): void {
+  refreshStats(owner: number, unitId: string): void {
     const s = this.specOf(owner, unitId);
     if (!s) return;
     const P = this.players[owner];
