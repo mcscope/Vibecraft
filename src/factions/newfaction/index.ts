@@ -1008,12 +1008,13 @@ function gHopper(b: ModelBuilder, p: Pose, gait = HOPPER_GAIT): void {
     // ram first (stretched, the fastest moment), then settling back past level
     const a = p.phase;
     const hitPitch = strikePitch(0.9, 1.05);
-    o.crouch = a < 0.35 ? 0.65 - 0.35 * sm(a / 0.35) : a < 0.55 ? 0.3 + 0.6 * sm((a - 0.35) / 0.2) : 0.9 - 0.25 * sm((a - 0.55) / 0.45); // (from its resting crouch and back to it)
-    o.thrust = a < 0.35 ? -0.08 * sm(a / 0.35) : a < 0.55 ? -0.08 + 0.5 * sm((a - 0.35) / 0.2) : 0.42 * (1 - sm((a - 0.55) / 0.45));
-    o.pitch = a < 0.35 ? 0.2 * sm(a / 0.35) : a < 0.55 ? 0.2 + (hitPitch - 0.2) * sm((a - 0.35) / 0.2) : hitPitch * Math.exp(-(a - 0.55) * 5) * Math.cos((a - 0.55) * 9);
-    o.sy = a < 0.35 ? 1 - 0.16 * sm(a / 0.35) : a < 0.55 ? 0.84 + 0.16 * sm((a - 0.35) / 0.2) : 1;
-    o.sx = a < 0.35 ? 1 + 0.05 * sm(a / 0.35) : a < 0.55 ? 1.05 + 0.2 * Math.sin((Math.PI * (a - 0.35)) / 0.2) : 1;
-    bend = a > 0.35 && a < 0.75 ? -0.18 * Math.sin((Math.PI * (a - 0.35)) / 0.4) : 0;
+    // (its blow lands 0.4 through the swing, World.CONTACT: bowed down into it there)
+    o.crouch = a < 0.2 ? 0.65 - 0.35 * sm(a / 0.2) : a < 0.4 ? 0.3 + 0.6 * sm((a - 0.2) / 0.2) : 0.9 - 0.25 * sm((a - 0.4) / 0.6); // (from its resting crouch and back to it)
+    o.thrust = a < 0.2 ? -0.08 * sm(a / 0.2) : a < 0.4 ? -0.08 + 0.5 * sm((a - 0.2) / 0.2) : 0.42 * (1 - sm((a - 0.4) / 0.6));
+    o.pitch = a < 0.2 ? 0.2 * sm(a / 0.2) : a < 0.4 ? 0.2 + (hitPitch - 0.2) * sm((a - 0.2) / 0.2) : hitPitch * Math.exp(-(a - 0.4) * 5) * Math.cos((a - 0.4) * 9);
+    o.sy = a < 0.2 ? 1 - 0.16 * sm(a / 0.2) : a < 0.4 ? 0.84 + 0.16 * sm((a - 0.2) / 0.2) : 1;
+    o.sx = a < 0.2 ? 1 + 0.05 * sm(a / 0.2) : a < 0.4 ? 1.05 + 0.2 * Math.sin((Math.PI * (a - 0.2)) / 0.2) : 1;
+    bend = a > 0.2 && a < 0.6 ? -0.18 * Math.sin((Math.PI * (a - 0.2)) / 0.4) : 0;
   }
   const { crouch, height, pitch, footX, footY, thrust, sx, sy } = o, sz = 1 / (sx * sy); // (its volume kept)
   b.joint([0, 0, 0], [0, 0, 0], (c) => {

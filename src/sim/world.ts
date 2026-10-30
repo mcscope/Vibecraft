@@ -1082,7 +1082,8 @@ export class World {
     // (and each is reckoned from how the bodies were meeting, before any of them lands: a blow landing first doesn't
     // slow the other it's met by)
     const landing: Array<() => void> = [];
-    for (const u of this.units.values()) if (u.blow && (this.tick >= u.blow.at || (u.blow.dur && this.reached(u, u.blow)))) { const f = this.strike(u); if (f) landing.push(f); }
+    // (a hopper's bound-blow lands only as it comes down: in the air it's over their heads)
+    for (const u of this.units.values()) if (u.blow && (u.blow.dur ? (this.tick >= u.blow.at || (u.strideMul > 0 && this.reached(u, u.blow))) && boundLeft(u) < 0.08 : this.tick >= u.blow.at)) { const f = this.strike(u); if (f) landing.push(f); }
     for (const f of landing) f();
     this.separate();
     for (const p of this.projectiles.values()) this.tickProjectile(p);
@@ -1643,7 +1644,12 @@ export class World {
     if (u.airborne && !wpn.throws && !tu) u.airborne = false; // (a building: it lands to strike)
     // in reach at a run: a striker doesn't stop on a dime, it keeps its line and strikes in passing, carried on past
     // alongside; at a walk it just pulls up (coasts to a stop). Riding out to come round again is the player's call
-    if (!u.airborne && !wpn.throws && tu && (u.blow?.dur || (u.stats.gait && u.strideMul > 0))) this.moveTo(u, tx, ty, 0, true, true); // (a hopper in the air finishes its bound, and one striking with its bound keeps bounding into it)
+    // (a hopper in the air finishes its bound; striking with its bound, it shortens it to come down just in front of its
+    // target: flying slower, so the blow lands as it lands, its ram coming down onto it, not over it mid-flight)
+    if (!u.airborne && !wpn.throws && tu && u.blow?.dur && u.stats.gait) { // (crouched, it keeps on: to spring)
+      const gap = Math.max(0, edge - wpn.range * 0.6), left = u.strideMul > 0 ? boundLeft(u) : u.stats.gait.hop * u.stats.gait.period;
+      this.moveTo(u, tx, ty, 0, true, true, (gap * u.stats.gait.hop) / Math.max(DT, left));
+    } else if (!u.airborne && !wpn.throws && tu && (u.blow?.dur || (u.stats.gait && u.strideMul > 0))) this.moveTo(u, tx, ty, 0, true, true);
     else if (!u.airborne && !wpn.throws && tu && Math.hypot(u.vx, u.vy) > u.stats.speed * 1.1) { const [px, py] = passBeside(u, tu, 4); this.moveTo(u, px, py, 0, true, true); }
     if (!u.airborne) this.face(u, tx - u.x, ty - u.y); // (in the air it faces the way it's flying: a swoop strikes in passing)
     if (u.cooldown > 0 || u.exhausted) return true;
@@ -1691,16 +1697,11 @@ export class World {
     // speed it's going this instant)
     // (on the ground, it waits out its crouch and springs: the blow is that next bound)
     let down = 0;
-    const tu = this.units.get(targetId), g = midStride(u, this.tick) || midStride(u, this.tick - 1) ? u.stats.gait : undefined, air = !!g && u.strideMul > 0; // (only one on its way bounds its blow)
+    const g = midStride(u, this.tick) || midStride(u, this.tick - 1) ? u.stats.gait : undefined, air = !!g && u.strideMul > 0; // (only one on its way bounds its blow)
     if (!u.airborne && g) {
-      const vk = air ? u.strideMul : 1 / g.hop, wait = takeoffIn(u);
-      let flight = air ? boundLeft(u) : g.hop * g.period;
-      if (tu) {
-        const d = Math.hypot(tu.x - u.x, tu.y - u.y) || 1, edge = d - tu.stats.radius;
-        const closing = ((u.vx * vk - tu.vx) * (tu.x - u.x) + (u.vy * vk - tu.vy) * (tu.y - u.y)) / d;
-        if (closing > 0) flight = Math.min(flight, Math.max(0, edge - reach * 0.6) / closing);
-      }
-      down = Math.max(DT, wait + flight);
+      const wait = takeoffIn(u);
+      // (it lands at the end of this bound, the blow with it: the bound is shortened to bring it down there)
+      down = Math.max(DT, wait + (air ? boundLeft(u) : g.hop * g.period));
       u.swing = down;
     }
     u.blow = { at: this.tick + (u.airborne || couched || planted ? 0 : down > 0 ? Math.round(down / DT) : Math.round((u.swing * World.CONTACT) / DT)), target: targetId, damage, shaft, reach, ...(down > 0 ? { dur: down, wait: air ? 0 : takeoffIn(u) } : {}) };
