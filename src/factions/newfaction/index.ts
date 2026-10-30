@@ -311,12 +311,18 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
     // (striking, a battering ram: drawn back on its legs, then slammed forward level and hard, spike first)
     const hit = p.anim === 'attack' && !k.whip && !k.trebuchet ? p.phase : -1;
     const ramX = hit < 0 ? 0 : hit < 0.38 ? -0.22 * Math.sin((hit / 0.38) * Math.PI / 2) : hit < 0.5 ? -0.22 + ((k.ram ?? 0.45) + 0.22) * ((hit - 0.38) / 0.12) : (k.ram ?? 0.45) * (1 - (hit - 0.5) / 0.5) ** 2; // (exaggerated: far back, then a long hard slam, as far as its legs reach)
-    const ramTilt = hit < 0 ? 0 : hit < 0.38 ? 0.25 * Math.sin((hit / 0.38) * Math.PI / 2) : hit < 0.5 ? 0.25 - 0.45 * ((hit - 0.38) / 0.12) : -0.2 * (1 - (hit - 0.5) / 0.5) ** 2; // (rearing back, then driving down into it)
+    // (it slams its spike into the middle of an average body, half a 70 kg body's height up, where the sim has blows
+    // meet: crouching nose down to wind up, then rising on its legs and tipping its nose up just so far as puts the tip
+    // there at the moment of contact)
+    const STRIKE_H = 0.85 / LOOK.charger.scale(mass), ease2 = (x: number) => { const c2 = Math.max(0, Math.min(1, x)); return c2 * c2 * (3 - 2 * c2); };
+    const ramLift = hit < 0 ? 0 : hit < 0.38 ? -0.06 * Math.sin((hit / 0.38) * Math.PI) : hit < 0.5 ? 0.12 * ease2((hit - 0.38) / 0.12) : 0.12 * (1 - ease2((hit - 0.5) / 0.5));
+    const hitTilt = Math.asin(Math.max(-0.6, Math.min(0.9, (STRIKE_H - (k.H + 0.04 + 0.12)) / (0.6 * k.body))));
+    const ramTilt = hit < 0 ? 0 : hit < 0.38 ? -0.12 * Math.sin((hit / 0.38) * Math.PI / 2) : hit < 0.5 ? -0.12 + (hitTilt + 0.12) * ease2((hit - 0.38) / 0.12) : hitTilt * (1 - (hit - 0.5) / 0.5) ** 2;
   const ramShift = ramX * k.body / 0.7; // (the hips go with the body: the whole of it lunges, its feet planted)
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
     for (const S of [1, -1]) {
       const back = 0.11; // (a charger's legs attach well back along its body)
-      const hip: V = [-0.02 - back + ramShift, H + bob, S * k.hipZ], restFoot: V = [0.1 - 0.08 * upK - back, 0.01, S * (k.footZ + 0.05 * (1 - upK))];
+      const hip: V = [-0.02 - back + ramShift, H + bob + ramLift, S * k.hipZ], restFoot: V = [0.1 - 0.08 * upK - back, 0.01, S * (k.footZ + 0.05 * (1 - upK))];
       const ph = p.phase + (S > 0 ? 0 : 0.5);
       const foot = running ? footAt(restFoot, ph, k.run, 0.2, 0.35) : walking ? footAt(restFoot, ph, k.walk, 0.12, 0.55) : restFoot;
       const ankle: V = [foot[0] + k.foot[0], foot[1] + k.foot[1], foot[2]];
@@ -337,7 +343,7 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
     const tp = p.anim === 'attack' && k.trebuchet ? p.phase : -1, rp = p.anim === 'reload' && k.trebuchet ? p.phase : -1;
     const treb = rp >= 0 ? 0.55 * Math.max(0, (rp - 0.7) / 0.3) : tp < 0 ? 0 : tp < 0.3 ? 0.55 * Math.sin((tp / 0.3) * Math.PI / 2) : tp < 0.55 ? 0.55 - 2.75 * ((tp - 0.3) / 0.25) ** 2 : -2.2 * (1 - (tp - 0.55) / 0.45) ** 2;
     const dip = k.whip ? Math.sin(Math.min(1, p.phase / 0.7) * Math.PI) * (p.anim === 'attack' ? 1 : 0) : 0;
-    const bodyY = H + bob + 0.04 - 0.08 * dip - 0.07 * spear, bodyRot = tilt + ramTilt + treb + (running ? (spear ? -0.02 : -0.15) : 0) - 0.35 * dip;
+    const bodyY = H + bob + ramLift + 0.04 - 0.08 * dip - 0.07 * spear, bodyRot = tilt + ramTilt + treb + (running ? (spear ? -0.02 : -0.15) : 0) - 0.35 * dip;
     c.joint([ramShift + 0.08 * spear, bodyY, 0], [0, 0, bodyRot], (t) => t.joint([0, 0, 0], [0, 0, 0], (q) => {
       spikeBody(q, k.whip || k.trebuchet ? false : p.armed, k.tint);
       if (k.trebuchet) trebuchetParts(q, p, tp, rp, k.tint, { y: bodyY, rot: bodyRot, scale: k.body }, ((k.sling ?? 1.6) / (k.body * LOOK.charger.scale(mass)) - 0.16) / 8);
