@@ -67,6 +67,8 @@ export function unitFrame(u: Unit): { anim: ArtAnim } & FrameTime {
       if (u.stats.gait) return { anim: 'charge', progress: u.stride };
       return { anim: 'charge', time: (u.animT * Math.hypot(u.vx, u.vy)) / 1.7, walked: u.walked * UNITS_PER_TILE };
     case 'attack': {
+      // (a hopper whose bound-blow has just landed is still 'attacking' for the rest of that tick: it's bounding on)
+      if (u.stats.gait && u.swing <= 0 && !u.blow) return { anim: Math.hypot(u.vx, u.vy) > u.stats.speed * 1.15 ? 'charge' : 'walk', progress: u.stride };
       // (a hopper striking in the air: its bound is the blow, played over the bound, down at the landing)
       if (u.blow?.dur && u.stats.gait) { // (its bound is the blow: crouched for its `wait`, the art's first 0.35, then the
         // bound itself, played by how far through the air it really is, so the art's arc is the sim's)
