@@ -952,8 +952,10 @@ function gHopper(b: ModelBuilder, p: Pose, gait = HOPPER_GAIT): void {
 }
 
 // offshoots, one refinement up (PLACEHOLDER bodies, attacks and names)
-const charger = unit({ id: 'charger', name: 'Charger', mass: 38, physique: { muscle: 0.6, frame: 0.25, reserve: 0.15 }, refinement: 2,
-  attack: { style: 'strike', crystalMass: 1.5 }, description: 'T1: a fast charging body, striding on two long legs.', model: (b, p) => drawCharger(b, p, 38) }, 'charger');
+// (15 kg, its larva's own weight: it changes by reshaping the larva's body, for no food; drawn the size it was at 38 kg,
+// which is about the volume 15 kg of body fills)
+const charger = { ...unit({ id: 'charger', name: 'Charger', mass: 15, physique: { muscle: 0.6, frame: 0.25, reserve: 0.15 }, refinement: 2,
+  attack: { style: 'strike', crystalMass: 1.5 }, description: 'T1: a fast charging body, striding on two long legs.', model: (b, p) => drawCharger(b, p, 38) }, 'charger'), size: footprint('charger', 38) };
 const micropike = unit({ id: 'micropike', name: 'Micropike', mass: 35, physique: { muscle: 0.45, frame: 0.4, reserve: 0.15 }, refinement: 2,
   attack: { style: 'strike', crystalMass: 0.8, shaft: 1.5 }, description: 'T1: micropikes.', model: (b, p) => drawCharger(b, p, 35, MICROPIKE) }, 'charger');
 const flier = unit({ id: 'flier', name: 'Vimmer', mass: 120, physique: { muscle: 0.5, frame: 0.25, reserve: 0.25 }, refinement: 3, flight: { height: 20, launch: 'backward' }, // (a high ceiling: its dives are real drops, and it can climb after fliers)
