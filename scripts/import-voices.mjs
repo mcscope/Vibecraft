@@ -30,7 +30,7 @@ const combat = existsSync('public/voicelab/combat.json') ? JSON.parse(readFileSy
 // voice clips cut since the labels were saved keep their guesses too (unit, and line where one was guessed)
 const voices = existsSync('public/voicelab/clips.json') ? JSON.parse(readFileSync('public/voicelab/clips.json', 'utf8')) : [];
 const unlabelled = [...combat, ...voices].filter((c) => !seen.has(c.id)).map((c) => ({ id: c.id, unit: c.guess, line: c.guessLine ?? 'any' }));
-const clips = [...labelled, ...unlabelled].filter((c) => c.unit !== 'skip');
+const clips = [...labelled, ...unlabelled].filter((c) => c.unit && c.unit !== 'skip'); // (unlabelled clips stay out)
 
 const out = 'public/voices';
 rmSync(out, { recursive: true, force: true });
