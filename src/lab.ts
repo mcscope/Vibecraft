@@ -4,7 +4,7 @@ import './style.css';
 import type { FactionSpec } from './factions/types';
 import type { ArtAnim, FactionArt, Sprite, UnitArt } from './art/contract';
 import { unitSprite } from './art/contract';
-import { blit } from './art/draw';
+import { blit, fitCanvas } from './art/draw';
 import { meadowfolk } from './factions/meadowfolk';
 import { training } from './factions/training';
 import { deriveBuilding, validate, validateFaction } from './sim/physics';
@@ -95,15 +95,11 @@ async function main(): Promise<void> {
 const start = performance.now();
 function frame(now: number): void {
   const t = (now - start) / 1000;
-  const dpr = window.devicePixelRatio || 1;
   for (const cell of cells) {
     const { c, art } = cell;
-    const w = c.clientWidth, h = c.clientHeight;
-    if (!w) continue;
-    if (c.width !== Math.round(w * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
-    const ctx = c.getContext('2d')!;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, w, h);
+    const fit = fitCanvas(c);
+    if (!fit) continue;
+    const { ctx, w, h } = fit;
     const dir = cell.dir ?? (cell.anim === 'idle' ? Math.floor(t / 2.5) % 8 : 1);
     const oneShot = cell.anim === 'attack' || cell.anim === 'die';
     const sprite = unitSprite(art, cell.anim, dir, oneShot ? { progress: (t % 1.6) / 1.2 } : { time: t });

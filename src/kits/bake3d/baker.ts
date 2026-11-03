@@ -163,6 +163,24 @@ function collapse(body: THREE.Object3D, k: number): void {
 
 const AIR_POSES = new Set<string>(['fly', 'leap', 'climb', 'soar', 'glide', 'land', 'bankL', 'bankR', 'swoop']);
 
+/** The animations a unit bake renders, by its options. */
+function animsFor(opts: UnitBakeOptions): BakedAnim[] {
+  if (opts.dummy) return ['idle', 'die'];
+  if (opts.part) return ['idle', 'walk', 'die'];
+  const anims: BakedAnim[] = ['idle', 'walk', 'attack', 'gather', 'eat', 'tired', 'die', 'charge', 'stagger'];
+  if (opts.brace) anims.push('brace');
+  if (opts.rises) anims.push('rise');
+  if (opts.reload) anims.push('reload');
+  if (opts.lay) anims.push('lay');
+  if (opts.gives) anims.push('give');
+  if (opts.slam) anims.push('slam');
+  if (opts.grows) anims.push('grow', 'hungry', 'hatch');
+  if (opts.sidearm) anims.push('cut');
+  if (opts.withCarry) anims.push('carryFood', 'carryWood', 'carryCrystal');
+  if (opts.fly) anims.push('fly', 'leap', 'climb', 'soar', 'glide', 'land', 'bankL', 'bankR', 'swoop'); // (a bank: one still frame a side)
+  return anims;
+}
+
 export class Baker {
   readonly q: number;
   private renderer: THREE.WebGLRenderer;
@@ -423,19 +441,7 @@ export class Baker {
       }
       return front;
     }
-    const withCarry = !!opts.withCarry;
-    const anims: BakedAnim[] = opts.part ? ['idle', 'walk', 'die'] : opts.dummy ? ['idle', 'die'] : ['idle', 'walk', 'attack', 'gather', 'eat', 'tired', 'die'];
-    if (!opts.dummy && !opts.part) anims.push('charge', 'stagger');
-    if (opts.brace && !opts.dummy) anims.push('brace');
-    if (opts.rises && !opts.dummy) anims.push('rise');
-    if (opts.reload && !opts.dummy) anims.push('reload');
-    if (opts.lay && !opts.dummy) anims.push('lay');
-    if (opts.gives && !opts.dummy) anims.push('give');
-    if (opts.slam && !opts.dummy) anims.push('slam');
-    if (opts.grows && !opts.dummy) anims.push('grow', 'hungry', 'hatch');
-    if (opts.sidearm && !opts.dummy) anims.push('cut');
-    if (withCarry && !opts.dummy) anims.push('carryFood', 'carryWood', 'carryCrystal');
-    if (opts.fly && !opts.dummy) anims.push('fly', 'leap', 'climb', 'soar', 'glide', 'land', 'bankL', 'bankR', 'swoop'); // (a bank: one still frame a side)
+    const anims = animsFor(opts);
     // the whole-body styles ride on poses every model already knows: a charge is the walk, a stagger
     // is tired (hunched, arms down), a brace is standing; the baker leans the body for each (below)
     const poseFor = (anim: BakedAnim, phase: number): Pose => ({
@@ -446,7 +452,7 @@ export class Baker {
     });
     const samples = [poseFor('idle', 0), poseFor('walk', 0.25), poseFor('attack', 0.3), poseFor('attack', 0.6), poseFor('gather', 0.5)];
     if (opts.sidearm) samples.push(poseFor('cut', 0.3), poseFor('cut', 0.6));
-    if (withCarry) samples.push(poseFor('carryFood', 0.25));
+    if (opts.withCarry) samples.push(poseFor('carryFood', 0.25));
     if (opts.fly) samples.push(poseFor('fly', 0), poseFor('fly', 0.25), poseFor('fly', 0.5), poseFor('fly', 0.75), poseFor('leap', 0), poseFor('leap', 0.5), poseFor('land', 0.5)); // spread wings need room
     let { r, h } = this.measure(model, team, samples);
     r = Math.max(r, h * 1.05); // room to fall over
@@ -602,15 +608,10 @@ export class Baker {
     return { height: (h * Math.cos(Math.PI / 6)) * PX_PER_UNIT, anims: out as UnitArt['anims'] };
   }
 
-  /** Frames a unit bake renders, for progress bars. */
+  /** Frames a unit bake renders, for progress bars: each animation's (twice for one in the air: its shadow too), and its trailing parts'. */
   static frameCount(opts: UnitBakeOptions = {}): number {
-    const withCarry = !!opts.withCarry;
-    if (opts.dummy) return (FRAMES.idle + FRAMES.die) * BAKED_DIRS.length;
-    let n = FRAMES.idle + FRAMES.walk + FRAMES.attack + FRAMES.gather + FRAMES.eat + FRAMES.tired + FRAMES.die;
-    if (withCarry) n += FRAMES.carryFood + FRAMES.carryWood + FRAMES.carryCrystal;
-    if (opts.sidearm) n += FRAMES.cut;
-    if (opts.fly) n += 2 * (FRAMES.fly + FRAMES.leap + FRAMES.climb + FRAMES.soar + FRAMES.glide + FRAMES.land); // (and their shadows)
-    return n * BAKED_DIRS.length;
+    const own = animsFor(opts).reduce((n, a) => n + (opts.frames?.[a] ?? FRAMES[a]) * (AIR_POSES.has(a) ? 2 : 1), 0) * BAKED_DIRS.length;
+    return own + (opts.segments?.length ?? 0) * Baker.frameCount({ part: true });
   }
 }
 
@@ -674,20 +675,4 @@ function rubble(b: ModelBuilder, size: number, level: number, h: number): void {
     }
     b.rock([0.5, 0.35, 0.6], [size * 0.85, 0.15, -size * 0.3], { color: '#6f6a62', tex: 'stone' }, 3);
   }
-}
-
-/** Draw a sprite with its anchor at (x, y), scaled by zoom, optionally mirrored. */
-export function blit(ctx: CanvasRenderingContext2D, s: Sprite, x: number, y: number, zoom: number, mirror = false, alpha = 1): void {
-  const k = zoom / s.q;
-  if (alpha !== 1) ctx.globalAlpha = alpha;
-  if (mirror) {
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.scale(-1, 1);
-    ctx.drawImage(s.img, s.sx, s.sy, s.sw, s.sh, -s.ax * k, -s.ay * k, s.sw * k, s.sh * k);
-    ctx.restore();
-  } else {
-    ctx.drawImage(s.img, s.sx, s.sy, s.sw, s.sh, x - s.ax * k, y - s.ay * k, s.sw * k, s.sh * k);
-  }
-  if (alpha !== 1) ctx.globalAlpha = 1;
 }

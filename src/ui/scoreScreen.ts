@@ -2,11 +2,10 @@
 // of the match (army value, resources gathered, units) from the sim's stats.
 import { TEAM_COLORS } from '../render/artbank';
 import type { StatsSample } from '../sim/stats';
-import type { World } from '../sim/world';
-import { esc } from './format';
+import { TICK_RATE, type World } from '../sim/world';
+import { clock, esc } from './format';
 
 const n0 = (x: number) => Math.round(x).toLocaleString('en-US');
-const clock = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
 
 /** One small line chart: a line per player over time, with a crosshair readout on hover. */
 function chart(title: string, timeline: StatsSample[], pick: (s: StatsSample) => number[], players: Array<{ id: number; name: string }>): string {
@@ -44,7 +43,7 @@ export function showScore(box: HTMLElement, w: World, me: number, onClose: () =>
   box.innerHTML = `
     <div class="menu-box score-box">
       <h2>${esc(title)}</h2>
-      <p class="sub">${esc(sub)}${sub ? ' · ' : ''}${clock(w.tick / 20)} played</p>
+      <p class="sub">${esc(sub)}${sub ? ' · ' : ''}${clock(w.tick / TICK_RATE)} played</p>
       <table class="score-table">
         <tr><th></th>${players.map((p) => `<th><i class="score-swatch" style="background:${TEAM_COLORS[p.id % TEAM_COLORS.length].primary}"></i>${esc(p.name)}${p.id === w.winner ? ' ★' : ''}</th>`).join('')}</tr>
         ${row('Food gathered', res('food'))}

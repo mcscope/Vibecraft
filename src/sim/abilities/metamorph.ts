@@ -25,6 +25,7 @@ import type { UnitSpec } from '../../factions/types';
 import { derive, K, type DerivedStats } from '../physics';
 import { MAX_QUEUE, type Unit, type World } from '../world';
 import type { Ability } from './index';
+import { edgeDist2 } from '../geometry';
 
 /** Seconds per point of the new form's refinement. */
 export const METAMORPH_SEC = 6;
@@ -54,8 +55,7 @@ function larders(w: World, u: Unit): Array<{ have: number; take: (kg: number) =>
     if (r?.resource === 'food' && Math.hypot(b.x - u.x, b.y - u.y) <= r.radius) out.push({ have: b.food, take: (k) => { b.food -= k; } });
   }
   for (const b of w.buildingsOf(u.owner)) {
-    const ex = Math.max(b.ox, Math.min(u.x, b.ox + b.size)) - u.x, ey = Math.max(b.oy, Math.min(u.y, b.oy + b.size)) - u.y;
-    if (b.complete && Math.hypot(ex, ey) <= u.stats.radius + 1.5) out.push({ have: b.stock.food, take: (k) => { b.stock.food -= k; } }); // (beside it: within a tile and a half)
+    if (b.complete && edgeDist2(b, u.x, u.y) <= (u.stats.radius + 1.5) ** 2) out.push({ have: b.stock.food, take: (k) => { b.stock.food -= k; } }); // (beside it: within a tile and a half)
   }
   return out;
 }

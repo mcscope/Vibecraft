@@ -10,6 +10,20 @@ export function blit(ctx: CanvasRenderingContext2D, s: Sprite, x: number, y: num
   if (alpha !== 1) ctx.globalAlpha = 1;
 }
 
+/**
+ * Ready `c` to draw on: sized to its box at the screen's pixel density, cleared, its units CSS pixels. Null while it
+ * has no size (not laid out yet).
+ */
+export function fitCanvas(c: HTMLCanvasElement): { ctx: CanvasRenderingContext2D; w: number; h: number } | null {
+  const dpr = window.devicePixelRatio || 1, w = c.clientWidth, h = c.clientHeight;
+  if (!w) return null;
+  if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+  const ctx = c.getContext('2d')!;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, w, h);
+  return { ctx, w, h };
+}
+
 /** Fit a sprite into a size×size canvas, anchored low (top-bar icons). */
 export function spriteToCanvas(s: Sprite, size: number, crop = 1): HTMLCanvasElement {
   const c = document.createElement('canvas');

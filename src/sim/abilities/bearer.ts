@@ -9,8 +9,7 @@
 // right-click restocking (ui/input.ts).
 import type { ResourceKind } from '../../factions/types';
 import { n0 } from '../../ui/format';
-import { K } from '../physics';
-import { DT, type Building, type Unit, type World } from '../world';
+import { bite, type Building, type Unit, type World } from '../world';
 import type { Ability } from './index';
 
 /** What a bearer carries ('crystal' or 'food'), or null if it isn't one. */
@@ -68,8 +67,7 @@ export function runEatFrom(w: World, u: Unit, bearerId: number): boolean {
   const room = u.stats.maxCalories - u.cal;
   if (!b || b.owner !== u.owner || b.food < 1e-6 || room < 1) { w.finish(u); return false; }
   if (!w.moveTo(u, b.x, b.y, u.stats.radius + b.stats.radius + 0.5)) return u.x !== u.px || u.y !== u.py;
-  const kg = Math.min(b.food, (u.stats.eatRate * DT) / K.calPerFood, room / K.calPerFood);
-  b.food -= kg; u.cal += kg * K.calPerFood; u.busy = true;
+  b.food -= bite(u, b.food); u.busy = true;
   return false;
 }
 

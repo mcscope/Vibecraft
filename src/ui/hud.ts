@@ -4,12 +4,12 @@ import { metamorphCost } from '../sim/abilities/metamorph';
 import { resourceName, workerName, baseName, carterName } from '../factions/types';
 // DOM overlay: resources, selection panel, build / train / research buttons, tooltips.
 import type { ResourceKind, Stock, UnitSpec } from '../factions/types';
-import { itemCost, MAX_QUEUE, plantKg, RESOURCES, type Building, type Unit, type World } from '../sim/world';
+import { itemCost, MAX_QUEUE, plantKg, RESOURCES, TICK_RATE, type Building, type Unit, type World } from '../sim/world';
 import { CAP, capitalFor, derive, type DerivedStats } from '../sim/physics';
-import { f1, fmt, have, n0, need, pct } from './format';
+import { clock, f1, fmt, have, n0, need, pct, statRow } from './format';
 import { unitFrame } from '../render/renderer';
 import { teamColor } from '../render/artbank';
-import { blit, spriteIcon, spriteToCanvas } from '../art/draw';
+import { blit, fitCanvas, spriteIcon, spriteToCanvas } from '../art/draw';
 import { unitSprite } from '../art/contract';
 import type { ArtBank } from '../render/artbank';
 import { keymap, onSettings } from './settings';
@@ -39,7 +39,7 @@ export interface HudActions {
 
 export function statsTable(spec: UnitSpec, stats: DerivedStats = derive(spec), food = 'food'): string {
   const d = stats;
-  const row = (k: string, v: string, hint = '') => `<div class="st"><span title="${hint}">${k}</span><b>${v}</b></div>`;
+  const row = statRow;
   return `
     <div class="stats">
       ${row('Mass', `${fmt(d.mass)} kg`, 'Body mass — everything derives from this')}
@@ -228,7 +228,6 @@ export class Hud {
     const w = this.world;
     const stock = w.stockOf(this.player);
     const base = w.baseOf(this.player)?.stock ?? { food: 0, wood: 0, crystal: 0 };
-    const mins = Math.floor(w.tick / 20 / 60), secs = Math.floor(w.tick / 20) % 60;
     // main number = at the town center; (+N) = held in other buildings' own caches
     for (const r of RESOURCES) {
       const elsewhere = stock[r] - base[r];
@@ -238,7 +237,7 @@ export class Hud {
     this.resEls.idle.textContent = `${idle}`;
     this.resEls.idle.parentElement!.classList.toggle('none', idle === 0);
     this.resEls.pop.textContent = `${w.unitsOf(this.player).length}`;
-    this.resEls.clock.textContent = `${mins}:${String(secs).padStart(2, '0')}`;
+    this.resEls.clock.textContent = clock(w.tick / TICK_RATE);
 
     const units = [...selected].map((id) => w.units.get(id)).filter((u): u is Unit => !!u);
     const building = [...selected].map((id) => w.buildings.get(id)).find((b): b is Building => !!b);
@@ -427,14 +426,9 @@ export class Hud {
     for (const p of this.portraits) {
       const sheet = this.bank.unit(p.owner, p.specId);
       if (!sheet) continue;
-      const c = p.canvas;
-      const dpr = window.devicePixelRatio || 1;
-      const w = c.clientWidth, h = c.clientHeight;
-      if (!w) continue;
-      if (c.width !== w * dpr) { c.width = w * dpr; c.height = h * dpr; }
-      const ctx = c.getContext('2d')!;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, w, h);
+      const fit = fitCanvas(p.canvas);
+      if (!fit) continue;
+      const { ctx, w, h } = fit;
       const live = p.unit && this.world.units.has(p.unit.id) ? p.unit : undefined;
       const f = live ? unitFrame(live) : { anim: 'idle' as const, time: this.t };
       const sprite = unitSprite(sheet, f.anim, live ? live.heading : 1, f);

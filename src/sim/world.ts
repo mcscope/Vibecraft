@@ -4,6 +4,7 @@
 
 import type { BuildingSpec, FactionSpec, ResourceKind, Stock, TechSpec, UnitSpec, WildSpec } from '../factions/types';
 import { Rng } from './rng';
+import { edgeDist2 } from './geometry';
 import type { PlayerCommand } from './commands';
 import type { Grid } from './map';
 import { skirmish, type Scenario } from './scenarios';
@@ -27,6 +28,13 @@ import {
 
 export const TICK_RATE = 20;
 export const DT = 1 / TICK_RATE;
+
+/** `u` eats for a tick from `avail` kg of food: as fast as it eats, until it's full. Returns the kg it ate (the caller takes them from where they were). */
+export function bite(u: Unit, avail: number): number {
+  const kg = Math.max(0, Math.min(avail, (u.stats.eatRate * DT) / K.calPerFood, (u.stats.maxCalories - u.cal) / K.calPerFood));
+  u.cal += kg * K.calPerFood;
+  return kg;
+}
 
 export const MAX_QUEUE = 5;
 export const MAX_UNITS_PER_PLAYER = 150;
@@ -1265,15 +1273,7 @@ export class World {
     b.stock.crystal -= atk.crystalMass;
     b.cooldown = tw.cooldown;
     this.events.push({ type: 'attack', x: cx, y: cy, owner: b.owner, style: 'throw', kg: atk.crystalMass });
-    const dist = Math.sqrt(bestD);
-    const flight = Math.max(0.3, (dist * M_PER_TILE) / (tw.velocity * 0.7)); // metres over its horizontal speed
-    const p: Projectile = {
-      id: this.nextId++, owner: b.owner, sx: cx, sy: cy, sz: atk.height,
-      tx: leadPoint({ x: cx, y: cy }, target, flight)[0], ty: leadPoint({ x: cx, y: cy }, target, flight)[1],
-      t: 0, duration: flight, damage: tw.damage, crystalKg: atk.crystalMass, target: target.id,
-      tz: target.airborne && target.alt > 0.5 ? leadAlt(target, flight) : undefined,
-    };
-    this.projectiles.set(p.id, p);
+    this.launch(b.owner, cx, cy, atk.height, target, tw.velocity, tw.damage, atk.crystalMass);
   }
 
   private tickUnit(u: Unit): void {
@@ -1411,8 +1411,7 @@ export class World {
     if (!n || n.amount <= 0.001 || room < 1) { this.finish(u); return false; }
     if (!this.moveToNear(u, n.x, n.y, 0.85 + u.stats.radius, true)) return u.x !== u.px || u.y !== u.py;
     this.face(u, n.x - u.x, n.y - u.y);
-    const kg = Math.min(n.amount, (u.stats.eatRate * DT) / K.calPerFood, room / K.calPerFood); // (eating: anyone can, gatherer or not)
-    n.amount -= kg; u.cal += kg * K.calPerFood; u.busy = true;
+    n.amount -= bite(u, n.amount); u.busy = true; // (eating: anyone can, gatherer or not)
     if (n.amount <= 0.001) this.removeNode(n);
     return false;
   }
@@ -1537,9 +1536,8 @@ export class World {
     if (tu) { tx = tu.x; ty = tu.y; edge = Math.hypot(tu.px - u.px, tu.py - u.py) - tu.stats.radius; }
     else {
       const b = tb!;
-      const cx = Math.max(b.ox, Math.min(u.x, b.ox + b.size)), cy = Math.max(b.oy, Math.min(u.y, b.oy + b.size));
       tx = b.ox + b.size / 2; ty = b.oy + b.size / 2;
-      edge = Math.sqrt((cx - u.x) ** 2 + (cy - u.y) ** 2);
+      edge = Math.sqrt(edgeDist2(b, u.x, u.y));
     }
     // buildings: units stop near tile centres, so anyone on a tile touching it (≤ ~0.75 from a corner) can reach
     // a flier in the air bombs: it flies right over the target and drops (sim/abilities/flight.ts)
@@ -1723,7 +1721,7 @@ export class World {
     if (!tu && !tb) return;
     let tx: number, ty: number, edge: number;
     if (tu) { tx = tu.x; ty = tu.y; edge = Math.hypot(tx - u.x, ty - u.y) - tu.stats.radius; }
-    else { const bd = tb!; tx = bd.ox + bd.size / 2; ty = bd.oy + bd.size / 2; edge = Math.hypot(Math.max(bd.ox, Math.min(u.x, bd.ox + bd.size)) - u.x, Math.max(bd.oy, Math.min(u.y, bd.oy + bd.size)) - u.y); }
+    else { const bd = tb!; tx = bd.ox + bd.size / 2; ty = bd.oy + bd.size / 2; edge = Math.sqrt(edgeDist2(bd, u.x, u.y)); }
     if (edge > b.reach + 0.3 || (tu && !canReach(u, tu))) return; // (it got away: the blow falls short)
     // (a hopper's bound-blow comes down with its fall: from the top of its bound, g × half its time in the air, as a
     // diving flier's blow carries its dive)
@@ -1784,11 +1782,14 @@ export class World {
     return true;
   }
 
-  /** Launch a crystal from (x, y), `h` metres up, at (tx, ty) (towers, garrisons). */
-  launch(owner: number, x: number, y: number, h: number, tx: number, ty: number, damage: number, kg: number, target: number): void {
-    const flight = Math.max(0.3, (Math.hypot(tx - x, ty - y) * M_PER_TILE) / 8);
-    const tu = this.units.get(target);
-    const p: Projectile = { id: this.nextId++, owner, sx: x, sy: y, sz: h, tx, ty, t: 0, duration: flight, damage, crystalKg: kg, target, tz: tu?.airborne && tu.alt > 0.5 ? leadAlt(tu, flight) : undefined };
+  /**
+   * Launch a crystal from (x, y), `h` metres up, at `t`, leaving at `velocity` (m/s; towers, garrisons): lobbed, it
+   * crosses at 0.7 of that, aimed where `t` will be when it lands.
+   */
+  launch(owner: number, x: number, y: number, h: number, t: Unit, velocity: number, damage: number, kg: number): void {
+    const flight = Math.max(0.3, (Math.hypot(t.x - x, t.y - y) * M_PER_TILE) / (velocity * 0.7)); // metres over its horizontal speed
+    const [tx, ty] = leadPoint({ x, y }, t, flight);
+    const p: Projectile = { id: this.nextId++, owner, sx: x, sy: y, sz: h, tx, ty, t: 0, duration: flight, damage, crystalKg: kg, target: t.id, tz: t.airborne && t.alt > 0.5 ? leadAlt(t, flight) : undefined };
     this.projectiles.set(p.id, p);
   }
 
@@ -1878,8 +1879,7 @@ export class World {
     if (best) return best;
     for (const b of this.buildings.values()) {
       if (b.owner === u.owner || (!includeDummies && this.scenario.inertPlayers?.includes(b.owner))) continue;
-      const cx = Math.max(b.ox, Math.min(u.x, b.ox + b.size)), cy = Math.max(b.oy, Math.min(u.y, b.oy + b.size));
-      const d = (cx - u.x) ** 2 + (cy - u.y) ** 2;
+      const d = edgeDist2(b, u.x, u.y);
       if (d < bestD) { bestD = d; best = b.id; }
     }
     return best;
@@ -2101,13 +2101,10 @@ export class World {
 
   /** Eat for one tick from the pack (b = null) or a building's stock. False when done. */
   private eat(u: Unit, b: Building | null): boolean {
-    const room = u.stats.maxCalories - u.cal;
-    if (room < 1) return false;
-    const avail = b ? b.stock.food : u.food;
-    const kg = Math.min(avail, (u.stats.eatRate * DT) / K.calPerFood, room / K.calPerFood);
+    if (u.stats.maxCalories - u.cal < 1) return false;
+    const kg = bite(u, b ? b.stock.food : u.food);
     if (kg <= 1e-6) return false;
     if (b) b.stock.food -= kg; else u.food -= kg;
-    u.cal += kg * K.calPerFood;
     u.busy = true;
     return true;
   }
@@ -2532,16 +2529,14 @@ export class World {
       if (open) this.moveTo(u, open[0], open[1], 0.2);
       return false;
     }
-    const cx = Math.max(b.ox, Math.min(u.x, b.ox + b.size)), cy = Math.max(b.oy, Math.min(u.y, b.oy + b.size));
-    if ((cx - u.x) ** 2 + (cy - u.y) ** 2 <= reach * reach) { u.path = []; return true; }
+    if (edgeDist2(b, u.x, u.y) <= reach * reach) { u.path = []; return true; }
     const mx = b.ox + b.size / 2, my = b.oy + b.size / 2;
     const d = Math.sqrt((u.x - mx) ** 2 + (u.y - my) ** 2) || 1;
     const ax = mx + ((u.x - mx) / d) * (b.size / 2 + 0.6), ay = my + ((u.y - my) / d) * (b.size / 2 + 0.6);
     const open = this.grid.nearestOpen(ax, ay, 4);
     if (!open) return false;
     if (this.moveTo(u, open[0], open[1], 0.2)) return true;
-    const cx2 = Math.max(b.ox, Math.min(u.x, b.ox + b.size)), cy2 = Math.max(b.oy, Math.min(u.y, b.oy + b.size));
-    return (cx2 - u.x) ** 2 + (cy2 - u.y) ** 2 <= reach * reach;
+    return edgeDist2(b, u.x, u.y) <= reach * reach;
   }
 
   crawls(u: Unit): boolean { return !!this.specOf(u.owner, u.specId)?.spec.crawls; }

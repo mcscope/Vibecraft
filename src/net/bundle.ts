@@ -115,6 +115,8 @@ export function checkSpec(s: unknown): string[] {
   if (f.buildings !== undefined && (!Array.isArray(f.buildings) || f.buildings.length > BUNDLE_LIMITS.buildings)) e.push('bad building list');
   if (f.techs !== undefined && (!Array.isArray(f.techs) || f.techs.length > BUNDLE_LIMITS.techs)) e.push('bad tech list');
   if (f.wildlife !== undefined && (!Array.isArray(f.wildlife) || f.wildlife.length > BUNDLE_LIMITS.wildlife)) e.push('bad wildlife list');
+  // (shown all over the HUD and Codex: plain words only)
+  if (f.resourceNames !== undefined && (typeof f.resourceNames !== 'object' || Object.entries(f.resourceNames).some(([k, v]) => !['food', 'wood', 'crystal'].includes(k) || typeof v !== 'string' || !/^[\p{L} '-]{1,20}$/u.test(v)))) e.push('bad resource names');
   if (e.length) return e;
   const unit = (u: WildSpec | FactionData['units'][number], where: string) => {
     if (!isId(u.id) || !isStr(u.name, 60) || !isStr(u.description ?? '')) e.push(`${where}: bad id/name/description`);

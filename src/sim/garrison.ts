@@ -4,7 +4,7 @@
 // height and under cover. If the building falls, or on Ungarrison, they come out.
 // A building holds two units per tile of footprint, of a body that fits through its door.
 import { K } from './physics';
-import { DT, type Building, type Unit, type World } from './world';
+import { bite, DT, type Building, type Unit, type World } from './world';
 
 /** The heaviest body that fits through a door (kg): about a big man in armour. Mounts, beasts and great birds stay out. */
 export const DOOR_KG = 150;
@@ -49,7 +49,7 @@ export function tickGarrison(w: World, b: Building): void {
     const need = Math.min(Math.max(0, u.stats.loadoutCrystal - u.ammo), b.stock.crystal);
     if (need > 0) { u.ammo += need; b.stock.crystal -= need; }
     const room = u.stats.maxCalories - u.cal;
-    if (room > 1 && b.stock.food > 0) { const kg = Math.min(b.stock.food, (u.stats.eatRate * DT) / K.calPerFood, room / K.calPerFood); b.stock.food -= kg; u.cal += kg * K.calPerFood; }
+    if (room > 1 && b.stock.food > 0) b.stock.food -= bite(u, b.stock.food);
     if (!u.throws || u.cooldown > 0 || u.ammo < u.crystalMass - 1e-6) continue;
     // throw at the nearest enemy in reach (from height: the crystal carries further and hits harder)
     const reach = u.stats.range + h * 0.5 + b.size / 2;
@@ -63,6 +63,6 @@ export function tickGarrison(w: World, b: Building): void {
     u.cooldown = u.stats.cooldown;
     u.ammo -= u.crystalMass;
     const damage = u.stats.damage + u.crystalMass * K.gravity * h * K.damageScale;
-    w.launch(b.owner, cx, cy, h, target.x, target.y, damage, u.crystalMass, target.id);
+    w.launch(b.owner, cx, cy, h, target, u.stats.crystalVelocity, damage, u.crystalMass);
   }
 }

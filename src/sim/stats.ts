@@ -2,7 +2,7 @@
 // plus a timeline sampled every few seconds for the graphs. Only ever read by
 // the UI; nothing in the sim depends on it, so it can't affect the game.
 import type { ResourceKind } from '../factions/types';
-import type { WorldEvent as GameEvent, World } from './world';
+import { TICK_RATE, type WorldEvent as GameEvent, type World } from './world';
 
 export const STATS_EVERY_SEC = 10;
 
@@ -60,7 +60,7 @@ export class MatchStats {
 
   sample(w: World): void {
     const n = this.totals.length;
-    const s: StatsSample = { t: w.tick / 20, units: Array(n).fill(0), army: Array(n).fill(0), gathered: Array(n).fill(0), stock: Array(n).fill(0) };
+    const s: StatsSample = { t: w.tick / TICK_RATE, units: Array(n).fill(0), army: Array(n).fill(0), gathered: Array(n).fill(0), stock: Array(n).fill(0) };
     if (this.timeline.length && this.timeline[this.timeline.length - 1].t === s.t) return;
     for (const u of w.units.values()) {
       if (u.owner >= n || w.players[u.owner]?.neutral) continue;

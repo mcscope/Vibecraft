@@ -4,14 +4,14 @@ import './style.css';
 import type { BuildingSpec, FactionSpec, ResourceKind, TechSpec, UnitSpec } from './factions/types';
 import type { ArtAnim, FactionArt, Sprite } from './art/contract';
 import { unitSprite } from './art/contract';
-import { blit, spriteIcon } from './art/draw';
+import { blit, fitCanvas, spriteIcon } from './art/draw';
 import { meadowfolk } from './factions/meadowfolk';
 import { training } from './factions/training';
 import { fenfolk } from './factions/fenfolk';
 import { capitalFor, CAP, derive, deriveBuilding, K, prerequisites, techCost, techGate, techStart, techTime } from './sim/physics';
 import { TEAM_COLORS } from './render/artbank';
 import { statsTable } from './ui/hud';
-import { esc, f1, n0 } from './ui/format';
+import { esc, f1, n0, statRow } from './ui/format';
 import { buildingAbilityLines, unitAbilityLines } from './sim/abilities';
 
 const FACTIONS: FactionSpec[] = [meadowfolk, fenfolk, training];
@@ -167,7 +167,7 @@ function drawEdges(): void {
 
 // ── Detail panel ───────────────────────────────────────────────────────────
 
-const row = (k: string, v: string, hint = '') => `<div class="st"><span title="${esc(hint)}">${k}</span><b>${v}</b></div>`;
+const row = statRow;
 const link = (kind: Sel['kind'], id: string, label: string) => `<a href="#${faction.id}/${kind}/${id}" class="xref">${esc(label)}</a>`;
 const list = (items: string[]) => (items.length ? items.join(', ') : '—');
 
@@ -373,13 +373,9 @@ window.addEventListener('resize', () => requestAnimationFrame(drawEdges));
 
 function frame(now: number): void {
   const c = view.canvas, ua = view.unit ? art?.units[view.unit] : undefined;
-  if (c && ua && c.isConnected) {
-    const dpr = window.devicePixelRatio || 1;
-    const w = c.clientWidth, h = c.clientHeight;
-    if (w && c.width !== Math.round(w * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
-    const ctx = c.getContext('2d')!;
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, w, h);
+  const fit = c && ua && c.isConnected ? fitCanvas(c) : null;
+  if (fit && ua) {
+    const { ctx, w, h } = fit;
     const t = (now - view.t0) / 1000;
     const dir = view.facing ?? Math.floor(t / 1.6) % 8;
     const oneShot = view.anim === 'attack' || view.anim === 'die';
