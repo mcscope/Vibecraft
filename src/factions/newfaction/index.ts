@@ -218,7 +218,7 @@ const LASHER: ChargerBuild = { H: 0.6, thigh: 0.29, shin: 0.31, foot: [-0.07, 0.
 // (`sling`: metres of throwing arm and cord past its own reach, its attack.sling: the art draws the arm that long)
 const SLINGER: ChargerBuild = { ...CHARGER, H: 0.6, body: 0.75, tint: '#3ab0bc', trebuchet: true, sling: 2 };
 // the T1 micropike: a cantilevered pike (the user's design), on the charger's legs; its own colour (drawMicropike)
-const MICROPIKE: ChargerBuild = { ...CHARGER, H: 0.86, thigh: 0.5, shin: 0.52, foot: [-0.07, 0.21, 0], hipZ: 0.09, footZ: 0.13, thighR: 0.05, shinR: 0.032, body: 1, tint: '#c98a2e', walk: 0.24, run: 0.38 };
+const MICROPIKE: ChargerBuild = { ...CHARGER, H: 0.86, thigh: 0.5, shin: 0.52, foot: [-0.07, 0.21, 0], hipZ: 0.09, footZ: 0.13, thighR: 0.05, shinR: 0.032, body: 1, tint: '#c98a2e', walk: 0.24, run: 0.28 };
 /** The micropike's pike (model units): how long it reaches forward from its hips, its girth there and at its head. */
 const PIKE = { boom: 1.5, r0: 0.11, r1: 0.026, head: 0.06, hips: 0.11 };
 
@@ -249,7 +249,15 @@ function drawMicropike(b: ModelBuilder, p: Pose, mass: number): void {
   const sm = (x: number) => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c); };
   const t = p.phase * TAU, walking = p.anim === 'walk', running = walking && p.style === 'charge', braced = p.style === 'brace', hit = p.anim === 'attack' ? p.phase : -1;
   const crouch = braced ? 0.25 : hit >= 0 ? 0.15 : running ? 0.1 : 0;
-  const bob = running ? -0.04 + 0.05 * Math.max(0, Math.sin((p.phase * 2 - 0.35) * TAU)) : walking ? -0.025 + Math.abs(Math.cos(t)) * 0.025 : p.anim === 'idle' ? 0.008 * Math.sin(t) : 0;
+  // on the move it's on one foot most of the time, so its weight goes over that foot: its whole body sways toward it,
+  // nearly all the way at a walk, less at a run (quicker, it falls between steps). And it rides each stance leg as a
+  // walker does, vaulting over it (highest mid-step) or as a runner does, sinking into it like a spring (lowest
+  // mid-stance). Each foot's stance is centred at half its duty: the near foot's at `mid`, the far one's half a step on
+  const duty = running ? 0.35 : 0.55, mid = duty / 2;
+  const onFoot = Math.cos((p.phase - mid) * TAU); // +1 standing on the near foot, −1 on the far one
+  const sway = walking ? k.footZ * (running ? 0.35 : 0.8) * onFoot : 0;
+  const pend = Math.cos((p.phase - mid) * 2 * TAU); // +1 at each foot's mid-stance
+  const bob = running ? -0.04 - 0.035 * pend : walking ? -0.012 + 0.018 * pend : p.anim === 'idle' ? 0.008 * Math.sin(t) : 0;
   const H = k.H * (1 - crouch) + bob;
   // the pike's angle (above level): at rest a little raised, set well raised, charging level; a stab dips it
   const rest = braced ? 0.45 : running ? -0.03 : hit >= 0 ? 0.2 : 0.12;
@@ -260,9 +268,9 @@ function drawMicropike(b: ModelBuilder, p: Pose, mass: number): void {
   const under = pikeBalance(rest); // (its feet at rest: under its centre of mass)
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
     for (const S of [1, -1]) {
-      const hip: V = [lunge, H, S * k.hipZ], restFoot: V = [under, 0.01, S * k.footZ];
+      const hip: V = [lunge, H, S * k.hipZ + sway], restFoot: V = [under, 0.01, S * k.footZ];
       const ph = p.phase + (S > 0 ? 0 : 0.5);
-      const foot = running ? footAt(restFoot, ph, k.run, 0.2, 0.35) : walking ? footAt(restFoot, ph, k.walk, 0.12, 0.55) : restFoot;
+      const foot = running ? footAt(restFoot, ph, k.run, 0.1, duty) : walking ? footAt(restFoot, ph, k.walk, 0.12, duty) : restFoot;
       const ankle: V = [foot[0] + k.foot[0], foot[1] + k.foot[1], foot[2]];
       const knee = jointBetween(hip, ankle, k.thigh, k.shin, [1, 0.3, S * 0.4]);
       shapedLimb(c, hip, knee, k.thighR, [1.1, 1.4, 1.35, 1.0, 0.7], muscle);
@@ -271,9 +279,10 @@ function drawMicropike(b: ModelBuilder, p: Pose, mass: number): void {
       c.sphere(k.shinR * 0.7, ankle, chitin);
       shapedLimb(c, ankle, foot, k.shinR * 0.65, [1.0, 0.85, 0.75, 0.8], chitin);
       for (const dz of [-0.03, 0, 0.03]) c.cone(0.012, 0.07, [foot[0] + 0.05, 0.01, foot[2] + dz], claw, [0, dz * 4, -Math.PI / 2], 4); // toes
+      c.cone(0.012, 0.06, [foot[0] - 0.045, 0.01, foot[2]], claw, [0, 0, Math.PI / 2], 4); // a hind toe: a foot to stand on, not a point
     }
     // the pike, held at its butt by the hips and nothing else
-    c.joint([lunge, H, 0], [0, 0, pitch], (q) => {
+    c.joint([lunge, H, sway], [0, 0, pitch], (q) => {
       q.sphere([P.hips * 1.1, P.hips * 0.9, P.hips], [0, 0, 0], muscle); // its hips, holding the butt
       q.cone(0.03, 0.08, [-P.hips, 0, 0], chitin, [0, 0, Math.PI / 2], 4); // the butt's barb
       q.loft([0, 0.25, 0.6, 1].map((f) => ({ at: [f * P.boom, 0, 0] as V, w: P.r0 + (P.r1 - P.r0) * f, up: P.r0 + (P.r1 - P.r0) * f, down: (P.r0 + (P.r1 - P.r0) * f) * 0.9, keel: 0.3 })), chitin);
