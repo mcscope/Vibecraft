@@ -3,8 +3,8 @@ import { fenfolk } from '../src/factions/fenfolk';
 import { meadowfolk } from '../src/factions/meadowfolk';
 import { World } from '../src/sim/world';
 import { capacity } from '../src/sim/garrison';
+import { run } from './kit';
 
-const run = (w: World, ticks: number) => { for (let i = 0; i < ticks; i++) w.step(); };
 
 describe('garrison', () => {
   test('workers shelter inside; fenlings inside throw from cover; everyone comes out when it falls', () => {

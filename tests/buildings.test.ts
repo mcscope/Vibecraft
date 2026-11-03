@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { meadowfolk } from '../src/factions/meadowfolk';
 import { World } from '../src/sim/world';
 import { capitalFor, deriveBuilding, techCost, techGate, validateFaction } from '../src/sim/physics';
-const run = (w: World, ticks: number) => { for (let i = 0; i < ticks; i++) w.step(); };
+import { run } from './kit';
 const newWorld = () => new World({ seed: 7, players: [{ name: 'A', faction: meadowfolk }, { name: 'B', faction: meadowfolk }] });
 
 describe('capital curve', () => {
@@ -34,8 +34,9 @@ describe('construction', () => {
     const vills = w.unitsOf(0).map((u) => u.id);
     const spot = w.findBuildSpot(3, tc.ox + 6, tc.oy + 1)!;
     w.enqueue({ player: 0, cmd: { type: 'build', units: vills, specId: 'barracks', ox: spot[0], oy: spot[1] } });
-    run(w, 20 * 120);
-    const b = w.buildingsOf(0).find((x) => x.specId === 'barracks')!;
+    const barracks = () => w.buildingsOf(0).find((x) => x.specId === 'barracks');
+    run(w, 20 * 120, () => !!barracks()?.complete && barracks()!.hp >= barracks()!.maxHp - 0.5);
+    const b = barracks()!;
     expect(b.complete).toBe(true);
     expect(b.hp).toBeCloseTo(b.maxHp, 0);
     expect(tc.stock.wood).toBeCloseTo(400 - 180, 0); // a barracks is 180 wood
@@ -57,9 +58,9 @@ describe('training and research', () => {
     const b = w.addBuilding(0, 'barracks', tc.ox + 6, tc.oy)!;
     b.stock = { food: 200, wood: 0, crystal: 50 };
     w.enqueue({ player: 0, cmd: { type: 'autoTrain', building: b.id, specId: 'slinger' } });
+    const each = w.specOf(0, 'slinger')!.stats, affordable = Math.min(Math.floor(200 / each.foodCost), Math.floor(50 / each.crystalCost));
     run(w, 20 * 60);
-    const each = w.specOf(0, 'slinger')!.stats;
-    expect(w.unitsOf(0).filter((u) => u.specId === 'slinger').length).toBe(Math.min(Math.floor(200 / each.foodCost), Math.floor(50 / each.crystalCost))); // as many as 200 food (and 50 crystal) buys
+    expect(w.unitsOf(0).filter((u) => u.specId === 'slinger').length).toBe(affordable); // as many as 200 food (and 50 crystal) buys
     const trained = w.unitsOf(0).filter((u) => u.specId === 'slinger').length;
     // turning it off stops new orders; the one already waiting in the queue still trains
     w.enqueue({ player: 0, cmd: { type: 'autoTrain', building: b.id, specId: null } });
@@ -218,12 +219,13 @@ describe('towers and infrastructure', () => {
   expect(w.gatherBoostAt(0, cx + 20, cy, 'food')).toBe(1);
   expect(w.gatherBoostAt(1, cx + 3, cy, 'food')).toBe(1);
   camp.stock = { food: 300, wood: 300, crystal: 0 };
-  run(w, 20 * 140); // 60 kg of sowing mechanism plants 12 kg/s of yield: bushes and trees
-  const sown = [...w.nodes.values()].filter((n) => n.sownBy === camp.id);
+  const sownNow = () => [...w.nodes.values()].filter((n) => n.sownBy === camp.id);
+  run(w, 20 * 140, () => sownNow().some((n) => n.type === 'food') && sownNow().some((n) => n.type === 'wood') && camp.stock.food < 300); // 60 kg of sowing mechanism plants 12 kg/s of yield: bushes and trees
+  const sown = sownNow();
   expect(sown.some((n) => n.type === 'food')).toBe(true);
   expect(sown.some((n) => n.type === 'wood')).toBe(true);
   expect(camp.stock.food).toBeLessThan(300);
-  run(w, 20 * 100);
+  run(w, 20 * 100, () => sownNow().some((n) => !n.growLeft));
   const grown = [...w.nodes.values()].filter((n) => n.sownBy === camp.id && !n.growLeft);
   expect(grown.length).toBeGreaterThan(0);
   expect(grown.every((n) => n.amount <= n.maxAmount + 1e-6)).toBe(true);

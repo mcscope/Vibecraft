@@ -1,11 +1,10 @@
 import { describe, expect, test } from 'vitest';
 import { fenfolk } from '../src/factions/fenfolk';
 import { World } from '../src/sim/world';
-import { pool as poolSpec, withExtras } from './kit';
+import { pool as poolSpec, run, withExtras } from './kit';
 
 const fen = withExtras(fenfolk, { buildings: [poolSpec] });
 
-const run = (w: World, ticks: number) => { for (let i = 0; i < ticks; i++) w.step(); };
 
 describe('living buildings', () => {
   test('a spawning pool is planted small, grows by eating roots, and trains fenlings only once big enough', () => {

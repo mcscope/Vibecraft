@@ -2,6 +2,7 @@ import { describe, expect, test } from 'vitest';
 import { meadowfolk } from '../src/factions/meadowfolk';
 import { World, type Unit } from '../src/sim/world';
 import { K } from '../src/sim/physics';
+import { run } from './kit';
 
 function setup() {
   const w = new World({ seed: 7, players: [{ name: 'A', faction: meadowfolk }, { name: 'B', faction: meadowfolk }] });
@@ -10,7 +11,6 @@ function setup() {
   const a = w.spawnUnit(0, 'maceman', tc)!, b = w.spawnUnit(0, 'maceman', tc)!;
   return { w, a, b };
 }
-const run = (w: World, ticks: number) => { for (let i = 0; i < ticks; i++) w.step(); };
 
 describe('weapon pack and cargo pack', () => {
   test('the weapon sits in its own pack: it weighs on the unit but leaves the cargo pack free', () => {

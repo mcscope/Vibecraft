@@ -97,13 +97,6 @@ export function packBiome(b: BiomeArt): PackedBiome {
   return out;
 }
 
-/** Bake (on this machine, with this faction's own code) and pack a faction for the given team colours. */
-export async function makeBundle(f: FactionSpec, team: import('../art/contract').TeamColors, onProgress?: (fr: number, label: string) => void): Promise<FactionBundle> {
-  const art = f.art ? packArt(await f.art(team, onProgress)) : undefined;
-  const biome = f.biome ? packBiome(await f.biome(onProgress)) : undefined;
-  return { v: 1, spec: specData(f), art, biome };
-}
-
 // ───────────────────────────── checking + unpacking (receiver) ─────────────────────────────
 
 const isNum = (x: unknown) => typeof x === 'number' && Number.isFinite(x);

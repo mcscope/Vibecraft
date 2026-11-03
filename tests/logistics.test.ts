@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { meadowfolk } from '../src/factions/meadowfolk';
 import { World } from '../src/sim/world';
-const run = (w: World, ticks: number) => { for (let i = 0; i < ticks; i++) w.step(); };
+import { run } from './kit';
 const newWorld = () => new World({ seed: 7, players: [{ name: 'A', faction: meadowfolk }, { name: 'B', faction: meadowfolk }] });
 
 describe('carts', () => {
@@ -16,7 +16,7 @@ describe('carts', () => {
     expect(w.logistics.supplyTargets(b)).toEqual({ food: 20, wood: 0, crystal: 0 });
     expect(b.stock.food).toBeLessThan(40);
     w.enqueue({ player: 0, cmd: { type: 'train', building: b.id, specId: 'maceman' } });
-    run(w, 20 * 40);
+    run(w, 20 * 40, () => w.unitsOf(0).some((u) => u.specId === 'maceman'));
     expect(w.unitsOf(0).some((u) => u.specId === 'maceman')).toBe(true);
   });
 
@@ -28,7 +28,7 @@ describe('carts', () => {
     run(w, 20 * 5);
     expect(tc.queue[0]?.kind === 'tech' && !tc.queue[0].paid).toBe(true);
     tc.stock.wood = 500;
-    run(w, 20 * 30);
+    run(w, 20 * 30, () => w.players[0].researched.includes('villager-tools'));
     expect(w.players[0].researched).toContain('villager-tools');
   });
 
@@ -37,7 +37,7 @@ describe('carts', () => {
     const tc = w.baseOf(0)!;
     tc.stock = { food: 2500, wood: 0, crystal: 300 };
     const tower = w.addBuilding(0, 'watchtower', tc.ox, tc.oy + 6)!;
-    run(w, 20 * 45);
+    run(w, 20 * 45, () => w.unitsOf(0).some((u) => u.carter));
     const cart = w.unitsOf(0).find((u) => u.carter)!;
     w.enqueue({ player: 0, cmd: { type: 'assignCart', units: [cart.id], building: tower.id } });
     run(w, 2);
@@ -52,11 +52,11 @@ describe('carts', () => {
     const tc = w.baseOf(0)!;
     tc.stock.food = 3000;
     w.addBuilding(0, 'barracks', tc.ox + 6, tc.oy); // somewhere to haul to: carts are only bought once there is
-    run(w, 20 * 90); // automatic pool of 3
     const pool = () => [...w.units.values()].filter((u) => u.owner === 0 && u.carter);
+    run(w, 20 * 90, () => pool().length >= 3); // automatic pool of 3
     expect(pool().length).toBe(3);
     w.enqueue({ player: 0, cmd: { type: 'train', building: tc.id, specId: 'mule' } });
-    run(w, 20 * 40);
+    run(w, 20 * 40, () => pool().length >= 4);
     expect(pool().length).toBe(4);
     expect(pool().every((u) => u.order.kind === 'cart' && u.order.base === tc.id)).toBe(true);
   });
@@ -69,7 +69,7 @@ describe('carts', () => {
     // place a site with nobody assigned to build it
     const spot = w.findBuildSpot(3, tc.ox + 7, tc.oy + 1)!;
     w.enqueue({ player: 0, cmd: { type: 'build', units: [], specId: 'barracks', ox: spot[0], oy: spot[1] } });
-    run(w, 20 * 150);
+    run(w, 20 * 150, () => !!w.buildingsOf(0).find((x) => x.specId === 'barracks')?.complete);
     const b = w.buildingsOf(0).find((x) => x.specId === 'barracks')!;
     expect(b.complete).toBe(true);
   });

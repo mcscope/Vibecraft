@@ -1,11 +1,10 @@
 import { describe, expect, test } from 'vitest';
 import { fenfolk } from '../src/factions/fenfolk';
 import { World } from '../src/sim/world';
-import { withExtras } from './kit';
+import { run, withExtras } from './kit';
 
 const fen = withExtras(fenfolk, { patch: { 'pack-tortoise': { dropOff: true } } });
 
-const run = (w: World, ticks: number) => { for (let i = 0; i < ticks; i++) w.step(); };
 
 describe('walking drop-off', () => {
   test('gatherers far from home unload into a nearby pack tortoise, which unloads at a building', () => {

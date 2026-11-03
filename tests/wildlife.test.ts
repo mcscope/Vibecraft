@@ -1,8 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import { meadowfolk } from '../src/factions/meadowfolk';
 import { World, WILD } from '../src/sim/world';
+import { run } from './kit';
 
-const run = (w: World, ticks: number) => { for (let i = 0; i < ticks; i++) w.step(); };
 const newWorld = () => new World({ seed: 7, players: [{ name: 'A', faction: meadowfolk }, { name: 'B', faction: meadowfolk }] });
 const wild = (w: World, id: string) => w.unitsOf(w.wildsId).filter((u) => u.specId === id);
 

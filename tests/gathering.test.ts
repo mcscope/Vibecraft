@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { meadowfolk } from '../src/factions/meadowfolk';
 import { World } from '../src/sim/world';
-const run = (w: World, ticks: number) => { for (let i = 0; i < ticks; i++) w.step(); };
+import { run } from './kit';
 const newWorld = () => new World({ seed: 7, players: [{ name: 'A', faction: meadowfolk }, { name: 'B', faction: meadowfolk }] });
 
 describe('gatherers', () => {

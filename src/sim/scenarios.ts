@@ -158,8 +158,6 @@ export function provingGrounds(): Scenario {
   };
 }
 
-export const SCENARIOS = { skirmish, provingGrounds };
-
 /**
  * Faceoff (?mode=faceoff, a showcase): the Proving Grounds field with two armies in its ranks, player 0 on the
  * left facing south-east and player 1 mirrored on the right facing south-west, each everything it can train.

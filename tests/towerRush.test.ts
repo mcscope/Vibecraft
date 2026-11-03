@@ -2,9 +2,8 @@ import { describe, expect, test } from 'vitest';
 import { meadowfolk } from '../src/factions/meadowfolk';
 import { World } from '../src/sim/world';
 import { SkirmishAI } from '../src/ai/skirmishAI';
-import { withExtras } from './kit';
+import { run, withExtras } from './kit';
 
-const run = (w: World, ticks: number) => { for (let i = 0; i < ticks; i++) w.step(); };
 const newWorld = () => new World({ seed: 7, players: [{ name: 'A', faction: meadowfolk }, { name: 'B', faction: meadowfolk }] });
 const tidy = (w: World) => { for (const u of [...w.units.values()]) if (w.players[u.owner].neutral) w.units.delete(u.id); };
 

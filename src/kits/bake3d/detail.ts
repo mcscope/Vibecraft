@@ -155,20 +155,6 @@ export function timberFrame(b: ModelBuilder, o: WallOpts & { wood: Mat }): void 
   }
 }
 
-/** Vertical planks on the two visible faces of a block (sheds, palisades, barns). */
-export function plankWall(b: ModelBuilder, o: WallOpts): void {
-  const [w, h, d] = o.size, [ax, ay, az] = o.at;
-  b.box([w, h, d], [ax, ay + h / 2, az], vary(o.mat, 0.15, 0.35));
-  for (const face of [0, 1]) {
-    const span = face === 0 ? d : w, n = Math.max(2, Math.round(span / 0.22)), pw = span / n;
-    for (let i = 0; i < n; i++) {
-      const j = hash(face, i, ax, az), t = -span / 2 + (i + 0.5) * pw, ph = h * (0.97 + j * 0.03);
-      if (face === 0) b.box([0.05, ph, pw * 0.9], [ax + w / 2 + 0.02, ay + ph / 2, az + t], vary(o.mat, j, 0.16));
-      else b.box([pw * 0.9, ph, 0.05], [ax + t, ay + ph / 2, az + d / 2 + 0.02], vary(o.mat, j, 0.16));
-    }
-  }
-}
-
 /**
  * A round thatched roof: three overlapping straw skirts (smooth, textured), each
  * with a short ragged fringe of straw along its lower edge, like a real thatch's

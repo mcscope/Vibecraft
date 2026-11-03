@@ -1,9 +1,8 @@
 import { describe, expect, test } from 'vitest';
 import { fenfolk } from '../src/factions/fenfolk';
 import { World } from '../src/sim/world';
-import { withExtras } from './kit';
+import { run, withExtras } from './kit';
 
-const run = (w: World, ticks: number) => { for (let i = 0; i < ticks; i++) w.step(); };
 
 describe('ammo bearer', () => {
   test('a pack tortoise loads crystal at a building; dry fenlings come and take a load from it', () => {

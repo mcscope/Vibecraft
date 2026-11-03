@@ -1,6 +1,12 @@
 // Test-only specs for abilities no shipped faction uses yet (see DESIGN_SPACE.md):
 // a faction plus a few extra units and buildings switched on.
 import type { BuildingSpec, FactionSpec, UnitSpec } from '../src/factions/types';
+import type { World } from '../src/sim/world';
+
+/** Step `w` for `ticks` ticks, or till `until` holds (checked after each tick). */
+export function run(w: World, ticks: number, until?: () => boolean): void {
+  for (let i = 0; i < ticks && !until?.(); i++) w.step();
+}
 
 export function withExtras(f: FactionSpec, extra: { units?: UnitSpec[]; buildings?: BuildingSpec[]; patch?: Record<string, Partial<UnitSpec>> }): FactionSpec {
   return {
