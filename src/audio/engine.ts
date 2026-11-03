@@ -9,7 +9,7 @@ import type { Camera } from '../render/camera';
 import type { ArtBank } from '../render/artbank';
 import type { World, WorldEvent } from '../sim/world';
 import { settings, onSettings } from '../ui/settings';
-import { playCombat, preloadVoices, sayLine, voicesOn } from './clips';
+import { playCombat, preloadVoices, sayLine, setMassOf, voicesOn } from './clips';
 import type { Command } from '../sim/commands';
 
 const FORMANTS: Record<NonNullable<SynthRecipe['vowel']>, [number, number]> = {
@@ -34,6 +34,12 @@ export class AudioEngine {
   private lastAlert = { t: -Infinity, x: 0, y: 0 };
 
   constructor(private world: World, private bank: ArtBank, private player: number) {
+    // (a voice shared up a body's tiers is pitched by each body's mass)
+    setMassOf((unit) => {
+      const [faction, specId] = unit.split(':');
+      for (let p = 0; p < world.players.length; p++) if (world.factionOf(p).id === faction) return world.specOf(p, specId)?.stats.mass;
+      return undefined;
+    });
     // browsers only allow audio after a user gesture
     const start = () => { this.start(); window.removeEventListener('pointerdown', start); window.removeEventListener('keydown', start); };
     window.addEventListener('pointerdown', start);

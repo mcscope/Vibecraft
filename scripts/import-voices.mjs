@@ -16,6 +16,8 @@ const GROUPS = {
   'newfaction:all': WILDWELDS, 'newfaction:mother': tiers('mother'), 'newfaction:egg': tiers('egg'), 'newfaction:larva': tiers('larva'),
 };
 const unitsOf = (u) => GROUPS[u] ?? [u];
+// groups of tiers of one body: a clip labelled for one is pitched for each tier by its size (src/audio/clips.ts)
+const SIZED = new Set(['newfaction:mother', 'newfaction:egg', 'newfaction:larva']);
 
 const newest = () => [process.cwd(), join(homedir(), 'Downloads')]
   .flatMap((d) => (existsSync(d) ? readdirSync(d).filter((f) => /^voicelab_labels.*\.json$/.test(f)).map((f) => join(d, f)) : []))
@@ -35,10 +37,11 @@ const clips = [...labelled, ...unlabelled].filter((c) => c.unit && c.unit !== 's
 const out = 'public/voices';
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
-const lines = {};
+const lines = {}, sized = {};
 const add = (unit, line, id) => ((lines[unit] ??= {})[line] ??= []).push(id);
 for (const c of clips) {
   for (const u of unitsOf(c.unit)) add(u, c.line, c.id);
+  if (SIZED.has(c.unit)) sized[c.id] = unitsOf(c.unit);
   execFileSync('afconvert', ['-f', 'm4af', '-d', 'aac', '-b', '64000', `public/voicelab/${c.id}.wav`, `${out}/${c.id}.m4a`]);
 }
 const keep = new Set(clips.map((c) => c.id));
@@ -48,6 +51,6 @@ const unitFx = {};
 for (const [u, fx] of Object.entries(labels.unitTreatments ?? {})) {
   for (const t of unitsOf(u)) unitFx[t] = { ...unitFx[t], ...fx };
 }
-writeFileSync(`${out}/manifest.json`, JSON.stringify({ lines, clipFx, unitFx }, null, 1));
+writeFileSync(`${out}/manifest.json`, JSON.stringify({ lines, clipFx, unitFx, sized }, null, 1));
 console.log(`imported ${clips.length} clips from ${file}`);
 for (const [u, ls] of Object.entries(lines).sort()) console.log(`  ${u.padEnd(28)} ${Object.entries(ls).map(([l, ids]) => `${l} ${ids.length}`).join(', ')}`);

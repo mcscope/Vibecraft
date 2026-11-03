@@ -867,5 +867,102 @@
    "pitch": -1,
    "lowcut": 510
   }
+ },
+ "sized": {
+  "mouthnoises2_01": [
+   "newfaction:larva1",
+   "newfaction:larva2",
+   "newfaction:larva3"
+  ],
+  "mouthnoises2_02": [
+   "newfaction:larva1",
+   "newfaction:larva2",
+   "newfaction:larva3"
+  ],
+  "mouthnoises2_03": [
+   "newfaction:larva1",
+   "newfaction:larva2",
+   "newfaction:larva3"
+  ],
+  "mouthnoises2_04": [
+   "newfaction:larva1",
+   "newfaction:larva2",
+   "newfaction:larva3"
+  ],
+  "mouthnoises2_05": [
+   "newfaction:larva1",
+   "newfaction:larva2",
+   "newfaction:larva3"
+  ],
+  "mouthnoises2_06": [
+   "newfaction:larva1",
+   "newfaction:larva2",
+   "newfaction:larva3"
+  ],
+  "mouthnoises2_09": [
+   "newfaction:egg1",
+   "newfaction:egg2",
+   "newfaction:egg3"
+  ],
+  "mouthnoises2_10": [
+   "newfaction:larva1",
+   "newfaction:larva2",
+   "newfaction:larva3"
+  ],
+  "mouthnoises2_12": [
+   "newfaction:larva1",
+   "newfaction:larva2",
+   "newfaction:larva3"
+  ],
+  "mouthnoises2_13": [
+   "newfaction:egg1",
+   "newfaction:egg2",
+   "newfaction:egg3"
+  ],
+  "mouthnoises2_14": [
+   "newfaction:larva1",
+   "newfaction:larva2",
+   "newfaction:larva3"
+  ],
+  "mouthnoises2_15": [
+   "newfaction:larva1",
+   "newfaction:larva2",
+   "newfaction:larva3"
+  ],
+  "mouthnoises2_16": [
+   "newfaction:mother1",
+   "newfaction:mother2",
+   "newfaction:mother3"
+  ],
+  "mouthnoises2_17": [
+   "newfaction:mother1",
+   "newfaction:mother2",
+   "newfaction:mother3"
+  ],
+  "mouthnoises2_18": [
+   "newfaction:mother1",
+   "newfaction:mother2",
+   "newfaction:mother3"
+  ],
+  "mouthnoises2_19": [
+   "newfaction:mother1",
+   "newfaction:mother2",
+   "newfaction:mother3"
+  ],
+  "mouthnoises2_20": [
+   "newfaction:mother1",
+   "newfaction:mother2",
+   "newfaction:mother3"
+  ],
+  "mouthnoises2_21": [
+   "newfaction:mother1",
+   "newfaction:mother2",
+   "newfaction:mother3"
+  ],
+  "mouthnoises2_22": [
+   "newfaction:mother1",
+   "newfaction:mother2",
+   "newfaction:mother3"
+  ]
  }
 }

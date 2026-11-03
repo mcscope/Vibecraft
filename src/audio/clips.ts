@@ -11,7 +11,23 @@ export const voicesOn = (): boolean => (URL_VOICES === '1' ? true : URL_VOICES =
 export type VoiceLine = 'select' | 'order' | 'attack' | 'death';
 
 interface Fx { pitch?: number; lowcut?: number; highcut?: number; drive?: number; reverb?: number; gain?: number }
-interface Manifest { lines: Record<string, Partial<Record<VoiceLine | 'any', string[]>>>; clipFx: Record<string, Fx>; unitFx: Record<string, Fx> }
+/** `sized`: clips labelled for a group of tiers (each clip: the units sharing it), pitched by each one's size. */
+interface Manifest { lines: Record<string, Partial<Record<VoiceLine | 'any', string[]>>>; clipFx: Record<string, Fx>; unitFx: Record<string, Fx>; sized?: Record<string, string[]> }
+
+let massOf: (unit: string) => number | undefined = () => undefined;
+/** How to look up a unit's body mass (`factionId:specId`, kg): sized clips are pitched by it. */
+export function setMassOf(f: (unit: string) => number | undefined): void { massOf = f; }
+
+/**
+ * A clip shared up a body's tiers sounds as it would from the bigger body: a body's length grows as the cube root of
+ * its mass, and its voice drops with its length, so −12·log2(∛(m / m₀)) semitones below the smallest that shares it.
+ */
+function sizePitch(m: Manifest, id: string, unit: string): number {
+  const shared = m.sized?.[id], mass = massOf(unit);
+  if (!shared || !mass) return 0;
+  const least = Math.min(...shared.map((u) => massOf(u) ?? mass));
+  return -4 * Math.log2(mass / least);
+}
 
 const BASE = 'voices/';
 const COOLDOWN_MS = 700; // per unit type: repeat clicks don't stack
@@ -49,7 +65,7 @@ function clip(ctx: AudioContext, id: string): Promise<AudioBuffer> {
 function fxFor(m: Manifest, id: string, unit: string) {
   const a = m.clipFx[id] ?? {}, b = m.unitFx[unit] ?? {};
   return {
-    pitch: (a.pitch ?? 0) + (b.pitch ?? 0), gain: (a.gain ?? 0) + (b.gain ?? 0),
+    pitch: (a.pitch ?? 0) + (b.pitch ?? 0) + sizePitch(m, id, unit), gain: (a.gain ?? 0) + (b.gain ?? 0),
     lowcut: Math.max(a.lowcut ?? 20, b.lowcut ?? 20), highcut: Math.min(a.highcut ?? 20000, b.highcut ?? 20000),
     drive: 1 - (1 - (a.drive ?? 0)) * (1 - (b.drive ?? 0)), reverb: 1 - (1 - (a.reverb ?? 0)) * (1 - (b.reverb ?? 0)),
   };
