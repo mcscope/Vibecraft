@@ -1265,7 +1265,7 @@ export class World {
     const blind = tw.minRange + b.size / 2; // can't lob onto its own doorstep
     let target: Unit | null = null, bestD = reach * reach;
     for (const u of this.units.values()) {
-      if (u.owner === b.owner) continue;
+      if (u.owner === b.owner || this.players[u.owner]?.neutral) continue; // (enemies only: not the Wilds' animals)
       const d = (u.x - cx) ** 2 + (u.y - cy) ** 2;
       if (d < bestD && d >= blind * blind) { bestD = d; target = u; }
     }
