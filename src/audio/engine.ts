@@ -140,6 +140,16 @@ export class AudioEngine {
         case 'trained':
           if (e.owner === this.player) { const u = this.world.units.get(e.id); if (u) this.unitLine(u.owner, u.specId, 'select', { pan: 0, gain: 0.6 }); }
           break;
+        case 'metamorph': {
+          // a shell hatching (a body that neither fights nor gathers: an egg, a cocoon): its own sound, then what came
+          // out of it answers
+          const shell = this.world.specOf(e.owner, e.specId);
+          if (e.owner !== this.player || !voicesOn() || !shell || shell.stats.canAttack || shell.spec.canGather !== false) break;
+          const at = this.where(cam, e.x, e.y), faction = this.world.factionOf(e.owner).id;
+          void sayLine(this.ctx!, this.out(at, 0.55), faction, e.specId, 'select').then((secs) =>
+            setTimeout(() => { if (this.ctx) void sayLine(this.ctx, this.out(at, 0.6), faction, e.intoSpec, 'select'); }, secs * 1000 + 80));
+          break;
+        }
         case 'built':
           if (e.owner === this.player) this.chord([0, 4, 7, 12], 330, 0.5);
           break;

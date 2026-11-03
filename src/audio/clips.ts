@@ -82,26 +82,26 @@ function treated(ctx: AudioContext, out: AudioNode, buf: AudioBuffer, t: ReturnT
 }
 
 /**
- * `factionId:specId` says `line` (or one of its general clips), through `out`. False if voices are off, it has no
- * clip for it, it spoke too recently, or enough voices are already going.
+ * `factionId:specId` says `line` (or one of its general clips), through `out`. Resolves to how long the line lasts
+ * (seconds), or 0 if voices are off, it has no clip for it, it spoke too recently, or enough voices are already going.
  */
 /**
  * `chorus`: a group answers (several detuned voices). `echo`: replay the clip this line last played, straight away
  * (a double-click's group answering the single click it follows).
  */
-export async function sayLine(ctx: AudioContext, out: AudioNode, factionId: string, specId: string, line: VoiceLine, chorus = false, echo = false): Promise<boolean> {
-  if (!voicesOn()) return false;
+export async function sayLine(ctx: AudioContext, out: AudioNode, factionId: string, specId: string, line: VoiceLine, chorus = false, echo = false): Promise<number> {
+  if (!voicesOn()) return 0;
   const m = await load();
   const unit = `${factionId}:${specId}`, set = m?.lines[unit];
-  if (!m || !set) return false;
+  if (!m || !set) return 0;
   // a moment's own clips mixed with the unit's general ("any line") ones; death keeps to death clips, falling back
   // to the general ones only if it has none (a cheerful grunt is no death cry)
   const own = set[line] ?? [], any = set.any ?? [];
   const pool = (line === 'death' ? (own.length ? own : any) : [...own, ...any]).filter((id) => !struck.has(id));
-  if (!pool.length) return false;
+  if (!pool.length) return 0;
   const now = performance.now();
   // (an echo comes straight after the line it repeats, so it skips the cooldown)
-  if ((!echo && now - (last.get(unit) ?? -Infinity) < COOLDOWN_MS) || playing >= MAX_AT_ONCE) return false;
+  if ((!echo && now - (last.get(unit) ?? -Infinity) < COOLDOWN_MS) || playing >= MAX_AT_ONCE) return 0;
   last.set(unit, now);
   // round-robin through the type's clips for this line
   const key = `${unit}/${line}`, n = turn.get(key) ?? 0, i = ((echo && n > 0 ? n - 1 : n) % pool.length + pool.length) % pool.length;
@@ -123,7 +123,7 @@ export async function sayLine(ctx: AudioContext, out: AudioNode, factionId: stri
     });
     if (k === 0) s.onended = () => { playing--; };
   });
-  return true;
+  return bufs[0]?.duration ?? 0;
 }
 
 /**
