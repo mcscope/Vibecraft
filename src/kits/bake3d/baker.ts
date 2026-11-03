@@ -611,7 +611,7 @@ export class Baker {
   /** Frames a unit bake renders, for progress bars: each animation's (twice for one in the air: its shadow too), and its trailing parts'. */
   static frameCount(opts: UnitBakeOptions = {}): number {
     const own = animsFor(opts).reduce((n, a) => n + (opts.frames?.[a] ?? FRAMES[a]) * (AIR_POSES.has(a) ? 2 : 1), 0) * BAKED_DIRS.length;
-    return own + (opts.segments?.length ?? 0) * Baker.frameCount({ part: true });
+    return opts.segments?.length ? own + opts.segments.length * Baker.frameCount({ part: true }) : own;
   }
 }
 
