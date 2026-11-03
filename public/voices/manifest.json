@@ -266,10 +266,12 @@
     "mouthnoises2_06",
     "mouthnoises2_12",
     "mouthnoises2_14",
-    "mouthnoises2_15"
+    "mouthnoises2_15",
+    "mouthnoises2_71"
    ],
    "death": [
-    "mouthnoises2_03"
+    "mouthnoises2_03",
+    "mouthnoises2_59"
    ],
    "order": [
     "mouthnoises2_10"
@@ -284,10 +286,12 @@
     "mouthnoises2_06",
     "mouthnoises2_12",
     "mouthnoises2_14",
-    "mouthnoises2_15"
+    "mouthnoises2_15",
+    "mouthnoises2_71"
    ],
    "death": [
-    "mouthnoises2_03"
+    "mouthnoises2_03",
+    "mouthnoises2_59"
    ],
    "order": [
     "mouthnoises2_10"
@@ -302,10 +306,12 @@
     "mouthnoises2_06",
     "mouthnoises2_12",
     "mouthnoises2_14",
-    "mouthnoises2_15"
+    "mouthnoises2_15",
+    "mouthnoises2_71"
    ],
    "death": [
-    "mouthnoises2_03"
+    "mouthnoises2_03",
+    "mouthnoises2_59"
    ],
    "order": [
     "mouthnoises2_10"
@@ -313,22 +319,41 @@
   },
   "newfaction:cocoon": {
    "any": [
-    "mouthnoises2_08"
+    "mouthnoises2_08",
+    "mouthnoises2_71"
+   ],
+   "death": [
+    "mouthnoises2_59"
    ]
   },
   "newfaction:egg1": {
    "any": [
-    "mouthnoises2_09"
+    "mouthnoises2_09",
+    "mouthnoises2_13",
+    "mouthnoises2_71"
+   ],
+   "death": [
+    "mouthnoises2_59"
    ]
   },
   "newfaction:egg2": {
    "any": [
-    "mouthnoises2_09"
+    "mouthnoises2_09",
+    "mouthnoises2_13",
+    "mouthnoises2_71"
+   ],
+   "death": [
+    "mouthnoises2_59"
    ]
   },
   "newfaction:egg3": {
    "any": [
-    "mouthnoises2_09"
+    "mouthnoises2_09",
+    "mouthnoises2_13",
+    "mouthnoises2_71"
+   ],
+   "death": [
+    "mouthnoises2_59"
    ]
   },
   "newfaction:mother1": {
@@ -339,7 +364,11 @@
     "mouthnoises2_19",
     "mouthnoises2_20",
     "mouthnoises2_21",
-    "mouthnoises2_22"
+    "mouthnoises2_22",
+    "mouthnoises2_71"
+   ],
+   "death": [
+    "mouthnoises2_59"
    ]
   },
   "newfaction:mother2": {
@@ -350,7 +379,11 @@
     "mouthnoises2_19",
     "mouthnoises2_20",
     "mouthnoises2_21",
-    "mouthnoises2_22"
+    "mouthnoises2_22",
+    "mouthnoises2_71"
+   ],
+   "death": [
+    "mouthnoises2_59"
    ]
   },
   "newfaction:mother3": {
@@ -361,7 +394,11 @@
     "mouthnoises2_19",
     "mouthnoises2_20",
     "mouthnoises2_21",
-    "mouthnoises2_22"
+    "mouthnoises2_22",
+    "mouthnoises2_71"
+   ],
+   "death": [
+    "mouthnoises2_59"
    ]
   },
   "newfaction:micropike": {
@@ -376,6 +413,12 @@
    "attack": [
     "mouthnoises2_27",
     "mouthnoises2_28"
+   ],
+   "death": [
+    "mouthnoises2_59"
+   ],
+   "any": [
+    "mouthnoises2_71"
    ]
   },
   "newfaction:slinger": {
@@ -390,6 +433,29 @@
    "attack": [
     "mouthnoises2_37",
     "mouthnoises2_38"
+   ],
+   "death": [
+    "mouthnoises2_59"
+   ],
+   "any": [
+    "mouthnoises2_71"
+   ]
+  },
+  "newfaction:ground-attacker3": {
+   "order": [
+    "mouthnoises2_46",
+    "mouthnoises2_92"
+   ],
+   "death": [
+    "mouthnoises2_59",
+    "mouthnoises2_117"
+   ],
+   "any": [
+    "mouthnoises2_71",
+    "mouthnoises2_95"
+   ],
+   "attack": [
+    "mouthnoises2_93"
    ]
   },
   "newfaction:whipweld": {
@@ -401,22 +467,31 @@
     "mouthnoises2_57",
     "mouthnoises2_58"
    ],
+   "death": [
+    "mouthnoises2_59",
+    "mouthnoises2_61",
+    "mouthnoises2_62"
+   ],
    "attack": [
     "mouthnoises2_60",
     "mouthnoises2_63"
    ],
-   "death": [
-    "mouthnoises2_61",
-    "mouthnoises2_62"
-   ],
    "any": [
-    "mouthnoises2_64"
+    "mouthnoises2_64",
+    "mouthnoises2_71"
    ]
   },
   "newfaction:charger": {
+   "death": [
+    "mouthnoises2_59",
+    "mouthnoises2_78"
+   ],
    "select": [
     "mouthnoises2_70",
     "mouthnoises2_72"
+   ],
+   "any": [
+    "mouthnoises2_71"
    ],
    "order": [
     "mouthnoises2_73",
@@ -426,12 +501,16 @@
    "attack": [
     "mouthnoises2_74",
     "mouthnoises2_76"
-   ],
-   "death": [
-    "mouthnoises2_78"
    ]
   },
   "newfaction:flier": {
+   "death": [
+    "mouthnoises2_59"
+   ],
+   "any": [
+    "mouthnoises2_71",
+    "mouthnoises2_88"
+   ],
    "select": [
     "mouthnoises2_81",
     "mouthnoises2_82",
@@ -445,18 +524,18 @@
     "mouthnoises2_86",
     "mouthnoises2_90",
     "mouthnoises2_91"
-   ],
-   "any": [
-    "mouthnoises2_88"
-   ]
-  },
-  "newfaction:ground-attacker3": {
-   "any": [
-    "mouthnoises2_92",
-    "mouthnoises2_93"
    ]
   },
   "newfaction:dragon-fly": {
+   "death": [
+    "mouthnoises2_59"
+   ],
+   "any": [
+    "mouthnoises2_71",
+    "mouthnoises2_108",
+    "mouthnoises2_113",
+    "mouthnoises2_115"
+   ],
    "attack": [
     "mouthnoises2_99",
     "mouthnoises2_100",
@@ -464,20 +543,16 @@
     "mouthnoises2_111",
     "mouthnoises2_116"
    ],
+   "order": [
+    "mouthnoises2_102",
+    "mouthnoises2_109",
+    "mouthnoises2_110",
+    "mouthnoises2_112"
+   ],
    "select": [
     "mouthnoises2_104",
     "mouthnoises2_105",
     "mouthnoises2_107"
-   ],
-   "any": [
-    "mouthnoises2_108",
-    "mouthnoises2_113",
-    "mouthnoises2_115"
-   ],
-   "order": [
-    "mouthnoises2_109",
-    "mouthnoises2_110",
-    "mouthnoises2_112"
    ]
   },
   "combat:swing": {
