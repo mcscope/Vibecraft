@@ -218,7 +218,8 @@ const LASHER: ChargerBuild = { H: 0.6, thigh: 0.29, shin: 0.31, foot: [-0.07, 0.
 // (`sling`: metres of throwing arm and cord past its own reach, its attack.sling: the art draws the arm that long)
 const SLINGER: ChargerBuild = { ...CHARGER, H: 0.6, body: 0.75, tint: '#3ab0bc', trebuchet: true, sling: 2 };
 // the T1 micropike: a cantilevered pike (the user's design), on the charger's legs; its own colour (drawMicropike)
-const MICROPIKE: ChargerBuild = { ...CHARGER, H: 0.86, thigh: 0.5, shin: 0.52, foot: [-0.07, 0.21, 0], hipZ: 0.09, footZ: 0.13, thighR: 0.05, shinR: 0.032, body: 1, tint: '#c98a2e', walk: 0.24, run: 0.28 };
+// (`H`: its hips at rest, where a near-straight leg (0.97 of thigh + shin) leaning out to its feet under its weight puts them)
+const MICROPIKE: ChargerBuild = { ...CHARGER, H: 0.77, thigh: 0.39, shin: 0.41, foot: [-0.03, 0.08, 0], hipZ: 0.09, footZ: 0.13, thighR: 0.05, shinR: 0.032, body: 1, tint: '#c98a2e', walk: 0.18, run: 0.24 };
 /** The micropike's pike (model units): how long it reaches forward from its hips, its girth there and at its head. */
 const PIKE = { boom: 1.5, r0: 0.11, r1: 0.026, head: 0.06, hips: 0.11 };
 
@@ -232,9 +233,10 @@ function pikeBalance(pitch: number): number {
 }
 
 /**
- * The micropike (the user's design): a cantilever. Its pike of a body is held only at its butt, by its hips, and juts
- * forward with nothing behind to balance it; at rest its legs keep its feet under its centre of mass, out along the
- * pike, so they angle forward from the hips. Raised to set, the pike's weight comes back over the hips and the feet
+ * The micropike (the user's design): a cantilever, balanced like the wine-bottle holder that stands on one edge of a
+ * leaning plank. Its pike of a body is held only at its butt, by its hips, and juts forward and a little up with nothing
+ * behind to balance it; at rest each leg is a near-straight strut leaning out from the hips to its foot, under its
+ * centre of mass out along the pike: the pike and the struts the two diagonals of the holder. Raised to set, the pike's weight comes back over the hips and the feet
  * stand back under it; walking and charging they stride about it. Stabbing, it lunges past its balance, momentum
  * carrying the pike out, and draws back.
  */
@@ -248,7 +250,8 @@ function drawMicropike(b: ModelBuilder, p: Pose, mass: number): void {
   const eye: Mat = { color: '#050608', tex: 'none', rough: 0.05, metal: 0.5 };
   const sm = (x: number) => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c); };
   const t = p.phase * TAU, walking = p.anim === 'walk', running = walking && p.style === 'charge', braced = p.style === 'brace', hit = p.anim === 'attack' ? p.phase : -1;
-  const crouch = braced ? 0.25 : hit >= 0 ? 0.15 : running ? 0.1 : 0;
+  // (on the move it crouches: a straight strut can't stride, so it flexes to reach out and back)
+  const crouch = braced ? 0.25 : hit >= 0 ? 0.15 : running ? 0.25 : walking ? 0.15 : 0;
   // on the move it's on one foot most of the time, so its weight goes over that foot: its whole body sways toward it,
   // nearly all the way at a walk, less at a run (quicker, it falls between steps). And it rides each stance leg as a
   // walker does, vaulting over it (highest mid-step) or as a runner does, sinking into it like a spring (lowest
@@ -260,7 +263,7 @@ function drawMicropike(b: ModelBuilder, p: Pose, mass: number): void {
   const bob = running ? -0.04 - 0.035 * pend : walking ? -0.012 + 0.018 * pend : p.anim === 'idle' ? 0.008 * Math.sin(t) : 0;
   const H = k.H * (1 - crouch) + bob;
   // the pike's angle (above level): at rest a little raised, set well raised, charging level; a stab dips it
-  const rest = braced ? 0.45 : running ? -0.03 : hit >= 0 ? 0.2 : 0.12;
+  const rest = braced ? 0.45 : running ? -0.03 : hit >= 0 ? 0.2 : 0.22;
   const pitch = hit >= 0 ? (hit < 0.3 ? 0.2 + 0.06 * sm(hit / 0.3) : hit < 0.45 ? 0.26 - 0.38 * sm((hit - 0.3) / 0.15) : 0.2 - 0.32 * (1 - sm((hit - 0.45) / 0.55)))
     : rest + (walking ? 0.03 * Math.sin(t * 2) : 0.02 * Math.sin(t));
   // a stab's lunge: the hips thrown forward past its balance, its feet where they stood (to its sim reach)
