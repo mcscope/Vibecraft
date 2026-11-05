@@ -2,7 +2,7 @@
 // body of its mass), its collision width, and how far its attack reaches. For catching art that doesn't match the sim.
 import { units as meadowfolk } from '../factions/meadowfolk';
 import { units as fenfolk } from '../factions/fenfolk';
-import { units as wildwelds } from '../factions/newfaction';
+import { units as wildwelds } from '../factions/wildwelds';
 import { TEAM_COLORS } from '../render/artbank';
 import { Baker } from '../kits/bake3d/baker';
 import { derive, M_PER_TILE } from '../sim/physics';

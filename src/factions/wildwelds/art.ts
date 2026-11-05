@@ -1,4 +1,4 @@
-// New faction art: baked from its own models with the shared bake3d kit. No buildings.
+// Wildweld art: baked from its own models with the shared bake3d kit. No buildings.
 import type { FactionArt, TeamColors } from '../../art/contract';
 import { bakeFaction } from '../../kits/bake3d/bakeFaction';
 import type { UnitBakeOptions } from '../../kits/bake3d/baker';

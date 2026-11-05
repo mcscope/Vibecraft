@@ -1,7 +1,7 @@
 // Dev page: ?mode=sizecheck. The Wildwelds as drawn beside the Wildwelds drawn to the volume their mass gives them (the
 // size most units are drawn at for their mass, measured with ?mode=artcheck): each at rest and through its walk, a
 // maceman alongside for scale. A look at a change, not the change.
-import { units as wildwelds } from '../factions/newfaction';
+import { units as wildwelds } from '../factions/wildwelds';
 import { units as meadowfolk } from '../factions/meadowfolk';
 import { units as fenfolk } from '../factions/fenfolk';
 import { TEAM_COLORS } from '../render/artbank';

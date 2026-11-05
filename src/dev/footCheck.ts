@@ -5,7 +5,7 @@
 // they were. Worst slips, in cm, per unit and animation; ◀ over 2 cm.
 import { meadowfolk } from '../factions/meadowfolk';
 import { fenfolk } from '../factions/fenfolk';
-import { newFaction as newfaction } from '../factions/newfaction';
+import { wildwelds } from '../factions/wildwelds';
 import { TEAM_COLORS } from '../render/artbank';
 import { animsFor, Baker, type BakedAnim, type UnitBakeOptions } from '../kits/bake3d/baker';
 import type { UnitModel } from '../kits/bake3d/types';
@@ -28,7 +28,7 @@ export async function runFootCheck(params = new URLSearchParams(location.search)
   const factions = [
     { f: meadowfolk, opts: (await import('../factions/meadowfolk/art')).bakeOpts },
     { f: fenfolk, opts: (await import('../factions/fenfolk/art')).bakeOpts },
-    { f: newfaction, opts: (await import('../factions/newfaction/art')).bakeOpts },
+    { f: wildwelds, opts: (await import('../factions/wildwelds/art')).bakeOpts },
   ] as Array<{ f: { id: string; units: Array<{ id: string; model?: UnitModel }> }; opts: (u: never) => UnitBakeOptions }>;
   const baker = new Baker(), team = TEAM_COLORS[0];
   const rows: string[] = ['unit                         anim          stride m/loop | worst planted-foot slip, cm (where)'];

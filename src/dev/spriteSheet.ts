@@ -8,7 +8,7 @@ import type { ArtAnim, UnitArt } from '../art/contract';
 export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
   if (params.get('faction')) return roster(params);
   const id = params.get('unit') ?? 'lynx', anim = (params.get('anim') ?? 'attack') as ArtAnim, scale = +(params.get('scale') ?? 2);
-  // (&from=newfaction: which faction's, when two share an id)
+  // (&from=wildwelds: which faction's, when two share an id)
   const from = params.get('from');
   const faction = PLAYABLE.find((f) => (!from || f.id === from) && f.units.some((u) => u.id === id));
   const out = document.createElement('div');

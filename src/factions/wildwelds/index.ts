@@ -1,4 +1,4 @@
-// New faction (working title: the user hasn't named it or most of its units yet; see docs/NEW_FACTION_NOTES.md).
+// The Wildwelds (the user's name; most of its units aren't named yet: see docs/WILDWELDS_NOTES.md).
 // A faction with no buildings that climbs by changing form:
 //   • a mother lays eggs (trained in her body, a queue; she lays anything up to her own refinement);
 //   • an egg hatches into the larva of its tier (fed by Give: the mother carries food to it);
@@ -1065,8 +1065,8 @@ export const units: Unit[] = [
   charger, micropike, flier, whipweld, slinger, dragonFly, groundAttacker3,
 ];
 
-export const newFaction: FactionSpec = {
-  id: 'newfaction',
+export const wildwelds: FactionSpec = {
+  id: 'wildwelds',
   name: 'Wildwelds',
   workerId: 'mother1', // it starts with one r1 mother, in the field (no buildings)
   startWorkers: 1,

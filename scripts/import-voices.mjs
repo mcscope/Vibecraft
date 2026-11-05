@@ -8,16 +8,16 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 // a label for a group joins each of its units
-const tiers = (u) => [1, 2, 3].map((t) => `newfaction:${u}${t}`);
-const WILDWELDS = [...tiers('mother'), ...tiers('egg'), ...tiers('larva'), ...['cocoon', 'charger', 'micropike', 'flier', 'whipweld', 'slinger', 'dragon-fly', 'ground-attacker3'].map((u) => `newfaction:${u}`)];
+const tiers = (u) => [1, 2, 3].map((t) => `wildwelds:${u}${t}`);
+const WILDWELDS = [...tiers('mother'), ...tiers('egg'), ...tiers('larva'), ...['cocoon', 'charger', 'micropike', 'flier', 'whipweld', 'slinger', 'dragon-fly', 'ground-attacker3'].map((u) => `wildwelds:${u}`)];
 const GROUPS = {
   'meadowfolk:infantry': ['villager', 'slinger', 'maceman', 'pikeman'].map((u) => `meadowfolk:${u}`),
   'fenfolk:infantry': ['fenling', 'reedguard'].map((u) => `fenfolk:${u}`),
-  'newfaction:all': WILDWELDS, 'newfaction:mother': tiers('mother'), 'newfaction:egg': tiers('egg'), 'newfaction:larva': tiers('larva'),
+  'wildwelds:all': WILDWELDS, 'wildwelds:mother': tiers('mother'), 'wildwelds:egg': tiers('egg'), 'wildwelds:larva': tiers('larva'),
 };
 const unitsOf = (u) => GROUPS[u] ?? [u];
 // groups of tiers of one body: a clip labelled for one is pitched for each tier by its size (src/audio/clips.ts)
-const SIZED = new Set(['newfaction:mother', 'newfaction:egg', 'newfaction:larva']);
+const SIZED = new Set(['wildwelds:mother', 'wildwelds:egg', 'wildwelds:larva']);
 
 const newest = () => [process.cwd(), join(homedir(), 'Downloads')]
   .flatMap((d) => (existsSync(d) ? readdirSync(d).filter((f) => /^voicelab_labels.*\.json$/.test(f)).map((f) => join(d, f)) : []))
@@ -25,7 +25,10 @@ const newest = () => [process.cwd(), join(homedir(), 'Downloads')]
 const file = process.argv[2] ?? newest();
 if (!file) throw new Error('no voicelab_labels*.json found');
 const labels = JSON.parse(readFileSync(file, 'utf8'));
-const labelled = labels.clips ?? labels;
+// (labels saved before the Wildwelds' id was 'wildwelds' say 'newfaction:')
+const renamed = (u) => (typeof u === 'string' ? u.replace(/^newfaction:/, 'wildwelds:') : u);
+const labelled = (labels.clips ?? labels).map((c) => ({ ...c, unit: renamed(c.unit) }));
+labels.unitTreatments = Object.fromEntries(Object.entries(labels.unitTreatments ?? {}).map(([k, v]) => [renamed(k), v]));
 // combat clips not labelled yet keep the Voice Lab's measured guess (public/voicelab/combat.json)
 const seen = new Set(labelled.map((c) => c.id));
 const combat = existsSync('public/voicelab/combat.json') ? JSON.parse(readFileSync('public/voicelab/combat.json', 'utf8')) : [];

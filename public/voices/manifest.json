@@ -257,7 +257,7 @@
     "supplement2_15"
    ]
   },
-  "newfaction:larva1": {
+  "wildwelds:larva1": {
    "any": [
     "mouthnoises2_01",
     "mouthnoises2_02",
@@ -278,7 +278,7 @@
     "mouthnoises2_10"
    ]
   },
-  "newfaction:larva2": {
+  "wildwelds:larva2": {
    "any": [
     "mouthnoises2_01",
     "mouthnoises2_02",
@@ -299,7 +299,7 @@
     "mouthnoises2_10"
    ]
   },
-  "newfaction:larva3": {
+  "wildwelds:larva3": {
    "any": [
     "mouthnoises2_01",
     "mouthnoises2_02",
@@ -320,7 +320,7 @@
     "mouthnoises2_10"
    ]
   },
-  "newfaction:cocoon": {
+  "wildwelds:cocoon": {
    "any": [
     "mouthnoises2_08",
     "mouthnoises2_71"
@@ -330,7 +330,7 @@
     "mouthnoises2_63"
    ]
   },
-  "newfaction:egg1": {
+  "wildwelds:egg1": {
    "any": [
     "mouthnoises2_09",
     "mouthnoises2_13",
@@ -341,7 +341,7 @@
     "mouthnoises2_63"
    ]
   },
-  "newfaction:egg2": {
+  "wildwelds:egg2": {
    "any": [
     "mouthnoises2_09",
     "mouthnoises2_13",
@@ -352,7 +352,7 @@
     "mouthnoises2_63"
    ]
   },
-  "newfaction:egg3": {
+  "wildwelds:egg3": {
    "any": [
     "mouthnoises2_09",
     "mouthnoises2_13",
@@ -363,7 +363,7 @@
     "mouthnoises2_63"
    ]
   },
-  "newfaction:mother1": {
+  "wildwelds:mother1": {
    "any": [
     "mouthnoises2_16",
     "mouthnoises2_17",
@@ -379,7 +379,7 @@
     "mouthnoises2_63"
    ]
   },
-  "newfaction:mother2": {
+  "wildwelds:mother2": {
    "any": [
     "mouthnoises2_16",
     "mouthnoises2_17",
@@ -395,7 +395,7 @@
     "mouthnoises2_63"
    ]
   },
-  "newfaction:mother3": {
+  "wildwelds:mother3": {
    "any": [
     "mouthnoises2_16",
     "mouthnoises2_17",
@@ -411,7 +411,7 @@
     "mouthnoises2_63"
    ]
   },
-  "newfaction:micropike": {
+  "wildwelds:micropike": {
    "select": [
     "mouthnoises2_23",
     "mouthnoises2_24"
@@ -432,7 +432,7 @@
     "mouthnoises2_71"
    ]
   },
-  "newfaction:slinger": {
+  "wildwelds:slinger": {
    "select": [
     "mouthnoises2_32",
     "mouthnoises2_33"
@@ -453,7 +453,7 @@
     "mouthnoises2_71"
    ]
   },
-  "newfaction:ground-attacker3": {
+  "wildwelds:ground-attacker3": {
    "order": [
     "mouthnoises2_46",
     "mouthnoises2_92"
@@ -471,7 +471,7 @@
     "mouthnoises2_93"
    ]
   },
-  "newfaction:charger": {
+  "wildwelds:charger": {
    "death": [
     "mouthnoises2_53",
     "mouthnoises2_63",
@@ -494,7 +494,7 @@
     "mouthnoises2_76"
    ]
   },
-  "newfaction:flier": {
+  "wildwelds:flier": {
    "death": [
     "mouthnoises2_53",
     "mouthnoises2_63"
@@ -518,7 +518,7 @@
     "mouthnoises2_91"
    ]
   },
-  "newfaction:whipweld": {
+  "wildwelds:whipweld": {
    "death": [
     "mouthnoises2_53",
     "mouthnoises2_61",
@@ -541,7 +541,7 @@
     "mouthnoises2_71"
    ]
   },
-  "newfaction:dragon-fly": {
+  "wildwelds:dragon-fly": {
    "death": [
     "mouthnoises2_53",
     "mouthnoises2_63"
@@ -882,110 +882,110 @@
   "combat:heavy": {
    "drive": 0.05
   },
-  "newfaction:ground-attacker3": {
+  "wildwelds:ground-attacker3": {
    "highcut": 9200,
    "drive": 0.1
   },
-  "newfaction:whipweld": {
+  "wildwelds:whipweld": {
    "pitch": -1,
    "lowcut": 510
   }
  },
  "sized": {
   "mouthnoises2_01": [
-   "newfaction:larva1",
-   "newfaction:larva2",
-   "newfaction:larva3"
+   "wildwelds:larva1",
+   "wildwelds:larva2",
+   "wildwelds:larva3"
   ],
   "mouthnoises2_02": [
-   "newfaction:larva1",
-   "newfaction:larva2",
-   "newfaction:larva3"
+   "wildwelds:larva1",
+   "wildwelds:larva2",
+   "wildwelds:larva3"
   ],
   "mouthnoises2_03": [
-   "newfaction:larva1",
-   "newfaction:larva2",
-   "newfaction:larva3"
+   "wildwelds:larva1",
+   "wildwelds:larva2",
+   "wildwelds:larva3"
   ],
   "mouthnoises2_04": [
-   "newfaction:larva1",
-   "newfaction:larva2",
-   "newfaction:larva3"
+   "wildwelds:larva1",
+   "wildwelds:larva2",
+   "wildwelds:larva3"
   ],
   "mouthnoises2_05": [
-   "newfaction:larva1",
-   "newfaction:larva2",
-   "newfaction:larva3"
+   "wildwelds:larva1",
+   "wildwelds:larva2",
+   "wildwelds:larva3"
   ],
   "mouthnoises2_06": [
-   "newfaction:larva1",
-   "newfaction:larva2",
-   "newfaction:larva3"
+   "wildwelds:larva1",
+   "wildwelds:larva2",
+   "wildwelds:larva3"
   ],
   "mouthnoises2_09": [
-   "newfaction:egg1",
-   "newfaction:egg2",
-   "newfaction:egg3"
+   "wildwelds:egg1",
+   "wildwelds:egg2",
+   "wildwelds:egg3"
   ],
   "mouthnoises2_10": [
-   "newfaction:larva1",
-   "newfaction:larva2",
-   "newfaction:larva3"
+   "wildwelds:larva1",
+   "wildwelds:larva2",
+   "wildwelds:larva3"
   ],
   "mouthnoises2_12": [
-   "newfaction:larva1",
-   "newfaction:larva2",
-   "newfaction:larva3"
+   "wildwelds:larva1",
+   "wildwelds:larva2",
+   "wildwelds:larva3"
   ],
   "mouthnoises2_13": [
-   "newfaction:egg1",
-   "newfaction:egg2",
-   "newfaction:egg3"
+   "wildwelds:egg1",
+   "wildwelds:egg2",
+   "wildwelds:egg3"
   ],
   "mouthnoises2_14": [
-   "newfaction:larva1",
-   "newfaction:larva2",
-   "newfaction:larva3"
+   "wildwelds:larva1",
+   "wildwelds:larva2",
+   "wildwelds:larva3"
   ],
   "mouthnoises2_15": [
-   "newfaction:larva1",
-   "newfaction:larva2",
-   "newfaction:larva3"
+   "wildwelds:larva1",
+   "wildwelds:larva2",
+   "wildwelds:larva3"
   ],
   "mouthnoises2_16": [
-   "newfaction:mother1",
-   "newfaction:mother2",
-   "newfaction:mother3"
+   "wildwelds:mother1",
+   "wildwelds:mother2",
+   "wildwelds:mother3"
   ],
   "mouthnoises2_17": [
-   "newfaction:mother1",
-   "newfaction:mother2",
-   "newfaction:mother3"
+   "wildwelds:mother1",
+   "wildwelds:mother2",
+   "wildwelds:mother3"
   ],
   "mouthnoises2_18": [
-   "newfaction:mother1",
-   "newfaction:mother2",
-   "newfaction:mother3"
+   "wildwelds:mother1",
+   "wildwelds:mother2",
+   "wildwelds:mother3"
   ],
   "mouthnoises2_19": [
-   "newfaction:mother1",
-   "newfaction:mother2",
-   "newfaction:mother3"
+   "wildwelds:mother1",
+   "wildwelds:mother2",
+   "wildwelds:mother3"
   ],
   "mouthnoises2_20": [
-   "newfaction:mother1",
-   "newfaction:mother2",
-   "newfaction:mother3"
+   "wildwelds:mother1",
+   "wildwelds:mother2",
+   "wildwelds:mother3"
   ],
   "mouthnoises2_21": [
-   "newfaction:mother1",
-   "newfaction:mother2",
-   "newfaction:mother3"
+   "wildwelds:mother1",
+   "wildwelds:mother2",
+   "wildwelds:mother3"
   ],
   "mouthnoises2_22": [
-   "newfaction:mother1",
-   "newfaction:mother2",
-   "newfaction:mother3"
+   "wildwelds:mother1",
+   "wildwelds:mother2",
+   "wildwelds:mother3"
   ]
  }
 }
