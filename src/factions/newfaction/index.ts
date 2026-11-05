@@ -294,13 +294,14 @@ function mpRun(q: number): MpPose {
 function mpStab(q: number): MpPose {
   const reachX = 0.83, hitY = MP.hub - 0.35, aim = mpAim(hitY, MP_STRIKE_H);
   let x: number, y: number, sy: number, swing: number;
-  if (q < 0.22) { const k = ease(q / 0.22); x = -0.18 * k; y = MP.hub - 0.14 * k; sy = 1 - 0.12 * k; swing = -0.5 * k; }
-  else if (q < 0.4) { const k = (q - 0.22) / 0.18, kin = k * k; x = mixN(-0.18, reachX, ease(k)); y = mixN(MP.hub - 0.14, hitY, ease(k)) + 0.06 * Math.sin(Math.PI * k); sy = 0.88 + 0.3 * Math.sin(Math.PI * k) + 0.12 * k * 0; swing = mixN(-0.5, aim, kin); }
-  else if (q < 0.52) { const k = (q - 0.4) / 0.12; x = reachX + 0.06 * Math.sin(Math.PI * k * 0.5); y = hitY - 0.04 * Math.sin(Math.PI * k); sy = 1 - 0.08 * Math.sin(Math.PI * k); swing = aim + 0.22 * Math.sin(Math.PI * k * 0.5); }
-  else { const u = (q - 0.52) / 0.48, e = ease(u); x = mixN(reachX + 0.06, 0, e); y = mixN(hitY, MP.hub, e); sy = 1 + 0.05 * Math.sin(Math.PI * u) * (1 - u); swing = (aim + 0.22) * (1 - u) ** 2 * Math.cos(2.4 * Math.PI * u); }
+  // (exaggerated: a deep wind-up, the pike swung far back; a snapping arc; a hard overshoot and a big pendulum after)
+  if (q < 0.22) { const k = ease(q / 0.22); x = -0.35 * k; y = MP.hub - 0.32 * k; sy = 1 - 0.22 * k; swing = -1.15 * k; }
+  else if (q < 0.4) { const k = (q - 0.22) / 0.18; x = mixN(-0.35, reachX, ease(k)); y = mixN(MP.hub - 0.32, hitY, ease(k)) + 0.12 * Math.sin(Math.PI * k); sy = 0.78 + 0.57 * Math.sin(Math.PI * k) + 0.22 * k; swing = mixN(-1.15, aim, k ** 2.5); }
+  else if (q < 0.52) { const k = (q - 0.4) / 0.12; x = reachX + 0.06 * Math.sin(Math.PI * k * 0.5); y = hitY - 0.08 * Math.sin(Math.PI * k); sy = 1 - 0.15 * Math.sin(Math.PI * k); swing = aim + 0.55 * Math.sin(Math.PI * k * 0.5); }
+  else { const u = (q - 0.52) / 0.48, e = ease(u); x = mixN(reachX + 0.06, 0, e); y = mixN(hitY, MP.hub, e) + 0.05 * Math.sin(Math.PI * u) * (1 - u); sy = 1 + 0.08 * Math.sin(2 * Math.PI * u) * (1 - u); swing = (aim + 0.55) * (1 - u) ** 1.6 * Math.cos(2.6 * Math.PI * u); }
   // the back foot skips in under the lunge (from 0.24, landing as the blow does) and back out on the way home
   const back = rest3(2), skip = q < 0.24 ? 0 : q < 0.4 ? ease((q - 0.24) / 0.16) : q < 0.62 ? 1 : 1 - ease((q - 0.62) / 0.3);
-  const lift = (q > 0.24 && q < 0.4 ? Math.sin(Math.PI * (q - 0.24) / 0.16) : q > 0.62 && q < 0.92 ? Math.sin(Math.PI * (q - 0.62) / 0.3) : 0) * 0.12;
+  const lift = (q > 0.24 && q < 0.4 ? Math.sin(Math.PI * (q - 0.24) / 0.16) : q > 0.62 && q < 0.92 ? Math.sin(Math.PI * (q - 0.62) / 0.3) : 0) * 0.2;
   return { hub: [x, y, 0], sy, swing, roll: 0, feet: [rest3(0), rest3(1), [back[0] + 0.42 * skip, back[1] + lift, back[2]]] };
 }
 
@@ -1044,7 +1045,7 @@ function gHopper(b: ModelBuilder, p: Pose, gait = HOPPER_GAIT): void {
 const charger = { ...unit({ id: 'charger', name: 'Charger', mass: 15, physique: { muscle: 0.6, frame: 0.25, reserve: 0.15 }, refinement: 2,
   attack: { style: 'strike', crystalMass: 1.5 }, description: 'T1: a fast charging body, striding on two long legs.', model: (b, p) => drawCharger(b, p, 38) }, 'charger'), size: footprint('charger', 38) };
 const micropike = { ...unit({ id: 'micropike', name: 'Micropike', mass: 35, physique: { muscle: 0.6, frame: 0.25, reserve: 0.15 }, refinement: 2,
-  attack: { style: 'strike', crystalMass: 0.8, shaft: 1.5 }, description: 'T1: micropikes.', model: drawMicropike }, 'charger'), size: 0.84 }; // (its collision as wide as it is drawn: its narrow tripod stance)
+  attack: { style: 'strike', crystalMass: 0.8, shaft: 1.5 }, description: 'T1: micropikes.', height: 1.73, model: drawMicropike }, 'charger'), size: 0.84 }; // (its collision as wide as it is drawn: its narrow tripod stance)
 const flier = unit({ id: 'flier', name: 'Vimmer', mass: 120, physique: { muscle: 0.5, frame: 0.25, reserve: 0.25 }, refinement: 3, flight: { height: 20, launch: 'backward' }, // (a high ceiling: its dives are real drops, and it can climb after fliers)
   attack: { style: 'strike', crystalMass: 2 }, description: 'T2: a dive bomber: it swoops down onto its target to strike, its dive behind the blow, and climbs away again.', model: (b, p) => drawVimmer(b, p, 120) }, 'vimmer');
 const whipweld = unit({ id: 'whipweld', name: 'Whipweld', mass: 150, physique: { muscle: 0.5, frame: 0.35, reserve: 0.15 }, refinement: 3,

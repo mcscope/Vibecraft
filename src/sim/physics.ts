@@ -201,6 +201,8 @@ export interface DerivedStats {
   canPlant: boolean;
   /** Metres nose to tail: given for a long body, else an upright body's depth from its mass. Every body's line turns no faster than speed ÷ this. */
   length: number;
+  /** Metres tall: as drawn (UnitSpec.height), else of the usual build for its mass. */
+  height: number;
   /** The jolt (m/s) it takes without stumbling: a body stays balanced while its centre stays over its stance (the capture point), so it scales with stance length × √(g / hip height); K.staggerDv for a 70 kg upright body. */
   balance: number;
 
@@ -290,7 +292,9 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0, techGro
   // work refinement w: gathers, walks and carries w× as much (applied below)
   const workRefinement = Math.max(1, (spec.workRefinement ?? 1) + techWork);
   // (its legs' pace, from their length; it cruises at that, as it sprints, no faster than its burst allows: below)
-  const legPace = clamp(K.baseSpeed * Math.pow(muscleRel, 0.8) * massSpeedFactor(mass), K.minSpeed, K.maxSpeed) * workRefinement;
+  // (its height: as drawn, else of the usual build for its mass; its legs are that much longer or shorter: v ∝ √leg)
+  const height = spec.height ? clamp(spec.height, 0.2, 12) : bodyHeight(mass);
+  const legPace = clamp(K.baseSpeed * Math.pow(muscleRel, 0.8) * massSpeedFactor(mass) * Math.sqrt(height / bodyHeight(mass)), K.minSpeed, K.maxSpeed) * workRefinement;
   const wheeled = !!spec.wheeled;
   const carryCapacity = Math.max(1, K.carryPerMuscleKg * muscleMass * (wheeled ? K.wheelCarry : 1) * workRefinement);
 
@@ -317,8 +321,8 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0, techGro
   const strikeMass = throwing ? weaponMass : whip ? weaponMass + K.whipKgPerM * whip : weaponMass + K.limbShare * mass;
   // a sling is a lever: its cord lengthens the throwing arm (~0.4 of the body's height), so the stone leaves faster in
   // proportion; but never faster than the muscle's energy allows (√(2E/m)), however long the cord
-  const sling = throwing && atk?.sling ? Math.max(0, Math.min(bodyHeight(mass), atk.sling)) : 0;
-  const arm = 0.4 * bodyHeight(mass);
+  const sling = throwing && atk?.sling ? Math.max(0, Math.min(height, atk.sling)) : 0;
+  const arm = 0.4 * height;
   const crystalVelocity = Math.min(limbSpeed * (1 + (sling + whip) / arm), Math.sqrt((2 * maxAttackEnergy) / strikeMass));
   const attackEnergy = 0.5 * strikeMass * crystalVelocity * crystalVelocity;
   // and it has to be spun up first: about a turn of the arm and cord before release
@@ -349,7 +353,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0, techGro
   // it sees 10 tiles, past its reach, and at least as far as it rides out to charge (the run-up to its sprint, plus reach)
   // a bound flexes the spine: a stride is the leg plus the body's run-length beyond an upright body's depth, so
   // long bodies gallop faster (v ∝ √(g·stride)); wheels and wings don't stride
-  const height = bodyHeight(mass), leg = K.legPerHeight * height, upright = 0.18 * height;
+  const leg = K.legPerHeight * height, upright = 0.18 * height;
   const length = spec.length ? Math.max(0.2, Math.min(12, spec.length)) : upright; // an upright body: its depth, ~0.18 of its height
   const gallop = spec.wheeled || spec.flight ? 1 : Math.sqrt((leg + Math.max(upright, length)) / (leg + upright));
   const sprintTiles = legPace * K.sprintPerCruise * gallop * burstLimit(mass), runUpTiles = ((sprintTiles * M_PER_TILE) ** 2 / (2 * K.traction * K.gravity)) / M_PER_TILE;
@@ -389,7 +393,7 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0, techGro
     // a shaft can be planted (butt on the ground behind, point at the enemy) only if it's well longer than the body is tall:
     // a pike in a man's hands, not a lance on a mount
     canPlant: shaft > 1.5 * 1.7 * Math.cbrt(mass / 70),
-    length,
+    length, height,
     balance: K.staggerDv * (length / (0.18 * bodyHeight(70))) * Math.sqrt(bodyHeight(70) / height),
     gatherRate,
     moveCalPerTile: K.moveCalPerKgTile * mass * Math.pow(mass / 70, -0.3), // big bodies move a kg more cheaply

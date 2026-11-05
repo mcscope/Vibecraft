@@ -5,7 +5,7 @@ import { units as fenfolk } from '../factions/fenfolk';
 import { units as wildwelds } from '../factions/newfaction';
 import { TEAM_COLORS } from '../render/artbank';
 import { Baker } from '../kits/bake3d/baker';
-import { bodyHeight, derive, M_PER_TILE } from '../sim/physics';
+import { derive, M_PER_TILE } from '../sim/physics';
 import type { Pose } from '../kits/bake3d/types';
 
 export function runArtCheck(): void {
@@ -18,7 +18,7 @@ export function runArtCheck(): void {
     // its attack at its most forward (sampled through the swing)
     let reach = 0;
     if (st.canAttack) for (let k = 0; k < 8; k++) reach = Math.max(reach, baker.dims(u.model, team, pose('attack', k / 7)).front);
-    const simH = bodyHeight(u.mass), coll = st.radius * 2 * M_PER_TILE, simReach = st.range * M_PER_TILE;
+    const simH = st.height, coll = st.radius * 2 * M_PER_TILE, simReach = st.range * M_PER_TILE;
     const flag = (a: number, b: number) => (b > 0 && (a / b > 1.35 || a / b < 0.74) ? ' ◀' : '');
     rows.push(`${(fid + ':' + u.id).padEnd(28)} ${String(u.mass).padStart(4)} | ${rest.top.toFixed(2)} / ${simH.toFixed(2)}${flag(rest.top, simH)} | ${(rest.front + rest.back).toFixed(2)} | ${rest.width.toFixed(2)} / ${coll.toFixed(2)}${flag(Math.max(rest.width, Math.min(rest.width, rest.front + rest.back)), coll)} | ${st.canAttack ? `${reach.toFixed(2)} / ${simReach.toFixed(2)}${u.attack?.style === 'throw' ? ' (throws)' : flag(reach, simReach)}` : '-'} | ${(rest.volume * 1000).toFixed(0)} L / ${u.mass} L = ${(rest.volume * 1000 / u.mass).toFixed(2)}×${rest.volume * 1000 / u.mass > 2 || rest.volume * 1000 / u.mass < 0.5 ? ' ◀' : ''}`);
   }

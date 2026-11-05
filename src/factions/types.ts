@@ -67,6 +67,12 @@ export interface UnitSpec {
    */
   length?: number;
   /**
+   * Metres tall, as it's drawn (0.2–12). Its legs are that much of its height (K.legPerHeight), so a taller body
+   * strides longer and goes faster (v ∝ √leg), its arm is longer, and it's easier to knock over. Leave it out for a
+   * body of the usual build: its height from its mass (a 70 kg person: 1.7 m).
+   */
+  height?: number;
+  /**
    * Metres across the ground it takes up (its footprint, as drawn): bodies the sim keeps apart by this much don't
    * overlap on screen. Leave it out and it comes from the mass (a 70 kg body: 1 m). A body at another mass (a shell)
    * scales it by ∛ of the mass.

@@ -1,8 +1,9 @@
 // Dev page: ?mode=sprites&unit=<id>&anim=<anim>[&scale=2][&facing=<0-7>], or ?mode=sprites&faction=<id> for its roster. Bakes one unit and lays out every frame of an
-// animation, a row per facing, so its art can be checked (or screenshotted headless) without a fight.
+// animation, a row per facing, so its art can be checked (or screenshotted headless) without a fight. &anim=all plays
+// every animation at once, stacked, looping at its game speed ([&facing=<0-7>|all]).
 import { PLAYABLE } from '../factions';
 import { TEAM_COLORS } from '../render/artbank';
-import type { ArtAnim } from '../art/contract';
+import type { ArtAnim, UnitArt } from '../art/contract';
 
 export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
   if (params.get('faction')) return roster(params);
@@ -16,6 +17,7 @@ export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
   if (!faction?.art) { out.textContent = `no art for ${id}`; return; }
   out.textContent = `baking ${id}…`;
   const art = (await faction.art(TEAM_COLORS[0], undefined, [id])).units[id];
+  if (art && anim === ('all' as ArtAnim)) { out.textContent = ''; return playAll(out, art, scale, params.get('facing') ?? '3'); }
   const found = art?.anims[anim];
   if (!found) { out.textContent = `${id} has no '${anim}' (has: ${Object.keys(art?.anims ?? {}).join(', ')})`; return; }
   // &shadows=1: an animation in the air's shadow frames instead (baked alone, laid on the ground by the renderer)
@@ -70,4 +72,41 @@ async function roster(params: URLSearchParams): Promise<void> {
   });
   document.body.appendChild(c);
   document.title = 'sprites ready';
+}
+
+/** Animations played once through (each blow, a death, a hatching): replayed after a pause. */
+const ONCE = new Set(['attack', 'die', 'rise', 'reload', 'lay', 'give', 'slam', 'hatch', 'cut']);
+
+/** Every animation of a unit at once, a row each, looping as the game plays them (one facing, or all 8 side by side). */
+function playAll(out: HTMLElement, art: UnitArt, scale: number, facing: string): void {
+  const names = Object.keys(art.anims) as ArtAnim[];
+  const facings = facing === 'all' ? [0, 1, 2, 3, 4, 5, 6, 7] : [+facing];
+  const size = (n: ArtAnim) => art.anims[n]!.frames.flat().reduce((m, s) => [Math.max(m[0], (s.sw / s.q) * scale), Math.max(m[1], (s.sh / s.q) * scale)], [0, 0]);
+  const cellW = Math.max(...names.map((n) => size(n)[0])) + 16, rowH = names.map((n) => size(n)[1] + 20), label = 90;
+  const c = document.createElement('canvas');
+  c.width = label + cellW * facings.length; c.height = rowH.reduce((a, b) => a + b, 0) + 10;
+  out.appendChild(c);
+  const g = c.getContext('2d')!;
+  document.title = 'sprites ready';
+  const draw = (now: number) => {
+    const t = now / 1000;
+    g.clearRect(0, 0, c.width, c.height);
+    g.font = '13px sans-serif';
+    let y = 0;
+    names.forEach((n, ri) => {
+      const a = art.anims[n]!, h = rowH[ri], ground = y + h - 12;
+      g.fillStyle = '#fff'; g.fillText(n, 6, ground - 4);
+      g.strokeStyle = 'rgba(0,0,0,0.2)'; g.beginPath(); g.moveTo(label, ground); g.lineTo(c.width, ground); g.stroke();
+      facings.forEach((f, ci) => {
+        const row = a.frames[f % a.frames.length], k = row.length;
+        // (a blow plays over its swing, 0.45 s; anything else once through takes a second; then a pause)
+        const dur = n === 'attack' ? 0.45 : 1, i = ONCE.has(n) ? Math.min(k - 1, Math.floor(((t % (dur + 0.7)) / dur) * k)) : Math.floor(t * (a.fps ?? 8)) % k;
+        const s = row[i], q = scale / s.q, x = label + ci * cellW + cellW / 2;
+        g.drawImage(s.img, s.sx, s.sy, s.sw, s.sh, x - s.ax * q, ground - s.ay * q, s.sw * q, s.sh * q);
+      });
+      y += h;
+    });
+    requestAnimationFrame(draw);
+  };
+  requestAnimationFrame(draw);
 }
