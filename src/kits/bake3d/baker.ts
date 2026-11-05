@@ -165,8 +165,49 @@ function collapse(body: THREE.Object3D, k: number): void {
 
 const AIR_POSES = new Set<string>(['fly', 'leap', 'climb', 'soar', 'glide', 'land', 'bankL', 'bankR', 'swoop']);
 
+/**
+ * The pose a model is drawn in for a baked animation: the whole-body styles ride on poses every model already knows (a
+ * charge is the walk, a stagger is tired, a brace is standing, a bank is soaring, a swoop is gliding), the loaded walks
+ * are the walk with a load.
+ */
+export function bakedPose(anim: BakedAnim, phase: number, team: TeamColors): Pose {
+  return {
+    anim: anim === 'carryFood' || anim === 'carryWood' || anim === 'carryCrystal' || anim === 'charge' ? 'walk' : anim === 'stagger' ? 'tired' : anim === 'brace' ? 'idle' : anim === 'bankL' || anim === 'bankR' ? 'soar' : anim === 'swoop' ? 'glide' : anim,
+    phase, team, armed: true,
+    cargo: anim === 'carryFood' ? 'food' : anim === 'carryWood' ? 'wood' : anim === 'carryCrystal' ? 'crystal' : null,
+    style: anim === 'charge' || anim === 'stagger' || anim === 'brace' || anim === 'bankL' || anim === 'bankR' || anim === 'swoop' ? anim : undefined,
+  };
+}
+
+/** The baker's whole-body styles, on top of the model (unless its model draws them itself). */
+function styleBody(body: THREE.Object3D, anim: BakedAnim, phase: number, opts: UnitBakeOptions): void {
+  // models face +x, so leaning in is a tip about z toward +x
+  if (anim === 'charge' && !opts.ownStyles) { body.rotation.z = -0.2; body.position.x = 0.04; } // flat out, weight forward
+  // banking: rolled into the turn, the inside wing down (L turns toward its +z side, which dips with +x roll)
+  if (anim === 'bankL' || anim === 'bankR') body.rotation.x = anim === 'bankL' ? 0.5 : -0.5;
+  // a leap off the ground, springy: crouching (squashing down, tipping nose-up, weight back), then driving up
+  // (stretching tall, tipped further up), then easing into the climb
+  if (anim === 'leap' && !opts.ownLeap) {
+    const ease = (k: number) => k * k * (3 - 2 * k);
+    const [sy, tip, dx] = phase < 0.2 ? [1 - 0.22 * ease(phase / 0.2), 0.3 * ease(phase / 0.2), -0.04 * ease(phase / 0.2)]
+      : phase < 0.4 ? [0.78 + 0.37 * ease((phase - 0.2) / 0.2), 0.3 + 0.15 * ease((phase - 0.2) / 0.2), -0.04 + 0.06 * ease((phase - 0.2) / 0.2)]
+      : [1.15 - 0.15 * ease((phase - 0.4) / 0.6), 0.45 - 0.25 * ease((phase - 0.4) / 0.6), 0.02];
+    body.scale.set(1 / Math.sqrt(sy), sy, 1 / Math.sqrt(sy)); // (squash and stretch, keeping its volume)
+    body.rotation.z = tip;
+    body.position.x = dx;
+  }
+  if (anim === 'brace' && !opts.ownStyles) { body.rotation.z = -0.1; body.scale.set(1, 0.92, 1); } // set low, leaning into the point
+  if (anim === 'stagger' && !opts.ownStyles) { // knocked back off balance, swaying as it catches itself
+    const s = Math.sin(phase * Math.PI * 2);
+    body.rotation.z = 0.28 + s * 0.06;
+    body.rotation.x = s * 0.14;
+    body.position.x = -0.05;
+  }
+  if (anim === 'die') collapse(body, phase);
+}
+
 /** The animations a unit bake renders, by its options. */
-function animsFor(opts: UnitBakeOptions): BakedAnim[] {
+export function animsFor(opts: UnitBakeOptions): BakedAnim[] {
   if (opts.dummy) return ['idle', 'die'];
   if (opts.part) return ['idle', 'walk', 'die'];
   const anims: BakedAnim[] = ['idle', 'walk', 'attack', 'gather', 'eat', 'tired', 'die', 'charge', 'stagger'];
@@ -273,6 +314,20 @@ export class Baker {
       steps++;
     }
     return steps >= n / 2 && d > 0.05 ? (d * n) / steps : undefined;
+  }
+
+  /** Dev (the foot check): each mesh touching the ground (its lowest point within 3 cm) in a frame of a baked animation, as drawn (with the baker's styles): its centre (x, z, metres) and how low it is. */
+  contacts(model: UnitModel, team: TeamColors, anim: BakedAnim, phase: number, opts: UnitBakeOptions = {}): Array<{ x: number; z: number; lo: number }> {
+    this.clearStage();
+    this.stage.rotation.y = 0;
+    const body = new THREE.Group();
+    this.stage.add(body);
+    model(new Builder(team, body), bakedPose(anim === 'die' ? 'idle' : anim, anim === 'die' ? 0 : phase, team));
+    styleBody(body, anim, phase, opts);
+    this.stage.updateMatrixWorld(true);
+    const box = new THREE.Box3(), c = new THREE.Vector3(), out: Array<{ x: number; z: number; lo: number }> = [];
+    this.stage.traverse((o) => { if (o instanceof THREE.Mesh) { box.setFromObject(o); if (box.min.y < 0.03) { box.getCenter(c); out.push({ x: c.x, z: c.z, lo: box.min.y }); } } });
+    return out;
   }
 
   /** A model's extent in a pose, in metres (a unit is a metre): front (+x) and back, height, width (dev: sim vs art checks). */
@@ -446,12 +501,7 @@ export class Baker {
     const anims = animsFor(opts);
     // the whole-body styles ride on poses every model already knows: a charge is the walk, a stagger
     // is tired (hunched, arms down), a brace is standing; the baker leans the body for each (below)
-    const poseFor = (anim: BakedAnim, phase: number): Pose => ({
-      anim: anim === 'carryFood' || anim === 'carryWood' || anim === 'carryCrystal' || anim === 'charge' ? 'walk' : anim === 'stagger' ? 'tired' : anim === 'brace' ? 'idle' : anim === 'bankL' || anim === 'bankR' ? 'soar' : anim === 'swoop' ? 'glide' : anim,
-      phase, team, armed: true,
-      cargo: anim === 'carryFood' ? 'food' : anim === 'carryWood' ? 'wood' : anim === 'carryCrystal' ? 'crystal' : null,
-      style: anim === 'charge' || anim === 'stagger' || anim === 'brace' || anim === 'bankL' || anim === 'bankR' || anim === 'swoop' ? anim : undefined,
-    });
+    const poseFor = (anim: BakedAnim, phase: number): Pose => bakedPose(anim, phase, team);
     const samples = [poseFor('idle', 0), poseFor('walk', 0.25), poseFor('attack', 0.3), poseFor('attack', 0.6), poseFor('gather', 0.5)];
     if (opts.sidearm) samples.push(poseFor('cut', 0.3), poseFor('cut', 0.6));
     if (opts.withCarry) samples.push(poseFor('carryFood', 0.25));
@@ -499,29 +549,7 @@ export class Baker {
           const body = new THREE.Group();
           this.stage.add(body);
           model(new Builder(team, body), poseFor(anim === 'die' ? 'idle' : anim, anim === 'die' ? 0 : phase));
-          // the body styles: models face +x, so leaning in is a tip about z toward +x
-          if (anim === 'charge' && !opts.ownStyles) { body.rotation.z = -0.2; body.position.x = 0.04; } // flat out, weight forward
-          // banking: rolled into the turn, the inside wing down (L turns toward its +z side, which dips with +x roll)
-          if (anim === 'bankL' || anim === 'bankR') body.rotation.x = anim === 'bankL' ? 0.5 : -0.5;
-          // a leap off the ground, springy: crouching (squashing down, tipping nose-up, weight back), then driving up
-          // (stretching tall, tipped further up), then easing into the climb
-          if (anim === 'leap' && !opts.ownLeap) {
-            const ease = (k: number) => k * k * (3 - 2 * k);
-            const [sy, tip, dx] = phase < 0.2 ? [1 - 0.22 * ease(phase / 0.2), 0.3 * ease(phase / 0.2), -0.04 * ease(phase / 0.2)]
-              : phase < 0.4 ? [0.78 + 0.37 * ease((phase - 0.2) / 0.2), 0.3 + 0.15 * ease((phase - 0.2) / 0.2), -0.04 + 0.06 * ease((phase - 0.2) / 0.2)]
-              : [1.15 - 0.15 * ease((phase - 0.4) / 0.6), 0.45 - 0.25 * ease((phase - 0.4) / 0.6), 0.02];
-            body.scale.set(1 / Math.sqrt(sy), sy, 1 / Math.sqrt(sy)); // (squash and stretch, keeping its volume)
-            body.rotation.z = tip;
-            body.position.x = dx;
-          }
-          if (anim === 'brace' && !opts.ownStyles) { body.rotation.z = -0.1; body.scale.set(1, 0.92, 1); } // set low, leaning into the point
-          if (anim === 'stagger' && !opts.ownStyles) { // knocked back off balance, swaying as it catches itself
-            const s = Math.sin(phase * Math.PI * 2);
-            body.rotation.z = 0.28 + s * 0.06;
-            body.rotation.x = s * 0.14;
-            body.position.x = -0.05;
-          }
-          if (anim === 'die') collapse(body, phase);
+          styleBody(body, anim, phase, opts);
           // its shadow alone: the body draws nothing (its own copies of its materials write no colour or depth) but
           // still casts its shadow (the shadow map is drawn apart, from the light)
           if (shadowPass) body.traverse((o) => {

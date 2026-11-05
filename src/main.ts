@@ -66,6 +66,7 @@ if (mode === 'arena') { menu.style.display = 'none'; void import('./arena/arenaM
 else if ((mode as string) === 'sprites') { menu.style.display = 'none'; void import('./dev/spriteSheet').then((m) => m.runSpriteSheet(params)); }
 else if ((mode as string) === 'sizecheck') { menu.style.display = 'none'; void import('./dev/sizeCheck').then((m) => m.runSizeCheck()); }
 else if ((mode as string) === 'artcheck') { menu.style.display = 'none'; void import('./dev/artCheck').then((m) => m.runArtCheck()); }
+else if ((mode as string) === 'footcheck') { menu.style.display = 'none'; void import('./dev/footCheck').then((m) => m.runFootCheck()); }
 else if ((mode as string) === 'prebake') { menu.style.display = 'none'; void import('./dev/prebake').then((m) => m.runPrebake()); }
 else if (mode) start(mode);
 else {
