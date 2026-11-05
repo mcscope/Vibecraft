@@ -17,7 +17,9 @@ const flag = (cm: number) => (cm > 2 ? ' ◀' : '');
 
 type Pt = { x: number; z: number; lo: number };
 
-export async function runFootCheck(): Promise<void> {
+export async function runFootCheck(params = new URLSearchParams(location.search)): Promise<void> {
+  // (&unit=<id>: only that unit; &dump=<anim>: and what touches the ground in each frame of that animation)
+  const only = params.get('unit'), dump = params.get('dump') as BakedAnim | null;
   const out = document.createElement('pre');
   out.id = 'footcheck';
   out.style.cssText = 'position:fixed;inset:0;margin:0;padding:10px;background:#111;color:#ddd;font:12px monospace;overflow:auto;z-index:10';
@@ -31,12 +33,13 @@ export async function runFootCheck(): Promise<void> {
   const baker = new Baker(), team = TEAM_COLORS[0];
   const rows: string[] = ['unit                         anim          stride m/loop | worst planted-foot slip, cm (where)'];
   for (const { f, opts } of factions) for (const u of f.units) {
-    if (!u.model) continue;
+    if (!u.model || (only && u.id !== only)) continue;
     const o = opts(u as never);
     if (o.segments?.length) { rows.push(`${(f.id + ':' + u.id).padEnd(28)} (a crawler in parts: skipped)`); continue; }
     const frames = (anim: BakedAnim): Pt[][] => Array.from({ length: N }, (_, i) => baker.contacts(u.model!, team, anim, i / N, o));
     const feet = (pts: Pt[]) => pts.filter((p) => p.lo < 0.012); // (what stands on the ground: not a body part resting near it)
     const idle0 = feet(baker.contacts(u.model, team, 'idle', 0, o));
+    if (dump) for (let i = 0; i < N; i++) rows.push(`${dump} frame ${i}: ` + baker.contacts(u.model, team, dump, i / N, o).filter((p) => p.lo < 0.03).map((p) => `(${p.x.toFixed(2)},${p.z.toFixed(2)} lo ${p.lo.toFixed(3)})`).join(' '));
     for (const anim of animsFor(o)) {
       if (SKIP.has(anim)) continue;
       const fr = frames(anim);

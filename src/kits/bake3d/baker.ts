@@ -181,8 +181,13 @@ export function bakedPose(anim: BakedAnim, phase: number, team: TeamColors): Pos
 
 /** The baker's whole-body styles, on top of the model (unless its model draws them itself). */
 function styleBody(body: THREE.Object3D, anim: BakedAnim, phase: number, opts: UnitBakeOptions): void {
-  // models face +x, so leaning in is a tip about z toward +x
-  if (anim === 'charge' && !opts.ownStyles) { body.rotation.z = -0.2; body.position.x = 0.04; } // flat out, weight forward
+  // models face +x; a lean is a shear (x, and z, shifted in proportion to height), so its planted feet stay where they
+  // are on the ground while the body above leans over them
+  const lean = (forward: number, side = 0, squash = 1) => {
+    body.matrixAutoUpdate = false;
+    body.matrix.set(1, forward, 0, 0, 0, squash, 0, 0, 0, side, 1, 0, 0, 0, 0, 1);
+  };
+  if (anim === 'charge' && !opts.ownStyles) lean(0.2); // flat out, weight forward
   // banking: rolled into the turn, the inside wing down (L turns toward its +z side, which dips with +x roll)
   if (anim === 'bankL' || anim === 'bankR') body.rotation.x = anim === 'bankL' ? 0.5 : -0.5;
   // a leap off the ground, springy: crouching (squashing down, tipping nose-up, weight back), then driving up
@@ -196,12 +201,10 @@ function styleBody(body: THREE.Object3D, anim: BakedAnim, phase: number, opts: U
     body.rotation.z = tip;
     body.position.x = dx;
   }
-  if (anim === 'brace' && !opts.ownStyles) { body.rotation.z = -0.1; body.scale.set(1, 0.92, 1); } // set low, leaning into the point
-  if (anim === 'stagger' && !opts.ownStyles) { // knocked back off balance, swaying as it catches itself
+  if (anim === 'brace' && !opts.ownStyles) lean(0.1, 0, 0.92); // set low, leaning into the point
+  if (anim === 'stagger' && !opts.ownStyles) { // knocked back off balance, swaying as it catches itself, its feet where they were
     const s = Math.sin(phase * Math.PI * 2);
-    body.rotation.z = 0.28 + s * 0.06;
-    body.rotation.x = s * 0.14;
-    body.position.x = -0.05;
+    lean(-0.29 - s * 0.06, s * 0.14);
   }
   if (anim === 'die') collapse(body, phase);
 }
@@ -316,7 +319,7 @@ export class Baker {
     return steps >= n / 2 && d > 0.05 ? (d * n) / steps : undefined;
   }
 
-  /** Dev (the foot check): each mesh touching the ground (its lowest point within 3 cm) in a frame of a baked animation, as drawn (with the baker's styles): its centre (x, z, metres) and how low it is. */
+  /** Dev (the foot check): every mesh in a frame, in order, where it touches the ground (its lowest point within 3 cm; else NaN) of a baked animation, as drawn (with the baker's styles): its centre (x, z, metres) and how low it is. */
   contacts(model: UnitModel, team: TeamColors, anim: BakedAnim, phase: number, opts: UnitBakeOptions = {}): Array<{ x: number; z: number; lo: number }> {
     this.clearStage();
     this.stage.rotation.y = 0;
@@ -325,8 +328,21 @@ export class Baker {
     model(new Builder(team, body), bakedPose(anim === 'die' ? 'idle' : anim, anim === 'die' ? 0 : phase, team));
     styleBody(body, anim, phase, opts);
     this.stage.updateMatrixWorld(true);
-    const box = new THREE.Box3(), c = new THREE.Vector3(), out: Array<{ x: number; z: number; lo: number }> = [];
-    this.stage.traverse((o) => { if (o instanceof THREE.Mesh) { box.setFromObject(o); if (box.min.y < 0.03) { box.getCenter(c); out.push({ x: c.x, z: c.z, lo: box.min.y }); } } });
+    // (each mesh's own contact patch: the centre of its vertices within 1 cm of its lowest, not its middle: a shin
+    // reaching down to a planted foot touches where the foot is, wherever its knee goes)
+    const box = new THREE.Box3(), v = new THREE.Vector3(), out: Array<{ x: number; z: number; lo: number }> = [];
+    this.stage.traverse((o) => {
+      if (!(o instanceof THREE.Mesh)) return;
+      box.setFromObject(o);
+      if (box.min.y >= 0.03) { out.push({ x: NaN, z: NaN, lo: box.min.y }); return; } // (every mesh listed, in order: frames compare mesh by mesh)
+      const pos = (o.geometry as THREE.BufferGeometry).getAttribute('position');
+      let x = 0, z = 0, n = 0;
+      for (let i = 0; i < pos.count; i++) {
+        v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+        if (v.y < box.min.y + 0.01) { x += v.x; z += v.z; n++; }
+      }
+      if (n) out.push({ x: x / n, z: z / n, lo: box.min.y });
+    });
     return out;
   }
 

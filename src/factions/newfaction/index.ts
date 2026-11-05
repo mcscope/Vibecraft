@@ -160,7 +160,8 @@ function drawVimmer(b: ModelBuilder, p: Pose, mass: number): void {
   // planted, the joint between them arched up where its bones put it (the same bones it flies on)
   function standing(S: number, y0: number, step = (rest: V): V => rest) {
     const sh: V = [0.06, y0 + 0.04, S * 0.08];
-    const wrist = step([0.34, 0, S * 0.4]), tip = step([-0.5, 0, S * 0.7]);
+    // (each as high as its bone is thick there: the wrist's 6 cm, the tip's 1; lower, they sank into the ground and dragged as they lifted)
+    const wrist = step([0.34, 0.06, S * 0.4]), tip = step([-0.5, 0.012, S * 0.7]);
     return { sh, wrist, tip, knuckle: jointBetween(wrist, tip, BONES[1], BONES[2], [0.02, 1, S * 0.05]) };
   }
   // standing on its wings, each wing's wrist (in front) and tip (behind) planted, the joint between arched high;
@@ -169,12 +170,12 @@ function drawVimmer(b: ModelBuilder, p: Pose, mass: number): void {
     for (const S of [1, -1]) {
       // (walking, its four points step in turn on planted feet, the high joints riding between)
       let leg = 0;
-      const step = (rest: V): V => (p.anim === 'walk' ? footAt(rest, p.phase + leg++ * 0.25 + (S > 0 ? 0 : 0.5), 0.1, 0.06) : rest);
+      const step = (rest: V): V => (p.anim === 'walk' ? footAt(rest, p.phase + leg++ * 0.25 + (S > 0 ? 0 : 0.5), 0.1, 0.08) : rest);
       const { sh, wrist, knuckle, tip } = standing(S, y0, step);
       bone(o, sh, wrist, 0.05, 0.03);
       bone(o, wrist, knuckle, 0.06, 0.1);
       bone(o, knuckle, tip, 0.1, 0.01);
-      for (const foot of [wrist, tip]) for (const dz of [-0.025, 0.025]) o.cone(0.012, 0.06, [foot[0] + 0.03, 0.01, foot[2] + dz], rib, [0, 0, -Math.PI / 2], 4); // claws
+      for (const foot of [wrist, tip]) for (const dz of [-0.025, 0.025]) o.cone(0.012, 0.06, [foot[0] + 0.03, foot[1] + 0.01 - (foot === wrist ? 0.06 : 0.012), foot[2] + dz], rib, [0, 0, -Math.PI / 2], 4); // claws
     }
     // the body slung between them; striking, it drives its whole torso forward like a battering ram, the spike first
     o.joint([0.34 * stab, y0 - 0.04 * stab, 0], [0, 0, tilt - 0.08 * stab], body);
@@ -267,10 +268,10 @@ function mpWalk(q: number): MpPose {
       x += w * ((MP.feet[a][0] + MP.feet[b][0]) / 2 - 0.073) * 0.85; // (the feet's centroid is at x 0.073)
       z += w * ((MP.feet[a][1] + MP.feet[b][1]) / 2) * 0.85;
     }
-    return [x, MP.hub - 0.05, z];
+    return [x, MP.hub, z];
   };
   const hub = hubAt(q), land = Math.max(...lands);
-  hub[1] += 0.03 * Math.max(...lifts) - 0.05 * land;
+  hub[1] += 0.03 * Math.max(...lifts) - 0.03 * land; // (never so low its hanging point touches the ground)
   const { swing, roll } = pendulum(hubAt, q);
   return { hub, sy: 1 - 0.1 * land, swing, roll, feet: offs.map((o, i) => footAt(rest3(i), q + o, 0.3, 0.16, duty)) };
 }
@@ -282,27 +283,26 @@ function mpRun(q: number): MpPose {
   const hubAt = (p: number): V3m => [0.06 * Math.sin((p - 0.1) * TAU), hubY + 0.07 * Math.sin((p - 0.05) * TAU) - 0.05 * bump(p, 0.55, 0.12), 0];
   const hub = hubAt(q), push = bump(q, 0.08, 0.12), catchF = bump(q, 0.55, 0.12);
   // (its feet: the front pair down together for 0.45 … 0.85, the back one for 0.95 … 0.25)
-  const feet: V3m[] = [footAt(rest3(0), q - 0.45, 0.32, 0.2, 0.42), footAt(rest3(1), q - 0.47, 0.32, 0.2, 0.42), footAt(rest3(2), q + 0.05, 0.38, 0.22, 0.32)];
+  // (each planted foot sliding back at one speed, 2·reach/duty a loop: the front pair's longer reach for their longer contact)
+  const feet: V3m[] = [footAt(rest3(0), q - 0.45, 0.42, 0.2, 0.42), footAt(rest3(1), q - 0.47, 0.42, 0.2, 0.42), footAt(rest3(2), q + 0.05, 0.32, 0.22, 0.32)];
   const { swing } = pendulum(hubAt, q);
   return { hub, sy: 1 + 0.14 * push - 0.16 * catchF, swing: aim + swing, roll: 0, feet };
 }
 
-/** A stab (contact at 0.4, where the sim lands it): anticipation, the hub sinking and drawing back while the pike swings
- *  back behind it; then the hub springs forward over its front feet, stretching, the pike sweeping up through its arc
- *  to the point at mid-body as far out as the sim's reach, the back foot skipping in under the lunge; the pike
- *  overshoots up and the whole thing settles back, the pike falling and swinging as a pendulum till it hangs again. */
+/** A stab (contact at 0.4, where the sim lands it), its feet planted throughout: it pulls back and rises tall on its
+ *  legs, swinging the pike up and forward as it goes, so the point clears the ground (a hanging pike can only swing up
+ *  if its hub lifts it), cocks it level, still drawing back (anticipation); then drives the hub in along the pike,
+ *  fast, stretching, the point reaching mid-body at the sim's reach; a jolt on impact, and it draws back and settles,
+ *  lowering the pike behind its rising hub (always clear) to hang again, a little swing past and back. */
 function mpStab(q: number): MpPose {
-  const reachX = 0.83, hitY = MP.hub - 0.35, aim = mpAim(hitY, MP_STRIKE_H);
+  const reachX = 0.83, hitY = MP.hub - 0.35, aim = mpAim(hitY, MP_STRIKE_H), up = MP.hub + 0.22, raised = Math.PI / 2 + 0.15;
   let x: number, y: number, sy: number, swing: number;
-  // (exaggerated: a deep wind-up, the pike swung far back; a snapping arc; a hard overshoot and a big pendulum after)
-  if (q < 0.22) { const k = ease(q / 0.22); x = -0.35 * k; y = MP.hub - 0.32 * k; sy = 1 - 0.22 * k; swing = -1.15 * k; }
-  else if (q < 0.4) { const k = (q - 0.22) / 0.18; x = mixN(-0.35, reachX, ease(k)); y = mixN(MP.hub - 0.32, hitY, ease(k)) + 0.12 * Math.sin(Math.PI * k); sy = 0.78 + 0.57 * Math.sin(Math.PI * k) + 0.22 * k; swing = mixN(-1.15, aim, k ** 2.5); }
-  else if (q < 0.52) { const k = (q - 0.4) / 0.12; x = reachX + 0.06 * Math.sin(Math.PI * k * 0.5); y = hitY - 0.08 * Math.sin(Math.PI * k); sy = 1 - 0.15 * Math.sin(Math.PI * k); swing = aim + 0.55 * Math.sin(Math.PI * k * 0.5); }
-  else { const u = (q - 0.52) / 0.48, e = ease(u); x = mixN(reachX + 0.06, 0, e); y = mixN(hitY, MP.hub, e) + 0.05 * Math.sin(Math.PI * u) * (1 - u); sy = 1 + 0.08 * Math.sin(2 * Math.PI * u) * (1 - u); swing = (aim + 0.55) * (1 - u) ** 1.6 * Math.cos(2.6 * Math.PI * u); }
-  // the back foot skips in under the lunge (from 0.24, landing as the blow does) and back out on the way home
-  const back = rest3(2), skip = q < 0.24 ? 0 : q < 0.4 ? ease((q - 0.24) / 0.16) : q < 0.62 ? 1 : 1 - ease((q - 0.62) / 0.3);
-  const lift = (q > 0.24 && q < 0.4 ? Math.sin(Math.PI * (q - 0.24) / 0.16) : q > 0.62 && q < 0.92 ? Math.sin(Math.PI * (q - 0.62) / 0.3) : 0) * 0.2;
-  return { hub: [x, y, 0], sy, swing, roll: 0, feet: [rest3(0), rest3(1), [back[0] + 0.42 * skip, back[1] + lift, back[2]]] };
+  if (q < 0.25) { const k = ease(q / 0.25); x = -0.25 * k; y = mixN(MP.hub, up, k) - 0.05 * Math.sin(Math.PI * Math.min(1, q / 0.08)); sy = 1 - 0.1 * Math.sin(Math.PI * Math.min(1, q / 0.08)) + 0.08 * k; swing = raised * k; }
+  else if (q < 0.32) { const k = ease((q - 0.25) / 0.07); x = -0.25 - 0.06 * k; y = up; sy = 1.08 - 0.04 * k; swing = mixN(raised, aim + 0.05, k); }
+  else if (q < 0.4) { const k = (q - 0.32) / 0.08, kin = k * k; x = mixN(-0.31, reachX, kin); y = mixN(up, hitY, kin); sy = 1.04 - 0.22 * Math.sin(Math.PI * k * 0.9); swing = mixN(aim + 0.05, aim, k); }
+  else if (q < 0.5) { const k = (q - 0.4) / 0.1; x = reachX + 0.06 * Math.sin(Math.PI * k * 0.5); y = hitY - 0.05 * Math.sin(Math.PI * k); sy = 0.86 + 0.14 * k; swing = aim - 0.08 * Math.sin(Math.PI * k); }
+  else { const u = (q - 0.5) / 0.5; x = mixN(reachX + 0.06, 0, ease(u)); y = mixN(hitY, MP.hub, ease(Math.min(1, u / 0.6))); sy = 1 + 0.04 * Math.sin(Math.PI * u); swing = aim * (1 - ease((u - 0.2) / 0.8)) - (u > 0.7 ? 0.12 * Math.sin((Math.PI * (u - 0.7)) / 0.3) : 0); }
+  return { hub: [x, y, 0], sy, swing, roll: 0, feet: [rest3(0), rest3(1), rest3(2)] };
 }
 
 /**
@@ -324,14 +324,14 @@ function drawMicropike(b: ModelBuilder, p: Pose): void {
   else if (walking) m = mpWalk(q);
   else if (p.anim === 'attack') m = mpStab(q);
   else if (p.style === 'brace') // set: sunk low and back, legs wide, the pike swung up and forward at a charging body's chest, braced still
-    m = { hub: [-0.1, MP.hub - 0.5, 0], sy: 0.9 + 0.01 * Math.sin(t * 2), swing: 1.95, roll: 0, feet: [[0.55, 0.01, 0.5], [0.55, 0.01, -0.5], [-0.75, 0.01, 0]] };
+    m = { hub: [-0.1, MP.hub - 0.5, 0], sy: 0.9 + 0.01 * Math.sin(t * 2), swing: 1.95, roll: 0, feet: [rest3(0), rest3(1), rest3(2)] }; // (its feet where they stood: its legs fold)
   else if (p.style === 'stagger') // knocked back, legs splayed, the pike swinging wildly
-    m = { hub: [-0.22, MP.hub - 0.25, 0.08 * Math.sin(t)], sy: 0.92, swing: -0.55 * Math.sin(t + 0.6), roll: 0.35 * Math.sin(t * 2), feet: [[0.45, 0.01, 0.45], [0.42, 0.01, -0.5], [-0.75, 0.01, 0.06]] };
+    m = { hub: [-0.22, MP.hub - 0.25, 0.08 * Math.sin(t)], sy: 0.92, swing: -0.55 * Math.sin(t + 0.6), roll: 0.35 * Math.sin(t * 2), feet: [rest3(0), rest3(1), rest3(2)] };
   else if (p.anim === 'gather' || p.anim === 'eat') { // down at the ground: its legs fold high, the pike stood straight up out of the way, its head pecking
     const peck = p.anim === 'eat' ? 0.5 + 0.5 * Math.sin(t) : bump(q, 0.3, 0.25) + bump(q, 0.75, 0.2);
     m = { hub: [0.12, 0.32 + 0.1 * (1 - peck), 0], sy: 1 - 0.1 * peck, swing: Math.PI - 0.08 + 0.05 * peck, roll: 0, feet: [rest3(0), rest3(1), rest3(2)] };
   } else if (p.anim === 'tired') // sagging, legs splayed, heaving
-    m = { hub: [0, MP.hub - 0.3 - 0.03 * Math.sin(t), 0], sy: 0.94 + 0.05 * Math.sin(t), swing: 0.03 * Math.sin(t - 0.8), roll: 0, feet: [[0.48, 0.01, 0.45], [0.48, 0.01, -0.45], [-0.75, 0.01, 0]] };
+    m = { hub: [0, MP.hub - 0.3 - 0.03 * Math.sin(t), 0], sy: 0.94 + 0.05 * Math.sin(t), swing: 0.03 * Math.sin(t - 0.8), roll: 0, feet: [rest3(0), rest3(1), rest3(2)] };
   else // idle: breathing, its hub rising and falling, the pike swaying a little after it
     m = { hub: [0, MP.hub + 0.015 * Math.sin(t), 0], sy: 1 + 0.03 * Math.sin(t), swing: 0.04 * Math.sin(t - 0.7), roll: 0.02 * Math.sin(t * 0.5), feet: [rest3(0), rest3(1), rest3(2)] };
   const { hub, sy } = m, sw = 1 / Math.sqrt(sy);
@@ -348,7 +348,7 @@ function drawMicropike(b: ModelBuilder, p: Pose): void {
       shapedLimb(c, hip, knee, 0.03, [1.2, 1.0, 0.85, 0.8, 0.9], chitin);
       c.sphere(0.03, knee, sheen);
       shapedLimb(c, knee, foot, 0.026, [1.0, 0.85, 0.7, 0.55, 0.4], chitin, { flat: 0.3 });
-      c.cone(0.014, 0.06, [foot[0] + (dx / out) * 0.02, 0.012, foot[2] + (dz / out) * 0.02], claw, [0, Math.atan2(-dz, dx), -Math.PI / 2], 4);
+      c.cone(0.014, 0.06, [foot[0] + (dx / out) * 0.02, foot[1] + 0.002, foot[2] + (dz / out) * 0.02], claw, [0, Math.atan2(-dz, dx), -Math.PI / 2], 4);
     });
     // the pike: its butt held at the hub, hanging and swinging from it
     c.joint([hub[0], hub[1] - 0.06 * sy, hub[2]], [m.roll, 0, -Math.PI / 2 + m.swing], (k) => {
@@ -406,8 +406,8 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
       shapedLimb(c, knee, ankle, k.shinR, [1.0, 0.85, 0.72, 0.66, 0.7], chitin, { flat: 0.3 }); // the shin
       c.sphere(k.shinR * 0.68, ankle, chitin);
       shapedLimb(c, ankle, foot, k.shinR * 0.65, [1.0, 0.85, 0.75, 0.8], chitin); // the foot bone
-      for (const dz of [-0.03, 0, 0.03]) c.cone(0.012 * k.body / 0.7, 0.07 * k.body / 0.7, [foot[0] + 0.05, 0.01, foot[2] + dz * k.body / 0.7], claw, [0, dz * 4, -Math.PI / 2], 4); // toes
-      c.cone(0.01, 0.05, [foot[0] - 0.04, 0.01, foot[2]], claw, [0, 0, Math.PI / 2], 4); // the back claw
+      for (const dz of [-0.03, 0, 0.03]) c.cone(0.012 * k.body / 0.7, 0.07 * k.body / 0.7, [foot[0] + 0.05, foot[1], foot[2] + dz * k.body / 0.7], claw, [0, dz * 4, -Math.PI / 2], 4); // toes
+      c.cone(0.01, 0.05, [foot[0] - 0.04, foot[1], foot[2]], claw, [0, 0, Math.PI / 2], 4); // the back claw
     }
     // the body, slung between the hips: leaning into a run; striking, it rams forward, the spike first
     // (a lasher doesn't ram: it dips its torso down as it lashes)
@@ -868,7 +868,7 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
       if (detail > 0.5) c.cone(0.02, 0.09, [knee[0] - 0.05, knee[1] - 0.03, knee[2]], legMat, [0, 0, 2.2], 4); // the spur
       c.sphere(0.04 * lk, ankle, legMat);
       shapedLimb(c, ankle, foot, 0.035 * lk, [0.9, 0.7, 0.6, 0.7], legMat, { flat: 0.3 });
-      for (const dz of [-0.04, 0, 0.04]) c.cone(0.016, 0.08, [foot[0] + 0.06, 0.012, foot[2] + dz], dark, [0, dz * 4, -Math.PI / 2], 4); // claws
+      for (const dz of [-0.04, 0, 0.04]) c.cone(0.016, 0.08, [foot[0] + 0.06, foot[1] + 0.012, foot[2] + dz], dark, [0, dz * 4, -Math.PI / 2], 4); // claws
       const fo = o.fore ?? 1; // (tucked in: shorter forelegs, their knees kept low, clear of her head)
       const fhip: V3 = [0.1, y0 - 0.06, z * 0.12], fkRest: V3 = [0.1 + 0.14 * fo, y0 + 0.02 + 0.3 * cr * (1 - (1 - fo) * 2.5), z * 0.34 * (1 + (sp - 1) * fo)], frest: V3 = [0.1 + 0.26 * fo, 0, z * 0.4 * (1 + (sp - 1) * fo)];
       const ffoot = walking ? footAt(frest, ph + 0.5, 0.12, 0.05) : frest;
@@ -876,7 +876,7 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
       shapedLimb(c, fhip, fk, 0.07 * lk, [0.6, 1.15, 1.25, 0.95, 0.55], legMat, { flat: 0.35, up: [0, 0, z] });
       c.sphere(0.04 * lk, fk, legMat);
       shapedLimb(c, fk, ffoot, 0.05 * lk, [0.7, 1.0, 0.85, 0.6, 0.4], legMat, { flat: 0.7, keel: 0.6, up: [1, 0, 0] });
-      for (const dz of [-0.03, 0.03]) c.cone(0.012, 0.06, [ffoot[0] + 0.04, 0.01, ffoot[2] + dz], dark, [0, dz * 4, -Math.PI / 2], 4);
+      for (const dz of [-0.03, 0.03]) c.cone(0.012, 0.06, [ffoot[0] + 0.04, ffoot[1] + 0.01, ffoot[2] + dz], dark, [0, dz * 4, -Math.PI / 2], 4);
     }
   }, LOOK.mother.scale(mass));
 }

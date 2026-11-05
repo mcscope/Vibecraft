@@ -160,12 +160,13 @@ const packTortoise: FenUnit = {
       // four pillar legs in iron greaves, clawed
       // (on planted feet: diagonal pairs stepping together, a foot holding where it stands as the body goes over it)
       for (const [x, z, ph] of [[0.48, 0.42, 0], [0.48, -0.42, 0.5], [-0.48, 0.42, 0.5], [-0.48, -0.42, 0]] as Array<[number, number, number]>) {
-        const rest: [number, number, number] = [x, 0.06, z * 1.18];
-        const foot = walking ? footAt(rest, p.phase + ph, 0.09, 0.06) : rest;
+        // (its foot as high as its leg is thick there: lower, the leg's end sank into the ground and dragged as it lifted)
+        const rest: [number, number, number] = [x, 0.12, z * 1.18];
+        const foot = walking ? footAt(rest, p.phase + ph, 0.09, 0.08) : rest;
         b.limb([x, 0.42, z], foot, 0.14, hide, 0.12);
         b.cylinder(0.15, 0.17, 0.2, [(x + foot[0]) / 2, 0.24, (z + foot[2]) / 2], IRON, undefined, 8); // greave
         b.cylinder(0.16, 0.16, 0.03, [(x + foot[0]) / 2, 0.35, (z + foot[2]) / 2], BRASS, undefined, 8);
-        for (const c of [-0.06, 0, 0.06]) b.cone(0.03, 0.1, [foot[0] + 0.12, foot[1], foot[2] + c], BONE, [0, 0, -Math.PI / 2], 5); // claws
+        for (const c of [-0.06, 0, 0.06]) b.cone(0.03, 0.1, [foot[0] + 0.12, foot[1] - 0.09, foot[2] + c], BONE, [0, 0, -Math.PI / 2], 5); // claws (on the ground under its foot)
       }
       const bob = walking ? Math.abs(Math.sin(t)) * 0.03 : 0;
       b.joint([0, bob, 0], [0, 0, 0], (c) => {
@@ -315,7 +316,7 @@ const greatSiegeHeron: FenUnit = {
           shapedLimb(b, hip, knee, 0.045, [1.2, 1.0, 0.8, 0.75, 0.85], heronLeg); // (a feathered thigh thinning to the joint)
           b.sphere(0.034, knee, heronLeg);
           shapedLimb(b, knee, foot, 0.035, [0.95, 0.8, 0.72, 0.72, 0.8], heronLeg);
-          for (const tz of [-0.08, 0, 0.08]) b.limb(foot, [foot[0] + 0.22, 0.02, foot[2] + tz * 1.5], 0.015, heronLeg); // splayed toes
+          for (const tz of [-0.08, 0, 0.08]) b.limb(foot, [foot[0] + 0.22, foot[1] + 0.02, foot[2] + tz * 1.5], 0.015, heronLeg); // splayed toes
         }
       }
       // the body pitches about the hip (so the legs stay attached however it tilts)

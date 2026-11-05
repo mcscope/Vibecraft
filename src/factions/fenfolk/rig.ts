@@ -83,7 +83,13 @@ export function fenling(
       const sq = h.squat * SQUAT_DEPTH;
       const hip: Vec3 = [-0.04, 0.4 - (1 - e) * 0.03, z];
       const knee: Vec3 = [mix(0.12, -0.14) + h.squat * 0.07, mix(0.3, 0.22) + sq * 0.55, z * (mix(2.1, 1.3) + h.squat * 0.6)];
-      const foot: Vec3 = [mix(-0.02, -0.42) - h.squat * 0.03, mix(0.03, 0.06) + sq, z * (mix(1.6, 1.1) + h.squat * 0.25)];
+      // (on the ground, landing through take-off, its feet stay exactly where they came down: the body's still there, so
+      // its knees take the squat and the push; they blend into the kick behind only once it's off the ground, and back
+      // before it lands)
+      const ph = p.phase, sm = (x: number) => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c); };
+      const planted = p.anim !== 'walk' || ph >= 0.92 || ph < 0.16 ? 1 : ph < 0.26 ? 1 - sm((ph - 0.16) / 0.1) : ph > 0.84 ? sm((ph - 0.84) / 0.08) : 0;
+      const free: Vec3 = [mix(-0.02, -0.42) - h.squat * 0.03, mix(0.03, 0.06), z * (mix(1.6, 1.1) + h.squat * 0.25)];
+      const foot: Vec3 = [free[0] + (-0.02 - free[0]) * planted, free[1] + (0.03 - free[1]) * planted + sq, free[2] + (z * 1.6 - free[2]) * planted];
       shapedLimb(m, hip, knee, 0.075, [1.1, 1.25, 1.05, 0.8, 0.72], skin); // (a frog's thick thigh)
       m.sphere(0.055, knee, skin);
       shapedLimb(m, knee, foot, 0.05, [1.0, 0.85, 0.75, 0.7, 0.75], skin);

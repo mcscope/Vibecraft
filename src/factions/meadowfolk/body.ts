@@ -254,7 +254,8 @@ export function quadLegs(b: ModelBuilder, p: Pose, o: { fx: number; bx: number; 
   const order: Record<string, number> = { '1,1': 0.5, '1,-1': 0.6, '-1,1': 0, '-1,-1': 0.1 };
   for (const [x, z, ph] of legs) {
     const hip: Vec3 = [x, o.hip + (gallop ? galBob(p.phase, o.len) : bob), z];
-    const rest: Vec3 = [x + (p.anim === 'tired' ? 0.04 * o.len : 0), Math.min(o.r * 0.5, o.hip - o.len * 0.98), z];
+    // (its foot as high as its shin's end is thick: lower, the leg's end sank into the ground and dragged as it lifted)
+    const rest: Vec3 = [x, o.r * 0.62, z];
     const foot = gallop ? footAt(rest, p.phase + order[`${Math.sign(x)},${Math.sign(z)}`], 0.45 * o.len, 0.25 * o.len, 0.32)
       : walking ? footAt(rest, p.phase + ph, 0.42 * o.len, 0.16 * o.len) : rest; // (long strides: a runner covers ground by reach, not by scurrying)
     const knee = jointBetween(hip, foot, o.len * 0.5, o.len * 0.5, [x > 0 ? 1 : -1, 0, 0]); // (a foreleg's knee forward, a hind leg's hock back)
@@ -263,7 +264,7 @@ export function quadLegs(b: ModelBuilder, p: Pose, o: { fx: number; bx: number; 
     b.sphere(o.r * 1.05, hip, o.mat);
     b.sphere(o.r * 0.72, knee, o.mat);
     shapedLimb(b, knee, foot, o.r * 0.75, [0.95, 0.78, 0.72, 0.75, 0.82], o.mat);
-    b.sphere([o.r * 1.05, o.r * 0.6, o.r * 0.95], [foot[0] + o.r * 0.3, Math.max(o.r * 0.5, foot[1]), foot[2]], o.paw);
+    b.sphere([o.r * 1.05, o.r * 0.6, o.r * 0.95], [foot[0] + o.r * 0.3, o.r * 0.55 + foot[1] - rest[1], foot[2]], o.paw); // (on the ground planted, lifted with its foot)
   }
   return bob;
 }
