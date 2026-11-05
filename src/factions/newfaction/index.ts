@@ -217,84 +217,145 @@ const LASHER: ChargerBuild = { H: 0.6, thigh: 0.29, shin: 0.31, foot: [-0.07, 0.
 // the T2 slinger: the charger's build, its body the arm of a trebuchet (the user's design)
 // (`sling`: metres of throwing arm and cord past its own reach, its attack.sling: the art draws the arm that long)
 const SLINGER: ChargerBuild = { ...CHARGER, H: 0.6, body: 0.75, tint: '#3ab0bc', trebuchet: true, sling: 2 };
-// the T1 micropike: a cantilevered pike (the user's design), on the charger's legs; its own colour (drawMicropike)
-// (`H`: its hips at rest, where a near-straight leg (0.97 of thigh + shin) leaning out to its feet under its weight puts them)
-const MICROPIKE: ChargerBuild = { ...CHARGER, H: 0.77, thigh: 0.39, shin: 0.41, foot: [-0.03, 0.08, 0], hipZ: 0.09, footZ: 0.13, thighR: 0.05, shinR: 0.032, body: 1, tint: '#c98a2e', walk: 0.18, run: 0.24 };
-/** The micropike's pike (model units): how long it reaches forward from its hips, its girth there and at its head. */
-const PIKE = { boom: 1.5, r0: 0.11, r1: 0.026, head: 0.06, hips: 0.11 };
+// the T1 micropike: the tripod pendulum (the user's pick of three concepts); its own colour
+const MP = {
+  hub: 1.65, // its hub's height at rest (model units): the hanging pike's crystal just clears the ground
+  thigh: 1.0, shin: 1.2, // each leg, hub to knee (raised above the hub) to foot
+  feet: [[0.42, 0.27], [0.42, -0.27], [-0.62, 0]] as const, // its feet at rest (x, z): two ahead to the sides, one behind
+  pike: 1.35, r0: 0.075, r1: 0.025, crystal: 0.2, // the pike, its butt at the hub
+  tint: '#c98a2e',
+};
+/** The pike's swing (from hanging straight down, 0, toward level forward, π/2) that puts the crystal's tip at `tipY` from a hub at `hubY`. */
+const mpAim = (hubY: number, tipY: number) => Math.acos(Math.max(-1, Math.min(1, (hubY - tipY) / (MP.pike + MP.crystal))));
+/** Mid-body of an average 70 kg body (model units at its scale): where its point is aimed, stabbing and couched. */
+const MP_STRIKE_H = 0.85 / LOOK.charger.scale(35);
 
-/** How far ahead of its hips the micropike's centre of mass lies, its pike `pitch` above level: the pike (a tapering cone,
- *  its head at the tip) and its hips, each by its volume. */
-function pikeBalance(pitch: number): number {
-  const { boom: L, r0, r1, head, hips } = PIKE;
-  const vb = (Math.PI * L / 3) * (r0 * r0 + r0 * r1 + r1 * r1), xb = (L * (r0 * r0 + 2 * r0 * r1 + 3 * r1 * r1)) / (4 * (r0 * r0 + r0 * r1 + r1 * r1));
-  const vh = (4 / 3) * Math.PI * head ** 3, vp = (4 / 3) * Math.PI * hips ** 3;
-  return ((vb * xb + vh * L) * Math.cos(pitch)) / (vb + vh + vp);
+type V3m = [number, number, number];
+/** Its body at one moment: hub (x, y, z), the hub's squash (its height × sy; its width keeps its volume), the pike's
+ *  swing and roll, and its three feet. */
+interface MpPose { hub: V3m; sy: number; swing: number; roll: number; feet: V3m[] }
+
+/** A bump 0 … 1 … 0, centred on `c`, `w` either side, on a looping phase. */
+function bump(q: number, c: number, w: number): number {
+  let d = q - c; d -= Math.round(d);
+  return Math.abs(d) >= w ? 0 : Math.cos((d / w) * (Math.PI / 2)) ** 2;
+}
+const ease = (x: number) => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c); };
+const mixN = (a: number, b: number, k: number) => a + (b - a) * k;
+const rest3 = (i: number): V3m => [MP.feet[i][0], 0.01, MP.feet[i][1]];
+
+/** The pike hanging under a hub that jiggles on a loop: stepping several times a second, far faster than the pike's own
+ *  swing (a hanging pike swings about once in 1.7 s), it can't follow: its point stays nearly still in space while its
+ *  butt goes with the hub, so it tilts by how far the hub is off its average, over the pike's length, a little behind. */
+function pendulum(at: (q: number) => V3m, q: number): { swing: number; roll: number } {
+  let mx = 0, mz = 0;
+  for (let i = 0; i < 16; i++) { const h = at(i / 16); mx += h[0] / 16; mz += h[2] / 16; }
+  const h = at(q - 0.05), len = MP.pike * 0.6; // (its centre of percussion: most of its length)
+  return { swing: -Math.atan((h[0] - mx) / len), roll: Math.atan((h[2] - mz) / len) };
+}
+
+/** Walking, a foot at a time (back, then front left, then front right), on the other two each time: before a foot
+ *  lifts its hub moves over the line between the two it keeps down (anticipating), dipping as each one lands. */
+function mpWalk(q: number): MpPose {
+  const duty = 0.72, offs = [0, 1 / 3, 2 / 3];
+  const lifts = offs.map((o) => bump(q + o, duty + (1 - duty) / 2, 0.22)); // (each leg's weight-off: wider than its swing)
+  const lands = offs.map((o) => bump(q + o, 0.02, 0.07));
+  const hubAt = (p: number): V3m => {
+    let x = 0, z = 0;
+    for (let i = 0; i < 3; i++) {
+      const w = bump(p + offs[i], duty + (1 - duty) / 2, 0.22), [a, b] = [0, 1, 2].filter((j) => j !== i);
+      x += w * ((MP.feet[a][0] + MP.feet[b][0]) / 2 - 0.073) * 0.85; // (the feet's centroid is at x 0.073)
+      z += w * ((MP.feet[a][1] + MP.feet[b][1]) / 2) * 0.85;
+    }
+    return [x, MP.hub - 0.05, z];
+  };
+  const hub = hubAt(q), land = Math.max(...lands);
+  hub[1] += 0.03 * Math.max(...lifts) - 0.05 * land;
+  const { swing, roll } = pendulum(hubAt, q);
+  return { hub, sy: 1 - 0.1 * land, swing, roll, feet: offs.map((o, i) => footAt(rest3(i), q + o, 0.3, 0.16, duty)) };
+}
+
+/** Charging, it bounds: its back leg drives it off (stretching), it flies, both front feet catch it (squashing), and
+ *  the back leg swings through to drive again; the pike couched level at mid-body the whole way, bouncing a little behind. */
+function mpRun(q: number): MpPose {
+  const hubY = MP.hub - 0.4, aim = mpAim(hubY, MP_STRIKE_H);
+  const hubAt = (p: number): V3m => [0.06 * Math.sin((p - 0.1) * TAU), hubY + 0.07 * Math.sin((p - 0.05) * TAU) - 0.05 * bump(p, 0.55, 0.12), 0];
+  const hub = hubAt(q), push = bump(q, 0.08, 0.12), catchF = bump(q, 0.55, 0.12);
+  // (its feet: the front pair down together for 0.45 … 0.85, the back one for 0.95 … 0.25)
+  const feet: V3m[] = [footAt(rest3(0), q - 0.45, 0.32, 0.2, 0.42), footAt(rest3(1), q - 0.47, 0.32, 0.2, 0.42), footAt(rest3(2), q + 0.05, 0.38, 0.22, 0.32)];
+  const { swing } = pendulum(hubAt, q);
+  return { hub, sy: 1 + 0.14 * push - 0.16 * catchF, swing: aim + swing, roll: 0, feet };
+}
+
+/** A stab (contact at 0.4, where the sim lands it): anticipation, the hub sinking and drawing back while the pike swings
+ *  back behind it; then the hub springs forward over its front feet, stretching, the pike sweeping up through its arc
+ *  to the point at mid-body as far out as the sim's reach, the back foot skipping in under the lunge; the pike
+ *  overshoots up and the whole thing settles back, the pike falling and swinging as a pendulum till it hangs again. */
+function mpStab(q: number): MpPose {
+  const reachX = 0.83, hitY = MP.hub - 0.35, aim = mpAim(hitY, MP_STRIKE_H);
+  let x: number, y: number, sy: number, swing: number;
+  if (q < 0.22) { const k = ease(q / 0.22); x = -0.18 * k; y = MP.hub - 0.14 * k; sy = 1 - 0.12 * k; swing = -0.5 * k; }
+  else if (q < 0.4) { const k = (q - 0.22) / 0.18, kin = k * k; x = mixN(-0.18, reachX, ease(k)); y = mixN(MP.hub - 0.14, hitY, ease(k)) + 0.06 * Math.sin(Math.PI * k); sy = 0.88 + 0.3 * Math.sin(Math.PI * k) + 0.12 * k * 0; swing = mixN(-0.5, aim, kin); }
+  else if (q < 0.52) { const k = (q - 0.4) / 0.12; x = reachX + 0.06 * Math.sin(Math.PI * k * 0.5); y = hitY - 0.04 * Math.sin(Math.PI * k); sy = 1 - 0.08 * Math.sin(Math.PI * k); swing = aim + 0.22 * Math.sin(Math.PI * k * 0.5); }
+  else { const u = (q - 0.52) / 0.48, e = ease(u); x = mixN(reachX + 0.06, 0, e); y = mixN(hitY, MP.hub, e); sy = 1 + 0.05 * Math.sin(Math.PI * u) * (1 - u); swing = (aim + 0.22) * (1 - u) ** 2 * Math.cos(2.4 * Math.PI * u); }
+  // the back foot skips in under the lunge (from 0.24, landing as the blow does) and back out on the way home
+  const back = rest3(2), skip = q < 0.24 ? 0 : q < 0.4 ? ease((q - 0.24) / 0.16) : q < 0.62 ? 1 : 1 - ease((q - 0.62) / 0.3);
+  const lift = (q > 0.24 && q < 0.4 ? Math.sin(Math.PI * (q - 0.24) / 0.16) : q > 0.62 && q < 0.92 ? Math.sin(Math.PI * (q - 0.62) / 0.3) : 0) * 0.12;
+  return { hub: [x, y, 0], sy, swing, roll: 0, feet: [rest3(0), rest3(1), [back[0] + 0.42 * skip, back[1] + lift, back[2]]] };
 }
 
 /**
- * The micropike (the user's design): a cantilever, balanced like the wine-bottle holder that stands on one edge of a
- * leaning plank. Its pike of a body is held only at its butt, by its hips, and juts forward and a little up with nothing
- * behind to balance it; at rest each leg is a near-straight strut leaning out from the hips to its foot, under its
- * centre of mass out along the pike: the pike and the struts the two diagonals of the holder. Raised to set, the pike's weight comes back over the hips and the feet
- * stand back under it; walking and charging they stride about it. Stabbing, it lunges past its balance, momentum
- * carrying the pike out, and draws back.
+ * The micropike (the user's design, the tripod pendulum): three long legs meet at a hub high over the ground, knees up
+ * above it; its pike hangs point-down beneath the hub, so it's always balanced, a pendulum that swings with every move
+ * the hub makes. It walks a foot at a time, its hub moving over the two feet it keeps down; it charges bounding, the
+ * pike couched level; set against a charge it sinks low, legs wide, the pike swung up and forward; stabbing it swings
+ * the pike up through a wide arc as it lunges. Drawn with squash and stretch, anticipation, follow-through and arcs.
  */
-function drawMicropike(b: ModelBuilder, p: Pose, mass: number): void {
-  type V = [number, number, number];
-  const k = MICROPIKE, P = PIKE;
+function drawMicropike(b: ModelBuilder, p: Pose): void {
   const chitin: Mat = { color: '#1a2628', tex: 'leather', rough: 0.3, metal: 0.35 };
-  const sheen: Mat = { color: k.tint, tex: 'leather', rough: 0.3, metal: 0.4 };
-  const muscle: Mat = { color: mix('#3a2a18', k.tint, 0.35), tex: 'leather', rough: 0.4, metal: 0.2 };
+  const sheen: Mat = { color: MP.tint, tex: 'leather', rough: 0.3, metal: 0.4 };
+  const muscle: Mat = { color: mix('#3a2a18', MP.tint, 0.35), tex: 'leather', rough: 0.4, metal: 0.2 };
   const claw: Mat = { color: '#0e1210', tex: 'none', rough: 0.4 };
   const eye: Mat = { color: '#050608', tex: 'none', rough: 0.05, metal: 0.5 };
-  const sm = (x: number) => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c); };
-  const t = p.phase * TAU, walking = p.anim === 'walk', running = walking && p.style === 'charge', braced = p.style === 'brace', hit = p.anim === 'attack' ? p.phase : -1;
-  // (on the move it crouches: a straight strut can't stride, so it flexes to reach out and back)
-  const crouch = braced ? 0.25 : hit >= 0 ? 0.15 : running ? 0.25 : walking ? 0.15 : 0;
-  // on the move it's on one foot most of the time, so its weight goes over that foot: its whole body sways toward it,
-  // nearly all the way at a walk, less at a run (quicker, it falls between steps). And it rides each stance leg as a
-  // walker does, vaulting over it (highest mid-step) or as a runner does, sinking into it like a spring (lowest
-  // mid-stance). Each foot's stance is centred at half its duty: the near foot's at `mid`, the far one's half a step on
-  const duty = running ? 0.35 : 0.55, mid = duty / 2;
-  const onFoot = Math.cos((p.phase - mid) * TAU); // +1 standing on the near foot, −1 on the far one
-  const sway = walking ? k.footZ * (running ? 0.35 : 0.8) * onFoot : 0;
-  const pend = Math.cos((p.phase - mid) * 2 * TAU); // +1 at each foot's mid-stance
-  const bob = running ? -0.04 - 0.035 * pend : walking ? -0.012 + 0.018 * pend : p.anim === 'idle' ? 0.008 * Math.sin(t) : 0;
-  const H = k.H * (1 - crouch) + bob;
-  // the pike's angle (above level): at rest a little raised, set well raised, charging level; a stab dips it
-  const rest = braced ? 0.45 : running ? -0.03 : hit >= 0 ? 0.2 : 0.22;
-  const pitch = hit >= 0 ? (hit < 0.3 ? 0.2 + 0.06 * sm(hit / 0.3) : hit < 0.45 ? 0.26 - 0.38 * sm((hit - 0.3) / 0.15) : 0.2 - 0.32 * (1 - sm((hit - 0.45) / 0.55)))
-    : rest + (walking ? 0.03 * Math.sin(t * 2) : 0.02 * Math.sin(t));
-  // a stab's lunge: the hips thrown forward past its balance, its feet where they stood (to its sim reach)
-  const lunge = hit < 0 ? 0 : hit < 0.3 ? -0.05 * sm(hit / 0.3) : hit < 0.45 ? -0.05 + 0.74 * sm((hit - 0.3) / 0.15) : 0.69 * (1 - sm((hit - 0.45) / 0.55));
-  const under = pikeBalance(rest); // (its feet at rest: under its centre of mass)
+  const q = p.phase, t = q * TAU, walking = p.anim === 'walk', running = walking && p.style === 'charge';
+  let m: MpPose;
+  if (running) m = mpRun(q);
+  else if (walking) m = mpWalk(q);
+  else if (p.anim === 'attack') m = mpStab(q);
+  else if (p.style === 'brace') // set: sunk low and back, legs wide, the pike swung up and forward at a charging body's chest, braced still
+    m = { hub: [-0.1, MP.hub - 0.5, 0], sy: 0.9 + 0.01 * Math.sin(t * 2), swing: 1.95, roll: 0, feet: [[0.55, 0.01, 0.5], [0.55, 0.01, -0.5], [-0.75, 0.01, 0]] };
+  else if (p.style === 'stagger') // knocked back, legs splayed, the pike swinging wildly
+    m = { hub: [-0.22, MP.hub - 0.25, 0.08 * Math.sin(t)], sy: 0.92, swing: -0.55 * Math.sin(t + 0.6), roll: 0.35 * Math.sin(t * 2), feet: [[0.45, 0.01, 0.45], [0.42, 0.01, -0.5], [-0.75, 0.01, 0.06]] };
+  else if (p.anim === 'gather' || p.anim === 'eat') { // down at the ground: its legs fold high, the pike stood straight up out of the way, its head pecking
+    const peck = p.anim === 'eat' ? 0.5 + 0.5 * Math.sin(t) : bump(q, 0.3, 0.25) + bump(q, 0.75, 0.2);
+    m = { hub: [0.12, 0.32 + 0.1 * (1 - peck), 0], sy: 1 - 0.1 * peck, swing: Math.PI - 0.08 + 0.05 * peck, roll: 0, feet: [rest3(0), rest3(1), rest3(2)] };
+  } else if (p.anim === 'tired') // sagging, legs splayed, heaving
+    m = { hub: [0, MP.hub - 0.3 - 0.03 * Math.sin(t), 0], sy: 0.94 + 0.05 * Math.sin(t), swing: 0.03 * Math.sin(t - 0.8), roll: 0, feet: [[0.48, 0.01, 0.45], [0.48, 0.01, -0.45], [-0.75, 0.01, 0]] };
+  else // idle: breathing, its hub rising and falling, the pike swaying a little after it
+    m = { hub: [0, MP.hub + 0.015 * Math.sin(t), 0], sy: 1 + 0.03 * Math.sin(t), swing: 0.04 * Math.sin(t - 0.7), roll: 0.02 * Math.sin(t * 0.5), feet: [rest3(0), rest3(1), rest3(2)] };
+  const { hub, sy } = m, sw = 1 / Math.sqrt(sy);
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
-    for (const S of [1, -1]) {
-      const hip: V = [lunge, H, S * k.hipZ + sway], restFoot: V = [under, 0.01, S * k.footZ];
-      const ph = p.phase + (S > 0 ? 0 : 0.5);
-      const foot = running ? footAt(restFoot, ph, k.run, 0.1, duty) : walking ? footAt(restFoot, ph, k.walk, 0.12, duty) : restFoot;
-      const ankle: V = [foot[0] + k.foot[0], foot[1] + k.foot[1], foot[2]];
-      const knee = jointBetween(hip, ankle, k.thigh, k.shin, [1, 0.3, S * 0.4]);
-      shapedLimb(c, hip, knee, k.thighR, [1.1, 1.4, 1.35, 1.0, 0.7], muscle);
-      c.sphere(k.thighR * 0.75, knee, chitin);
-      shapedLimb(c, knee, ankle, k.shinR, [1.0, 0.85, 0.72, 0.66, 0.7], chitin, { flat: 0.3 });
-      c.sphere(k.shinR * 0.7, ankle, chitin);
-      shapedLimb(c, ankle, foot, k.shinR * 0.65, [1.0, 0.85, 0.75, 0.8], chitin);
-      for (const dz of [-0.03, 0, 0.03]) c.cone(0.012, 0.07, [foot[0] + 0.05, 0.01, foot[2] + dz], claw, [0, dz * 4, -Math.PI / 2], 4); // toes
-      c.cone(0.012, 0.06, [foot[0] - 0.045, 0.01, foot[2]], claw, [0, 0, Math.PI / 2], 4); // a hind toe: a foot to stand on, not a point
-    }
-    // the pike, held at its butt by the hips and nothing else
-    c.joint([lunge, H, sway], [0, 0, pitch], (q) => {
-      q.sphere([P.hips * 1.1, P.hips * 0.9, P.hips], [0, 0, 0], muscle); // its hips, holding the butt
-      q.cone(0.03, 0.08, [-P.hips, 0, 0], chitin, [0, 0, Math.PI / 2], 4); // the butt's barb
-      q.loft([0, 0.25, 0.6, 1].map((f) => ({ at: [f * P.boom, 0, 0] as V, w: P.r0 + (P.r1 - P.r0) * f, up: P.r0 + (P.r1 - P.r0) * f, down: (P.r0 + (P.r1 - P.r0) * f) * 0.9, keel: 0.3 })), chitin);
-      for (let i = 1; i < 7; i++) { const f = i / 7, r = P.r0 + (P.r1 - P.r0) * f; q.sphere([0.01, r * 1.08, r * 1.08], [f * P.boom, 0, 0], sheen); q.cone(0.008, 0.035, [f * P.boom, r + 0.012, 0], chitin, [0, 0, -0.5], 4); }
-      q.sphere([P.head * 1.3, P.head, P.head], [P.boom, 0, 0], chitin); // its head
-      for (const z of [1, -1]) q.sphere(0.013, [P.boom + 0.02, 0.025, z * 0.035], eye);
-      if (p.armed) q.crystal(0.22, [P.boom + 0.05, 0, 0], [0, 0, -Math.PI / 2]);
+    // the hub: squashing and stretching, its volume kept
+    c.sphere([0.16 * sw, 0.13 * sy, 0.16 * sw], hub, muscle);
+    c.sphere([0.17 * sw, 0.035, 0.17 * sw], [hub[0], hub[1] + 0.025 * sy, hub[2]], sheen); // its collar
+    for (const z of [1, -1]) c.sphere(0.024, [hub[0] + 0.14 * sw, hub[1] + 0.04 * sy, hub[2] + z * 0.06], eye);
+    // the legs: from round the hub toward each foot, knees raised above it and out
+    m.feet.forEach((foot) => {
+      const dx = foot[0] - hub[0], dz = foot[2] - hub[2], out = Math.hypot(dx, dz) || 1;
+      const hip: V3m = [hub[0] + (dx / out) * 0.12 * sw, hub[1], hub[2] + (dz / out) * 0.12 * sw];
+      const knee = jointBetween(hip, foot, MP.thigh, MP.shin, [dx / out, 1.5, (dz / out) * 0.45]); // (out toward its foot, but more up than sideways: a narrow stance)
+      shapedLimb(c, hip, knee, 0.03, [1.2, 1.0, 0.85, 0.8, 0.9], chitin);
+      c.sphere(0.03, knee, sheen);
+      shapedLimb(c, knee, foot, 0.026, [1.0, 0.85, 0.7, 0.55, 0.4], chitin, { flat: 0.3 });
+      c.cone(0.014, 0.06, [foot[0] + (dx / out) * 0.02, 0.012, foot[2] + (dz / out) * 0.02], claw, [0, Math.atan2(-dz, dx), -Math.PI / 2], 4);
     });
-  }, LOOK.charger.scale(mass));
+    // the pike: its butt held at the hub, hanging and swinging from it
+    c.joint([hub[0], hub[1] - 0.06 * sy, hub[2]], [m.roll, 0, -Math.PI / 2 + m.swing], (k) => {
+      k.loft([0, 0.3, 0.7, 1].map((f) => { const r = MP.r0 + (MP.r1 - MP.r0) * f; return { at: [f * MP.pike, 0, 0] as V3m, w: r, up: r, down: r * 0.9, keel: 0.3 }; }), chitin);
+      for (let i = 1; i < 6; i++) { const f = i / 6, r = MP.r0 + (MP.r1 - MP.r0) * f; k.sphere([0.012, r * 1.1, r * 1.1], [f * MP.pike, 0, 0], sheen); }
+      if (p.armed) k.crystal(MP.crystal, [MP.pike + 0.02, 0, 0], [0, 0, -Math.PI / 2]);
+    });
+  }, LOOK.charger.scale(35));
 }
 
 /**
@@ -983,7 +1044,7 @@ function gHopper(b: ModelBuilder, p: Pose, gait = HOPPER_GAIT): void {
 const charger = { ...unit({ id: 'charger', name: 'Charger', mass: 15, physique: { muscle: 0.6, frame: 0.25, reserve: 0.15 }, refinement: 2,
   attack: { style: 'strike', crystalMass: 1.5 }, description: 'T1: a fast charging body, striding on two long legs.', model: (b, p) => drawCharger(b, p, 38) }, 'charger'), size: footprint('charger', 38) };
 const micropike = { ...unit({ id: 'micropike', name: 'Micropike', mass: 35, physique: { muscle: 0.6, frame: 0.25, reserve: 0.15 }, refinement: 2,
-  attack: { style: 'strike', crystalMass: 0.8, shaft: 1.5 }, description: 'T1: micropikes.', model: (b, p) => drawMicropike(b, p, 35) }, 'charger'), size: 0.6 }; // (its collision as wide as it is drawn)
+  attack: { style: 'strike', crystalMass: 0.8, shaft: 1.5 }, description: 'T1: micropikes.', model: drawMicropike }, 'charger'), size: 0.84 }; // (its collision as wide as it is drawn: its narrow tripod stance)
 const flier = unit({ id: 'flier', name: 'Vimmer', mass: 120, physique: { muscle: 0.5, frame: 0.25, reserve: 0.25 }, refinement: 3, flight: { height: 20, launch: 'backward' }, // (a high ceiling: its dives are real drops, and it can climb after fliers)
   attack: { style: 'strike', crystalMass: 2 }, description: 'T2: a dive bomber: it swoops down onto its target to strike, its dive behind the blow, and climbs away again.', model: (b, p) => drawVimmer(b, p, 120) }, 'vimmer');
 const whipweld = unit({ id: 'whipweld', name: 'Whipweld', mass: 150, physique: { muscle: 0.5, frame: 0.35, reserve: 0.15 }, refinement: 3,

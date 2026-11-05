@@ -13,11 +13,9 @@ export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
   const out = document.createElement('div');
   out.style.cssText = 'position:fixed;inset:0;background:#7a8a5a;color:#fff;font:14px sans-serif;padding:8px;overflow:auto;z-index:10';
   document.body.appendChild(out);
-  // (&concept=a: a design concept instead, baked straight from its model: newfaction/concepts.ts)
-  const concept = params.get('concept');
-  if (!concept && !faction?.art) { out.textContent = `no art for ${id}`; return; }
-  out.textContent = `baking ${concept ?? id}…`;
-  const art = concept ? await bakeConcept(concept) : (await faction!.art!(TEAM_COLORS[0], undefined, [id])).units[id];
+  if (!faction?.art) { out.textContent = `no art for ${id}`; return; }
+  out.textContent = `baking ${id}…`;
+  const art = (await faction.art(TEAM_COLORS[0], undefined, [id])).units[id];
   const found = art?.anims[anim];
   if (!found) { out.textContent = `${id} has no '${anim}' (has: ${Object.keys(art?.anims ?? {}).join(', ')})`; return; }
   // &shadows=1: an animation in the air's shadow frames instead (baked alone, laid on the ground by the renderer)
@@ -45,17 +43,6 @@ export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
   out.appendChild(document.createElement('br'));
   out.appendChild(c);
   document.title = 'sprites ready';
-}
-
-/** A concept model baked as a unit (with a braced stance). */
-async function bakeConcept(name: string) {
-  const [{ MICROPIKE_CONCEPTS }, { Baker }] = await Promise.all([import('../factions/newfaction/concepts'), import('../kits/bake3d/baker')]);
-  const model = MICROPIKE_CONCEPTS[name];
-  if (!model) return undefined;
-  const baker = new Baker();
-  const art = await baker.bakeUnit(model, TEAM_COLORS[0], { brace: true });
-  baker.dispose();
-  return art;
 }
 
 /** ?mode=sprites&faction=<id>[&facing=2][&scale=2]: every unit of a faction standing side by side, true to scale, named. */

@@ -10,11 +10,14 @@ const hopFrames = (u: (typeof units)[number]) => {
   return { walk: n, charge: n, slam: n };
 };
 const carry = (id: string) => id.startsWith('larva') || id.startsWith('mother');
+/** The micropike's frames: its walk shifts its weight foot by foot and its stab winds up, lunges and swings back as a
+ *  pendulum, too much for the usual 8. */
+const frames = (u: (typeof units)[number]) => hopFrames(u) ?? (u.id === 'micropike' ? { walk: 12, charge: 10, attack: 12 } : undefined);
 
 export function bakeArt(team: TeamColors, onProgress?: (f: number, label: string) => void, only?: string[]): Promise<FactionArt> {
   return bakeFaction({
     units,
-    opts: (u) => ({ withCarry: carry(u.id), fly: !!u.flight, brace: !!u.attack?.shaft, ownLeap: u.id === 'flier', reload: u.id === 'slinger', lay: u.id.startsWith('mother'), gives: carry(u.id), slam: !!u.gait, grows: u.id.startsWith('egg') || u.id === 'cocoon', rises: u.id === 'charger' || u.id === 'whipweld' || u.id === 'slinger', segments: u.id.startsWith('larva') ? caterpillarSegments(u.mass) : undefined, frames: hopFrames(u) }),
+    opts: (u) => ({ withCarry: carry(u.id), fly: !!u.flight, brace: !!u.attack?.shaft, ownLeap: u.id === 'flier', reload: u.id === 'slinger', lay: u.id.startsWith('mother'), gives: carry(u.id), slam: !!u.gait, grows: u.id.startsWith('egg') || u.id === 'cocoon', rises: u.id === 'charger' || u.id === 'whipweld' || u.id === 'slinger', segments: u.id.startsWith('larva') ? caterpillarSegments(u.mass) : undefined, frames: frames(u), ownStyles: u.id === 'micropike' }),
     // PLACEHOLDER flag: an egg; PLACEHOLDER music
     flag: (baker) => baker.bakeStatic((b) => b.cylinder(0, 0.2, 0.3, [0, 0.35, 0], { team: 'primary', tex: 'none' }, undefined, 5), team),
     music: { scale: [0, 2, 3, 7, 8], root: 196, tempo: 76, lead: 'triangle', drone: 'sine' },

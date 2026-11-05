@@ -34,6 +34,8 @@ export interface UnitBakeOptions {
   sidearm?: boolean;
   /** Its model draws its whole leap itself (no springy squash and tip from the baker). */
   ownLeap?: boolean;
+  /** Its model draws its own charge, brace and stagger (no whole-body lean from the baker: a lean lifts a wide stance's feet off the ground). */
+  ownStyles?: boolean;
   /** Frames for some of its animations instead of the usual (a long hop's bound wants more, or it plays jerky). */
   frames?: Partial<Record<BakedAnim, number>>;
   /** It changes in place (an egg, a cocoon): also bake 'grow' (cooking: fed, the change going on), 'hungry' (waiting on food) and 'hatch' (its last moments). */
@@ -498,7 +500,7 @@ export class Baker {
           this.stage.add(body);
           model(new Builder(team, body), poseFor(anim === 'die' ? 'idle' : anim, anim === 'die' ? 0 : phase));
           // the body styles: models face +x, so leaning in is a tip about z toward +x
-          if (anim === 'charge') { body.rotation.z = -0.2; body.position.x = 0.04; } // flat out, weight forward
+          if (anim === 'charge' && !opts.ownStyles) { body.rotation.z = -0.2; body.position.x = 0.04; } // flat out, weight forward
           // banking: rolled into the turn, the inside wing down (L turns toward its +z side, which dips with +x roll)
           if (anim === 'bankL' || anim === 'bankR') body.rotation.x = anim === 'bankL' ? 0.5 : -0.5;
           // a leap off the ground, springy: crouching (squashing down, tipping nose-up, weight back), then driving up
@@ -512,8 +514,8 @@ export class Baker {
             body.rotation.z = tip;
             body.position.x = dx;
           }
-          if (anim === 'brace') { body.rotation.z = -0.1; body.scale.set(1, 0.92, 1); } // set low, leaning into the point
-          if (anim === 'stagger') { // knocked back off balance, swaying as it catches itself
+          if (anim === 'brace' && !opts.ownStyles) { body.rotation.z = -0.1; body.scale.set(1, 0.92, 1); } // set low, leaning into the point
+          if (anim === 'stagger' && !opts.ownStyles) { // knocked back off balance, swaying as it catches itself
             const s = Math.sin(phase * Math.PI * 2);
             body.rotation.z = 0.28 + s * 0.06;
             body.rotation.x = s * 0.14;
