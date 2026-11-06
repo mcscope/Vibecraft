@@ -8,7 +8,9 @@
 // small green, medium cyan, big purple/pink) and the eggs (whitish origami-like, sized by tier and tinted toward their
 // larva) follow the user's description. The Dragon Fly is the user's; its fire (from crystal) is still to design.
 // Self-contained: only engine types and kits, never another faction.
-import type { FactionSpec, UnitSpec } from '../types';
+import type { BuildingSpec, FactionSpec, UnitSpec } from '../types';
+import type { BuildingModel } from '../../kits/bake3d/types';
+import { webTower, webWall } from './buildings';
 import type { Section, ModelBuilder, Pose, Vec3 as V3 } from '../../kits/bake3d/types';
 import { aim, footAt, jointBetween, shapedLimb, span } from '../../kits/bake3d/gait';
 import type { Mat } from '../../kits/bake3d/types';
@@ -904,10 +906,10 @@ const unit = (u: Omit<Unit, 'description'> & { description?: string }, look?: ke
 const larva1 = unit({ crawls: true, tends: true, id: 'larva1', name: 'T1 Larva', mass: 15, physique: LARVA, refinement: 1, workRefinement: 1, shell: 'cocoon',
   digestsTrees: true, becomes: ['larva2', 'charger', 'micropike', 'mother1'], description: 'A small green larva. Gathers, then changes into a T1 form. Sent onto a tree, it turns the whole tree into food and is absorbed into it.',
   model: (b, p) => caterpillar(b, p, TIER[1], 15) }, 'caterpillar');
-const larva2 = unit({ crawls: true, tends: true, id: 'larva2', name: 'T2 Larva', mass: 60, physique: LARVA, refinement: 2, workRefinement: 2, shell: 'cocoon',
+const larva2 = unit({ crawls: true, tends: true, laysDown: ['web-wall'], id: 'larva2', name: 'T2 Larva', mass: 60, physique: LARVA, refinement: 2, workRefinement: 2, shell: 'cocoon',
   becomes: ['larva3', 'flier', 'whipweld', 'slinger', 'mother2'], description: 'A medium cyan larva. Gathers, then changes into a T2 form.',
   model: (b, p) => caterpillar(b, p, TIER[2], 60) }, 'caterpillar');
-const larva3 = unit({ crawls: true, tends: true, id: 'larva3', name: 'T3 Larva', mass: 179, physique: LARVA, refinement: 3, workRefinement: 3, shell: 'cocoon',
+const larva3 = unit({ crawls: true, tends: true, laysDown: ['web-tower'], id: 'larva3', name: 'T3 Larva', mass: 179, physique: LARVA, refinement: 3, workRefinement: 3, shell: 'cocoon',
   becomes: ['dragon-fly', 'ground-attacker3', 'mother3'], description: 'A big purple larva. Gathers, then changes into a T3 form.',
   model: (b, p) => caterpillar(b, p, TIER[3], 179) }, 'caterpillar');
 
@@ -1070,11 +1072,20 @@ export const units: Unit[] = [
   charger, micropike, flier, whipweld, slinger, dragonFly, groundAttacker3,
 ];
 
+/** What its larvae lay their bodies down as (UnitSpec.laysDown): web, grown on food. */
+export const buildings: Array<BuildingSpec & { model: BuildingModel }> = [
+  { id: 'web-wall', name: 'Web Wall', description: 'Laid down by a T2 larva\'s body (dragged, a strand of up to 5 pieces). It blocks the way. It starts as strong as the body that went into it and grows on food to its full strength.',
+    size: 1, materials: 150, wall: true, living: { seed: 0.08, grow: 0.5 }, model: webWall },
+  { id: 'web-tower', name: 'Web Tower', description: 'Laid down by a T3 larva\'s body. It throws crystals from its stock at enemies in range (Give it crystal). It starts as strong as the body that went into it and grows on food to its full strength.',
+    size: 2, materials: 400, living: { seed: 0.4, grow: 0.8 }, attack: { mechanism: 30, crystalMass: 0.6, height: 5, stockShots: 30 }, model: webTower },
+];
+
 export const wildwelds: FactionSpec = {
   id: 'wildwelds',
   name: 'Wildwelds',
   workerId: 'mother1', // it starts with one r1 mother, in the field (no buildings)
   startWorkers: 1,
   units,
+  buildings,
   art: (team, onProgress, only) => import('./art').then((m) => m.bakeArt(team, onProgress, only)),
 };

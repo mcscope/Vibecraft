@@ -1,3 +1,4 @@
+import { bodyBuilt, canLayDown, piecesFrom } from '../sim/abilities/layDown';
 import { isTamer, tameable } from '../sim/abilities/herding';
 import { isUnderfoot } from '../sim/abilities/underfoot';
 import { isWall } from '../sim/abilities/wall';
@@ -186,13 +187,22 @@ export class Input {
         if (g?.line && d.moved) {
           // a dragged line: the selected workers start at the first tile and work along it
           const tiles = g.line.filter(([, , ok]) => ok);
-          tiles.forEach(([x, y], i) => this.issue({ type: 'build', units: i === 0 ? this.workers(units) : [], specId: g.specId, ox: x, oy: y }));
+          if (bodyBuilt(this.world, this.player, g.specId)) {
+            // laid by bodies: each of them lays as many pieces as its body seeds, one after another; the line stops
+            // where their bodies run out
+            const spec = this.world.buildingSpecOf(this.player, g.specId)!;
+            let t = 0;
+            for (const id of this.builders(units, g.specId)) {
+              const n = piecesFrom(this.world.units.get(id)!.stats.mass, spec);
+              for (let k = 0; k < n && t < tiles.length; k++, t++) this.send({ type: 'build', units: [id], specId: g.specId, ox: tiles[t][0], oy: tiles[t][1], ...(k > 0 || this.queueing ? { queue: true } : {}) });
+            }
+          } else tiles.forEach(([x, y], i) => this.issue({ type: 'build', units: i === 0 ? this.workers(units) : [], specId: g.specId, ox: x, oy: y }));
           if (tiles.length) this.ping(tiles[0][0] + 0.5, tiles[0][1] + 0.5, '#7aff7a');
           if (!e.shiftKey) this.mode = null;
           return;
         }
         if (g && g.ok) {
-          this.issue({ type: 'build', units: this.workers(units), specId: g.specId, ox: g.ox, oy: g.oy });
+          this.issue({ type: 'build', units: this.builders(units, g.specId), specId: g.specId, ox: g.ox, oy: g.oy });
           this.ping(g.ox + g.size / 2, g.oy + g.size / 2, '#7aff7a');
           if (!e.shiftKey) this.mode = null;
         }
@@ -572,9 +582,15 @@ export class Input {
 
   /** Start placing a building (from the HUD build menu). */
   startPlacing(specId: string): void {
-    if (!this.workers(this.selectedUnits()).length) return;
+    if (!this.builders(this.selectedUnits(), specId).length) return;
     this.placeSpec = specId;
     this.mode = 'place';
+  }
+
+  /** Who of the selection builds `specId`: its workers, or (a building bodies lay down) those that can lay it. */
+  private builders(units: number[], specId: string): number[] {
+    if (!bodyBuilt(this.world, this.player, specId)) return this.workers(units);
+    return units.filter((id) => { const u = this.world.units.get(id); return !!u && canLayDown(this.world, u, specId); });
   }
 
   private workers(units: number[]): number[] {

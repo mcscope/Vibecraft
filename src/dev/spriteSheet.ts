@@ -7,6 +7,7 @@ import type { ArtAnim, UnitArt } from '../art/contract';
 
 export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
   if (params.get('faction')) return roster(params);
+  if (params.get('building')) return building(params);
   const id = params.get('unit') ?? 'lynx', anim = (params.get('anim') ?? 'attack') as ArtAnim, scale = +(params.get('scale') ?? 2);
   // (&from=wildwelds: which faction's, when two share an id)
   const from = params.get('from');
@@ -109,4 +110,27 @@ function playAll(out: HTMLElement, art: UnitArt, scale: number, facing: string):
     requestAnimationFrame(draw);
   };
   requestAnimationFrame(draw);
+}
+
+/** ?mode=sprites&building=<id>[&scale=2]: a building's art, built up complete, damaged, then its construction stages, side by side. */
+async function building(params: URLSearchParams): Promise<void> {
+  const id = params.get('building')!, scale = +(params.get('scale') ?? 1.5);
+  const faction = PLAYABLE.find((f) => f.buildings?.some((b) => b.id === id));
+  if (!faction) return;
+  const spec = faction.buildings!.find((b) => b.id === id)! as unknown as { model: import('../kits/bake3d/types').BuildingModel; size: number };
+  const { Baker } = await import('../kits/bake3d/baker');
+  const baker = new Baker();
+  const b = baker.bakeBuilding(spec.model, spec.size, TEAM_COLORS[0]);
+  baker.dispose();
+  const sprites = [b.complete, ...b.damaged, ...b.construction]; // (finished first)
+  const w = sprites.map((s) => (s.sw / s.q) * scale + 30), h = Math.max(...sprites.map((s) => (s.sh / s.q) * scale)) + 30;
+  const c = document.createElement('canvas');
+  c.width = w.reduce((a, x) => a + x, 0); c.height = h;
+  c.style.cssText = 'position:fixed;left:0;top:0;z-index:10';
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#5f7440'; g.fillRect(0, 0, c.width, c.height);
+  let x = 0;
+  sprites.forEach((s, i) => { const k = scale / s.q; g.drawImage(s.img, s.sx, s.sy, s.sw, s.sh, x + w[i] / 2 - s.ax * k, h - 15 - s.ay * k, s.sw * k, s.sh * k); x += w[i]; });
+  document.body.appendChild(c);
+  document.title = 'sprites ready';
 }

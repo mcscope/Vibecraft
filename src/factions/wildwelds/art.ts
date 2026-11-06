@@ -2,7 +2,7 @@
 import type { FactionArt, TeamColors } from '../../art/contract';
 import { bakeFaction } from '../../kits/bake3d/bakeFaction';
 import type { UnitBakeOptions } from '../../kits/bake3d/baker';
-import { caterpillarSegments, units } from './index';
+import { buildings, caterpillarSegments, units } from './index';
 
 /** A hopper's bounds, ~12 frames a second of each (its walk and charge are played by its bound: 8 frames of a long one jerk). */
 const hopFrames = (u: (typeof units)[number]) => {
@@ -20,7 +20,7 @@ export const bakeOpts = (u: (typeof units)[number]): UnitBakeOptions => ({ withC
 
 export function bakeArt(team: TeamColors, onProgress?: (f: number, label: string) => void, only?: string[]): Promise<FactionArt> {
   return bakeFaction({
-    units,
+    units, buildings,
     opts: bakeOpts,
     // PLACEHOLDER flag: an egg; PLACEHOLDER music
     flag: (baker) => baker.bakeStatic((b) => b.cylinder(0, 0.2, 0.3, [0, 0.35, 0], { team: 'primary', tex: 'none' }, undefined, 5), team),

@@ -5,6 +5,8 @@
 import type { BuildingSpec, FactionSpec, ResourceKind, Stock, TechSpec, UnitSpec, WildSpec } from '../factions/types';
 import { Rng } from './rng';
 import { edgeDist2, nearestOnSegments } from './geometry';
+import { bodyBuilt, canLayDown, runLayDown } from './abilities/layDown';
+import { hungryGrower } from './abilities/living';
 import type { PlayerCommand } from './commands';
 import type { Grid } from './map';
 import { skirmish, type Scenario } from './scenarios';
@@ -121,6 +123,7 @@ export type Order =
   | { kind: 'eatPack' }
   /** Carry wood to a construction site: from a stockpile, or straight from a tree. */
   | { kind: 'build'; site: number; phase: 'fetch' | 'chop' | 'deliver'; node: number }
+  | { kind: 'layDown'; site: number }
   /**
    * Carter supply loop. `base` is the building whose pool the cart belongs to (it
    * loads there); `home` is where the current load is going. Unpinned carts pick
@@ -222,6 +225,8 @@ export interface Unit {
   autoBrood: string | null;
   /** A long shaft breaking off from a body inside its point: that body's id while it runs, minus it while it turns back to reset (0: none). */
   breakFrom: number;
+  /** kg of its body it has laid down as buildings so far (sim/abilities/layDown.ts). */
+  bodySpent?: number;
   /** How it's actually been moving lately (tiles/s, smoothed over ~½ s): what an onlooker can see, and leads a throw by. */
   ovx: number; ovy: number;
   /** Which way a flier went this tick: +1 climbing, -1 coming down, 0 level. */
@@ -613,7 +618,7 @@ export class World {
     for (const b of this.buildings.values()) {
       if (b.owner !== owner || !b.complete) continue;
       if (b.specId === tcId) return b;
-      first ??= b;
+      if (!b.spec.wall) first ??= b; // (a wall is nobody's base)
     }
     return first;
   }
@@ -868,6 +873,13 @@ export class World {
         const spec = this.buildingSpecOf(player, cmd.specId)!;
         const ox = Math.floor(cmd.ox), oy = Math.floor(cmd.oy);
         if (!this.placeable(ox, oy, spec.size)) return;
+        if (bodyBuilt(this, player, cmd.specId)) {
+          const layer = mine(cmd.units).find((u) => canLayDown(this, u, cmd.specId));
+          if (!layer) return; // (only a body lays it down)
+          const site = this.addBuilding(player, cmd.specId, ox, oy, false);
+          if (site) set([layer], { kind: 'layDown', site: site.id });
+          return;
+        }
         const site = this.addBuilding(player, cmd.specId, ox, oy, false);
         if (site) set(mine(cmd.units).filter((u) => this.gathers(u, 'wood')), { kind: 'build', site: site.id, phase: 'fetch', node: 0 });
         return;
@@ -1371,6 +1383,7 @@ export class World {
         return false;
       }
       case 'build': return this.runBuild(u, o);
+      case 'layDown': return runLayDown(this, u, o.site);
       case 'cart': return this.logistics.runCart(u, o);
     }
   }
@@ -2012,6 +2025,12 @@ export class World {
       if (this.moveTo(u, to.x, to.y, u.stats.radius + to.stats.radius + 0.1) && this.handOver(u, to, o)) o.g = null; // (right up to it, and handed over)
       return u.x !== u.px || u.y !== u.py;
     }
+    // (nobody waiting: a growing building of its side short of food, if any; it takes its food there)
+    const grower = to ? null : hungryGrower(this, u);
+    if (grower && u.food >= 0.5 && (full || !o.g || o.g.phase === 'toDrop')) {
+      if (this.moveToBuilding(u, grower)) { this.deposit(u, grower, ['food']); o.g = null; }
+      return u.x !== u.px || u.y !== u.py;
+    }
     if (full) return false; // full and nobody waiting: it waits with the food
     // gather food: the nearest source, a trip at a time
     if (!o.g || o.g.phase === 'toDrop' || !this.nodes.get(o.g.node)) {
@@ -2120,7 +2139,11 @@ export class World {
   }
 
   private runGive(u: Unit, toId: number): boolean {
-    const to = this.units.get(toId);
+    const to = this.units.get(toId), into = to ? undefined : this.buildings.get(toId);
+    if (into && into.owner === u.owner && into.complete && !isUnderfoot(into.spec)) { // (into one of its own buildings: it puts its load in)
+      if (this.moveToBuilding(u, into)) { this.deposit(u, into); this.finish(u); }
+      return u.x !== u.px || u.y !== u.py;
+    }
     if (!to || to.owner !== u.owner) { this.finish(u); return false; }
     if (!this.moveTo(u, to.x, to.y, u.stats.radius + to.stats.radius + 0.1)) return u.x !== u.px || u.y !== u.py; // (right up to it)
     if (this.handOver(u, to, u.order.kind === 'give' ? u.order : {})) this.finish(u);
@@ -2243,7 +2266,8 @@ export class World {
     if (site.built >= site.stats.totalCost - 1e-6) this.completeBuilding(site);
   }
 
-  private completeBuilding(b: Building): void {
+  /** @internal sim helper, also used by abilities */
+  completeBuilding(b: Building): void {
     b.complete = true;
     this.beltRoutes = null;
     b.built = b.stats.totalCost;
@@ -2268,7 +2292,7 @@ export class World {
   nearestCache(u: Unit, test: (b: Building) => boolean): Building | null {
     let best: Building | null = null, bestD = Infinity;
     for (const b of this.buildings.values()) {
-      if (b.owner !== u.owner || !b.complete || isUnderfoot(b.spec) || !test(b)) continue; // roads and belts hold nothing
+      if (b.owner !== u.owner || !b.complete || isUnderfoot(b.spec) || b.spec.wall || !test(b)) continue; // roads, belts and walls hold nothing
       const d = (b.ox + b.size / 2 - u.x) ** 2 + (b.oy + b.size / 2 - u.y) ** 2;
       if (d < bestD) { bestD = d; best = b; }
     }
@@ -2630,8 +2654,9 @@ export class World {
     for (const p of this.players) {
       if (p.defeated || p.neutral) continue;
       const fighters = this.unitsOf(p.id).filter((u) => !u.carter);
-      if (this.buildingsOf(p.id).length === 0 && fighters.length === 0) p.defeated = true;
-      else if (this.buildingsOf(p.id).length === 0 && fighters.every((u) => !this.armed(u))) p.defeated = true;
+      const standing = this.buildingsOf(p.id).filter((b) => !b.spec.wall).length; // (walls alone don't keep a side in it)
+      if (standing === 0 && fighters.length === 0) p.defeated = true;
+      else if (standing === 0 && fighters.every((u) => !this.armed(u))) p.defeated = true;
     }
     const alive = this.players.filter((p) => !p.defeated && !p.neutral);
     if (alive.length <= 1 && this.players.filter((p) => !p.neutral).length > 1) {

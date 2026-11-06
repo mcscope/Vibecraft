@@ -1,3 +1,4 @@
+import { bodyBuilt, piecesFrom } from '../sim/abilities/layDown';
 import { capacity } from '../sim/garrison';
 import { FORMATIONS, formationSlots, formationUnit, type Formation } from './formations';
 import { metamorphCost } from '../sim/abilities/metamorph';
@@ -266,8 +267,8 @@ export class Hud {
     this.panel.querySelectorAll<HTMLElement>('[data-place]').forEach((el) => {
       const id = el.dataset.place!;
       el.classList.toggle('locked', !!w.buildBlocker(this.player, id));
-      // striped when there isn't enough banked wood to finish it
-      const missing = (w.buildingStatsOf(this.player, id)?.totalCost ?? 0) - stock.wood;
+      // striped when there isn't enough banked wood to finish it (one a body lays down costs its body, not wood)
+      const missing = bodyBuilt(w, this.player, id) ? 0 : (w.buildingStatsOf(this.player, id)?.totalCost ?? 0) - stock.wood;
       el.classList.toggle('short', missing > 0);
       const needEl = el.querySelector<HTMLElement>('.need');
       if (needEl) needEl.textContent = missing > 0 ? `need ${need(missing)} more` : '';
@@ -494,7 +495,7 @@ export class Hud {
   private buildMenu(): string {
     const w = this.world;
     const cost = (id: string) => w.buildingStatsOf(this.player, id)?.totalCost ?? 0;
-    const list = (w.factionOf(this.player).buildings ?? []).filter((b) => !b.unbuildable).sort((a, b) => cost(a.id) - cost(b.id));
+    const list = (w.factionOf(this.player).buildings ?? []).filter((b) => !b.unbuildable && !bodyBuilt(w, this.player, b.id)).sort((a, b) => cost(a.id) - cost(b.id));
     if (!list.length) return '';
     return `<div class="build"><div class="label">Build</div><div class="btns">${list.map((b) => {
       const st = w.buildingStatsOf(this.player, b.id)!;
@@ -551,7 +552,9 @@ export class Hud {
       if (u.order.kind === 'metamorph') continue; // (changing already: its form is chosen)
       for (const id of origin?.becomes ?? []) if (!forms.has(`${id}:0`)) forms.set(`${id}:0`, [u, false]);
     }
-    if (!forms.size) return '';
+    const lays = new Map<string, Unit>();
+    for (const u of units) for (const id of w.specOf(u.owner, u.specId)?.spec.laysDown ?? []) if (!lays.has(id)) lays.set(id, u);
+    if (!forms.size && !lays.size) return '';
     const food = this.names().food.toLowerCase();
     const tiles = [...forms.entries()].map(([key, [u, spawn]]) => {
       const id = key.slice(0, -2), to = w.specOf(u.owner, id), from = w.specOf(u.owner, spawn ? u.specId : u.shellOf ?? u.specId);
@@ -568,7 +571,19 @@ export class Hud {
         <span class="ref" title="Refinement ${fmt(to.stats.refinement, 2)}×">${fmt(to.stats.refinement, 2)}×</span>
       </button>`;
     }).join('');
-    return `<div class="actions"><div class="trains">${tiles}</div></div>`;
+    // (and what its body can become, laid down: placed like a building)
+    const laid = [...lays.entries()].map(([id, u]) => {
+      const b = w.buildingSpecOf(u.owner, id);
+      if (!b) return '';
+      const n = piecesFrom(u.stats.mass, b), art = this.icon('building', id, 120);
+      const tip = `Lay itself down as ${b.name}: its ${u.stats.mass.toFixed(0)} kg body the seed (alone, all of it; dragged in a line, up to ${n} pieces, a seed's worth each), gone into it. Then it grows on ${food} (Give it some, or tenders bring it) up to ${b.materials} kg.`;
+      return `<button class="train" data-place="${id}" title="${tip}">
+        ${art ? `<img class="art" src="${art}" alt="">` : ''}
+        <span class="name">↓ ${b.name}</span>
+        <span class="cost">its body · up to ${n}</span>
+      </button>`;
+    }).join('');
+    return `<div class="actions"><div class="trains">${tiles}${laid}</div></div>`;
   }
 
   /** A unit that lays or changes: its queue like a building's (click one to cancel), and a progress bar. */
@@ -708,6 +723,7 @@ export function describeOrder(w: World, u: Unit): string {
     case 'eatPack': return 'Eating from pack';
     case 'garrison': return 'Going inside';
     case 'eatFrom': return `Eating from the ${w.specOf(u.owner, w.units.get(o.unit)?.specId ?? '')?.spec.name ?? 'bearer'}`;
+    case 'layDown': { const b = w.buildings.get(o.site); return `Laying itself down as ${b?.spec.name ?? 'a building'}`; }
     case 'build': {
       const site = w.buildings.get(o.site);
       const name = site?.spec.name ?? 'building';

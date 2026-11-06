@@ -588,6 +588,12 @@ export function validateFaction(f: FactionSpec): string[] {
   const errs: string[] = [];
   for (const u of f.units) errs.push(...validate(u).map((e) => `${u.id}: ${e}`));
   errs.push(...validateMetamorphForms(f.units, (u) => u.refinement ?? 1));
+  // (a body lays down only living buildings of its own faction: its mass is their seed)
+  for (const u of f.units) for (const id of u.laysDown ?? []) {
+    const b = f.buildings?.find((x) => x.id === id);
+    if (!b) errs.push(`${u.id}: lays down unknown building ${id}`);
+    else if (!b.living) errs.push(`${u.id}: lays down ${id}, which isn't a living building (its body is the seed it grows from)`);
+  }
   for (const b of f.buildings ?? []) {
     const st = deriveBuilding(b, f);
     if (b.size < st.minSize) errs.push(`${b.id}: ${b.materials} kg needs a footprint of at least ${st.minSize}×${st.minSize}`);

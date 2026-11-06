@@ -124,6 +124,8 @@ export interface UnitSpec {
   spawns?: string[];
   /** Sent onto a tree, it turns the whole tree into food (1 kg per kg of wood) and is absorbed into it (sim/abilities/digest.ts). */
   digestsTrees?: boolean;
+  /** Living buildings (of this faction) it can lay its body down as: walked to the site, its body becomes the seed (kg for kg), gone into it; then it grows on food (sim/abilities/layDown.ts). Only bodies lay these. */
+  laysDown?: string[];
   /** The unit it changes inside: ordered to change, it becomes this at once, at its own mass, and the new form emerges from it (sim/abilities/metamorph.ts). Without one it changes in place. */
   shell?: string;
   /** How metamorphosis and spawning take their food: 'upfront' (default: like a building's training, it starts once the whole cost is on hand) or 'eaten' (eaten as it goes, pausing when the food runs out). */

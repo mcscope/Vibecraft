@@ -6,7 +6,7 @@
 import type { BuildingSpec, FactionSpec } from '../../factions/types';
 import { f1, n0 } from '../../ui/format';
 import { capitalFor, deriveBuilding, type BuildingStats } from '../physics';
-import type { Building } from '../world';
+import type { Building, Unit, World } from '../world';
 import type { Ability } from './index';
 
 /** kg of food it wants on hand to keep growing (haulers bring it). */
@@ -58,3 +58,14 @@ export const living: Ability = {
     ? `<b>Living.</b> Planted at ${n0(seedMaterials(b))} kg, it eats food to grow ${f1(b.living.grow, 1)} kg/s up to ${n0(b.materials)} kg: tougher, and able to train more refined units, as it grows.`
     : null),
 };
+
+/** The nearest growing building of `u`'s side short of food (below GROW_STASH on hand), for a feeder to bring food to. */
+export function hungryGrower(w: World, u: Unit): Building | null {
+  let best: Building | null = null, bestD = Infinity;
+  for (const b of w.buildings.values()) {
+    if (b.owner !== u.owner || !b.complete || !b.spec.living || (b.grown ?? 0) >= b.spec.materials - 1e-6 || b.stock.food >= GROW_STASH) continue;
+    const d = (b.ox + b.size / 2 - u.x) ** 2 + (b.oy + b.size / 2 - u.y) ** 2;
+    if (d < bestD) { bestD = d; best = b; }
+  }
+  return best;
+}
