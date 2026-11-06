@@ -123,6 +123,33 @@ async function building(params: URLSearchParams): Promise<void> {
   const baker = new Baker();
   const b = baker.bakeBuilding(spec.model, spec.size, TEAM_COLORS[0]);
   baker.dispose();
+  // (&line=N: N pieces laid in an L along both of the map's axes, as the game places them, back to front on its tile grid)
+  const line = +(params.get('line') ?? 0);
+  if (line > 0) {
+    const tiles: Array<[number, number]> = [];
+    for (let i = 0; i < line; i++) tiles.push([i * spec.size, 0]);
+    for (let i = 1; i < line; i++) tiles.push([0, i * spec.size]);
+    tiles.sort((p, q) => p[0] + p[1] - (q[0] + q[1]));
+    const s = b.complete, k = scale / s.q, iso = (x: number, y: number): [number, number] => [(x - y) * 32 * scale, (x + y) * 16 * scale];
+    const span = line * spec.size, pad = (s.sh / s.q) * scale + 40;
+    const c = document.createElement('canvas');
+    c.width = Math.ceil(span * 64 * scale + 160); c.height = Math.ceil(span * 32 * scale + pad + 40);
+    const ox = c.width / 2, oy = pad;
+    const g = c.getContext('2d')!;
+    g.fillStyle = '#5f7440'; g.fillRect(0, 0, c.width, c.height);
+    g.strokeStyle = 'rgba(0,0,0,0.12)';
+    for (let i = 0; i <= span; i++) for (const [a, z] of [[[i, 0], [i, span]], [[0, i], [span, i]]] as const) {
+      const [x0, y0] = iso(a[0], a[1]), [x1, y1] = iso(z[0], z[1]);
+      g.beginPath(); g.moveTo(ox + x0, oy + y0); g.lineTo(ox + x1, oy + y1); g.stroke();
+    }
+    for (const [tx, ty] of tiles) {
+      const [x, y] = iso(tx + spec.size / 2, ty + spec.size / 2);
+      g.drawImage(s.img, s.sx, s.sy, s.sw, s.sh, ox + x - s.ax * k, oy + y - s.ay * k, s.sw * k, s.sh * k);
+    }
+    scroller().appendChild(c);
+    document.title = 'sprites ready';
+    return;
+  }
   const sprites = [b.complete, ...b.damaged, ...b.construction]; // (finished first)
   const w = sprites.map((s) => (s.sw / s.q) * scale + 30), h = Math.max(...sprites.map((s) => (s.sh / s.q) * scale)) + 30;
   const c = document.createElement('canvas');
