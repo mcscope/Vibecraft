@@ -294,6 +294,8 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0, techGro
   // (its legs' pace, from their length; it cruises at that, as it sprints, no faster than its burst allows: below)
   // (its height: as drawn, else of the usual build for its mass; its legs are that much longer or shorter: v ∝ √leg)
   const height = spec.height ? clamp(spec.height, 0.2, 12) : bodyHeight(mass);
+  const leg = K.legPerHeight * height, upright = 0.18 * height;
+  const length = spec.length ? Math.max(0.2, Math.min(12, spec.length)) : upright; // an upright body: its depth, ~0.18 of its height
   const legPace = clamp(K.baseSpeed * Math.pow(muscleRel, 0.8) * massSpeedFactor(mass) * Math.sqrt(height / bodyHeight(mass)), K.minSpeed, K.maxSpeed) * workRefinement;
   const wheeled = !!spec.wheeled;
   const carryCapacity = Math.max(1, K.carryPerMuscleKg * muscleMass * (wheeled ? K.wheelCarry : 1) * workRefinement);
@@ -345,7 +347,10 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0, techGro
   const radius = spec.size ? clamp((spec.size * Math.cbrt(grown)) / 2 / M_PER_TILE, 0.05, 1.5) : clamp(0.25 * sizeRel, 0.05, 0.8); // (as small as a small body is drawn)
   // a flier's wings grow with its mass like a bird's (span ≈ 1.17·m^0.39 m, from bird allometry)
   const wingspan = spec.flight ? (1.17 * mass ** 0.39) / M_PER_TILE : 0;
-  const reach = radius + 0.35 * gl + 0.1 * Math.cbrt(crystalMass) + // (a grown body's arm, scaled with it)
+  // a blow lands from its front: a shaft is held at its middle (in hands, or a rider's), any other strike comes from its
+  // front (a head, horns, a spike), half its length ahead of its centre when it's longer than it is wide
+  const front = shaft ? radius : Math.max(radius, length / 2 / M_PER_TILE);
+  const reach = front + 0.35 * gl + 0.1 * Math.cbrt(crystalMass) + // (a grown body's arm, scaled with it)
     (shaft * 0.75) / M_PER_TILE + whip / M_PER_TILE; // a shaft held a quarter of the way along: ¾ of it reaches forward; a whip its whole length
   const range = throwing
     ? Math.min(K.maxThrowRange, (crystalVelocity * crystalVelocity) / K.gravity / M_PER_TILE) // v²/g metres, in tiles
@@ -353,8 +358,6 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0, techGro
   // it sees 10 tiles, past its reach, and at least as far as it rides out to charge (the run-up to its sprint, plus reach)
   // a bound flexes the spine: a stride is the leg plus the body's run-length beyond an upright body's depth, so
   // long bodies gallop faster (v ∝ √(g·stride)); wheels and wings don't stride
-  const leg = K.legPerHeight * height, upright = 0.18 * height;
-  const length = spec.length ? Math.max(0.2, Math.min(12, spec.length)) : upright; // an upright body: its depth, ~0.18 of its height
   const gallop = spec.wheeled || spec.flight ? 1 : Math.sqrt((leg + Math.max(upright, length)) / (leg + upright));
   const sprintTiles = legPace * K.sprintPerCruise * gallop * burstLimit(mass), runUpTiles = ((sprintTiles * M_PER_TILE) ** 2 / (2 * K.traction * K.gravity)) / M_PER_TILE;
   const sight = Math.max(10, range + 3, runUpTiles + range + 1);
