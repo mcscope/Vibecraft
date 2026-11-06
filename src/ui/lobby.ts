@@ -12,6 +12,12 @@ const remembered = (): { relay?: string; room?: string; name?: string; faction?:
   try { return JSON.parse(localStorage.getItem(KEY) ?? '{}'); } catch { return {}; }
 };
 const remember = (v: object) => { try { localStorage.setItem(KEY, JSON.stringify({ ...remembered(), ...v })); } catch { /* private mode */ } };
+// A page served over HTTPS may only open wss:// sockets, so a hosted copy reaches its relay at /relay on the
+// same address (mcscope.com routes that path to the relay); a local or plain-HTTP copy uses port 5190.
+const secure = location.protocol === 'https:';
+const defaultRelay = () => (secure ? `wss://${location.host}/relay` : `ws://${location.hostname || 'localhost'}:5190`);
+// a remembered ws:// relay can't be reached from an HTTPS page, so it falls back to the default
+const rememberedRelay = (relay?: string) => (relay && !(secure && relay.startsWith('ws://')) ? relay : undefined);
 const randomRoom = () => Array.from({ length: 4 }, () => 'ABCDEFGHJKMNPQRSTUVWXYZ'[Math.floor(Math.random() * 23)]).join('');
 
 export function openLobby(box: HTMLElement, onGame: (g: OnlineGame) => void, onBack: () => void): void {
@@ -20,7 +26,7 @@ export function openLobby(box: HTMLElement, onGame: (g: OnlineGame) => void, onB
     <h2>Online game</h2>
     <p class="sub">Each player brings their own faction from their own client. It's baked on your machine and sent to the others as data.</p>
     <div class="lobby-form">
-      <label>Relay <input name="relay" value="${esc(r.relay ?? `ws://${location.hostname || 'localhost'}:5190`)}" spellcheck="false"></label>
+      <label>Relay <input name="relay" value="${esc(rememberedRelay(r.relay) ?? defaultRelay())}" spellcheck="false"></label>
       <label>Room <input name="room" value="${esc(r.room ?? randomRoom())}" maxlength="20" spellcheck="false"></label>
       <label>Name <input name="name" value="${esc(r.name ?? '')}" maxlength="24" placeholder="Your name"></label>
       <label>Faction <select name="faction">${PLAYABLE.map((f) => `<option value="${esc(f.id)}" ${r.faction === f.id ? 'selected' : ''}>${esc(f.name)}</option>`).join('')}</select></label>
