@@ -60,7 +60,6 @@ async function roster(params: URLSearchParams): Promise<void> {
   const w = frames.map((s) => Math.max(130, (s.sw / s.q) * scale + 24)), h = Math.max(...frames.map((s) => (s.sh / s.q) * scale)) + 56;
   const c = document.createElement('canvas');
   c.width = w.reduce((a, b) => a + b, 0) + 24; c.height = h;
-  c.style.cssText = 'position:fixed;left:0;top:0;z-index:10';
   const g = c.getContext('2d')!;
   g.fillStyle = '#5f7440'; g.fillRect(0, 0, c.width, c.height);
   g.font = '600 15px Georgia, serif'; g.textAlign = 'center';
@@ -71,7 +70,7 @@ async function roster(params: URLSearchParams): Promise<void> {
     g.fillStyle = '#f3e7c4'; g.fillText(units[i].name, cx, h - 14);
     x += w[i];
   });
-  document.body.appendChild(c);
+  scroller().appendChild(c); // (wider or taller than the window: it scrolls)
   document.title = 'sprites ready';
 }
 
@@ -128,11 +127,18 @@ async function building(params: URLSearchParams): Promise<void> {
   const w = sprites.map((s) => (s.sw / s.q) * scale + 30), h = Math.max(...sprites.map((s) => (s.sh / s.q) * scale)) + 30;
   const c = document.createElement('canvas');
   c.width = w.reduce((a, x) => a + x, 0); c.height = h;
-  c.style.cssText = 'position:fixed;left:0;top:0;z-index:10';
   const g = c.getContext('2d')!;
   g.fillStyle = '#5f7440'; g.fillRect(0, 0, c.width, c.height);
   let x = 0;
   sprites.forEach((s, i) => { const k = scale / s.q; g.drawImage(s.img, s.sx, s.sy, s.sw, s.sh, x + w[i] / 2 - s.ax * k, h - 15 - s.ay * k, s.sw * k, s.sh * k); x += w[i]; });
-  document.body.appendChild(c);
+  scroller().appendChild(c); // (wider or taller than the window: it scrolls)
   document.title = 'sprites ready';
+}
+
+/** A full-window box that scrolls, over the game, to lay a sheet out in whole however big it is. */
+function scroller(): HTMLElement {
+  const box = document.createElement('div');
+  box.style.cssText = 'position:fixed;inset:0;overflow:auto;z-index:10;background:#5f7440';
+  document.body.appendChild(box);
+  return box;
 }
