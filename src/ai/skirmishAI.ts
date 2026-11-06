@@ -228,7 +228,8 @@ export class SkirmishAI {
 
     // ── Forward bases: if a buildable building can raise workers (a hut, an outpost),
     //    put more of them beside the resources our workers walk farthest for.
-    const outpost = (faction.buildings ?? []).filter((b) => !b.unbuildable && b.trains?.includes(faction.workerId)).sort((a, b) => a.materials - b.materials)[0];
+    // (not its town center: a whole new one is a big outlay, which set its army back; players build those)
+    const outpost = (faction.buildings ?? []).filter((b) => !b.unbuildable && b.id !== faction.townCenterId && b.trains?.includes(faction.workerId)).sort((a, b) => a.materials - b.materials)[0];
     if (tc && outpost && !siteOpen && !w.buildBlocker(this.player, outpost.id)) {
       const have = buildings.filter((b) => b.specId === outpost.id).length;
       const st = w.buildingStatsOf(this.player, outpost.id)!;
