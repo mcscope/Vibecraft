@@ -201,6 +201,33 @@ export class SkirmishAI {
       if (foe) { const d = Math.hypot(foe[0] - ax, foe[1] - ay) || 1; ax += ((foe[0] - ax) / d) * 6; ay += ((foe[1] - ay) / d) * 6; }
       return w.findBuildSpot(size, ax, ay);
     };
+    // ── Expanding: once its economy is up (16 workers, another base each 12 more) and it has the wood to spare, it takes
+    //    a new town center beside the richest resources well away from its buildings (the nearest such, the safest)
+    const tcSpec = faction.townCenterId ? faction.buildings?.find((b) => b.id === faction.townCenterId && !b.unbuildable) : undefined;
+    for (const site of buildings) { // (a new base going up: kept 5 builders on it)
+      if (site.complete || site.specId !== tcSpec?.id) continue;
+      const helping = workers.filter((u) => u.order.kind === 'build' && u.order.site === site.id).length;
+      const pick = helping < 5 ? this.closestFree(workers, builders, site.ox, site.oy, 5 - helping) : [];
+      if (pick.length) out.push({ type: 'construct', units: pick, site: site.id });
+    }
+    if (tc && tcSpec && !siteOpen && !w.buildBlocker(this.player, tcSpec.id)) {
+      const have = buildings.filter((b) => b.specId === tcSpec.id).length, want = workers.length < 16 ? 1 : 2 + Math.floor((workers.length - 16) / 12);
+      const cost = w.buildingStatsOf(this.player, tcSpec.id)!.totalCost;
+      if (have < want && stock.wood >= cost * 0.4) { // (as for any building: wood comes in as it's built)
+        const away = (x: number, y: number) => Math.min(...buildings.map((b) => Math.hypot(b.ox + b.size / 2 - x, b.oy + b.size / 2 - y)));
+        let site: [number, number] | null = null, best = -Infinity;
+        for (const n of w.nodes.values()) {
+          if (n.amount < 50 || n.type === 'wood' && n.tree === false || away(n.x, n.y) < 14) continue;
+          let rich = 0;
+          for (const m of w.nodes.values()) if (Math.hypot(m.x - n.x, m.y - n.y) < 6) rich += m.amount;
+          const score = rich / 100 - Math.hypot(n.x - home![0], n.y - home![1]); // (rich, and not too far out)
+          if (score > best) { best = score; site = [n.x, n.y]; }
+        }
+        const spot = site && w.findBuildSpot(tcSpec.size, site[0], site[1]);
+        const pick = spot ? this.closestFree(workers, builders, spot[0], spot[1], 4) : [];
+        if (spot && pick.length) out.push({ type: 'build', units: pick, specId: tcSpec.id, ox: spot[0], oy: spot[1] });
+      }
+    }
     for (const [step, [id, atWorkers]] of plan.entries()) {
       if (!tc || (workers.length < atWorkers && minutes < 1 + step * P.buildEvery) || !w.buildingSpecOf(this.player, id)) continue;
       const existing = buildings.filter((b) => b.specId === id);
