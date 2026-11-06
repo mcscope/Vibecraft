@@ -471,8 +471,10 @@ const techs: TechSpec[] = [
     flavor: 'By the third spring the pools boil with them, and the Meadowfolk stop sleeping near water.' },
   { id: 'reed-lore', name: 'Reed Lore', description: 'You buy the reed-grove\'s secrets: every Reedguard, in the field and to come, grows bigger at the price it was (refinement +0.6).', unit: 'reedguard', refinement: 0.6, grows: true,
     flavor: 'A single reed bends. Woven a thousand times, it turns a mace.' },
-  { id: 'toad-lore', name: 'Toad Lore', description: 'You buy the toad-wrangler\'s secrets: every Bog Toad, in the field and to come, grows bigger at the price it was (refinement +0.6). Bigger, and hungrier.', unit: 'bog-toad', refinement: 0.6, grows: true,
+  { id: 'toad-lore', name: 'Toad Breeding Program', description: 'Every Bog Toad, in the field and to come, grows bigger at the same price: its body ×1.25 (refinement +0.5).', unit: 'bog-toad', refinement: 0.5, grows: true,
     flavor: '"Sing to it while it eats. It is less likely to eat you." — Toad-wrangler Glim' },
+  { id: 'toad-growth', name: 'Toad Growth', description: 'Every Bog Toad grows again, more, at the same price: its body ×1.75 of the first (refinement +1).', unit: 'bog-toad', refinement: 1, grows: true },
+  { id: 'mega-bullfrog', name: 'Mega-Bullfrog', description: 'Every Bog Toad grows again, most of all, at the same price: its body ×2.5 of the first (refinement +1.5).', unit: 'bog-toad', refinement: 1.5, grows: true },
 ];
 
 export const fenfolk: FactionSpec = {
