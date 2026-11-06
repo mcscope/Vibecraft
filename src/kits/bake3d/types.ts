@@ -78,6 +78,8 @@ export interface BuildingState {
   phase: 'construction' | 'complete' | 'damaged';
   /** construction: 0, 1, 2. damaged: 1, 2. */
   level: number;
+  /** A wall piece's neighbours it joins, as bits: 1 +x, 2 −x, 4 +z, 8 −z (its art reaches out to meet them). */
+  joins?: number;
 }
 
 /** `state` is given when baking construction/damage looks; ignore it to let the kit add scaffolding and rubble. */

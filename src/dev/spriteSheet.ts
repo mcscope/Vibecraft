@@ -122,7 +122,6 @@ async function building(params: URLSearchParams): Promise<void> {
   const { Baker } = await import('../kits/bake3d/baker');
   const baker = new Baker();
   const b = baker.bakeBuilding(spec.model, spec.size, TEAM_COLORS[0]);
-  baker.dispose();
   // (&line=N: N pieces laid in an L along both of the map's axes, as the game places them, back to front on its tile grid)
   const line = +(params.get('line') ?? 0);
   if (line > 0) {
@@ -130,7 +129,7 @@ async function building(params: URLSearchParams): Promise<void> {
     for (let i = 0; i < line; i++) tiles.push([i * spec.size, 0]);
     for (let i = 1; i < line; i++) tiles.push([0, i * spec.size]);
     tiles.sort((p, q) => p[0] + p[1] - (q[0] + q[1]));
-    const s = b.complete, k = scale / s.q, iso = (x: number, y: number): [number, number] => [(x - y) * 32 * scale, (x + y) * 16 * scale];
+    const s = b.complete, iso = (x: number, y: number): [number, number] => [(x - y) * 32 * scale, (x + y) * 16 * scale];
     const span = line * spec.size, pad = (s.sh / s.q) * scale + 40;
     const c = document.createElement('canvas');
     c.width = Math.ceil(span * 64 * scale + 160); c.height = Math.ceil(span * 32 * scale + pad + 40);
@@ -142,14 +141,20 @@ async function building(params: URLSearchParams): Promise<void> {
       const [x0, y0] = iso(a[0], a[1]), [x1, y1] = iso(z[0], z[1]);
       g.beginPath(); g.moveTo(ox + x0, oy + y0); g.lineTo(ox + x1, oy + y1); g.stroke();
     }
+    // each piece joined to the neighbours it has (bits: 1 +x, 2 −x, 4 +y, 8 −y; a model's +z is the map's +y)
+    const has = (x: number, y: number) => tiles.some(([a, c]) => a === x && c === y), n = spec.size, joined = new Map<number, typeof s>();
     for (const [tx, ty] of tiles) {
-      const [x, y] = iso(tx + spec.size / 2, ty + spec.size / 2);
-      g.drawImage(s.img, s.sx, s.sy, s.sw, s.sh, ox + x - s.ax * k, oy + y - s.ay * k, s.sw * k, s.sh * k);
+      const m = (has(tx + n, ty) ? 1 : 0) | (has(tx - n, ty) ? 2 : 0) | (has(tx, ty + n) ? 4 : 0) | (has(tx, ty - n) ? 8 : 0);
+      if (!joined.has(m)) joined.set(m, baker.bakeStatic((mb) => spec.model(mb, { phase: 'complete', level: 0, joins: m }), TEAM_COLORS[0], true, {}, n * Math.SQRT2 + 1.1));
+      const sj = joined.get(m)!, kj = scale / sj.q, [x, y] = iso(tx + n / 2, ty + n / 2);
+      g.drawImage(sj.img, sj.sx, sj.sy, sj.sw, sj.sh, ox + x - sj.ax * kj, oy + y - sj.ay * kj, sj.sw * kj, sj.sh * kj);
     }
+    baker.dispose();
     scroller().appendChild(c);
     document.title = 'sprites ready';
     return;
   }
+  baker.dispose();
   const sprites = [b.complete, ...b.damaged, ...b.construction]; // (finished first)
   const w = sprites.map((s) => (s.sw / s.q) * scale + 30), h = Math.max(...sprites.map((s) => (s.sh / s.q) * scale)) + 30;
   const c = document.createElement('canvas');
