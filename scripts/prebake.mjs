@@ -28,5 +28,8 @@ try {
   }
 } finally {
   await browser.close();
-  await server.close();
+  // Vite's close can wait forever on its file watcher, so it gets a few seconds
+  await Promise.race([server.close(), new Promise((r) => setTimeout(r, 5000))]);
 }
+// whatever Vite still holds open would keep the process (and the build after it) waiting
+process.exit(0);
