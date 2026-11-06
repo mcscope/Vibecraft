@@ -4,7 +4,7 @@
 
 import type { BuildingSpec, FactionSpec, ResourceKind, Stock, TechSpec, UnitSpec, WildSpec } from '../factions/types';
 import { Rng } from './rng';
-import { edgeDist2 } from './geometry';
+import { edgeDist2, nearestOnSegments } from './geometry';
 import type { PlayerCommand } from './commands';
 import type { Grid } from './map';
 import { skirmish, type Scenario } from './scenarios';
@@ -310,6 +310,9 @@ export interface ResourceNode {
  * Where a charge at `t` should aim: alongside it (the two bodies' radii plus a hand's breadth off its centre, on the
  * side `u` is already coming from), `beyond` tiles past it. A charge strikes in passing; it doesn't ram the body.
  */
+/** How far (tiles) a body's spine runs either side of its middle: half its length beyond its width (0 for a round one). */
+const spine = (u: Unit): number => Math.max(0, u.stats.length / 2 / M_PER_TILE - u.stats.radius);
+
 function passBeside(u: Unit, t: Unit, beyond: number): [number, number] {
   const dx = t.x - u.x, dy = t.y - u.y, d = Math.hypot(dx, dy) || 1, nx = dx / d, ny = dy / d;
   const side = (u.vx * ny - u.vy * nx) > 0 ? -1 : (u.vx * ny - u.vy * nx) < 0 ? 1 : (u.id % 2 ? 1 : -1); // the side its run already favours
@@ -2550,7 +2553,15 @@ export class World {
         const b = arr[j];
         if (a.airborne !== b.airborne) continue; // fliers pass overhead
         if ((this.crawls(a) || this.crawls(b)) && a.owner === b.owner) continue; // a crawler goes under its own side's bodies
-        const dx = b.x - a.x, dy = b.y - a.y;
+        // (a body longer than it is wide keeps others off its whole length, not only a circle at its middle: a capsule
+        // along its facing, its spine; bodies meet where their spines come nearest)
+        let dx = b.x - a.x, dy = b.y - a.y;
+        const sa = a.airborne ? 0 : spine(a), sb = b.airborne ? 0 : spine(b);
+        if (sa || sb) {
+          const ca = Math.cos(a.facing) * sa, na = Math.sin(a.facing) * sa, cb = Math.cos(b.facing) * sb, nb = Math.sin(b.facing) * sb;
+          const [px, py, qx, qy] = nearestOnSegments(a.x - ca, a.y - na, a.x + ca, a.y + na, b.x - cb, b.y - nb, b.x + cb, b.y + nb);
+          dx = qx - px; dy = qy - py;
+        }
         // two fliers keep a little room for their wings (a quarter span apart: wings may overlap, one passing
         // above the other), aloft or landed; in the air that's all there is (no bodies to collide)
         const body = a.stats.radius + b.stats.radius;
