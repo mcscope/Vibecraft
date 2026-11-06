@@ -293,9 +293,9 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0, techGro
   const workRefinement = Math.max(1, (spec.workRefinement ?? 1) + techWork);
   // (its legs' pace, from their length; it cruises at that, as it sprints, no faster than its burst allows: below)
   // (its height: as drawn, else of the usual build for its mass; its legs are that much longer or shorter: v ∝ √leg)
-  const height = spec.height ? clamp(spec.height, 0.2, 12) : bodyHeight(mass);
+  const height = spec.height ? clamp(spec.height * Math.cbrt(grown), 0.2, 12) : bodyHeight(mass); // (grown, it's taller with its size)
   const leg = K.legPerHeight * height, upright = 0.18 * height;
-  const length = spec.length ? Math.max(0.2, Math.min(12, spec.length)) : upright; // an upright body: its depth, ~0.18 of its height
+  const length = spec.length ? Math.max(0.2, Math.min(12, spec.length * Math.cbrt(grown))) : upright; // an upright body: its depth, ~0.18 of its height (grown, longer with its size)
   const legPace = clamp(K.baseSpeed * Math.pow(muscleRel, 0.8) * massSpeedFactor(mass) * Math.sqrt(height / bodyHeight(mass)), K.minSpeed, K.maxSpeed) * workRefinement;
   const wheeled = !!spec.wheeled;
   const carryCapacity = Math.max(1, K.carryPerMuscleKg * muscleMass * (wheeled ? K.wheelCarry : 1) * workRefinement);
