@@ -120,7 +120,8 @@ export class SkirmishAI {
     const tier = (b: NonNullable<FactionSpec['buildings']>[number]) => prerequisites(b, f).length;
     const producer = (b: NonNullable<FactionSpec['buildings']>[number]) => (b.trains?.length || b.researches?.length ? 0 : 1);
     return (f.buildings ?? [])
-      .filter((b) => !b.unbuildable && !isWall(b))
+      // (not its town center, which it starts with, nor what only a body lays down: its workers can't build those)
+      .filter((b) => !b.unbuildable && !isWall(b) && b.id !== f.townCenterId && !f.units.some((u) => u.laysDown?.includes(b.id)))
       .sort((a, b) => producer(a) - producer(b) || tier(a) - tier(b) || a.materials - b.materials || (a.id < b.id ? -1 : 1))
       .map((b, i) => [b.id, 7 + gap * i]);
   }
