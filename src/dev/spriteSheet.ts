@@ -7,7 +7,7 @@ import type { ArtAnim, UnitArt } from '../art/contract';
 
 export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
   if (params.get('faction')) return roster(params);
-  if (params.get('building')) return building(params);
+  if (params.get('building') || params.get('bconcept')) return building(params);
   const id = params.get('unit') ?? 'lynx', anim = (params.get('anim') ?? 'attack') as ArtAnim, scale = +(params.get('scale') ?? 2);
   // (&from=wildwelds: which faction's, when two share an id)
   const from = params.get('from');
@@ -114,10 +114,12 @@ function playAll(out: HTMLElement, art: UnitArt, scale: number, facing: string):
 
 /** ?mode=sprites&building=<id>[&scale=2]: a building's art, built up complete, damaged, then its construction stages, side by side. */
 async function building(params: URLSearchParams): Promise<void> {
-  const id = params.get('building')!, scale = +(params.get('scale') ?? 1.5);
-  const faction = PLAYABLE.find((f) => f.buildings?.some((b) => b.id === id));
-  if (!faction) return;
-  const spec = faction.buildings!.find((b) => b.id === id)! as unknown as { model: import('../kits/bake3d/types').BuildingModel; size: number };
+  const id = params.get('building'), concept = params.get('bconcept'), scale = +(params.get('scale') ?? 1.5);
+  // (&bconcept=<name>: a design option instead, baked straight from its model: wildwelds/concepts.ts)
+  const spec = concept
+    ? (await import('../factions/wildwelds/concepts')).WEB_CONCEPTS[concept]
+    : (PLAYABLE.find((f) => f.buildings?.some((b) => b.id === id))?.buildings?.find((b) => b.id === id) as unknown as { model: import('../kits/bake3d/types').BuildingModel; size: number } | undefined);
+  if (!spec) return;
   const { Baker } = await import('../kits/bake3d/baker');
   const baker = new Baker();
   const b = baker.bakeBuilding(spec.model, spec.size, TEAM_COLORS[0]);
