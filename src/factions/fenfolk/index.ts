@@ -97,15 +97,16 @@ const bogToad: FenUnit = {
   id: 'bog-toad',
   name: 'Bog Toad',
   description: 'A huge marsh toad with a fenling on its back. Lunges and slams with its crystal-studded jaw: brutal up close.',
-  mass: 400, size: 2.22, // (its collision as wide as it's drawn) // horse-sized: a fenling rides it
-  length: 2.4, // m nose to tail: a long body, it wheels
-  physique: { muscle: 0.7, frame: 0.2, reserve: 0.1 },
+  // (a swarm hunter: lighter and plated, still the fastest of the jumpers; searched for, 2026-11-05)
+  mass: 200, size: 1.76, // (its collision as wide as it's drawn) // pony-sized: a fenling rides it
+  length: 1.9, height: 1.64, // m nose to tail (a long body, it wheels), and tall, as drawn
+  physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 },
   attack: { style: 'strike', crystalMass: 2.5 },
   refinement: 2.0, // as refined as the Toad Wallow allows (2.05): a big body bred well
   gait: { hop: 0.5, period: 1.1 }, // great lumbering leaps: airborne 1/3–5/6 of each stride
   model(outer, p) {
     // drawn at its old 150 kg proportions, scaled up by the cube root of its mass (the rider stays fenling-sized)
-    const K = Math.cbrt(400 / 150);
+    const K = Math.cbrt(200 / 150);
     outer.joint([0, 0, 0], [0, 0, 0], (b) => {
     const ph = p.phase;
     const hop = p.anim === 'walk' && ph > 1 / 3 && ph < 5 / 6 ? Math.sin(((ph - 1 / 3) / 0.5) * Math.PI) * 0.32 : 0;
