@@ -280,11 +280,14 @@ function mpWalk(q: number): MpPose {
  *  the back leg swings through to drive again; the pike couched level at mid-body the whole way, bouncing a little behind. */
 function mpRun(q: number): MpPose {
   const hubY = MP.hub - 0.4, aim = mpAim(hubY, MP_STRIKE_H);
-  const hubAt = (p: number): V3m => [0.06 * Math.sin((p - 0.1) * TAU), hubY + 0.07 * Math.sin((p - 0.05) * TAU) - 0.05 * bump(p, 0.55, 0.12), 0];
+  // (charging, its hub leans out ahead of its stride and its feet run back under it: the couched pike juts well clear
+  // of its knees, out toward the sim's reach)
+  const lean = 0.35, back = (i: number): V3m => { const r = rest3(i); return [r[0] - lean, r[1], r[2]]; };
+  const hubAt = (p: number): V3m => [lean + 0.06 * Math.sin((p - 0.1) * TAU), hubY + 0.07 * Math.sin((p - 0.05) * TAU) - 0.05 * bump(p, 0.55, 0.12), 0];
   const hub = hubAt(q), push = bump(q, 0.08, 0.12), catchF = bump(q, 0.55, 0.12);
   // (its feet: the front pair down together for 0.45 … 0.85, the back one for 0.95 … 0.25)
   // (each planted foot sliding back at one speed, 2·reach/duty a loop: the front pair's longer reach for their longer contact)
-  const feet: V3m[] = [footAt(rest3(0), q - 0.45, 0.42, 0.2, 0.42), footAt(rest3(1), q - 0.47, 0.42, 0.2, 0.42), footAt(rest3(2), q + 0.05, 0.32, 0.22, 0.32)];
+  const feet: V3m[] = [footAt(back(0), q - 0.45, 0.42, 0.2, 0.42), footAt(back(1), q - 0.47, 0.42, 0.2, 0.42), footAt(back(2), q + 0.05, 0.32, 0.22, 0.32)];
   const { swing } = pendulum(hubAt, q);
   return { hub, sy: 1 + 0.14 * push - 0.16 * catchF, swing: aim + swing, roll: 0, feet };
 }
