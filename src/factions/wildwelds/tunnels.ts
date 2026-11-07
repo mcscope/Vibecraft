@@ -312,8 +312,98 @@ const loneCoil: TunnelModel = (b, t) => {
   coilingTentacle(b, t, [-0.1, 0.25, 0], { skin: { color: '#20302f', tex: 'leather', rough: 0.35, metal: 0.3 }, band: FLESH.band, thick: 0.25, suckers: PALE, sling: CORD });
 };
 
+
+// ── 12. The mimic mine (2026-11-07, the user's design): at rest a crystal mine like any other, a few things off about
+//    it; to attack a tentacle slides up out of a burrow at its middle, curled like 9, reaches forward to pluck one of
+//    its own crystals, swings back, flings it, and coils back down out of sight. It never dips under the ground but in
+//    its burrow.
+
+/** Where the burrow opens (tower metres). */
+const MOUTH: Vec3 = [0, 0.3, 0];
+type MimicKey = { t: number; out: number; c: [Vec3, Vec3, Vec3]; curl: number };
+/** Its keyframes: how far out of the burrow it is (0 … 1), its body a curve from the mouth through three control points
+ *  (all well off the ground, so the curve between them is too), and how far its tip curls over at the end of it. */
+const MIMIC_KEYS: MimicKey[] = [
+  { t: 0.0, out: 0, c: [[0, 0.8, 0], [0, 1.3, 0], [0.1, 1.5, 0]], curl: -5 },
+  { t: 0.15, out: 1, c: [[0, 0.8, 0], [0, 1.3, 0], [0.1, 1.5, 0]], curl: -5 }, // up out of the burrow, curled like a fern
+  { t: 0.3, out: 1, c: [[0, 1.5, 0], [0.9, 2.0, 0.1], [0.95, 0.8, 0.2]], curl: -2.5 }, // reaching forward and down over the crystal
+  { t: 0.38, out: 1, c: [[0, 1.5, 0], [0.9, 2.0, 0.1], [0.95, 0.8, 0.2]], curl: -3.8 }, // its tip curls round it
+  { t: 0.5, out: 1, c: [[0, 1.4, 0], [-0.6, 2.6, 0], [-1.8, 2.2, 0]], curl: -1.2 }, // swung up and back
+  { t: 0.58, out: 1, c: [[0, 1.4, 0], [0.4, 2.8, 0], [1.6, 2.8, 0]], curl: -0.4 }, // the fling: let go at 0.56
+  { t: 0.68, out: 1, c: [[0, 1.2, 0], [1.0, 1.9, 0], [1.9, 1.1, 0]], curl: -1.5 }, // following through
+  { t: 0.82, out: 1, c: [[0, 0.8, 0], [0, 1.3, 0], [0.1, 1.5, 0]], curl: -5 }, // curled again
+  { t: 0.95, out: 0, c: [[0, 0.8, 0], [0, 1.3, 0], [0.1, 1.5, 0]], curl: -5 }, // gone
+];
+const MIMIC_LET_GO = 0.56;
+/** Its points from the burrow's mouth to its tip, each point's thickness, and where its curled tip holds a crystal,
+ *  at `t` 0 … 1 through a throw (no `t`: hidden). */
+export function mimicPose(t?: number): { pts: Vec3[]; r: number[]; hold: Vec3 } {
+  if (t === undefined || t <= 0 || t >= 0.95) return { pts: [MOUTH], r: [0.2], hold: MOUTH };
+  let i = 0;
+  while (i < MIMIC_KEYS.length - 2 && t > MIMIC_KEYS[i + 1].t) i++;
+  const A = MIMIC_KEYS[i], B = MIMIC_KEYS[i + 1], f = smooth((t - A.t) / (B.t - A.t));
+  const lerp = (x: number, y: number) => x + (y - x) * f;
+  const out = lerp(A.out, B.out), curl = lerp(A.curl, B.curl);
+  // (coming out: the whole of it drawn in toward the mouth)
+  const c = [0, 1, 2].map((k) => [0, 1, 2].map((d) => MOUTH[d] + (lerp(A.c[k][d], B.c[k][d]) - MOUTH[d]) * out) as Vec3);
+  const bez = (u: number): Vec3 => [0, 1, 2].map((d) => (1 - u) ** 3 * MOUTH[d] + 3 * (1 - u) ** 2 * u * c[0][d] + 3 * (1 - u) * u * u * c[1][d] + u ** 3 * c[2][d]) as Vec3;
+  const pts: Vec3[] = [], r: number[] = [], BODY = 10, TIP = 7;
+  for (let s = 0; s <= BODY; s++) { pts.push(bez(s / BODY)); r.push(0.2 - 0.12 * (s / BODY)); }
+  // its tip: on from the curve's end, curling over by `curl` in all, tighter toward the end
+  let p = pts[BODY], ang = Math.atan2(c[2][1] - c[1][1], c[2][0] - c[1][0]);
+  for (let s = 0; s < TIP; s++) {
+    ang += curl * (2 * (s + 1)) / (TIP * (TIP + 1));
+    const len = 0.16 * (1 - s / (TIP + 1)) * out;
+    p = [p[0] + Math.cos(ang) * len, p[1] + Math.sin(ang) * len, p[2]];
+    pts.push(p); r.push(0.08 * (1 - (s + 1) / (TIP + 1)) + 0.015);
+  }
+  const k = pts.length - 1, hold: Vec3 = [(pts[k - 4][0] + pts[k][0]) / 2, (pts[k - 4][1] + pts[k][1]) / 2, pts[k][2]];
+  return { pts, r, hold };
+}
+
+/** The crystal it plucks sits where its tip closes. */
+const MIMIC_GRAB = mimicPose(0.36).hold;
+
+/** 12. Mimic mine: a crystal mine (the biome's, half again as big) with a burrow at its middle where the big rock
+ *  should be, a few strands of silk between its rocks and a lump of its side's colour at one's foot. */
+const mimicMine: TunnelModel = (b, t) => {
+  let seed = (3 * 2654435761) >>> 0;
+  const r = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296); // (the mine's own scatter)
+  const rocks: Vec3[] = [];
+  b.joint([0, 0, 0], [0, 0, 0], (m) => {
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2 + r(), rr = 0.4 + r() * 0.35, sz = 0.3 + r() * 0.25;
+      m.rock([sz, sz, sz], [Math.cos(a) * rr, sz * 0.5, Math.sin(a) * rr], { color: i % 2 ? '#77736c' : '#8b867c', tex: 'stone' }, i + 1);
+      rocks.push([Math.cos(a) * rr * 1.5, sz * 1.2, Math.sin(a) * rr * 1.5]);
+    }
+    for (let i = 0; i < 7; i++) { // its crystals, round the burrow rather than over it
+      const a = (i / 7) * Math.PI * 2 + 0.5 + r() * 0.4, rr = 0.32 + r() * 0.15, len = (0.45 + r() * 0.6) * 1.15;
+      if (Math.abs(Math.atan2(Math.sin(a), Math.cos(a)) - 0.2) < 0.45) continue; // (the one it plucks is there)
+      m.crystal(len, [Math.cos(a) * rr, 0.35, Math.sin(a) * rr], [Math.sin(a) * 0.5, 0, Math.cos(a) * 0.5]);
+    }
+  }, 1.5);
+  b.cylinder(0.38, 0.32, 0.06, [0, MOUTH[1], 0], PIT, undefined, 14); // the burrow
+  b.sphere([0.5, 0.18, 0.5], [0, 0.18, 0], { color: '#6f6a62', tex: 'stone', rough: 0.95 }); // its rim, worn
+  for (const [i, j] of [[0, 2], [3, 5], [1, 4]]) { const p = rocks[i], q = rocks[j]; b.limb(p, [(p[0] + q[0]) / 2, Math.min(p[1], q[1]) * 0.6, (p[2] + q[2]) / 2], 0.006, { color: '#ece6d6', tex: 'none', rough: 0.85 }); }
+  b.sphere([0.12, 0.07, 0.12], [rocks[4][0] * 1.05, 0.06, rocks[4][2] * 1.05], TEAM);
+  const plucked = t !== undefined && t >= 0.38 && t < 0.95;
+  if (!plucked) b.crystal(0.75, MIMIC_GRAB, [0.4, 0, -0.5]);
+  // the tentacle
+  const { pts, r: rad, hold } = mimicPose(t);
+  const skin: Mat = { color: '#3a4440', tex: 'skin', rough: 0.45 }, band: Mat = { color: '#5fd0d6', tex: 'skin', rough: 0.35, metal: 0.2 };
+  for (let i = 0; i < pts.length - 1; i++) {
+    b.limb(pts[i], pts[i + 1], rad[i], i % 3 === 1 && i < 10 ? band : skin, rad[i + 1]);
+    if (i > 1 && i < 10 && i % 2 === 0) for (const z of [1, -1]) b.sphere(rad[i] * 0.3, [(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2, pts[i][2] + z * rad[i] * 0.8], PALE);
+  }
+  if (t !== undefined && t >= 0.38 && t < MIMIC_LET_GO) b.crystal(0.3, hold, [0, 0, 0.8]);
+  if (t !== undefined && t >= MIMIC_LET_GO && t < 0.86) {
+    const f = (t - MIMIC_LET_GO) / 0.3, o = mimicPose(MIMIC_LET_GO).hold;
+    b.crystal(0.3, [o[0] + f * 3.4, o[1] + f * 1.2 - f * f * 3.0, o[2]], [0, 0, f * 5]);
+  }
+};
+
 export const TUNNELS: Array<[string, TunnelModel]> = [
   ['1 coiled whip', coiledWhip], ['2 trapdoor', trapdoor], ['3 periscope', periscope], ['4 pincer pair', pincerPair],
   ['5 tentacle pit', tentaclePit], ['6 trebuchet beam', trebuchetBeam], ['7 mandible maw', mandibleMaw], ['8 scorpion tail', scorpionTail],
-  ['9 coiling tentacle', coilingPit], ['10 stone ring tentacles', stoneRingTentacles], ['11 lone coil', loneCoil],
+  ['9 coiling tentacle', coilingPit], ['10 stone ring tentacles', stoneRingTentacles], ['11 lone coil', loneCoil], ['12 mimic mine', mimicMine],
 ];
