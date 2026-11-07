@@ -409,6 +409,141 @@ function towerK(b: ModelBuilder): void {
   b.cylinder(0.7, 0.7, 0.1, [0, 1.5, 0], BAND, undefined, 14);
 }
 
+// ── round 4 (2026-11-07): tangle webs of different widths, no orbs; a range of arms on one rooted body, and an arm
+//    coming up out of a tunnel (the user)
+
+/** A tangle of web along the joined sides: `width` m either side of the line, `height` m tall, `n` threads; `bulge` swells
+ *  it in the middle of the piece and pinches it at the edges (where the neighbour's meets it at the edge's width). */
+function tangle(b: ModelBuilder, state: BuildingState | undefined, width: number, height: number, n: number, bulge = 0): void {
+  const j = joinsOf(state);
+  const reach = (bit: number) => (j & bit ? 1.0 : 0.4);
+  const xp = reach(1), xn = reach(2), zp = reach(4), zn = reach(8);
+  const alongX = !!(j & 3) || !(j & 12), alongZ = !!(j & 12);
+  const pt = (i: number): Vec3 => {
+    const u = (jit(i, 1) + 1) / 2, h = (jit(i, 3) + 1) / 2, side = jit(i, 5);
+    // which run of the web it's in (a corner piece: both)
+    const onX = alongX && (!alongZ || jit(i, 7) > 0);
+    const t = onX ? -xn + u * (xn + xp) : -zn + u * (zn + zp); // along it
+    const w = width * (1 + bulge * (1 - t * t)) * (0.6 + 0.4 * (1 - h)); // (wider low down, and through the middle if it bulges)
+    return onX ? [t, 0.04 + h ** 1.6 * height, side * w] : [side * w, 0.04 + h ** 1.6 * height, t];
+  };
+  for (let i = 0; i < n; i++) thread(b, pt(i), pt(i + 211), 0.03 + 0.04 * jit(i, 9), 0.007 + 0.002 * ((jit(i, 11) + 1) / 2));
+  for (let i = 0; i < Math.round(n / 7); i++) { const p = pt(i * 13 + 5); tieDown(b, p[0], p[2]); thread(b, [p[0], 0.02, p[2]], pt(i * 13 + 6), 0.01, 0.008); }
+  for (let i = 0; i < Math.round(n / 12); i++) b.sphere(0.016, pt(i * 17 + 2), DEW);
+}
+/** Wall T1, wisp: a thin tangle, narrow and low. */
+const wallT1 = (b: ModelBuilder, s?: BuildingState) => tangle(b, s, 0.22, 0.9, 55);
+/** Wall T2, hedge: a dense tangle, a hedge of web. */
+const wallT2 = (b: ModelBuilder, s?: BuildingState) => tangle(b, s, 0.42, 1.3, 110);
+/** Wall T3, sprawl: wide and low, web spread out over the ground. */
+const wallT3 = (b: ModelBuilder, s?: BuildingState) => tangle(b, s, 0.8, 0.8, 120);
+/** Wall T4, curtain: narrow and tall. */
+const wallT4 = (b: ModelBuilder, s?: BuildingState) => tangle(b, s, 0.28, 1.9, 110);
+/** Wall T5, billow: swelling in the middle of each piece and pinched where pieces meet, so a line of them heaves. */
+const wallT5 = (b: ModelBuilder, s?: BuildingState) => tangle(b, s, 0.3, 1.3, 110, 1.4);
+
+/** The rooted body every arm is shown on: the slinger's body half sunk in a mound, rooted, its head at the front; the arm goes on at `ARM_AT`. */
+function rootedBody(b: ModelBuilder): void {
+  b.sphere([1.4, 0.6, 1.3], [0, 0.1, 0], EARTH2);
+  roots(b, [0, 0.5, 0], 1.75, 8);
+  b.sphere([1.0, 0.5, 0.7], [0, 0.7, 0], SL_CHITIN);
+  for (const x of [-0.5, -0.1, 0.3]) b.cylinder(0.62, 0.62, 0.06, [x, 0.8, 0], SL_TEAL, [0, 0, Math.PI / 2], 12);
+  slingHead(b, [0.95, 0.9, 0], 1.45);
+  b.cylinder(0.72, 0.72, 0.1, [0.1, 0.9, 0], BAND, [0, 0, Math.PI / 2], 12);
+}
+const ARM_AT: Vec3 = [-0.8, 1.0, 0];
+/** A crystal in a sling's pouch hanging from `at`, `len` below. */
+function pouch(c: ModelBuilder, at: Vec3, len = 0.55): void {
+  const p: Vec3 = [at[0] + 0.04, at[1] - len, at[2]];
+  c.limb(at, p, 0.012, CORD, 0.01); c.sphere([0.1, 0.07, 0.09], p, CORD); c.crystal(0.18, [p[0], p[1] + 0.03, p[2]], [0, 0, Math.PI / 2]);
+}
+
+/** Arm 1, segmented: the slinger's own: segments of black and teal, spined, rising and curling over. */
+function armSegmented(b: ModelBuilder): void { rootedBody(b); slingArm(b, ARM_AT, Math.PI, 1.3, 2.4, 8, 0.58, 0.19); }
+
+/** Arm 2, tentacle: one smooth muscular limb, thick at its root, tapering, curling over in an S, banded, its tip coiled round the sling cord. */
+function armTentacle(b: ModelBuilder): void {
+  rootedBody(b);
+  const pts: Vec3[] = [ARM_AT];
+  let ang = 1.35; // (rising, then curling over toward the front, smoothly)
+  for (let i = 1; i <= 14; i++) { ang -= 0.19; const q = pts[i - 1]; pts.push([q[0] - 0.36 * Math.cos(ang), q[1] + 0.36 * Math.sin(ang), 0.12 * Math.sin(i * 0.7)]); }
+  for (let i = 0; i < pts.length - 1; i++) b.limb(pts[i], pts[i + 1], 0.3 * (1 - i / 15) + 0.03, i % 3 === 1 ? SL_TEAL : SL_CHITIN, 0.3 * (1 - (i + 1) / 15) + 0.03);
+  for (let i = 2; i < 12; i += 2) b.sphere(0.05, [pts[i][0], pts[i][1] - 0.2, pts[i][2] + 0.15], SL_TEAL); // suckers
+  pouch(b, pts[14]);
+}
+
+/** Arm 3, mantis: two long jointed segments like a mantis's foreleg, raptorial spines down its inner edge, the hooked tip holding the sling. */
+function armMantis(b: ModelBuilder): void {
+  rootedBody(b);
+  const knee: Vec3 = [-1.4, 3.6, 0], tip: Vec3 = [0.2, 4.5, 0];
+  b.limb(ARM_AT, knee, 0.22, SL_CHITIN, 0.17); b.sphere(0.2, knee, SL_TEAL); b.limb(knee, tip, 0.15, SL_TEAL, 0.06);
+  for (let i = 0; i < 6; i++) { const k = 0.15 + i * 0.13; b.cone(0.035, 0.2, [knee[0] + (tip[0] - knee[0]) * k, knee[1] + (tip[1] - knee[1]) * k - 0.12, 0], SL_CHITIN, [0, 0, Math.PI], 4); }
+  curve(b, [tip, [0.45, 4.3, 0], [0.4, 4.05, 0]], 0.06, 0.02, SL_CHITIN);
+  pouch(b, [0.4, 4.05, 0], 0.45);
+}
+
+/** Arm 4, scorpion: a segmented tail arching up and forward over the body like a scorpion's, its bulb the sling: crystals held in the bulb, the sting curved above. */
+function armScorpion(b: ModelBuilder): void {
+  rootedBody(b);
+  let p = ARM_AT;
+  for (let i = 1; i <= 7; i++) {
+    const a = 1.9 - i * 0.42, nx: Vec3 = [p[0] + 0.62 * Math.cos(a), p[1] + 0.62 * Math.sin(a), 0];
+    b.sphere([0.28 - i * 0.02, 0.24 - i * 0.02, 0.26 - i * 0.02], nx, i % 2 ? SL_TEAL : SL_CHITIN); b.limb(p, nx, 0.2 - i * 0.015, SL_CHITIN);
+    p = nx;
+  }
+  b.sphere([0.32, 0.26, 0.28], [p[0] + 0.2, p[1] - 0.05, 0], SL_TEAL); // the bulb
+  for (const [dx, dz] of [[0.25, 0.1], [0.3, -0.08]] as const) b.crystal(0.18, [p[0] + dx, p[1] + 0.18, dz], [0, 0, 0.6]);
+  curve(b, [[p[0] + 0.45, p[1], 0], [p[0] + 0.7, p[1] + 0.2, 0], [p[0] + 0.65, p[1] + 0.45, 0]], 0.07, 0.015, SL_CHITIN); // the sting
+}
+
+/** Arm 5, spoon: a long stiff beam of fused chitin, like a trebuchet's, braced to the body, a cupped ladle at its end full of crystals. */
+function armSpoon(b: ModelBuilder): void {
+  rootedBody(b);
+  const end: Vec3 = [-2.6, 4.3, 0];
+  b.limb(ARM_AT, end, 0.17, SL_CHITIN, 0.1);
+  for (let i = 1; i < 6; i++) { const k = i / 6; b.cylinder(0.19 - k * 0.07, 0.19 - k * 0.07, 0.06, [ARM_AT[0] + (end[0] - ARM_AT[0]) * k, ARM_AT[1] + (end[1] - ARM_AT[1]) * k, 0], SL_TEAL, [0, 0, 0.6], 8); }
+  for (const z of [1, -1]) b.limb([0.1, 1.1, z * 0.35], [-1.5, 2.6, z * 0.06], 0.05, SL_CHITIN, 0.03); // its braces
+  b.sphere([0.32, 0.14, 0.3], [end[0] - 0.1, end[1] + 0.05, 0], SL_TEAL); // the cup
+  for (const [dx, dz] of [[-0.05, 0.08], [-0.15, -0.06], [0.0, -0.05]] as const) b.crystal(0.16, [end[0] + dx, end[1] + 0.18, dz], [0.2, 0, 0.3]);
+}
+
+/** Arm 6, feeler: a very long thin whip like an antenna, many fine segments, rising high and drooping over in a long arc, the sling at its tip. */
+function armFeeler(b: ModelBuilder): void {
+  rootedBody(b);
+  let p = ARM_AT, a = 1.45;
+  for (let i = 1; i <= 16; i++) { a -= 0.13; const nx: Vec3 = [p[0] - 0.36 * Math.cos(a) * 0.6, p[1] + 0.36 * Math.sin(a), 0.05 * Math.sin(i)]; b.limb(p, nx, 0.08 * (1 - i / 18) + 0.012, i % 2 ? SL_TEAL : SL_CHITIN); p = nx; }
+  pouch(b, p, 0.5);
+}
+
+/** Arm 7, claw: a heavy jointed limb ending in a pincer claw that grips the crystals (the round-one chitin claw, on the slinger's body). */
+function armClaw(b: ModelBuilder): void {
+  rootedBody(b);
+  const knee: Vec3 = [-1.3, 3.2, 0], wrist: Vec3 = [-0.6, 4.6, 0], claw: Vec3 = [0.15, 4.5, 0];
+  b.limb(ARM_AT, knee, 0.26, SL_CHITIN, 0.2); b.sphere(0.22, knee, SL_TEAL); b.limb(knee, wrist, 0.19, SL_TEAL, 0.15); b.sphere(0.17, wrist, SL_CHITIN); b.limb(wrist, claw, 0.15, SL_CHITIN, 0.1);
+  for (const s of [1, -1]) curve(b, [claw, [0.45, 4.4, s * 0.16], [0.5, 4.65, s * 0.2], [0.38, 4.85, s * 0.08]], 0.07, 0.02, SL_CHITIN);
+  for (const [x, z, k] of [[0.35, 0.04, 0.22], [0.3, -0.07, 0.18]] as const) b.crystal(k, [x, 4.65, z], [0, 0, 0.5]);
+}
+
+/** Arm 8, forked: one thick limb splitting at its elbow into two segmented whips, a sling hanging from each. */
+function armForked(b: ModelBuilder): void {
+  rootedBody(b);
+  const fork: Vec3 = [-1.2, 2.9, 0];
+  b.limb(ARM_AT, fork, 0.24, SL_CHITIN, 0.18); b.sphere(0.2, fork, SL_TEAL);
+  slingArm(b, fork, Math.PI - 0.5, 1.0, 1.9, 6, 0.42, 0.12);
+  slingArm(b, fork, Math.PI + 0.5, 1.3, 2.3, 6, 0.42, 0.12);
+}
+
+/** Tunnel: a burrow in the ground, a ring of thrown-up earth round a dark hole lined with silk, the slinger's long arm rising up out of it and curling over, sling hanging; eyes glinting down in the dark. */
+function towerTunnel(b: ModelBuilder): void {
+  for (let i = 0; i < 12; i++) { const a = (i / 12) * Math.PI * 2; b.sphere([0.55, 0.35 + 0.08 * jit(i), 0.4], [Math.cos(a) * 1.1, 0.2, Math.sin(a) * 1.1], EARTH2, [0, -a, 0]); } // the rim
+  b.cylinder(0.85, 0.75, 0.08, [0, 0.3, 0], HOLE, undefined, 16); // the hole
+  for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; thread(b, [Math.cos(a) * 0.82, 0.36, Math.sin(a) * 0.82], [Math.cos(a + 0.6) * 1.35, 0.5, Math.sin(a + 0.6) * 1.35], 0.03, 0.012); } // silk lining its lip
+  for (const z of [0.1, -0.1]) b.sphere(0.06, [0.35, 0.33, z], { color: '#bff2ff', tex: 'none', rough: 0.05, emissive: '#1a5060' }); // eyes in the dark
+  for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2 + 0.25; b.sphere(0.12, [Math.cos(a) * 1.15, 0.5, Math.sin(a) * 1.15], BAND); } // its side's colour, studded round the rim
+  slingArm(b, [-0.15, 0.32, 0], Math.PI, 1.5, 2.7, 9, 0.58, 0.2);
+  roots(b, [0, 0.2, 0], 1.75, 6);
+}
+
 export const WEB_CONCEPTS: Record<string, { model: (b: ModelBuilder, state?: BuildingState) => void; size: number }> = {
   wallA: { model: wallA, size: 1 }, wallB: { model: wallB, size: 1 }, wallC: { model: wallC, size: 1 },
   towerA: { model: towerA, size: 2 }, towerB: { model: towerB, size: 2 }, towerC: { model: towerC, size: 2 },
@@ -416,4 +551,8 @@ export const WEB_CONCEPTS: Record<string, { model: (b: ModelBuilder, state?: Bui
   towerD: { model: towerD, size: 2 }, towerE: { model: towerE, size: 2 }, towerF: { model: towerF, size: 2 },
   wallG: { model: wallG, size: 1 }, wallH: { model: wallH, size: 1 }, wallI: { model: wallI, size: 1 },
   towerG: { model: towerG, size: 2 }, towerH: { model: towerH, size: 2 }, towerI: { model: towerI, size: 2 }, towerJ: { model: towerJ, size: 2 }, towerK: { model: towerK, size: 2 },
+  wallT1: { model: wallT1, size: 1 }, wallT2: { model: wallT2, size: 1 }, wallT3: { model: wallT3, size: 1 }, wallT4: { model: wallT4, size: 1 }, wallT5: { model: wallT5, size: 1 },
+  armSegmented: { model: armSegmented, size: 2 }, armTentacle: { model: armTentacle, size: 2 }, armMantis: { model: armMantis, size: 2 }, armScorpion: { model: armScorpion, size: 2 },
+  armSpoon: { model: armSpoon, size: 2 }, armFeeler: { model: armFeeler, size: 2 }, armClaw: { model: armClaw, size: 2 }, armForked: { model: armForked, size: 2 },
+  towerTunnel: { model: towerTunnel, size: 2 },
 };
