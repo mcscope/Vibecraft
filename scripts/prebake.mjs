@@ -27,9 +27,11 @@ try {
     console.log(`${key}: ${pages.length} pages, ${(bytes / 1e6).toFixed(1)} MB, ${((Date.now() - t) / 1000).toFixed(0)} s`);
   }
 } finally {
-  await browser.close();
-  // Vite's close can wait forever on its file watcher, so it gets a few seconds
-  await Promise.race([server.close(), new Promise((r) => setTimeout(r, 5000))]);
+  // either close can wait forever (Playwright on a Chrome that has already gone, Vite on its file watcher),
+  // so each gets a few seconds
+  const atMost = (p) => Promise.race([p, new Promise((r) => setTimeout(r, 5000))]);
+  await atMost(browser.close());
+  await atMost(server.close());
 }
 // whatever Vite still holds open would keep the process (and the build after it) waiting
 process.exit(0);
