@@ -343,23 +343,73 @@ const MIMIC = mimicLayout();
 /** Where its tip grips the crystal it plucks: two thirds of the way up it. */
 const GRIP: Vec3 = MIMIC.plucked.at.map((v, d) => v + MIMIC.plucked.dir[d] * MIMIC.plucked.len * 0.65) as Vec3;
 
-type MimicKey = { t: number; out: number; c: [Vec3, Vec3, Vec3]; curl: number };
+/** A pose of it as a chain from the mouth (heading straight up): each segment's length, its turn from the one before,
+ *  and how far to the side its end is. Poses blend by their turns, so it bends from one to the next like a limb. */
+type Chain = { len: number[]; turn: number[]; z: number[] };
+const SEGS = 19, BODY = 12; // (12 of body, 7 of curling tip)
+function chainOf(pts: Vec3[]): Chain {
+  const ch: Chain = { len: [], turn: [], z: [] };
+  let h = Math.PI / 2;
+  for (let s = 0; s < SEGS; s++) {
+    const dx = pts[s + 1][0] - pts[s][0], dy = pts[s + 1][1] - pts[s][1], a = Math.atan2(dy, dx);
+    ch.turn.push(Math.atan2(Math.sin(a - h), Math.cos(a - h))); ch.len.push(Math.hypot(dx, dy)); ch.z.push(pts[s + 1][2]);
+    h = a;
+  }
+  return ch;
+}
+/** A held pose: its body a curve from the mouth through three control points, its tip curling over by `curl` at the end. */
+function curvePts(c: [Vec3, Vec3, Vec3], curl: number): Vec3[] {
+  const bez = (u: number): Vec3 => [0, 1, 2].map((d) => (1 - u) ** 3 * MOUTH[d] + 3 * (1 - u) ** 2 * u * c[0][d] + 3 * (1 - u) * u * u * c[1][d] + u ** 3 * c[2][d]) as Vec3;
+  const pts: Vec3[] = [];
+  for (let s = 0; s <= BODY; s++) pts.push(bez(s / BODY));
+  let p = pts[BODY], ang = Math.atan2(c[2][1] - c[1][1], c[2][0] - c[1][0]);
+  const TIP = SEGS - BODY;
+  for (let s = 0; s < TIP; s++) {
+    ang += curl * (2 * (s + 1)) / (TIP * (TIP + 1));
+    const len = 0.24 * (1 - s / (TIP + 1));
+    p = [p[0] + Math.cos(ang) * len, p[1] + Math.sin(ang) * len, p[2]];
+    pts.push(p);
+  }
+  return pts;
+}
+/** A pose of the coiling tentacle's throw (9's): `wind` 0 coiled … 1 reared up and back, curling over behind;
+ *  `lash` 0 … 1 whipped over the top, curling forward. */
+function whipPts(wind: number, lash: number): Vec3[] {
+  const k14 = 14 / SEGS, pts: Vec3[] = [MOUTH];
+  let p = MOUTH, a = Math.PI / 2;
+  for (let i = 0; i < SEGS; i++) {
+    const k = i / SEGS;
+    a += (-0.65 * (1 - wind) + (wind - lash * 1.6) * 0.16 * (1 + k * 1.5) - 0.02) * k14;
+    const len = (0.22 + 0.2 * wind) * k14;
+    p = [p[0] + Math.cos(a) * len, p[1] + Math.sin(a) * len, 0];
+    pts.push(p);
+  }
+  return pts;
+}
 const CURLED: [Vec3, Vec3, Vec3] = [[0, 1.0, 0], [0, 1.7, 0], [0.15, 2.0, 0]];
-/** Its keyframes: how far out of the burrow it is (0 … 1), its body a curve from the mouth through three control points,
- *  and how far its tip curls over at the end of it. (The reach is moved to put its grip on the crystal.) */
-const MIMIC_KEYS: MimicKey[] = [
-  { t: 0.0, out: 0, c: CURLED, curl: -5 },
-  { t: 0.15, out: 1, c: CURLED, curl: -5 }, // up out of the burrow, curled like a fern
-  { t: 0.3, out: 1, c: [[0, 2.0, 0], [0.9, 2.6, 0.1], [1.0, 1.7, 0.15]], curl: -3.6 }, // reaching forward and down over the crystal
-  { t: 0.38, out: 1, c: [[0, 2.0, 0], [0.9, 2.6, 0.1], [1.0, 1.7, 0.15]], curl: -4.2 }, // its tip curls round it
-  { t: 0.44, out: 1, c: [[0, 2.2, 0], [0, 3.3, 0], [-0.6, 3.6, 0]], curl: -3.5 }, // lifting it high
-  { t: 0.5, out: 1, c: [[0, 2.3, 0], [-0.2, 3.7, 0], [-0.9, 4.3, 0]], curl: -2.0 }, // reared up overhead, cocked back
-  { t: 0.58, out: 1, c: [[0, 2.3, 0], [0.2, 3.9, 0], [1.0, 4.5, 0]], curl: -0.6 }, // snapped forward over the top: let go at 0.56
-  { t: 0.68, out: 1, c: [[0, 2.1, 0], [0.6, 3.3, 0], [1.4, 3.3, 0]], curl: -1.8 }, // following through, not far
-  { t: 0.82, out: 1, c: CURLED, curl: -5 }, // curled again
-  { t: 0.95, out: 0, c: CURLED, curl: -5 }, // gone
+const REACH: [Vec3, Vec3, Vec3] = [[0, 2.0, 0], [0.9, 2.6, 0.1], [1.0, 1.7, 0.15]];
+const MIMIC_LET_GO = 0.56, MIMIC_GRAB = 0.38;
+// (move its reach so its grip closes on the crystal)
+for (let n = 0; n < 6; n++) {
+  const h = holdOf(curvePts(REACH, -4.2));
+  for (const j of [1, 2]) REACH[j] = REACH[j].map((v, d) => v + (GRIP[d] - h[d])) as Vec3;
+}
+function holdOf(pts: Vec3[]): Vec3 { const k = pts.length - 1; return [(pts[k - 4][0] + pts[k][0]) / 2, (pts[k - 4][1] + pts[k][1]) / 2, pts[k][2]]; }
+/** Its keyframes: how far out of the burrow it is (0 … 1) and its pose. */
+const MIMIC_KEYS: Array<{ t: number; out: number; pose: Chain }> = [
+  { t: 0.0, out: 0, pose: chainOf(curvePts(CURLED, -5)) },
+  { t: 0.15, out: 1, pose: chainOf(curvePts(CURLED, -5)) }, // up out of the burrow, curled like a fern
+  { t: 0.22, out: 1, pose: chainOf(curvePts([[0, 2.1, 0], [0.5, 2.9, 0.1], [0.6, 2.7, 0.15]], -5)) }, // over it
+  { t: 0.3, out: 1, pose: chainOf(curvePts(REACH, -4.2)) }, // reaching forward and down over the crystal
+  { t: MIMIC_GRAB, out: 1, pose: chainOf(curvePts(REACH, -4.2)) }, // its tip curls round it
+  { t: 0.43, out: 1, pose: chainOf(curvePts([[0, 2.2, 0], [0.3, 3.1, 0.1], [0.5, 3.0, 0.15]], -4.2)) }, // lifting it up clear
+  { t: 0.48, out: 1, pose: chainOf(whipPts(1, 0)) }, // uncoiling up
+  { t: 0.52, out: 1, pose: chainOf(whipPts(1, 0)) }, // reared up and back, curling over behind
+  { t: 0.62, out: 1, pose: chainOf(whipPts(1, 1)) }, // whipped over the top: let go at 0.56
+  { t: 0.72, out: 1, pose: chainOf(whipPts(1, 0.6)) }, // following through
+  { t: 0.82, out: 1, pose: chainOf(curvePts(CURLED, -5)) }, // curled again
+  { t: 0.95, out: 0, pose: chainOf(curvePts(CURLED, -5)) }, // gone
 ];
-const MIMIC_LET_GO = 0.56, MIMIC_GRAB = 0.36;
 /** Its points from the burrow's mouth to its tip, each point's thickness, and where its curled tip holds a crystal,
  *  at `t` 0 … 1 through a throw (no `t`: hidden). */
 export function mimicPose(t?: number): { pts: Vec3[]; r: number[]; hold: Vec3 } {
@@ -368,27 +418,17 @@ export function mimicPose(t?: number): { pts: Vec3[]; r: number[]; hold: Vec3 } 
   while (i < MIMIC_KEYS.length - 2 && t > MIMIC_KEYS[i + 1].t) i++;
   const A = MIMIC_KEYS[i], B = MIMIC_KEYS[i + 1], f = smooth((t - A.t) / (B.t - A.t));
   const lerp = (x: number, y: number) => x + (y - x) * f;
-  const out = lerp(A.out, B.out), curl = lerp(A.curl, B.curl);
-  // (coming out: the whole of it drawn in toward the mouth)
-  const c = [0, 1, 2].map((k) => [0, 1, 2].map((d) => MOUTH[d] + (lerp(A.c[k][d], B.c[k][d]) - MOUTH[d]) * out) as Vec3);
-  const bez = (u: number): Vec3 => [0, 1, 2].map((d) => (1 - u) ** 3 * MOUTH[d] + 3 * (1 - u) ** 2 * u * c[0][d] + 3 * (1 - u) * u * u * c[1][d] + u ** 3 * c[2][d]) as Vec3;
-  const pts: Vec3[] = [], r: number[] = [], BODY = 12, TIP = 7;
-  for (let s = 0; s <= BODY; s++) { pts.push(bez(s / BODY)); r.push(0.32 - 0.19 * (s / BODY)); }
-  // its tip: on from the curve's end, curling over by `curl` in all, tighter toward the end
-  let p = pts[BODY], ang = Math.atan2(c[2][1] - c[1][1], c[2][0] - c[1][0]);
-  for (let s = 0; s < TIP; s++) {
-    ang += curl * (2 * (s + 1)) / (TIP * (TIP + 1));
-    const len = 0.24 * (1 - s / (TIP + 1)) * out;
-    p = [p[0] + Math.cos(ang) * len, p[1] + Math.sin(ang) * len, p[2]];
-    pts.push(p); r.push(0.12 * (1 - (s + 1) / (TIP + 1)) + 0.025);
+  const out = lerp(A.out, B.out);
+  const pts: Vec3[] = [MOUTH], r: number[] = [0.32];
+  let p = MOUTH, h = Math.PI / 2;
+  for (let s = 0; s < SEGS; s++) {
+    h += lerp(A.pose.turn[s], B.pose.turn[s]);
+    const len = lerp(A.pose.len[s], B.pose.len[s]) * out; // (coming out: all of it drawn in toward the mouth)
+    p = [p[0] + Math.cos(h) * len, p[1] + Math.sin(h) * len, lerp(A.pose.z[s], B.pose.z[s]) * out];
+    pts.push(p);
+    r.push(s < BODY ? 0.32 - 0.19 * ((s + 1) / BODY) : 0.12 * (1 - (s + 1 - BODY) / (SEGS - BODY + 1)) + 0.025);
   }
-  const k = pts.length - 1, hold: Vec3 = [(pts[k - 4][0] + pts[k][0]) / 2, (pts[k - 4][1] + pts[k][1]) / 2, pts[k][2]];
-  return { pts, r, hold };
-}
-// (move its reach so its grip closes on the crystal)
-for (let n = 0; n < 6; n++) {
-  const h = mimicPose(MIMIC_GRAB).hold;
-  for (const key of MIMIC_KEYS.slice(2, 4)) key.c = key.c.map((q, k) => k === 0 ? q : q.map((v, d) => v + (GRIP[d] - h[d])) as Vec3) as [Vec3, Vec3, Vec3];
+  return { pts, r, hold: holdOf(pts) };
 }
 
 /** The nearest its body comes to the mine's rocks and crystals (and the ground) through a throw: positive, clear. */
