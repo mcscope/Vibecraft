@@ -314,31 +314,56 @@ const loneCoil: TunnelModel = (b, t) => {
 
 
 // ── 12. The mimic mine (2026-11-07, the user's design): at rest a crystal mine like any other, a few things off about
-//    it; to attack a tentacle slides up out of a burrow at its middle, curled like 9, reaches forward to pluck one of
-//    its own crystals, swings back, flings it, and coils back down out of sight. It never dips under the ground but in
-//    its burrow.
+//    it; to attack a big tentacle slides up out of a burrow at its middle, curled like 9, reaches forward to pluck one
+//    of its own crystals, swings back, flings it, and coils back down out of sight. It never dips under the ground but
+//    in its burrow, and never passes through its rocks or crystals (mimicClear checks).
 
 /** Where the burrow opens (tower metres). */
 const MOUTH: Vec3 = [0, 0.3, 0];
+type Crystal = { len: number; at: Vec3; rot: Vec3; dir: Vec3 };
+const crystalAt = (len: number, at: Vec3, rot: Vec3): Crystal => ({ len, at, rot, dir: [-Math.sin(rot[2]), Math.cos(rot[2]) * Math.cos(rot[0]), Math.cos(rot[2]) * Math.sin(rot[0])] });
+/** The mine it passes for: the biome's mine half again as big (the same scatter), its rocks pushed out off the burrow
+ *  and its crystals leaning out from it; and the crystal it plucks, at the front. */
+export function mimicLayout(): { rocks: Array<{ at: Vec3; size: number }>; crystals: Crystal[]; plucked: Crystal } {
+  let seed = (3 * 2654435761) >>> 0;
+  const r = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296);
+  const rocks: Array<{ at: Vec3; size: number }> = [], crystals: Crystal[] = [];
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2 + r(), spread = r(), size = (0.3 + r() * 0.25) * 1.5, rr = size + 0.55 + spread * 0.35;
+    rocks.push({ at: [Math.cos(a) * rr, size * 0.5, Math.sin(a) * rr], size });
+  }
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2 + 0.5 + r() * 0.4, rr = (0.32 + r() * 0.15) * 1.5 + 0.15, len = (0.45 + r() * 0.6) * 1.3;
+    if (Math.abs(Math.atan2(Math.sin(a), Math.cos(a)) - 0.2) < 0.45) continue; // (where the one it plucks stands)
+    crystals.push(crystalAt(len, [Math.cos(a) * rr, 0.5, Math.sin(a) * rr], [Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5]));
+  }
+  return { rocks, crystals, plucked: crystalAt(0.7, [0.55, 0.5, 0.25], [-0.2, 0, -0.25]) };
+}
+const MIMIC = mimicLayout();
+/** Where its tip grips the crystal it plucks: two thirds of the way up it. */
+const GRIP: Vec3 = MIMIC.plucked.at.map((v, d) => v + MIMIC.plucked.dir[d] * MIMIC.plucked.len * 0.65) as Vec3;
+
 type MimicKey = { t: number; out: number; c: [Vec3, Vec3, Vec3]; curl: number };
-/** Its keyframes: how far out of the burrow it is (0 … 1), its body a curve from the mouth through three control points
- *  (all well off the ground, so the curve between them is too), and how far its tip curls over at the end of it. */
+const CURLED: [Vec3, Vec3, Vec3] = [[0, 1.0, 0], [0, 1.7, 0], [0.15, 2.0, 0]];
+/** Its keyframes: how far out of the burrow it is (0 … 1), its body a curve from the mouth through three control points,
+ *  and how far its tip curls over at the end of it. (The reach is moved to put its grip on the crystal.) */
 const MIMIC_KEYS: MimicKey[] = [
-  { t: 0.0, out: 0, c: [[0, 0.8, 0], [0, 1.3, 0], [0.1, 1.5, 0]], curl: -5 },
-  { t: 0.15, out: 1, c: [[0, 0.8, 0], [0, 1.3, 0], [0.1, 1.5, 0]], curl: -5 }, // up out of the burrow, curled like a fern
-  { t: 0.3, out: 1, c: [[0, 1.5, 0], [0.9, 2.0, 0.1], [0.95, 0.8, 0.2]], curl: -2.5 }, // reaching forward and down over the crystal
-  { t: 0.38, out: 1, c: [[0, 1.5, 0], [0.9, 2.0, 0.1], [0.95, 0.8, 0.2]], curl: -3.8 }, // its tip curls round it
-  { t: 0.5, out: 1, c: [[0, 1.4, 0], [-0.6, 2.6, 0], [-1.8, 2.2, 0]], curl: -1.2 }, // swung up and back
-  { t: 0.58, out: 1, c: [[0, 1.4, 0], [0.4, 2.8, 0], [1.6, 2.8, 0]], curl: -0.4 }, // the fling: let go at 0.56
-  { t: 0.68, out: 1, c: [[0, 1.2, 0], [1.0, 1.9, 0], [1.9, 1.1, 0]], curl: -1.5 }, // following through
-  { t: 0.82, out: 1, c: [[0, 0.8, 0], [0, 1.3, 0], [0.1, 1.5, 0]], curl: -5 }, // curled again
-  { t: 0.95, out: 0, c: [[0, 0.8, 0], [0, 1.3, 0], [0.1, 1.5, 0]], curl: -5 }, // gone
+  { t: 0.0, out: 0, c: CURLED, curl: -5 },
+  { t: 0.15, out: 1, c: CURLED, curl: -5 }, // up out of the burrow, curled like a fern
+  { t: 0.3, out: 1, c: [[0, 2.0, 0], [0.9, 2.6, 0.1], [1.0, 1.7, 0.15]], curl: -3.6 }, // reaching forward and down over the crystal
+  { t: 0.38, out: 1, c: [[0, 2.0, 0], [0.9, 2.6, 0.1], [1.0, 1.7, 0.15]], curl: -4.2 }, // its tip curls round it
+  { t: 0.44, out: 1, c: [[0, 2.2, 0], [0, 3.3, 0], [-0.6, 3.6, 0]], curl: -3.5 }, // lifting it high
+  { t: 0.5, out: 1, c: [[0, 1.9, 0], [-0.8, 3.4, 0], [-2.3, 2.9, 0]], curl: -1.2 }, // swung up and back
+  { t: 0.58, out: 1, c: [[0, 1.9, 0], [0.5, 3.6, 0], [2.1, 3.6, 0]], curl: -0.4 }, // the fling: let go at 0.56
+  { t: 0.68, out: 1, c: [[0, 1.7, 0], [1.3, 2.6, 0], [2.4, 2.0, 0]], curl: -1.5 }, // following through
+  { t: 0.82, out: 1, c: CURLED, curl: -5 }, // curled again
+  { t: 0.95, out: 0, c: CURLED, curl: -5 }, // gone
 ];
-const MIMIC_LET_GO = 0.56;
+const MIMIC_LET_GO = 0.56, MIMIC_GRAB = 0.36;
 /** Its points from the burrow's mouth to its tip, each point's thickness, and where its curled tip holds a crystal,
  *  at `t` 0 … 1 through a throw (no `t`: hidden). */
 export function mimicPose(t?: number): { pts: Vec3[]; r: number[]; hold: Vec3 } {
-  if (t === undefined || t <= 0 || t >= 0.95) return { pts: [MOUTH], r: [0.2], hold: MOUTH };
+  if (t === undefined || t <= 0 || t >= 0.95) return { pts: [MOUTH], r: [0.32], hold: MOUTH };
   let i = 0;
   while (i < MIMIC_KEYS.length - 2 && t > MIMIC_KEYS[i + 1].t) i++;
   const A = MIMIC_KEYS[i], B = MIMIC_KEYS[i + 1], f = smooth((t - A.t) / (B.t - A.t));
@@ -347,58 +372,75 @@ export function mimicPose(t?: number): { pts: Vec3[]; r: number[]; hold: Vec3 } 
   // (coming out: the whole of it drawn in toward the mouth)
   const c = [0, 1, 2].map((k) => [0, 1, 2].map((d) => MOUTH[d] + (lerp(A.c[k][d], B.c[k][d]) - MOUTH[d]) * out) as Vec3);
   const bez = (u: number): Vec3 => [0, 1, 2].map((d) => (1 - u) ** 3 * MOUTH[d] + 3 * (1 - u) ** 2 * u * c[0][d] + 3 * (1 - u) * u * u * c[1][d] + u ** 3 * c[2][d]) as Vec3;
-  const pts: Vec3[] = [], r: number[] = [], BODY = 10, TIP = 7;
-  for (let s = 0; s <= BODY; s++) { pts.push(bez(s / BODY)); r.push(0.2 - 0.12 * (s / BODY)); }
+  const pts: Vec3[] = [], r: number[] = [], BODY = 12, TIP = 7;
+  for (let s = 0; s <= BODY; s++) { pts.push(bez(s / BODY)); r.push(0.32 - 0.19 * (s / BODY)); }
   // its tip: on from the curve's end, curling over by `curl` in all, tighter toward the end
   let p = pts[BODY], ang = Math.atan2(c[2][1] - c[1][1], c[2][0] - c[1][0]);
   for (let s = 0; s < TIP; s++) {
     ang += curl * (2 * (s + 1)) / (TIP * (TIP + 1));
-    const len = 0.16 * (1 - s / (TIP + 1)) * out;
+    const len = 0.24 * (1 - s / (TIP + 1)) * out;
     p = [p[0] + Math.cos(ang) * len, p[1] + Math.sin(ang) * len, p[2]];
-    pts.push(p); r.push(0.08 * (1 - (s + 1) / (TIP + 1)) + 0.015);
+    pts.push(p); r.push(0.12 * (1 - (s + 1) / (TIP + 1)) + 0.025);
   }
   const k = pts.length - 1, hold: Vec3 = [(pts[k - 4][0] + pts[k][0]) / 2, (pts[k - 4][1] + pts[k][1]) / 2, pts[k][2]];
   return { pts, r, hold };
 }
+// (move its reach so its grip closes on the crystal)
+for (let n = 0; n < 6; n++) {
+  const h = mimicPose(MIMIC_GRAB).hold;
+  for (const key of MIMIC_KEYS.slice(2, 4)) key.c = key.c.map((q, k) => k === 0 ? q : q.map((v, d) => v + (GRIP[d] - h[d])) as Vec3) as [Vec3, Vec3, Vec3];
+}
 
-/** The crystal it plucks sits where its tip closes. */
-const MIMIC_GRAB = mimicPose(0.36).hold;
+/** The nearest its body comes to the mine's rocks and crystals (and the ground) through a throw: positive, clear. */
+export function mimicClear(): { gap: number; at: number; what: string } {
+  const near = (p: Vec3, a: Vec3, b: Vec3) => { // distance from p to the segment a–b
+    const ab = [0, 1, 2].map((d) => b[d] - a[d]), ap = [0, 1, 2].map((d) => p[d] - a[d]);
+    const k = Math.max(0, Math.min(1, (ap[0] * ab[0] + ap[1] * ab[1] + ap[2] * ab[2]) / (ab[0] ** 2 + ab[1] ** 2 + ab[2] ** 2 || 1)));
+    return Math.hypot(ap[0] - ab[0] * k, ap[1] - ab[1] * k, ap[2] - ab[2] * k);
+  };
+  const tipOf = (c: Crystal): Vec3 => c.at.map((v, d) => v + c.dir[d] * c.len) as Vec3;
+  let worst = { gap: 9, at: 0, what: '' };
+  for (let i = 1; i < 95; i++) {
+    const t = i / 100, { pts, r } = mimicPose(t);
+    const plucked = t >= MIMIC_GRAB - 0.03 && t < 0.95;
+    for (let s = 1; s < pts.length; s++) {
+      const p = pts[s], probe = (gap: number, what: string) => { if (gap < worst.gap) worst = { gap, at: t, what }; };
+      if (Math.hypot(p[0] - MOUTH[0], p[2] - MOUTH[2]) > 0.42) probe(p[1] - r[s], `ground (point ${s})`); // (in the burrow it may go down)
+      MIMIC.rocks.forEach((k, j) => probe(Math.hypot(p[0] - k.at[0], p[1] - k.at[1], p[2] - k.at[2]) - k.size * 1.1 - r[s], `rock ${j} (point ${s})`));
+      MIMIC.crystals.forEach((c, j) => probe(near(p, c.at, tipOf(c)) - c.len * 0.22 - r[s], `crystal ${j} (point ${s})`));
+      if (!plucked && s < pts.length - 7) probe(near(p, MIMIC.plucked.at, tipOf(MIMIC.plucked)) - MIMIC.plucked.len * 0.22 - r[s], `plucked crystal (point ${s})`);
+    }
+  }
+  return worst;
+}
 
+const PLUCK_SKIN: Mat = { color: '#3a4440', tex: 'skin', rough: 0.45 }, PLUCK_BAND: Mat = { color: '#5fd0d6', tex: 'skin', rough: 0.35, metal: 0.2 };
 /** 12. Mimic mine: a crystal mine (the biome's, half again as big) with a burrow at its middle where the big rock
- *  should be, a few strands of silk between its rocks and a lump of its side's colour at one's foot. */
+ *  should be, its crystals leaning out, a few strands of silk between its rocks and a lump of its side's colour at
+ *  one's foot. */
 const mimicMine: TunnelModel = (b, t) => {
-  let seed = (3 * 2654435761) >>> 0;
-  const r = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296); // (the mine's own scatter)
-  const rocks: Vec3[] = [];
-  b.joint([0, 0, 0], [0, 0, 0], (m) => {
-    for (let i = 0; i < 7; i++) {
-      const a = (i / 7) * Math.PI * 2 + r(), rr = 0.4 + r() * 0.35, sz = 0.3 + r() * 0.25;
-      m.rock([sz, sz, sz], [Math.cos(a) * rr, sz * 0.5, Math.sin(a) * rr], { color: i % 2 ? '#77736c' : '#8b867c', tex: 'stone' }, i + 1);
-      rocks.push([Math.cos(a) * rr * 1.5, sz * 1.2, Math.sin(a) * rr * 1.5]);
-    }
-    for (let i = 0; i < 7; i++) { // its crystals, round the burrow rather than over it
-      const a = (i / 7) * Math.PI * 2 + 0.5 + r() * 0.4, rr = 0.32 + r() * 0.15, len = (0.45 + r() * 0.6) * 1.15;
-      if (Math.abs(Math.atan2(Math.sin(a), Math.cos(a)) - 0.2) < 0.45) continue; // (the one it plucks is there)
-      m.crystal(len, [Math.cos(a) * rr, 0.35, Math.sin(a) * rr], [Math.sin(a) * 0.5, 0, Math.cos(a) * 0.5]);
-    }
-  }, 1.5);
-  b.cylinder(0.38, 0.32, 0.06, [0, MOUTH[1], 0], PIT, undefined, 14); // the burrow
-  b.sphere([0.5, 0.18, 0.5], [0, 0.18, 0], { color: '#6f6a62', tex: 'stone', rough: 0.95 }); // its rim, worn
-  for (const [i, j] of [[0, 2], [3, 5], [1, 4]]) { const p = rocks[i], q = rocks[j]; b.limb(p, [(p[0] + q[0]) / 2, Math.min(p[1], q[1]) * 0.6, (p[2] + q[2]) / 2], 0.006, { color: '#ece6d6', tex: 'none', rough: 0.85 }); }
-  b.sphere([0.12, 0.07, 0.12], [rocks[4][0] * 1.05, 0.06, rocks[4][2] * 1.05], TEAM);
-  const plucked = t !== undefined && t >= 0.38 && t < 0.95;
-  if (!plucked) b.crystal(0.75, MIMIC_GRAB, [0.4, 0, -0.5]);
+  const { rocks, crystals, plucked } = MIMIC;
+  rocks.forEach((k, i) => b.rock([k.size, k.size, k.size], k.at, { color: i % 2 ? '#77736c' : '#8b867c', tex: 'stone' }, i + 1));
+  for (const c of crystals) b.crystal(c.len, c.at, c.rot);
+  b.cylinder(0.42, 0.36, 0.06, [0, MOUTH[1], 0], PIT, undefined, 14); // the burrow
+  b.sphere([0.55, 0.2, 0.55], [0, 0.18, 0], { color: '#6f6a62', tex: 'stone', rough: 0.95 }); // its rim, worn
+  const top = (i: number): Vec3 => [rocks[i].at[0], rocks[i].size * 1.1, rocks[i].at[2]];
+  for (const [i, j] of [[0, 2], [3, 5], [1, 4]]) { const p = top(i), q = top(j); b.limb(p, [(p[0] + q[0]) / 2, Math.min(p[1], q[1]) * 0.6, (p[2] + q[2]) / 2], 0.006, { color: '#ece6d6', tex: 'none', rough: 0.85 }); }
+  b.sphere([0.14, 0.08, 0.14], [rocks[4].at[0] * 0.6, 0.06, rocks[4].at[2] * 0.6], TEAM);
+  const held = t !== undefined && t >= MIMIC_GRAB + 0.02 && t < MIMIC_LET_GO, gone = t !== undefined && t >= MIMIC_GRAB + 0.02 && t < 0.95;
+  if (!gone) b.crystal(plucked.len, plucked.at, plucked.rot);
   // the tentacle
   const { pts, r: rad, hold } = mimicPose(t);
-  const skin: Mat = { color: '#3a4440', tex: 'skin', rough: 0.45 }, band: Mat = { color: '#5fd0d6', tex: 'skin', rough: 0.35, metal: 0.2 };
   for (let i = 0; i < pts.length - 1; i++) {
-    b.limb(pts[i], pts[i + 1], rad[i], i % 3 === 1 && i < 10 ? band : skin, rad[i + 1]);
-    if (i > 1 && i < 10 && i % 2 === 0) for (const z of [1, -1]) b.sphere(rad[i] * 0.3, [(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2, pts[i][2] + z * rad[i] * 0.8], PALE);
+    b.limb(pts[i], pts[i + 1], rad[i], i % 3 === 1 && i < 12 ? PLUCK_BAND : PLUCK_SKIN, rad[i + 1]);
+    if (i > 1 && i < 12 && i % 2 === 0) for (const z of [1, -1]) b.sphere(rad[i] * 0.3, [(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2, pts[i][2] + z * rad[i] * 0.8], PALE);
   }
-  if (t !== undefined && t >= 0.38 && t < MIMIC_LET_GO) b.crystal(0.3, hold, [0, 0, 0.8]);
-  if (t !== undefined && t >= MIMIC_LET_GO && t < 0.86) {
-    const f = (t - MIMIC_LET_GO) / 0.3, o = mimicPose(MIMIC_LET_GO).hold;
-    b.crystal(0.3, [o[0] + f * 3.4, o[1] + f * 1.2 - f * f * 3.0, o[2]], [0, 0, f * 5]);
+  // the crystal in its grip: held as it stood, gripped two thirds up
+  const gripped = (at: Vec3): Vec3 => at.map((v, d) => v - plucked.dir[d] * plucked.len * 0.65) as Vec3;
+  if (held) b.crystal(plucked.len, gripped(hold), plucked.rot);
+  if (t !== undefined && t >= MIMIC_LET_GO && t < 0.88) {
+    const f = (t - MIMIC_LET_GO) / 0.32, o = mimicPose(MIMIC_LET_GO).hold;
+    b.crystal(plucked.len, [o[0] + f * 4, o[1] + f * 1.4 - f * f * 3.8, o[2]], [0, 0, -1.2 - f * 5]);
   }
 };
 

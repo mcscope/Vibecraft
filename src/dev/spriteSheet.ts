@@ -7,7 +7,7 @@ import type { ArtAnim, UnitArt } from '../art/contract';
 
 export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
   if (params.get('faction')) return roster(params);
-  if (params.get('tunnels')) return tunnels(params.get('tunnels')!, Number(params.get('frames') ?? 20));
+  if (params.get('tunnels')) return tunnels(params.get('tunnels')!, Number(params.get('frames') ?? 40));
   if (params.get('concepts')) return gallery(params.get('concepts')!);
   if (params.get('building') || params.get('bconcept')) return building(params);
   const id = params.get('unit') ?? 'lynx', anim = (params.get('anim') ?? 'attack') as ArtAnim, scale = +(params.get('scale') ?? 2);
@@ -244,7 +244,7 @@ async function gallery(which: string): Promise<void> {
 
 /** ?mode=sprites&tunnels=all: the eight tunnel towers (wildwelds/tunnels.ts), each playing its full attack over and
  *  over (a pause at rest between throws), its frames laid out in a strip under it. &tunnels=3: just the third;
- *  &frames=N: N frames to a throw (20). */
+ *  &frames=N: N frames to a throw (40); &secs=S: S seconds to a throw (3). */
 async function tunnels(which: string, FRAMES: number): Promise<void> {
   const { TUNNELS } = await import('../factions/wildwelds/tunnels');
   const { Baker } = await import('../kits/bake3d/baker');
@@ -257,8 +257,9 @@ async function tunnels(which: string, FRAMES: number): Promise<void> {
     g.drawImage(sp.img, sp.sx, sp.sy, sp.sw, sp.sh, x - sp.ax * k, y - sp.ay * k, sp.sw * k, sp.sh * k);
   };
   let start = performance.now();
-  const tick = (now: number) => { // one throw every 2 s: 1.4 s of it, then 0.6 s at rest
-    const c = ((now - start) / 2000) % 1, f = c < 0.7 ? Math.floor((c / 0.7) * FRAMES) : -1;
+  const secs = Number(new URLSearchParams(location.search).get('secs') ?? 3), cycle = secs + 0.8;
+  const tick = (now: number) => { // one throw of `secs` (&secs=, 3), then 0.8 s at rest
+    const c = ((now - start) / (cycle * 1000)) % 1, f = c < secs / cycle ? Math.floor((c / (secs / cycle)) * FRAMES) : -1;
     for (const pl of players) { pl.g.clearRect(0, 0, W, H); draw(pl.g, f < 0 ? pl.rest : pl.frames[f], W * 0.42, H - 40, scale); }
     requestAnimationFrame(tick);
   };
