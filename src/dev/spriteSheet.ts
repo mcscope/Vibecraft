@@ -7,6 +7,7 @@ import type { ArtAnim, UnitArt } from '../art/contract';
 
 export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
   if (params.get('faction')) return roster(params);
+  if (params.get('tunnels')) return tunnels(params.get('tunnels')!, Number(params.get('frames') ?? 20));
   if (params.get('concepts')) return gallery(params.get('concepts')!);
   if (params.get('building') || params.get('bconcept')) return building(params);
   const id = params.get('unit') ?? 'lynx', anim = (params.get('anim') ?? 'attack') as ArtAnim, scale = +(params.get('scale') ?? 2);
@@ -185,7 +186,8 @@ async function gallery(which: string): Promise<void> {
   const box = scroller();
   box.style.cssText += ';display:flex;flex-wrap:wrap;gap:18px;padding:16px;align-content:flex-start;color:#f3e7c4;font:600 14px Georgia, serif';
   const baker = new Baker(), team = TEAM_COLORS[0];
-  const tangles = Object.keys(WEB_CONCEPTS).filter((n) => /^wallT\d$/.test(n));
+  const mix = new URLSearchParams(location.search).get('mix')?.split(',') ?? null; // (&mix=2,3,5: just those, in turn)
+  const tangles = Object.keys(WEB_CONCEPTS).filter((n) => /^wallT\d$/.test(n) && (!mix || mix.includes(n.slice(5))));
   if (which === 'tangle') { // a long L of them mixed: each piece the next of the five
     const scale = 1.1, tiles: Array<[number, number]> = [];
     for (let i = 0; i < 10; i++) tiles.push([i, 0]);
@@ -235,6 +237,54 @@ async function gallery(which: string): Promise<void> {
     cell.append(c, label);
     box.appendChild(cell);
     await new Promise((r) => setTimeout(r, 0)); // (show them as they bake)
+  }
+  baker.dispose();
+  document.title = 'sprites ready';
+}
+
+/** ?mode=sprites&tunnels=all: the eight tunnel towers (wildwelds/tunnels.ts), each playing its full attack over and
+ *  over (a pause at rest between throws), its frames laid out in a strip under it. &tunnels=3: just the third;
+ *  &frames=N: N frames to a throw (20). */
+async function tunnels(which: string, FRAMES: number): Promise<void> {
+  const { TUNNELS } = await import('../factions/wildwelds/tunnels');
+  const { Baker } = await import('../kits/bake3d/baker');
+  const box = scroller();
+  box.style.cssText += ';display:flex;flex-wrap:wrap;gap:18px;padding:16px;align-content:flex-start;color:#f3e7c4;font:600 14px Georgia, serif';
+  const baker = new Baker(), team = TEAM_COLORS[0], scale = 1.0, stripScale = 0.45, W = 420, H = 380, reach = 5.5;
+  const players: Array<{ g: CanvasRenderingContext2D; frames: import('../art/contract').Sprite[]; rest: import('../art/contract').Sprite }> = [];
+  const draw = (g: CanvasRenderingContext2D, sp: import('../art/contract').Sprite, x: number, y: number, sc: number) => {
+    const k = sc / sp.q;
+    g.drawImage(sp.img, sp.sx, sp.sy, sp.sw, sp.sh, x - sp.ax * k, y - sp.ay * k, sp.sw * k, sp.sh * k);
+  };
+  let start = performance.now();
+  const tick = (now: number) => { // one throw every 2 s: 1.4 s of it, then 0.6 s at rest
+    const c = ((now - start) / 2000) % 1, f = c < 0.7 ? Math.floor((c / 0.7) * FRAMES) : -1;
+    for (const pl of players) { pl.g.clearRect(0, 0, W, H); draw(pl.g, f < 0 ? pl.rest : pl.frames[f], W * 0.42, H - 40, scale); }
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+  for (const [name, model] of TUNNELS) {
+    if (which !== 'all' && !name.startsWith(`${which} `)) continue;
+    const cell = document.createElement('div');
+    cell.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:6px;background:rgba(0,0,0,0.12);padding:8px;border-radius:6px';
+    const label = document.createElement('div');
+    label.textContent = `${name} (baking…)`;
+    const c = document.createElement('canvas'), g = c.getContext('2d')!;
+    c.width = W; c.height = H;
+    const strip = document.createElement('canvas'), sg = strip.getContext('2d')!, cw = 110;
+    strip.width = cw * 10; strip.height = 2 * 120;
+    cell.append(label, c, strip);
+    box.appendChild(cell);
+    await new Promise((r) => setTimeout(r, 0));
+    const rest = baker.bakeStatic((b) => model(b), team, true, {}, reach), frames = [];
+    for (let i = 0; i < FRAMES; i++) {
+      frames.push(baker.bakeStatic((b) => model(b, i / FRAMES), team, true, {}, reach));
+      draw(sg, frames[i], (i % 10) * cw + cw * 0.4, Math.floor(i / 10) * 120 + 108, stripScale);
+      if (i % 4 === 3) await new Promise((r) => setTimeout(r, 0)); // (let the page breathe)
+    }
+    label.textContent = name;
+    players.push({ g, frames, rest });
+    start = performance.now() - ((performance.now() - start) % 2000);
   }
   baker.dispose();
   document.title = 'sprites ready';
