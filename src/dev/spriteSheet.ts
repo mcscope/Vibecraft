@@ -7,7 +7,7 @@ import type { ArtAnim, UnitArt } from '../art/contract';
 
 export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
   if (params.get('faction')) return roster(params);
-  if (params.get('concepts')) return gallery();
+  if (params.get('concepts')) return gallery(params.get('concepts')!);
   if (params.get('building') || params.get('bconcept')) return building(params);
   const id = params.get('unit') ?? 'lynx', anim = (params.get('anim') ?? 'attack') as ArtAnim, scale = +(params.get('scale') ?? 2);
   // (&from=wildwelds: which faction's, when two share an id)
@@ -177,14 +177,40 @@ function scroller(): HTMLElement {
 }
 
 /** ?mode=sprites&concepts=all: every design concept (wildwelds/concepts.ts), labelled, in one scrolling gallery: walls
- *  laid in an L, each piece joined to its neighbours; towers on their own. */
-async function gallery(): Promise<void> {
+ *  laid in an L, each piece joined to its neighbours; towers on their own. &concepts=tangle: just the tangle webs
+ *  (walls T1–T5), first a long line of them mixed, each piece the next of the five in turn. */
+async function gallery(which: string): Promise<void> {
   const { WEB_CONCEPTS } = await import('../factions/wildwelds/concepts');
   const { Baker } = await import('../kits/bake3d/baker');
   const box = scroller();
   box.style.cssText += ';display:flex;flex-wrap:wrap;gap:18px;padding:16px;align-content:flex-start;color:#f3e7c4;font:600 14px Georgia, serif';
   const baker = new Baker(), team = TEAM_COLORS[0];
+  const tangles = Object.keys(WEB_CONCEPTS).filter((n) => /^wallT\d$/.test(n));
+  if (which === 'tangle') { // a long L of them mixed: each piece the next of the five
+    const scale = 1.1, tiles: Array<[number, number]> = [];
+    for (let i = 0; i < 10; i++) tiles.push([i, 0]);
+    for (let i = 1; i < 10; i++) tiles.push([0, i]);
+    const has = (x: number, y: number) => tiles.some(([a, b]) => a === x && b === y), iso = (x: number, y: number) => [(x - y) * 32 * scale, (x + y) * 16 * scale];
+    const c = document.createElement('canvas'), g = c.getContext('2d')!;
+    c.width = 10 * 64 * scale + 60; c.height = 10 * 32 * scale + 160;
+    const ox = c.width / 2, oy = 120, baked = new Map<string, import('../art/contract').Sprite>();
+    tiles.forEach(([tx, ty], i) => {
+      const name = tangles[i % tangles.length], m = (has(tx + 1, ty) ? 1 : 0) | (has(tx - 1, ty) ? 2 : 0) | (has(tx, ty + 1) ? 4 : 0) | (has(tx, ty - 1) ? 8 : 0), key = `${name}/${m}`;
+      if (!baked.has(key)) baked.set(key, baker.bakeStatic((b) => WEB_CONCEPTS[name].model(b, { phase: 'complete', level: 0, joins: m }), team, true, {}, Math.SQRT2 + 1.1));
+    });
+    for (const i of tiles.map((_, k) => k).sort((p, q) => tiles[p][0] + tiles[p][1] - (tiles[q][0] + tiles[q][1]))) {
+      const [tx, ty] = tiles[i], m = (has(tx + 1, ty) ? 1 : 0) | (has(tx - 1, ty) ? 2 : 0) | (has(tx, ty + 1) ? 4 : 0) | (has(tx, ty - 1) ? 8 : 0);
+      const sp = baked.get(`${tangles[i % tangles.length]}/${m}`)!, k = scale / sp.q, [x, y] = iso(tx + 0.5, ty + 0.5);
+      g.drawImage(sp.img, sp.sx, sp.sy, sp.sw, sp.sh, ox + x - sp.ax * k, oy + y - sp.ay * k, sp.sw * k, sp.sh * k);
+    }
+    const cell = document.createElement('div'), label = document.createElement('div');
+    cell.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;background:rgba(0,0,0,0.12);padding:8px;border-radius:6px';
+    label.textContent = `mixed: ${tangles.join(', ')} in turn`;
+    cell.append(c, label);
+    box.appendChild(cell);
+  }
   for (const [name, spec] of Object.entries(WEB_CONCEPTS)) {
+    if (which === 'tangle' && !tangles.includes(name)) continue;
     const cell = document.createElement('div');
     cell.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;background:rgba(0,0,0,0.12);padding:8px;border-radius:6px';
     const c = document.createElement('canvas'), g = c.getContext('2d')!;

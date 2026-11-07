@@ -428,8 +428,7 @@ function tangle(b: ModelBuilder, state: BuildingState | undefined, width: number
     return onX ? [t, 0.04 + h ** 1.6 * height, side * w] : [side * w, 0.04 + h ** 1.6 * height, t];
   };
   for (let i = 0; i < n; i++) thread(b, pt(i), pt(i + 211), 0.03 + 0.04 * jit(i, 9), 0.007 + 0.002 * ((jit(i, 11) + 1) / 2));
-  for (let i = 0; i < Math.round(n / 7); i++) { const p = pt(i * 13 + 5); tieDown(b, p[0], p[2]); thread(b, [p[0], 0.02, p[2]], pt(i * 13 + 6), 0.01, 0.008); }
-  for (let i = 0; i < Math.round(n / 12); i++) b.sphere(0.016, pt(i * 17 + 2), DEW);
+  for (let i = 0; i < Math.round(n / 7); i++) { const p = pt(i * 13 + 5); thread(b, [p[0], 0.02, p[2]], pt(i * 13 + 6), 0.01, 0.008); } // (threads down to the ground: web only, no wads, no dew)
 }
 /** Wall T1, wisp: a thin tangle, narrow and low. */
 const wallT1 = (b: ModelBuilder, s?: BuildingState) => tangle(b, s, 0.22, 0.9, 55);
