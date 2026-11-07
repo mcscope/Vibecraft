@@ -264,7 +264,7 @@ async function tunnels(which: string, FRAMES: number): Promise<void> {
   };
   requestAnimationFrame(tick);
   for (const [name, model] of TUNNELS) {
-    if (which !== 'all' && !name.startsWith(`${which} `)) continue;
+    if (which !== 'all' && !which.split(',').some((w) => name.startsWith(`${w} `))) continue;
     const cell = document.createElement('div');
     cell.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:6px;background:rgba(0,0,0,0.12);padding:8px;border-radius:6px';
     const label = document.createElement('div');

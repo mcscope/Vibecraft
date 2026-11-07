@@ -222,7 +222,98 @@ const scorpionTail: TunnelModel = (b, t) => {
   if (t !== undefined && t > 0.45 && t < 0.8) { const f = (t - 0.45) / 0.35; b.crystal(0.18, [p[0] + 0.3 + f * 3.2, p[1] + f * 1.2 - f * f * 3.2, 0], [0, 0, f * 5]); }
 };
 
+// ── Crosses of 1 and 5 (2026-11-07, the user: "cross the coiled whip and the tentacle pit"): the coiled whip's throw
+//    on the tentacle pit's flesh. These three share their parts.
+
+type Tentacle = { skin: Mat; band: Mat; thick: number; suckers?: Mat; sling?: Mat };
+const smooth = (x: number) => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c); };
+/** The coiled whip's throw: `wind` 0 coiled in the hole … 1 reared up and back; `lash` 0 … 1 over the top. */
+const whipThrow = (t?: number) => ({
+  wind: t === undefined ? 0.15 : t < 0.35 ? smooth(t / 0.35) : t < 0.5 ? 1 : 1 - smooth((t - 0.5) / 0.45),
+  lash: t === undefined ? 0 : t < 0.35 ? 0 : t < 0.5 ? smooth((t - 0.35) / 0.15) : 1 - smooth((t - 0.5) / 0.5),
+});
+
+/** A tentacle from `base` that throws like the coiled whip: lying coiled in the hole, it uncoils up and back, lashes
+ *  over the top (the crystal let go at 0.45) and coils back down, rippling all the while. The crystal is held curled
+ *  in its tip, or in a sling hanging from it. */
+function coilingTentacle(b: ModelBuilder, t: number | undefined, base: Vec3, s: Tentacle): void {
+  const { wind, lash } = whipThrow(t), w = t ?? 0, n = 14;
+  let p = base, a = Math.PI / 2;
+  for (let i = 0; i < n; i++) {
+    const k = i / n;
+    a += -0.65 * (1 - wind) + (wind - lash * 1.6) * 0.16 * (1 + k * 1.5) - 0.02 + Math.sin(k * 5 + w * 7) * 0.05 * (1 - lash);
+    const len = 0.22 + 0.2 * wind;
+    const q: Vec3 = [p[0] + Math.cos(a) * len, p[1] + Math.sin(a) * len, base[2] + Math.sin(k * 4 + w * 6) * 0.08 * (1 - wind)];
+    const r0 = s.thick * (1 - k * 0.85), r1 = s.thick * (1 - (k + 1 / n) * 0.85);
+    b.limb(p, q, r0, i % 4 === 2 ? s.band : s.skin, r1);
+    if (s.suckers && i > 1 && i % 2 === 0) for (const z of [1, -1]) b.sphere(r0 * 0.32, [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2, (p[2] + q[2]) / 2 + z * r0 * 0.8], s.suckers);
+    p = q;
+  }
+  const loaded = t === undefined || t < 0.45 || t > 0.85;
+  if (s.sling) {
+    const pouch: Vec3 = [p[0] + 0.05, p[1] - 0.35 + lash * 0.25, p[2]];
+    b.limb(p, pouch, 0.012, s.sling); b.sphere([0.09, 0.06, 0.08], pouch, s.sling);
+    if (loaded) b.crystal(0.16, [pouch[0], pouch[1] + 0.04, pouch[2]], [0, 0, Math.PI / 2]);
+  } else { // its tip curled round the crystal
+    const c: Vec3 = [p[0] + Math.cos(a - 1.2) * 0.12, p[1] + Math.sin(a - 1.2) * 0.12, p[2]];
+    if (loaded) b.crystal(0.16, c, [0, 0, a]);
+    b.limb(p, [c[0] + Math.cos(a - 2.6) * 0.1, c[1] + Math.sin(a - 2.6) * 0.1, p[2]], s.thick * 0.15, s.skin, s.thick * 0.07);
+  }
+  if (t !== undefined && t > 0.45 && t < 0.8) { const f = (t - 0.45) / 0.35; b.crystal(0.18, [p[0] + f * 3.2, p[1] + f * 1.4 - f * f * 2.6, 0], [0, 0, -1.2 + f * 2]); }
+}
+/** A short tentacle beside it, swaying, and shrinking back from the lash. */
+function writhingTentacle(b: ModelBuilder, t: number | undefined, base: Vec3, phase: number, s: Tentacle, n = 8): void {
+  const w = t ?? 0, back = 0.3 * Math.sin(w * 6.3 + phase) + 0.6 * whipThrow(t).lash;
+  let p = base, a = Math.PI / 2;
+  for (let i = 0; i < n; i++) {
+    const k = i / n;
+    a += (back * 0.22 + Math.sin(w * 6.3 + phase + k * 4) * 0.08) * (0.5 + k);
+    const q: Vec3 = [p[0] + Math.cos(a) * 0.28, p[1] + Math.sin(a) * 0.28, base[2] + Math.sin(k * 3 + phase) * 0.1];
+    b.limb(p, q, s.thick * (1 - k * 0.85), i % 4 === 2 ? s.band : s.skin, s.thick * (1 - (k + 1 / n) * 0.85));
+    p = q;
+  }
+}
+
+const FLESH: Tentacle = { skin: { color: '#3e4a46', tex: 'skin', rough: 0.45 }, band: { color: '#5fd0d6', tex: 'skin', rough: 0.35, metal: 0.2 }, thick: 0.13 };
+const PALE: Mat = { color: '#9fb3a8', tex: 'skin', rough: 0.4 };
+const LIP: Mat = { color: '#5a6b62', tex: 'skin', rough: 0.55 }, MAW: Mat = { color: '#160c0c', tex: 'none', rough: 1 };
+const STONE: Mat = { color: '#7d7468', tex: 'stone', rough: 0.95 }, PIT: Mat = { color: '#0d0a08', tex: 'none', rough: 1 };
+const CORD: Mat = { color: '#6b5844', tex: 'leather', rough: 0.85 }, TEAM: Mat = { team: 'primary', tex: 'none', rough: 0.6 };
+/** The tentacle pit's soft lip round its maw, lumps of the side's colour in it. */
+function softPit(b: ModelBuilder): void {
+  b.sphere([1.5, 0.3, 1.4], [0, 0.05, 0], LIP);
+  for (let i = 0; i < 10; i++) { const a = (i / 10) * Math.PI * 2; b.sphere([0.32, 0.16, 0.26], [Math.cos(a) * 0.95, 0.28, Math.sin(a) * 0.95], i % 3 ? LIP : TEAM, [0, -a, 0]); }
+  b.cylinder(0.78, 0.72, 0.05, [0, 0.3, 0], MAW, undefined, 16);
+}
+
+/** 9. Coiling tentacle: the tentacle pit, its middle tentacle thrown like the coiled whip (coiled in the pit, uncoiling
+ *  up and back, lashing over), the crystal curled in its suckered tip; the two beside it writhe and shrink back. */
+const coilingPit: TunnelModel = (b, t) => {
+  softPit(b);
+  writhingTentacle(b, t, [0.15, 0.25, 0.5], 1, FLESH); writhingTentacle(b, t, [0.15, 0.25, -0.5], 2.5, FLESH);
+  coilingTentacle(b, t, [-0.1, 0.25, 0], { ...FLESH, thick: 0.2, suckers: PALE });
+};
+
+/** 10. Stone ring tentacles: the coiled whip's ring of stones and dark hole; its whip a fleshy tentacle with the sling
+ *  at its tip, two short tentacles writhing at the hole's edge. */
+const stoneRingTentacles: TunnelModel = (b, t) => {
+  for (let i = 0; i < 14; i++) { const a = (i / 14) * Math.PI * 2; b.rock([0.5, 0.42 + 0.1 * Math.sin(i * 3.1), 0.4], [Math.cos(a) * 1.2, 0.18, Math.sin(a) * 1.2], STONE, i); }
+  b.cylinder(0.92, 0.85, 0.06, [0, 0.22, 0], PIT, undefined, 18);
+  for (let i = 0; i < 4; i++) { const a = (i / 4) * Math.PI * 2 + 0.4; b.sphere(0.13, [Math.cos(a) * 1.25, 0.5, Math.sin(a) * 1.25], TEAM); }
+  writhingTentacle(b, t, [0.45, 0.2, 0.55], 0.5, FLESH, 6); writhingTentacle(b, t, [0.3, 0.2, -0.6], 2, FLESH, 6);
+  coilingTentacle(b, t, [-0.1, 0.15, 0], { ...FLESH, thick: 0.18, sling: CORD });
+};
+
+/** 11. Lone coil: one great suckered tentacle in a soft pit set in stones, coiling and lashing like the whip, a sling
+ *  at its tip; the coiled whip's dark hide, the tentacle's bands. */
+const loneCoil: TunnelModel = (b, t) => {
+  for (let i = 0; i < 9; i++) { const a = (i / 9) * Math.PI * 2 + 0.2; b.rock([0.4, 0.3, 0.32], [Math.cos(a) * 1.45, 0.08, Math.sin(a) * 1.45], STONE, i + 20); }
+  softPit(b);
+  coilingTentacle(b, t, [-0.1, 0.25, 0], { skin: { color: '#20302f', tex: 'leather', rough: 0.35, metal: 0.3 }, band: FLESH.band, thick: 0.25, suckers: PALE, sling: CORD });
+};
+
 export const TUNNELS: Array<[string, TunnelModel]> = [
   ['1 coiled whip', coiledWhip], ['2 trapdoor', trapdoor], ['3 periscope', periscope], ['4 pincer pair', pincerPair],
   ['5 tentacle pit', tentaclePit], ['6 trebuchet beam', trebuchetBeam], ['7 mandible maw', mandibleMaw], ['8 scorpion tail', scorpionTail],
+  ['9 coiling tentacle', coilingPit], ['10 stone ring tentacles', stoneRingTentacles], ['11 lone coil', loneCoil],
 ];
