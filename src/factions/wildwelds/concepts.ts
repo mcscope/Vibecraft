@@ -240,9 +240,180 @@ function towerF(b: ModelBuilder): void {
   for (const y of [2.2, 2.9, 3.4]) thread(b, [-0.1, y, 0.38], [0.1, y + 0.1, -0.38], 0.05, 0.012);
 }
 
+// ── round 3 (2026-11-06): walls that are just web, no structure; towers a slinger that doesn't move: rooted, one or two
+//    arms (the user)
+
+const SL_CHITIN: Mat = { color: '#1a2628', tex: 'leather', rough: 0.3, metal: 0.35 };
+const SL_TEAL: Mat = { color: '#3ab0bc', tex: 'leather', rough: 0.3, metal: 0.4 };
+const CORD: Mat = { color: '#6a5640', tex: 'leather', rough: 0.8 };
+
+/** Silk tufts where web is tied down to the ground: a wad, a few strands splayed. */
+function tieDown(c: ModelBuilder, x: number, z: number): void {
+  c.sphere([0.07, 0.03, 0.07], [x, 0.015, z], SILK);
+}
+
+/** Wall G, orb web: a great orb web stood up along the line, radials and a spiral, its rim tied out to the tile's edge toward each neighbour (where theirs meets it) and down to the ground with guy-lines; dew on it. Nothing but web. */
+function wallG(b: ModelBuilder, state?: BuildingState): void {
+  const j = joinsOf(state);
+  const dirs = SIDES.filter(([bit]) => j & bit);
+  const planes: Array<[number, number]> = dirs.length ? [...new Set(dirs.map(([, dx]) => (dx ? 'x' : 'z')))].map((a) => (a === 'x' ? [1, 0] : [0, 1])) : [[1, 0]];
+  for (const [px, pz] of planes) {
+    const cy = 0.95, R = 0.82, P = (r: number, a: number): Vec3 => [px * Math.cos(a) * r, cy + Math.sin(a) * r * 0.95, pz * Math.cos(a) * r];
+    const spokes = 14;
+    for (let i = 0; i < spokes; i++) thread(b, P(0.04, (i / spokes) * Math.PI * 2), P(R * (0.92 + 0.08 * jit(i)), (i / spokes) * Math.PI * 2), 0.01, 0.009);
+    for (let ring = 1; ring <= 7; ring++) {
+      const r = R * (ring / 7.5);
+      for (let i = 0; i < spokes; i++) {
+        const a0 = (i / spokes) * Math.PI * 2, a1 = ((i + 1) / spokes) * Math.PI * 2;
+        thread(b, P(r, a0), P(r * 1.02, a1), 0.005, 0.0075);
+      }
+    }
+    b.sphere(0.05, P(0, 0), SILK); // its hub
+    for (let i = 0; i < 6; i++) b.sphere(0.02, P(R * (0.3 + 0.1 * i), i * 1.1), DEW);
+    // the frame: out to each joined edge (the neighbour's web ties on there), and down to the ground
+    for (const s of [1, -1]) {
+      const bit = px ? (s > 0 ? 1 : 2) : (s > 0 ? 4 : 8), out = j & bit ? 1.0 : 0.95;
+      thread(b, P(R, s > 0 ? 0.35 : Math.PI - 0.35), [px * s * out, 1.55, pz * s * out], 0.03, 0.012);
+      thread(b, P(R, s > 0 ? -0.4 : Math.PI + 0.4), [px * s * out, 0.02, pz * s * out], 0.02, 0.012);
+      tieDown(b, px * s * 0.95, pz * s * 0.95);
+    }
+    thread(b, P(R, -Math.PI / 2), [0, 0.02, 0], 0.01, 0.012);
+    tieDown(b, 0, 0);
+  }
+}
+
+/** Wall H, tangle web: a dense cobweb, threads every which way through a long low mass of it, thickening into sheets low down, spilling on toward each neighbour; tied to the ground all along. Nothing but web. */
+function wallH(b: ModelBuilder, state?: BuildingState): void {
+  const j = joinsOf(state);
+  const reach = (bit: number) => (j & bit ? 1.0 : 0.45);
+  const xp = reach(1), xn = reach(2), zp = reach(4), zn = reach(8);
+  const pt = (i: number): Vec3 => {
+    const u = (jit(i, 1) + 1) / 2, v = (jit(i, 2) + 1) / 2, h = (jit(i, 3) + 1) / 2;
+    const alongX = (j & 3) || !(j & 12);
+    const a = alongX ? -xn + u * (xn + xp) : (jit(i, 5) * 0.35), c = alongX ? jit(i, 5) * 0.35 : -zn + v * (zn + zp);
+    return [a, 0.05 + h * h * 1.3, c];
+  };
+  for (let i = 0; i < 70; i++) thread(b, pt(i), pt(i + 101), 0.04 + 0.04 * jit(i, 9), 0.008);
+  for (let i = 0; i < 9; i++) { const p = pt(i * 7 + 3); b.sphere([0.22, 0.05 + 0.03 * jit(i), 0.22], [p[0], 0.12 + 0.25 * ((jit(i, 4) + 1) / 2), p[2]], SILK); } // its sheets
+  for (let i = 0; i < 10; i++) { const p = pt(i * 13 + 5); tieDown(b, p[0], p[2]); thread(b, [p[0], 0.02, p[2]], pt(i * 13 + 6), 0.01, 0.009); }
+  for (let i = 0; i < 6; i++) b.sphere(0.018, pt(i * 17 + 2), DEW);
+}
+
+/** Wall I, sheet web: a broad sheet of web slung low like a hammock, sagging, a tangle of threads above it holding it up, and tied down to the ground round its edges; running on into the neighbour's. Nothing but web. */
+function wallI(b: ModelBuilder, state?: BuildingState): void {
+  const j = joinsOf(state);
+  const ext = (bit: number) => (j & bit ? 1.0 : 0.6);
+  const x0 = -ext(2), x1 = ext(1), z0 = -ext(8), z1 = ext(4);
+  const y = (x: number, z: number) => 0.75 - 0.25 * (1 - ((2 * (x - x0)) / (x1 - x0) - 1) ** 2) * (1 - ((2 * (z - z0)) / (z1 - z0) - 1) ** 2);
+  const n = 8, X = (i: number) => x0 + ((x1 - x0) * i) / n, Z = (k: number) => z0 + ((z1 - z0) * k) / n;
+  for (let i = 0; i <= n; i++) for (let k = 0; k < n; k++) thread(b, [X(i), y(X(i), Z(k)), Z(k)], [X(i), y(X(i), Z(k + 1)), Z(k + 1)], 0.005, 0.008);
+  for (let k = 0; k <= n; k++) for (let i = 0; i < n; i++) thread(b, [X(i), y(X(i), Z(k)), Z(k)], [X(i + 1), y(X(i + 1), Z(k)), Z(k)], 0.005, 0.008);
+  for (let i = 0; i < 5; i++) b.sphere([0.25, 0.012, 0.25], [X(1 + i * 1.5) * 0.85, y(X(1 + i * 1.5) * 0.85, 0) + 0.01, jit(i) * 0.25], SILK); // where it's thick
+  for (let i = 0; i < 18; i++) { const a: Vec3 = [x0 + (x1 - x0) * ((jit(i, 1) + 1) / 2), 1.5 + 0.3 * jit(i, 2), z0 + (z1 - z0) * ((jit(i, 3) + 1) / 2)]; thread(b, a, [a[0] + 0.2 * jit(i, 4), y(a[0], a[2]), a[2] + 0.2 * jit(i, 5)], 0.02, 0.008); thread(b, a, [x0 + (x1 - x0) * ((jit(i, 6) + 1) / 2), 1.4 + 0.3 * jit(i, 7), z0 + (z1 - z0) * ((jit(i, 8) + 1) / 2)], 0.05, 0.008); } // the tangle above
+  for (const [x, z] of [[x0, z0], [x1, z0], [x0, z1], [x1, z1], [0, z0], [0, z1]] as const) { thread(b, [x, y(x, z), z], [x * 1.05, 0.02, z * 1.05], 0.02, 0.01); tieDown(b, x * 1.05, z * 1.05); }
+  for (let i = 0; i < 5; i++) b.sphere(0.02, [X(2 + i), y(X(2 + i), 0.1) + 0.02, 0.1 * jit(i)], DEW);
+}
+
+/** The slinger's long segmented throwing arm from `at`, rising at `pitch` (radians above level, toward −x… turned by `yaw`), curling over, its sling cord and pouch (crystal in it) at its end. */
+function slingArm(c: ModelBuilder, at: Vec3, yaw: number, pitch: number, curl: number, segs: number, seg: number, r0: number): void {
+  let p = at, a = pitch;
+  const dx = Math.cos(yaw), dz = Math.sin(yaw);
+  for (let i = 1; i <= segs; i++) {
+    a -= curl / segs;
+    const nx: Vec3 = [p[0] + dx * seg * Math.cos(a), p[1] + seg * Math.sin(a), p[2] + dz * seg * Math.cos(a)];
+    c.limb(p, nx, r0 * (1 - i * 0.07), i % 2 ? SL_CHITIN : SL_TEAL, r0 * (1 - (i + 1) * 0.07));
+    c.cone(0.03, 0.11, [nx[0], nx[1] + 0.07, nx[2]], SL_CHITIN, [0, -yaw, 0.6], 4);
+    p = nx;
+  }
+  const pouch: Vec3 = [p[0] + dx * 0.05, p[1] - 0.55, p[2] + dz * 0.05];
+  c.limb(p, pouch, 0.012, CORD, 0.01);
+  c.sphere([0.1, 0.07, 0.09], pouch, CORD);
+  c.crystal(0.18, [pouch[0], pouch[1] + 0.03, pouch[2]], [0, 0, Math.PI / 2]);
+}
+
+/** The slinger's heavy head (its counterweight), plated in teal, spined, a pouch of crystals on it, at `at` facing +x. */
+function slingHead(c: ModelBuilder, at: Vec3, s: number): void {
+  c.sphere([0.42 * s, 0.3 * s, 0.34 * s], at, SL_TEAL);
+  for (let i = 0; i < 3; i++) c.cone(0.05 * s, 0.16 * s, [at[0] - 0.1 * s + i * 0.12 * s, at[1] + 0.28 * s, at[2]], SL_CHITIN, [0, 0, 0.5], 4);
+  for (const [y, z] of [[0.08, 0.12], [0.08, -0.12], [0.14, 0]] as const) c.sphere(0.04 * s, [at[0] + 0.36 * s, at[1] + y * s, at[2] + z * s], SL_CHITIN); // eyes
+  c.sphere([0.12 * s, 0.08 * s, 0.1 * s], [at[0] - 0.05 * s, at[1] + 0.25 * s, at[2] + 0.18 * s], CORD); // its pouch of crystals
+  for (const dz of [0.14, 0.2]) c.crystal(0.1 * s, [at[0] - 0.05 * s, at[1] + 0.32 * s, at[2] + dz * s], [0.3, 0, 0.2]);
+}
+
+/** Silk roots spreading from `at` into the ground round it: it's grown there, it doesn't move. */
+function roots(c: ModelBuilder, at: Vec3, r: number, n: number): void {
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2 + 0.3 * jit(i), foot: Vec3 = [at[0] + Math.cos(a) * r, 0.02, at[2] + Math.sin(a) * r];
+    curve(c, [[at[0] + Math.cos(a) * r * 0.35, at[1] * 0.5, at[2] + Math.sin(a) * r * 0.35], [at[0] + Math.cos(a) * r * 0.75, 0.12, at[2] + Math.sin(a) * r * 0.75], foot], 0.09, 0.025, SILK_OLD);
+  }
+}
+const SILK_OLD: Mat = { color: '#d6ccb4', tex: 'leather', rough: 0.9 };
+const EARTH2: Mat = { color: '#6e5a40', tex: 'stone', rough: 0.95 };
+
+/** Tower G, rooted slinger: the slinger's body half sunk into a mound of earth and silk, grown into the ground, its heavy head low at the front, its long arm reared up behind and curling over, sling hanging. */
+function towerG(b: ModelBuilder): void {
+  b.sphere([1.6, 0.7, 1.5], [0, 0.15, 0], EARTH2); // the mound it's sunk in
+  roots(b, [0, 0.5, 0], 1.8, 9);
+  b.sphere([1.1, 0.55, 0.7], [0, 0.75, 0], SL_CHITIN); // its body, half buried
+  for (const x of [-0.6, -0.2, 0.2]) b.cylinder(0.62, 0.62, 0.06, [x, 0.85, 0], SL_TEAL, [0, 0, Math.PI / 2], 12);
+  slingHead(b, [1.0, 0.95, 0], 1.6);
+  slingArm(b, [-0.9, 1.0, 0], Math.PI, 1.25, 2.4, 8, 0.6, 0.2);
+  b.cylinder(0.72, 0.72, 0.1, [0.1, 0.95, 0], BAND, [0, 0, Math.PI / 2], 12);
+}
+
+/** Tower H, barnacle: a hard shell cone of overlapping teal and black plates, fixed to the ground like a barnacle, the slinger's head peering from its top and its arm rising out of the opening, curling over, sling hanging. */
+function towerH(b: ModelBuilder): void {
+  for (let ring = 0; ring < 4; ring++) for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2 + ring * 0.4, r = 1.4 - ring * 0.3, y = 0.35 + ring * 0.6;
+    b.sphere([0.55 - ring * 0.08, 0.5, 0.3], [Math.cos(a) * r, y, Math.sin(a) * r], (i + ring) % 2 ? SL_TEAL : SL_CHITIN, [0, -a, 0.35]);
+  }
+  b.cylinder(0.55, 0.55, 0.12, [0, 2.45, 0], SL_CHITIN, undefined, 12);
+  b.cylinder(0.9, 0.9, 0.12, [0, 1.3, 0], BAND, undefined, 14);
+  slingHead(b, [0.3, 2.55, 0], 1.0);
+  slingArm(b, [-0.2, 2.5, 0], Math.PI, 1.35, 2.6, 8, 0.48, 0.15);
+  roots(b, [0, 0.3, 0], 1.75, 7);
+}
+
+/** Tower I, stalked: the slinger's body borne up on a thick stalk of wrapped silk, rooted wide into the ground like a fungus, its head forward and its arm curling up and over from its tail, sling hanging. */
+function towerI(b: ModelBuilder): void {
+  roots(b, [0, 0.9, 0], 1.7, 8);
+  for (let i = 0; i < 6; i++) { const r = 0.5 - i * 0.04; b.cylinder(r - 0.02, r, 0.5, [0, 0.25 + i * 0.5, 0], i % 2 ? SILK : SILK_OLD, undefined, 12); }
+  b.cylinder(0.48, 0.48, 0.1, [0, 1.6, 0], BAND, undefined, 12);
+  b.sphere([1.0, 0.5, 0.6], [0, 3.35, 0], SL_CHITIN);
+  for (const x of [-0.5, 0, 0.4]) b.cylinder(0.52, 0.52, 0.06, [x, 3.42, 0], SL_TEAL, [0, 0, Math.PI / 2], 12);
+  slingHead(b, [0.95, 3.45, 0], 1.3);
+  slingArm(b, [-0.8, 3.5, 0], Math.PI, 1.0, 2.2, 7, 0.45, 0.14);
+}
+
+/** Tower J, two arms: a squat body sunk into the ground on spreading roots, two long throwing arms from its tail: one reared high and cocked, one swinging low with its sling loaded. */
+function towerJ(b: ModelBuilder): void {
+  b.sphere([1.5, 0.6, 1.4], [0, 0.1, 0], EARTH2);
+  roots(b, [0, 0.6, 0], 1.8, 9);
+  b.sphere([1.0, 0.65, 0.85], [0, 0.85, 0], SL_CHITIN);
+  for (const x of [-0.5, -0.1, 0.3]) b.cylinder(0.75, 0.75, 0.06, [x, 0.95, 0], SL_TEAL, [0, 0, Math.PI / 2], 12);
+  slingHead(b, [0.95, 1.05, 0], 1.5);
+  slingArm(b, [-0.8, 1.2, 0.3], Math.PI - 0.35, 1.4, 2.6, 8, 0.55, 0.17);
+  slingArm(b, [-0.8, 1.2, -0.3], Math.PI + 0.35, 0.7, 1.6, 7, 0.5, 0.15);
+  b.cylinder(0.85, 0.85, 0.1, [0.1, 1.05, 0], BAND, [0, 0, Math.PI / 2], 12);
+}
+
+/** Tower K, cocooned: a slinger wrapped in a cocoon from its waist down, the cocoon bound to the ground with silk, its upper body free, head up, arm reared up out of the wrapping and curling over, sling hanging. */
+function towerK(b: ModelBuilder): void {
+  roots(b, [0, 0.4, 0], 1.6, 10);
+  for (let i = 0; i < 7; i++) { const y = 0.2 + i * 0.32, r = 0.85 * Math.sin(((i + 1) / 8) * Math.PI) + 0.25; b.sphere([r, 0.22, r * 0.9], [0, y, 0], i % 2 ? SILK : SILK_OLD); } // the cocoon
+  for (let i = 0; i < 5; i++) thread(b, [Math.cos(i * 1.3) * 0.7, 1.2 + i * 0.15, Math.sin(i * 1.3) * 0.7], [Math.cos(i * 1.3 + 2) * 0.7, 0.6 + i * 0.2, Math.sin(i * 1.3 + 2) * 0.7], 0.05, 0.02); // its binding
+  b.sphere([0.75, 0.45, 0.55], [0.1, 2.55, 0], SL_CHITIN); // the free upper body
+  b.cylinder(0.5, 0.5, 0.06, [0.1, 2.6, 0], SL_TEAL, [0, 0, Math.PI / 2], 12);
+  slingHead(b, [0.75, 2.75, 0], 1.3);
+  slingArm(b, [-0.5, 2.7, 0], Math.PI, 1.3, 2.5, 8, 0.45, 0.14);
+  b.cylinder(0.7, 0.7, 0.1, [0, 1.5, 0], BAND, undefined, 14);
+}
+
 export const WEB_CONCEPTS: Record<string, { model: (b: ModelBuilder, state?: BuildingState) => void; size: number }> = {
   wallA: { model: wallA, size: 1 }, wallB: { model: wallB, size: 1 }, wallC: { model: wallC, size: 1 },
   towerA: { model: towerA, size: 2 }, towerB: { model: towerB, size: 2 }, towerC: { model: towerC, size: 2 },
   wallD: { model: wallD, size: 1 }, wallE: { model: wallE, size: 1 }, wallF: { model: wallF, size: 1 },
   towerD: { model: towerD, size: 2 }, towerE: { model: towerE, size: 2 }, towerF: { model: towerF, size: 2 },
+  wallG: { model: wallG, size: 1 }, wallH: { model: wallH, size: 1 }, wallI: { model: wallI, size: 1 },
+  towerG: { model: towerG, size: 2 }, towerH: { model: towerH, size: 2 }, towerI: { model: towerI, size: 2 }, towerJ: { model: towerJ, size: 2 }, towerK: { model: towerK, size: 2 },
 };
