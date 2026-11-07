@@ -478,8 +478,9 @@ export class Baker {
    * levels. Unless `custom`, construction is the model clipped at rising
    * heights inside generic scaffolding, and damage is soot, rubble and (badly
    * hurt) a sheared-off corner. With `custom`, the model draws every state.
+   * With `looks` (a wall), also its finished looks joined to every set of neighbours, for each of its looks.
    */
-  bakeBuilding(model: BuildingModel, size: number, team: TeamColors, custom = false): BuildingArt {
+  bakeBuilding(model: BuildingModel, size: number, team: TeamColors, custom = false, looks = 0): BuildingArt {
     const { h } = this.measure((b) => model(b), team, [{ anim: 'idle', phase: 0, team, armed: true, cargo: null }]);
     const reach = size * Math.SQRT2 + 1.1; // scaffolding + timber pile stick out past the footprint
     const scoped = (b: ModelBuilder, o: BuildOpts, fn: (m: ModelBuilder) => void) => (b as Builder).withOpts(o, fn);
@@ -499,7 +500,9 @@ export class Baker {
       scoped(b, level === 2 ? { grime: 0.42, clip: [collapse], clipKey: 'collapse' } : { grime: 0.22 }, (m) => model(m, state));
       rubble(b, size, level, h);
     }, team, true, {}, reach));
-    return { construction, complete, damaged };
+    if (!looks) return { construction, complete, damaged };
+    const joined = Array.from({ length: looks }, (_, look) => Array.from({ length: 16 }, (_, joins) => this.bakeStatic((b) => model(b, { phase: 'complete', level: 0, joins, look }), team, true, {}, reach)));
+    return { construction, complete, damaged, joined };
   }
 
   /** Bake every animation × facing for a unit. Yields between rows so the page stays responsive. */

@@ -75,7 +75,7 @@ export class ArtBank {
       add(f.flag);
       if (f.wantFlag) add(f.wantFlag);
       for (const u of Object.values(f.units)) for (const set of [u.anims, ...(u.segments ?? []).map((s) => s.anims)]) for (const a of Object.values(set)) a?.frames.flat().forEach(add);
-      for (const bd of Object.values(f.buildings)) [...bd.construction, bd.complete, ...bd.damaged].forEach(add);
+      for (const bd of Object.values(f.buildings)) [...bd.construction, bd.complete, ...bd.damaged, ...(bd.joined ?? []).flat()].forEach(add);
     }
     return [...out];
   }

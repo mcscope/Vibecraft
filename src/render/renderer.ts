@@ -445,6 +445,8 @@ export class Renderer {
 
   private syncBuildings(): void {
     this.wantPool.begin();
+    const walls = new Map<string, { specId: string; owner: number }>(); // (wall pieces by their corner tile, to join them)
+    for (const b of this.world.buildings.values()) if (b.spec.wall) walls.set(`${b.ox},${b.oy}`, b);
     for (const b of this.world.buildings.values()) {
       let sp = this.buildingSprites.get(b.id);
       if (!sp) {
@@ -459,7 +461,13 @@ export class Renderer {
       // the faction supplies the looks; we pick construction stage / damage level
       const art = this.bank.building(b.owner, b.specId);
       if (art) {
-        const look = buildingSprite(art, b.complete, b.built / b.stats.totalCost, b.hp, b.maxHp);
+        let look = buildingSprite(art, b.complete, b.built / b.stats.totalCost, b.hp, b.maxHp);
+        // a finished wall piece reaches out to the like pieces beside it; pieces in a line take its looks in turn
+        if (art.joined && look === art.complete) {
+          const n = b.size, like = (x: number, y: number) => { const o = walls.get(`${x},${y}`); return !!o && o.specId === b.specId && o.owner === b.owner; };
+          const joins = (like(b.ox + n, b.oy) ? 1 : 0) | (like(b.ox - n, b.oy) ? 2 : 0) | (like(b.ox, b.oy + n) ? 4 : 0) | (like(b.ox, b.oy - n) ? 8 : 0);
+          look = art.joined[(b.ox + b.oy) % art.joined.length][joins];
+        }
         this.setFrame(sp, look);
         // a living building (sim/abilities/living.ts) swells as it grows
         if (b.grown !== undefined && b.complete) sp.scale.set((0.6 + 0.4 * Math.min(1, b.grown / b.spec.materials)) / look.q);

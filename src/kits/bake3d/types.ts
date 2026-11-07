@@ -80,6 +80,8 @@ export interface BuildingState {
   level: number;
   /** A wall piece's neighbours it joins, as bits: 1 +x, 2 −x, 4 +z, 8 −z (its art reaches out to meet them). */
   joins?: number;
+  /** Which of a wall's looks (its art's `looks`: pieces in a line take them in turn). */
+  look?: number;
 }
 
 /** `state` is given when baking construction/damage looks; ignore it to let the kit add scaffolding and rubble. */

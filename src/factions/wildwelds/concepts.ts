@@ -2,6 +2,7 @@
 // insectile. Dev only: the sprites page bakes them (?mode=sprites&bconcept=wallA|…&size=1|2); nothing in the game uses
 // them. Models in metres, a tile about 2 m across, centred on the footprint.
 import type { BuildingState, Mat, ModelBuilder, Vec3 } from '../../kits/bake3d/types';
+import { jit, tangle } from './buildings';
 
 const PAPER: Mat = { color: '#b9ab8c', tex: 'leather', rough: 0.95 };
 const PAPER_DK: Mat = { color: '#8f8268', tex: 'leather', rough: 0.95 };
@@ -16,8 +17,6 @@ const HOLE: Mat = { color: '#1a120a', tex: 'none', rough: 1 };
 const BAND: Mat = { team: 'primary', tex: 'none', rough: 0.6 };
 const DEW: Mat = { color: '#cfe8ff', tex: 'none', rough: 0.05, metal: 0.2 };
 
-/** A steady wobble from a few numbers (the same every bake): −1 … 1. */
-const jit = (...n: number[]) => { let h = 2166136261; for (const x of n) h = Math.imul(h ^ Math.round(x * 997 + 13), 16777619); return ((h >>> 0) % 2001) / 1000 - 1; };
 
 /** A curved limb through `pts`, `r0` thick at its first point narrowing to `r1`. */
 function curve(c: ModelBuilder, pts: Vec3[], r0: number, r1: number, mat: Mat): void {
@@ -412,24 +411,6 @@ function towerK(b: ModelBuilder): void {
 // ── round 4 (2026-11-07): tangle webs of different widths, no orbs; a range of arms on one rooted body, and an arm
 //    coming up out of a tunnel (the user)
 
-/** A tangle of web along the joined sides: `width` m either side of the line, `height` m tall, `n` threads; `bulge` swells
- *  it in the middle of the piece and pinches it at the edges (where the neighbour's meets it at the edge's width). */
-function tangle(b: ModelBuilder, state: BuildingState | undefined, width: number, height: number, n: number, bulge = 0): void {
-  const j = joinsOf(state);
-  const reach = (bit: number) => (j & bit ? 1.0 : 0.4);
-  const xp = reach(1), xn = reach(2), zp = reach(4), zn = reach(8);
-  const alongX = !!(j & 3) || !(j & 12), alongZ = !!(j & 12);
-  const pt = (i: number): Vec3 => {
-    const u = (jit(i, 1) + 1) / 2, h = (jit(i, 3) + 1) / 2, side = jit(i, 5);
-    // which run of the web it's in (a corner piece: both)
-    const onX = alongX && (!alongZ || jit(i, 7) > 0);
-    const t = onX ? -xn + u * (xn + xp) : -zn + u * (zn + zp); // along it
-    const w = width * (1 + bulge * (1 - t * t)) * (0.6 + 0.4 * (1 - h)); // (wider low down, and through the middle if it bulges)
-    return onX ? [t, 0.04 + h ** 1.6 * height, side * w] : [side * w, 0.04 + h ** 1.6 * height, t];
-  };
-  for (let i = 0; i < n; i++) thread(b, pt(i), pt(i + 211), 0.03 + 0.04 * jit(i, 9), 0.007 + 0.002 * ((jit(i, 11) + 1) / 2));
-  for (let i = 0; i < Math.round(n / 7); i++) { const p = pt(i * 13 + 5); thread(b, [p[0], 0.02, p[2]], pt(i * 13 + 6), 0.01, 0.008); } // (threads down to the ground: web only, no wads, no dew)
-}
 /** Wall T1, wisp: a thin tangle, narrow and low. */
 const wallT1 = (b: ModelBuilder, s?: BuildingState) => tangle(b, s, 0.22, 0.9, 55);
 /** Wall T2, hedge: a dense tangle, a hedge of web. */

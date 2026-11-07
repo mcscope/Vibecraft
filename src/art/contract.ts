@@ -65,6 +65,8 @@ export interface BuildingArt {
   complete: Sprite;
   /** Damaged looks, least damaged first (0+). */
   damaged: Sprite[];
+  /** A wall's finished looks joined to the pieces beside it: [look][joins bits] (BuildingState.joins); pieces in a line take the looks in turn. */
+  joined?: Sprite[][];
   sounds?: { placed?: SoundSpec; complete?: SoundSpec; destroyed?: SoundSpec };
 }
 

@@ -1,6 +1,6 @@
 // Wildweld buildings: what a larva lays its body down as (UnitSpec.laysDown), web grown on food. Models in metres, a
 // tile about 2 m across, centred on the footprint.
-import type { Mat, ModelBuilder, Vec3 } from '../../kits/bake3d/types';
+import type { BuildingState, Mat, ModelBuilder, Vec3 } from '../../kits/bake3d/types';
 
 const SILK: Mat = { color: '#ece6d6', tex: 'none', rough: 0.85 };
 const SILK_OLD: Mat = { color: '#d6ccb4', tex: 'leather', rough: 0.9 };
@@ -29,34 +29,38 @@ function wrapped(c: ModelBuilder, x: number, z: number, y0: number, y1: number, 
   }
 }
 
-/**
- * A strand of web wall (1 tile): a silk-wrapped pillar on a silk mound, web fanned out from it to the tile's edges and
- * corners low down, so pieces laid in a line knit into one web either way; rings of thread across the fans, dewdrops,
- * the layer's side in bands round the pillar.
- */
-export function webWall(b: ModelBuilder): void {
-  const H = 1.55;
-  b.sphere([0.5, 0.22, 0.5], [0, 0.06, 0], SILK_OLD); // the mound it's anchored in
-  wrapped(b, 0, 0, 0.1, H, 0.17, 0.05, 4);
-  for (const y of [0.55, 1.05]) b.cylinder(0.165 - y * 0.06, 0.17 - y * 0.06, 0.07, [0, y, 0], BAND, undefined, 10);
-  b.sphere(0.06, [0, H, 0], SILK);
-  // the fans: to each edge's middle (where the next piece's fan meets it) and each corner, from up the pillar
-  const anchors: Vec3[] = [[0.98, 0.04, 0], [-0.98, 0.04, 0], [0, 0.04, 0.98], [0, 0.04, -0.98], [0.9, 0.04, 0.9], [-0.9, 0.04, 0.9], [0.9, 0.04, -0.9], [-0.9, 0.04, -0.9]];
-  const ups = [0.45, 0.85, 1.2, 1.5];
-  anchors.forEach((an, i) => {
-    for (const y of ups) thread(b, [0, y, 0], an, 0.06 + y * 0.05, 0.011, (i + Math.round(y * 10)) % 3 === 0 ? 1 : 0);
-    // a cross-thread or two across each fan (the rings of a web), high and low
-    for (const k of [0.35, 0.65]) {
-      const lo: Vec3 = [an[0] * k, ups[0] + (an[1] - ups[0]) * k, an[2] * k], hi: Vec3 = [an[0] * k, ups[3] + (an[1] - ups[3]) * k, an[2] * k];
-      thread(b, lo, hi, 0.02, 0.009);
-    }
-  });
-  // strands run along the edges between the anchors: the web's rim, knitting it to the next piece
-  for (let i = 4; i < 8; i++) for (const j of [0, 1, 2, 3]) {
-    const a = anchors[i], e = anchors[j];
-    if (Math.abs(a[0] - e[0]) < 1 || Math.abs(a[2] - e[2]) < 1) thread(b, [a[0], 0.35, a[2]], [e[0], 0.35, e[2]], 0.08, 0.01);
-  }
+/** A steady wobble from a few numbers (the same every bake): −1 … 1. */
+export const jit = (...n: number[]) => { let h = 2166136261; for (const x of n) h = Math.imul(h ^ Math.round(x * 997 + 13), 16777619); return ((h >>> 0) % 2001) / 1000 - 1; };
+
+/** A tangle of web along the joined sides: `width` m either side of the line, `height` m tall, `n` threads; `bulge` swells
+ *  it in the middle of the piece and pinches it at the edges (where the neighbour's meets it at the edge's width). */
+export function tangle(b: ModelBuilder, state: BuildingState | undefined, width: number, height: number, n: number, bulge = 0): void {
+  const j = state?.joins ?? (state ? 0 : 3); // (no state: a straight run)
+  const reach = (bit: number) => (j & bit ? 1.0 : 0.4);
+  const xp = reach(1), xn = reach(2), zp = reach(4), zn = reach(8);
+  const alongX = !!(j & 3) || !(j & 12), alongZ = !!(j & 12);
+  const pt = (i: number): Vec3 => {
+    const u = (jit(i, 1) + 1) / 2, h = (jit(i, 3) + 1) / 2, side = jit(i, 5);
+    // which run of the web it's in (a corner piece: both)
+    const onX = alongX && (!alongZ || jit(i, 7) > 0);
+    const t = onX ? -xn + u * (xn + xp) : -zn + u * (zn + zp); // along it
+    const w = width * (1 + bulge * (1 - t * t)) * (0.6 + 0.4 * (1 - h)); // (wider low down, and through the middle if it bulges)
+    return onX ? [t, 0.04 + h ** 1.6 * height, side * w] : [side * w, 0.04 + h ** 1.6 * height, t];
+  };
+  for (let i = 0; i < n; i++) thread(b, pt(i), pt(i + 211), 0.03 + 0.04 * jit(i, 9), 0.007 + 0.002 * ((jit(i, 11) + 1) / 2));
+  for (let i = 0; i < Math.round(n / 7); i++) { const p = pt(i * 13 + 5); thread(b, [p[0], 0.02, p[2]], pt(i * 13 + 6), 0.01, 0.008); } // (threads down to the ground: web only, no wads, no dew)
 }
+/** The web wall's looks, in turn along a line (Building art `looks`): a hedge of web (dense), a sprawl (wide and low
+ *  over the ground) and a billow (swelling in each piece, pinched where pieces meet). Web only, joined to the pieces
+ *  beside it (`state.joins`). */
+const WEB_LOOKS = [
+  (b: ModelBuilder, s?: BuildingState) => tangle(b, s, 0.42, 1.3, 110),
+  (b: ModelBuilder, s?: BuildingState) => tangle(b, s, 0.8, 0.8, 120),
+  (b: ModelBuilder, s?: BuildingState) => tangle(b, s, 0.3, 1.3, 110, 1.4),
+];
+export const WEB_WALL_LOOKS = WEB_LOOKS.length;
+/** A piece of web wall (1 tile): a tangle of web, one of WEB_LOOKS. */
+export function webWall(b: ModelBuilder, state?: BuildingState): void { WEB_LOOKS[(state?.look ?? 0) % WEB_LOOKS.length](b, state); }
 
 /**
  * A web tower (2 tiles): a great cocoon spindle on four buttress roots, guyed down to the corners with web; at its top
