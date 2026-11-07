@@ -7,6 +7,7 @@ import type { ArtAnim, UnitArt } from '../art/contract';
 
 export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
   if (params.get('faction')) return roster(params);
+  if (params.get('concepts')) return gallery();
   if (params.get('building') || params.get('bconcept')) return building(params);
   const id = params.get('unit') ?? 'lynx', anim = (params.get('anim') ?? 'attack') as ArtAnim, scale = +(params.get('scale') ?? 2);
   // (&from=wildwelds: which faction's, when two share an id)
@@ -173,4 +174,42 @@ function scroller(): HTMLElement {
   box.style.cssText = 'position:fixed;inset:0;overflow:auto;z-index:10;background:#5f7440';
   document.body.appendChild(box);
   return box;
+}
+
+/** ?mode=sprites&concepts=all: every design concept (wildwelds/concepts.ts), labelled, in one scrolling gallery: walls
+ *  laid in an L, each piece joined to its neighbours; towers on their own. */
+async function gallery(): Promise<void> {
+  const { WEB_CONCEPTS } = await import('../factions/wildwelds/concepts');
+  const { Baker } = await import('../kits/bake3d/baker');
+  const box = scroller();
+  box.style.cssText += ';display:flex;flex-wrap:wrap;gap:18px;padding:16px;align-content:flex-start;color:#f3e7c4;font:600 14px Georgia, serif';
+  const baker = new Baker(), team = TEAM_COLORS[0];
+  for (const [name, spec] of Object.entries(WEB_CONCEPTS)) {
+    const cell = document.createElement('div');
+    cell.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px;background:rgba(0,0,0,0.12);padding:8px;border-radius:6px';
+    const c = document.createElement('canvas'), g = c.getContext('2d')!;
+    if (spec.size === 1) { // a wall: an L of 4 along each axis, joined
+      const scale = 1.2, tiles: Array<[number, number]> = [[0, 0], [1, 0], [2, 0], [3, 0], [0, 1], [0, 2], [0, 3]];
+      const has = (x: number, y: number) => tiles.some(([a, b]) => a === x && b === y), iso = (x: number, y: number) => [(x - y) * 32 * scale, (x + y) * 16 * scale];
+      c.width = 4 * 64 * scale + 40; c.height = 4 * 32 * scale + 140;
+      const ox = c.width / 2, oy = 110, baked = new Map<number, import('../art/contract').Sprite>();
+      for (const [tx, ty] of tiles.sort((p, q) => p[0] + p[1] - (q[0] + q[1]))) {
+        const m = (has(tx + 1, ty) ? 1 : 0) | (has(tx - 1, ty) ? 2 : 0) | (has(tx, ty + 1) ? 4 : 0) | (has(tx, ty - 1) ? 8 : 0);
+        if (!baked.has(m)) baked.set(m, baker.bakeStatic((b) => spec.model(b, { phase: 'complete', level: 0, joins: m }), team, true, {}, Math.SQRT2 + 1.1));
+        const sp = baked.get(m)!, k = scale / sp.q, [x, y] = iso(tx + 0.5, ty + 0.5);
+        g.drawImage(sp.img, sp.sx, sp.sy, sp.sw, sp.sh, ox + x - sp.ax * k, oy + y - sp.ay * k, sp.sw * k, sp.sh * k);
+      }
+    } else { // a tower, on its own
+      const scale = 1.2, sp = baker.bakeStatic((b) => spec.model(b), team, true, {}, spec.size * Math.SQRT2 + 1.1), k = scale / sp.q;
+      c.width = Math.ceil(sp.sw * k + 20); c.height = Math.ceil(sp.sh * k + 20);
+      g.drawImage(sp.img, sp.sx, sp.sy, sp.sw, sp.sh, c.width / 2 - sp.ax * k, c.height - 10 - sp.ay * k, sp.sw * k, sp.sh * k);
+    }
+    const label = document.createElement('div');
+    label.textContent = name;
+    cell.append(c, label);
+    box.appendChild(cell);
+    await new Promise((r) => setTimeout(r, 0)); // (show them as they bake)
+  }
+  baker.dispose();
+  document.title = 'sprites ready';
 }
