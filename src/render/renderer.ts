@@ -8,7 +8,7 @@ import { isUnderfoot, parcelPos } from '../sim/abilities/underfoot';
 import { LEAP_TIME } from '../sim/abilities/flight';
 import { metamorphCost } from '../sim/abilities/metamorph';
 import { M_PER_TILE } from '../sim/physics';
-import { buildingSprite, unitShadow, unitSprite, UNITS_PER_TILE, type ArtAnim, type FrameTime, type Sprite, type UnitArt } from '../art/contract';
+import { buildingSprite, throwFrame, unitShadow, unitSprite, UNITS_PER_TILE, type ArtAnim, type FrameTime, type Sprite, type UnitArt } from '../art/contract';
 import { gpuTexture, setFrameReader } from '../art/gpu';
 import { TEAM_COLORS, type ArtBank } from './artbank';
 import { buildGround } from './ground';
@@ -467,6 +467,12 @@ export class Renderer {
           const n = b.size, like = (x: number, y: number) => { const o = walls.get(`${x},${y}`); return !!o && o.specId === b.specId && o.owner === b.owner; };
           const joins = (like(b.ox + n, b.oy) ? 1 : 0) | (like(b.ox - n, b.oy) ? 2 : 0) | (like(b.ox, b.oy + n) ? 4 : 0) | (like(b.ox, b.oy - n) ? 8 : 0);
           look = art.joined[(b.ox + b.oy) % art.joined.length][joins];
+        }
+        // a tower throwing (its windup, its throw, going back to rest after)
+        if (art.attack && b.complete && b.stats.tower) {
+          const tw = b.stats.tower, windup = (b.spec.attack?.windup ?? 0) * tw.cooldown, tick = this.world.tick;
+          const thrown = throwFrame(art.attack, b.aimDir, windup, tw.cooldown - windup, b.aim ? (tick - b.aim.tick) * DT : null, b.threwTick >= 0 ? (tick - b.threwTick) * DT : null);
+          if (thrown) look = thrown;
         }
         this.setFrame(sp, look);
         // a living building (sim/abilities/living.ts) swells as it grows

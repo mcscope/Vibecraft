@@ -9,8 +9,9 @@
 // larva) follow the user's description. The Dragon Fly is the user's; its fire (from crystal) is still to design.
 // Self-contained: only engine types and kits, never another faction.
 import type { BuildingSpec, FactionSpec, UnitSpec } from '../types';
-import type { BuildingModel } from '../../kits/bake3d/types';
-import { WEB_WALL_LOOKS, webTower, webWall } from './buildings';
+import type { BuildingModel, ThrowTiming } from '../../kits/bake3d/types';
+import { WEB_WALL_LOOKS, webWall } from './buildings';
+import { SHOT_FROM, SHOT_TO, THROW_AT, webTower } from './mimic';
 import type { Section, ModelBuilder, Pose, Vec3 as V3 } from '../../kits/bake3d/types';
 import { aim, footAt, jointBetween, shapedLimb, span } from '../../kits/bake3d/gait';
 import type { Mat } from '../../kits/bake3d/types';
@@ -1073,11 +1074,11 @@ export const units: Unit[] = [
 ];
 
 /** What its larvae lay their bodies down as (UnitSpec.laysDown): web, grown on food. */
-export const buildings: Array<BuildingSpec & { model: BuildingModel; looks?: number }> = [
+export const buildings: Array<BuildingSpec & { model: BuildingModel; looks?: number; throws?: ThrowTiming }> = [
   { id: 'web-wall', name: 'Web Wall', description: 'Laid down by a T2 larva\'s body (dragged, a strand of up to 5 pieces). It blocks the way. It starts as strong as the body that went into it and grows on food to its full strength.',
     size: 1, materials: 150, wall: true, living: { seed: 0.08, grow: 0.5 }, model: webWall, looks: WEB_WALL_LOOKS },
   { id: 'web-tower', name: 'Web Tower', description: 'Laid down by a T3 larva\'s body. It throws crystals from its stock at enemies in range (Give it crystal). It starts as strong as the body that went into it and grows on food to its full strength.',
-    size: 2, materials: 400, living: { seed: 0.4, grow: 0.8 }, attack: { mechanism: 30, crystalMass: 0.6, height: 5, stockShots: 30 }, model: webTower },
+    size: 2, materials: 400, living: { seed: 0.4, grow: 0.8 }, attack: { mechanism: 30, crystalMass: 0.6, height: 5, stockShots: 30, windup: 0.6 }, model: webTower, throws: { frames: 24, from: SHOT_FROM, release: THROW_AT, to: SHOT_TO } },
 ];
 
 export const wildwelds: FactionSpec = {

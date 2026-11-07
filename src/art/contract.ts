@@ -59,6 +59,8 @@ export interface UnitArt {
   sounds?: UnitSounds;
 }
 
+export interface ThrowArt { frames: Sprite[][]; from: number; release: number; to: number }
+
 export interface BuildingArt {
   /** Construction looks, earliest first (1+). */
   construction: Sprite[];
@@ -67,6 +69,12 @@ export interface BuildingArt {
   damaged: Sprite[];
   /** A wall's finished looks joined to the pieces beside it: [look][joins bits] (BuildingState.joins); pieces in a line take the looks in turn. */
   joined?: Sprite[][];
+  /**
+   * A tower's throw: frames[facing][frame] (8 facings as a unit's; frames evenly through `t` 0 … 1 of
+   * BuildingState.attack). Before `from` it comes out; `from` … `to` is one shot, letting go at `release` (as the
+   * sim throws); after `to` it goes back to rest. Shot after shot it plays `from` … `to` again.
+   */
+  attack?: ThrowArt;
   sounds?: { placed?: SoundSpec; complete?: SoundSpec; destroyed?: SoundSpec };
 }
 
@@ -103,6 +111,7 @@ export interface BiomeArt {
 export type BiomeLoader = (onProgress?: (fraction: number, label: string) => void) => Promise<BiomeArt>;
 
 /** `only`: bake just these units, and no buildings (the arena bakes the units it's showing). */
+/** A faction's art in a team's colours; `only`: just these units and buildings (by id), the rest to come as needed. */
 export type ArtLoader = (team: TeamColors, onProgress?: (fraction: number, label: string) => void, only?: string[]) => Promise<FactionArt>;
 
 // ───────────────────────────── sound ─────────────────────────────
@@ -177,6 +186,29 @@ function frameOf(an: AnimArt, set: Sprite[][], octant: number, t: FrameTime): Sp
 }
 
 /** Which look a building shows: construction stage by progress, damage by HP. */
+/**
+ * A tower's throw frame (BuildingArt.attack), or null at rest. `aimed`: seconds since it began winding up at a target
+ * (null: it isn't); `thrown`: seconds since its last throw (null: none yet); `windup`, `follow`: the sim's seconds
+ * before and after the throw; `dir`: which way it aims (radians, map axes). Winding up it plays to `release` (out of
+ * rest first, unless it's still out from its last throw); after, on to `to`, holds there a little, then goes to rest.
+ */
+export function throwFrame(art: ThrowArt, dir: number, windup: number, follow: number, aimed: number | null, thrown: number | null): Sprite | null {
+  const HOLD = 0.6, BACK = 0.6; // (seconds it stays out after a shot, and takes to go back)
+  const out = (s: number) => s < follow + HOLD + BACK * 0.5; // (still out, `s` after a throw)
+  let t: number | null = null;
+  if (aimed !== null) {
+    const k = Math.min(1, aimed / Math.max(windup, 1e-6)), start = thrown !== null && out(thrown - aimed) ? art.from : 0;
+    t = start + k * (art.release - start);
+  } else if (thrown !== null) {
+    if (thrown < follow) t = art.release + (thrown / Math.max(follow, 1e-6)) * (art.to - art.release);
+    else if (thrown < follow + HOLD) t = art.to;
+    else if (thrown < follow + HOLD + BACK) t = art.to + ((thrown - follow - HOLD) / BACK) * (1 - art.to);
+  }
+  if (t === null) return null;
+  const facing = art.frames[((Math.round(dir / (Math.PI / 4)) % 8) + 8) % 8];
+  return facing[Math.min(facing.length - 1, Math.floor(t * facing.length))];
+}
+
 export function buildingSprite(art: BuildingArt, complete: boolean, built: number, hp: number, maxHp: number): Sprite {
   if (!complete) {
     const n = art.construction.length;

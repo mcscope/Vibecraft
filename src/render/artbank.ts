@@ -40,14 +40,43 @@ export class ArtBank {
    */
   private constructor(readonly factions: FactionArt[], readonly biome: BiomeArt, readonly biomes: BiomeArt[], private readonly world: World, private readonly teams: TeamColors[]) {}
 
-  /** Bake any of these units the player's art doesn't have yet (a bank built with `only` fills in as it goes). */
-  async ensureUnits(owner: number, ids: string[]): Promise<void> {
-    const f = this.world.factionOf(owner), missing = ids.filter((id) => !this.factions[owner].units[id]);
-    if (!missing.length || !f.art) return;
-    const key = `${teamKey(f.id, this.teams[owner])}.${[...missing].sort().join('+')}`;
-    let art = await cachedArt<FactionArt>(f.id, key);
-    if (!art) { art = await f.art(this.teams[owner], undefined, missing); cacheArt(f.id, key, art); }
-    Object.assign(this.factions[owner].units, art.units);
+  /** A bank that bakes a player's units and buildings as they're first needed (dev, and `only`). */
+  private lazy = new Set<number>();
+  private asked = new Set<string>();
+  private wanted = new Map<number, string[]>(); // (asked for this frame: baked together)
+  private queue: Promise<void> = Promise.resolve();
+
+  /**
+   * Bake any of these units and buildings a player's art doesn't have yet, each cached on its own (dev). One at a
+   * time: a bank built lazily fills in as things are first needed.
+   */
+  ensure(owner: number, ids: string[]): Promise<void> {
+    const f = this.world.factionOf(owner), have = this.factions[owner], art = f.art;
+    const own = (id: string) => f.units.some((u) => u.id === id) || (f.buildings ?? []).some((b) => b.id === id);
+    const missing = () => ids.filter((id) => own(id) && !have.units[id] && !have.buildings[id]);
+    if (!art || !missing().length) return Promise.resolve();
+    const job = this.queue.then(async () => {
+      const team = this.teams[owner], key = (id: string) => `${teamKey(f.id, team)}.${id}`, bake: string[] = [];
+      for (const id of missing()) {
+        const got = await cachedArt<FactionArt>(f.id, key(id));
+        if (got) { Object.assign(have.units, got.units); Object.assign(have.buildings, got.buildings); } else bake.push(id);
+      }
+      if (!bake.length) return;
+      const baked = await art(team, undefined, bake);
+      Object.assign(have.units, baked.units); Object.assign(have.buildings, baked.buildings);
+      for (const id of bake) cacheArt(f.id, key(id), { ...baked, units: baked.units[id] ? { [id]: baked.units[id] } : {}, buildings: baked.buildings[id] ? { [id]: baked.buildings[id] } : {} });
+    });
+    this.queue = job.catch((e) => console.error('baking', ids, e));
+    return job;
+  }
+  /** In a lazy bank, start baking a player's unit or building the first time it's asked for. */
+  private want(owner: number, id: string): void {
+    if (!this.lazy.has(owner) || this.asked.has(`${owner}:${id}`)) return;
+    this.asked.add(`${owner}:${id}`);
+    const ids = this.wanted.get(owner);
+    if (ids) { ids.push(id); return; }
+    this.wanted.set(owner, [id]);
+    setTimeout(() => { const all = this.wanted.get(owner)!; this.wanted.delete(owner); void this.ensure(owner, all); }, 0);
   }
 
   /** The biome whose half of the map a point is in. */
@@ -57,9 +86,15 @@ export class ArtBank {
 
   /** A unit's art; a tamed animal (sim/abilities/herding.ts) keeps its wild look. */
   unit(owner: number, id: string): UnitArt | undefined {
-    return this.factions[owner]?.units[id] ?? (this.world.wildsId >= 0 ? this.factions[this.world.wildsId]?.units[id] : undefined);
+    const got = this.factions[owner]?.units[id] ?? (this.world.wildsId >= 0 ? this.factions[this.world.wildsId]?.units[id] : undefined);
+    if (!got) this.want(owner, id);
+    return got;
   }
-  building(owner: number, id: string): BuildingArt | undefined { return this.factions[owner]?.buildings[id]; }
+  building(owner: number, id: string): BuildingArt | undefined {
+    const got = this.factions[owner]?.buildings[id];
+    if (!got) this.want(owner, id);
+    return got;
+  }
   flag(owner: number): Sprite { return this.factions[owner].flag; }
   wantFlag(owner: number): Sprite { return this.factions[owner].wantFlag ?? this.factions[owner].flag; }
 
@@ -75,14 +110,15 @@ export class ArtBank {
       add(f.flag);
       if (f.wantFlag) add(f.wantFlag);
       for (const u of Object.values(f.units)) for (const set of [u.anims, ...(u.segments ?? []).map((s) => s.anims)]) for (const a of Object.values(set)) a?.frames.flat().forEach(add);
-      for (const bd of Object.values(f.buildings)) [...bd.construction, bd.complete, ...bd.damaged, ...(bd.joined ?? []).flat()].forEach(add);
+      for (const bd of Object.values(f.buildings)) [...bd.construction, bd.complete, ...bd.damaged, ...(bd.joined ?? []).flat(), ...(bd.attack?.frames ?? []).flat()].forEach(add);
     }
     return [...out];
   }
 
   /**
    * `teams` overrides the seat colours (the arena paints every left side blue, every right side red). `only`: bake
-   * just these units for every player, and no buildings (more come with ensureUnits).
+   * just these units for every player, and no buildings (more come with ensure). In dev (no pre-baked art) a player's
+   * art starts with just what it has on the map, and the rest bakes the first time it's needed.
    */
   static async build(world: World, biome: BiomeLoader, onProgress: (f: number, label: string) => void, teams?: TeamColors[], only?: string[]): Promise<ArtBank> {
     const players = world.players.filter((p) => !p.neutral);
@@ -103,7 +139,7 @@ export class ArtBank {
       base++;
     }
     const biomes = players.map((p) => baked.get(world.factionOf(p.id).biome ?? biome)!);
-    const factions: FactionArt[] = [], colours: TeamColors[] = [];
+    const factions: FactionArt[] = [], colours: TeamColors[] = [], lazy: number[] = [];
     for (const p of world.players) {
       const f = world.factionOf(p.id);
       const team = p.neutral ? WILD_COLORS : teams?.[p.id] ?? TEAM_COLORS[p.id % TEAM_COLORS.length];
@@ -111,15 +147,29 @@ export class ArtBank {
       if (p.neutral) factions.push(wildsArt(world, p.id, team, biomes));
       else if (!f.art) factions.push(placeholderArt(world, p.id, team));
       else {
-        const key = `${teamKey(f.id, team)}${only ? `.${[...only].sort().join('+')}` : ''}`;
-        let art = (await prebaked<FactionArt>(f, teamKey(f.id, team), true)) ?? (await cachedArt<FactionArt>(f.id, key));
-        if (!art) { art = await f.art(team, sub, only); cacheArt(f.id, key, art); }
+        let art = await prebaked<FactionArt>(f, teamKey(f.id, team), true);
+        if (!art && (only || import.meta.env.DEV)) { // (its flag now; its units and buildings as they're needed)
+          const key = `${teamKey(f.id, team)}.flag`;
+          art = await cachedArt<FactionArt>(f.id, key);
+          if (!art) { art = await f.art(team, undefined, []); cacheArt(f.id, key, art); }
+          art = { ...art, units: {}, buildings: {} };
+          lazy.push(p.id);
+        }
+        if (!art) { const key = teamKey(f.id, team); art = (await cachedArt<FactionArt>(f.id, key)) ?? (await f.art(team, sub)); cacheArt(f.id, key, art); }
         factions.push(art);
       }
       base++;
     }
+    const bank = new ArtBank(factions, baked.get(biome) ?? biomes[0], biomes, world, colours);
+    // a lazy player's: what it has on the map now (or `only`), before the game starts
+    for (const [i, owner] of lazy.entries()) {
+      bank.lazy.add(owner);
+      const ids = only ?? [...new Set([...[...world.units.values()].filter((u) => u.owner === owner).map((u) => u.specId), ...[...world.buildings.values()].filter((b) => b.owner === owner).map((b) => b.specId), world.factionOf(owner).workerId])];
+      onProgress((base - lazy.length + i) / parts, `Mustering ${world.factionOf(owner).name ?? 'an army'}`);
+      await bank.ensure(owner, ids);
+    }
     onProgress(1, 'Ready');
-    return new ArtBank(factions, baked.get(biome) ?? biomes[0], biomes, world, colours);
+    return bank;
   }
 }
 

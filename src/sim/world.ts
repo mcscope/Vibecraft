@@ -287,6 +287,11 @@ export interface Building {
   breeding?: Record<string, number>;
   /** kg of planting work accumulated toward the next plant. */
   sowProgress: number;
+  /** A tower winding up (TowerSpec.windup): at whom, since which tick. */
+  aim: { target: number; tick: number } | null;
+  /** A tower's last throw (tick; −1: none) and which way it last aimed (radians, map axes). */
+  threwTick: number;
+  aimDir: number;
 }
 
 export interface ResourceNode {
@@ -980,7 +985,7 @@ export class World {
       hp: complete ? stats.maxHp : 1, maxHp: stats.maxHp,
       built: complete ? stats.totalCost : 0, complete,
       queue: [], stock: emptyStock(),
-      rallyX: ox + size + 1, rallyY: oy + size + 1, rallyRes: null, cooldown: 0, autoTrain: null,
+      rallyX: ox + size + 1, rallyY: oy + size + 1, rallyRes: null, cooldown: 0, aim: null, threwTick: -1, aimDir: Math.PI / 4, autoTrain: null,
       sowing: [...(spec.sow?.resources ?? [])], sowProgress: 0, grown, garrison: [],
     };
     this.buildings.set(b.id, b);
@@ -1273,20 +1278,37 @@ export class World {
     const tw = b.stats.tower!;
     const atk = b.spec.attack!;
     if (b.cooldown > 0) { b.cooldown -= DT; return; }
-    if ((this.tick + b.id) % 4 !== 0) return;
-    if (b.stock.crystal < atk.crystalMass) return;
     const cx = b.ox + b.size / 2, cy = b.oy + b.size / 2;
     const reach = tw.range + b.size / 2;
     const blind = tw.minRange + b.size / 2; // can't lob onto its own doorstep
-    let target: Unit | null = null, bestD = reach * reach;
-    for (const u of this.units.values()) {
-      if (u.owner === b.owner || this.players[u.owner]?.neutral) continue; // (enemies only: not the Wilds' animals)
-      const d = (u.x - cx) ** 2 + (u.y - cy) ** 2;
-      if (d < bestD && d >= blind * blind) { bestD = d; target = u; }
+    const inReach = (u: Unit) => { const d = (u.x - cx) ** 2 + (u.y - cy) ** 2; return d < reach * reach && d >= blind * blind; };
+    const windup = (atk.windup ?? 0) * tw.cooldown;
+    let target: Unit | null = null;
+    if (b.aim) { // winding up: it throws at the end if its target is still there, else it looks again
+      const u = this.units.get(b.aim.target);
+      if (u && inReach(u) && b.stock.crystal >= atk.crystalMass) {
+        b.aimDir = Math.atan2(u.y - cy, u.x - cx);
+        if ((this.tick - b.aim.tick) * DT < windup) return;
+        target = u;
+      }
+      b.aim = null;
     }
-    if (!target) return;
+    if (!target) {
+      if ((this.tick + b.id) % 4 !== 0) return;
+      if (b.stock.crystal < atk.crystalMass) return;
+      let bestD = reach * reach;
+      for (const u of this.units.values()) {
+        if (u.owner === b.owner || this.players[u.owner]?.neutral) continue; // (enemies only: not the Wilds' animals)
+        const d = (u.x - cx) ** 2 + (u.y - cy) ** 2;
+        if (d < bestD && d >= blind * blind) { bestD = d; target = u; }
+      }
+      if (!target) return;
+      b.aimDir = Math.atan2(target.y - cy, target.x - cx);
+      if (windup > 0) { b.aim = { target: target.id, tick: this.tick }; return; }
+    }
     b.stock.crystal -= atk.crystalMass;
-    b.cooldown = tw.cooldown;
+    b.cooldown = tw.cooldown - windup;
+    b.threwTick = this.tick;
     this.events.push({ type: 'attack', x: cx, y: cy, owner: b.owner, style: 'throw', kg: atk.crystalMass });
     this.launch(b.owner, cx, cy, atk.height, target, tw.velocity, tw.damage, atk.crystalMass);
   }

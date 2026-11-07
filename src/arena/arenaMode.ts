@@ -137,7 +137,7 @@ export async function runArena(params: URLSearchParams): Promise<void> {
     // bake the two (once each; a quick look at the loading bar the first time)
     const fresh = !bank.unit(seat(a, 0), a.id) || !bank.unit(seat(b, 1), b.id);
     if (fresh) { loading.style.display = 'flex'; bar.style.width = '50%'; label.textContent = `Mustering ${name(a)} and ${name(b)}`; }
-    await Promise.all([bank.ensureUnits(seat(a, 0), [a.id]), bank.ensureUnits(seat(b, 1), [b.id])]);
+    await Promise.all([bank.ensure(seat(a, 0), [a.id]), bank.ensure(seat(b, 1), [b.id])]);
     if (fresh) loading.style.display = 'none';
     if (my !== staging) return; // another fight was picked meanwhile
     setRefinement(world, seat(a, 0), a.id, refine[0]); setRefinement(world, seat(b, 1), b.id, refine[1]);

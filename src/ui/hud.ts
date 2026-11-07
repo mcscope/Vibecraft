@@ -80,7 +80,8 @@ export class Hud {
     if (url === undefined) {
       const ua = kind === 'unit' ? this.bank.unit(this.player, id) : undefined;
       const sprite = kind === 'building' ? this.bank.building(this.player, id)?.complete : ua ? unitSprite(ua, 'idle', 1, { time: 0 }) : undefined;
-      url = sprite ? spriteIcon(sprite, size * 2).toDataURL() : '';
+      if (!sprite) return ''; // (not baked yet: asked again next time)
+      url = spriteIcon(sprite, size * 2).toDataURL();
       this.icons.set(key, url);
     }
     return url;

@@ -2,11 +2,11 @@
 import type { FactionArt, MusicSpec, Sprite, TeamColors } from '../../art/contract';
 import { Baker, type UnitBakeOptions } from './baker';
 import { toBitmaps } from './bitmaps';
-import type { BuildingModel, UnitModel } from './types';
+import type { BuildingModel, ThrowTiming, UnitModel } from './types';
 
 export interface FactionBake<U extends { id: string; name: string; model: UnitModel }> {
   units: U[];
-  buildings?: Array<{ id: string; name: string; model: BuildingModel; size: number; wall?: boolean; looks?: number }>;
+  buildings?: Array<{ id: string; name: string; model: BuildingModel; size: number; wall?: boolean; looks?: number; throws?: ThrowTiming }>;
   /** What each unit bakes (its extra animations): the same options size the progress bar. */
   opts(u: U): UnitBakeOptions;
   flag(baker: Baker): Sprite;
@@ -18,8 +18,8 @@ export interface FactionBake<U extends { id: string; name: string; model: UnitMo
 
 export async function bakeFaction<U extends { id: string; name: string; model: UnitModel }>(f: FactionBake<U>, team: TeamColors, onProgress?: (f: number, label: string) => void, only?: string[]): Promise<FactionArt> {
   const baker = new Baker();
-  const units = only ? f.units.filter((u) => only.includes(u.id)) : f.units, buildings = only ? [] : (f.buildings ?? []);
-  const total = units.reduce((n, u) => n + Baker.frameCount(f.opts(u)), 0) + buildings.reduce((n, b) => n + 6 + (b.wall ? (b.looks ?? 1) * 16 : 0), 0) + 1;
+  const units = only ? f.units.filter((u) => only.includes(u.id)) : f.units, buildings = only ? (f.buildings ?? []).filter((b) => only.includes(b.id)) : (f.buildings ?? []);
+  const total = units.reduce((n, u) => n + Baker.frameCount(f.opts(u)), 0) + buildings.reduce((n, b) => n + 6 + (b.wall ? (b.looks ?? 1) * 16 : 0) + (b.throws?.frames ?? 0) * 8, 0) + 1;
   let done = 0;
   const art: FactionArt = { units: {}, buildings: {}, flag: f.flag(baker), wantFlag: f.wantFlag?.(baker), music: f.music };
   for (const u of units) {
@@ -31,10 +31,11 @@ export async function bakeFaction<U extends { id: string; name: string; model: U
   for (const b of buildings) {
     onProgress?.(done / total, `Raising the ${b.name}`);
     art.buildings[b.id] = baker.bakeBuilding(b.model, b.size, team, false, b.wall ? (b.looks ?? 1) : 0);
-    done += 6 + (b.wall ? (b.looks ?? 1) * 16 : 0);
+    if (b.throws) art.buildings[b.id].attack = await baker.bakeBuildingThrow(b.model, b.size, team, b.throws);
+    done += 6 + (b.wall ? (b.looks ?? 1) * 16 : 0) + (b.throws?.frames ?? 0) * 8;
     await new Promise((r) => setTimeout(r, 0));
   }
   baker.dispose();
-  await toBitmaps([art.flag, ...(art.wantFlag ? [art.wantFlag] : []), ...Object.values(art.buildings).flatMap((b) => [...b.construction, b.complete, ...b.damaged, ...(b.joined ?? []).flat()])]);
+  await toBitmaps([art.flag, ...(art.wantFlag ? [art.wantFlag] : []), ...Object.values(art.buildings).flatMap((b) => [...b.construction, b.complete, ...b.damaged, ...(b.joined ?? []).flat(), ...(b.attack?.frames ?? []).flat()])]);
   return art;
 }

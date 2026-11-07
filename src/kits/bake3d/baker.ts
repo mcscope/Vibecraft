@@ -4,8 +4,8 @@
 // upper-left casting soft shadows down-right, sky/ground fill light. Each unit
 // is baked in all 8 facings (mirroring would flip the baked shadows).
 import * as THREE from 'three';
-import type { AnimArt, ArtAnim, BuildingArt, Sprite, TeamColors, UnitArt } from '../../art/contract';
-import type { BuildingModel, ModelBuilder, Pose, UnitModel } from './types';
+import type { AnimArt, ArtAnim, BuildingArt, Sprite, TeamColors, ThrowArt, UnitArt } from '../../art/contract';
+import type { BuildingModel, ModelBuilder, Pose, ThrowTiming, UnitModel } from './types';
 import { Builder, type BuildOpts } from './builder';
 
 /** Model units per map tile. A 1.7-unit person is a bit under a tile tall. */
@@ -503,6 +503,16 @@ export class Baker {
     if (!looks) return { construction, complete, damaged };
     const joined = Array.from({ length: looks }, (_, look) => Array.from({ length: 16 }, (_, joins) => this.bakeStatic((b) => model(b, { phase: 'complete', level: 0, joins, look }), team, true, {}, reach)));
     return { construction, complete, damaged, joined };
+  }
+
+  /** A tower's throw (BuildingArt.attack): `frames` evenly through it, in each of 8 facings. Yields between facings. */
+  async bakeBuildingThrow(model: BuildingModel, size: number, team: TeamColors, timing: ThrowTiming): Promise<ThrowArt> {
+    const reach = size * Math.SQRT2 + 1.1, out: Sprite[][] = [], frames = timing.frames;
+    for (let o = 0; o < 8; o++) {
+      out.push(Array.from({ length: frames }, (_, i) => this.bakeStatic((b) => model(b, { phase: 'complete', level: 0, attack: { t: i / frames, facing: o * (Math.PI / 4) } }), team, true, {}, reach)));
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    return { frames: out, from: timing.from, release: timing.release, to: timing.to };
   }
 
   /** Bake every animation × facing for a unit. Yields between rows so the page stays responsive. */

@@ -82,7 +82,12 @@ export interface BuildingState {
   joins?: number;
   /** Which of a wall's looks (its art's `looks`: pieces in a line take them in turn). */
   look?: number;
+  /** A tower throwing (BuildingArt.attack): `t` 0 … 1 through its throw, toward `facing` (radians, map axes). */
+  attack?: { t: number; facing: number };
 }
+
+/** A tower's throw to bake (BuildingArt.attack): how many frames, and where it's out (`from`), lets go and ends a shot (`to`), as `t` 0 … 1. */
+export interface ThrowTiming { frames: number; from: number; release: number; to: number }
 
 /** `state` is given when baking construction/damage looks; ignore it to let the kit add scaffolding and rubble. */
 export type BuildingModel = (b: ModelBuilder, state?: BuildingState) => void;

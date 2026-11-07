@@ -145,6 +145,9 @@ export interface TowerSpec {
   height: number;
   /** Shots' worth of crystal ammo the building asks to keep on hand (default 40). */
   stockShots?: number;
+  /** Share of its cooldown spent taking aim before each throw (0 … 0.9, default 0): it picks its target, winds up,
+   *  then throws if the target is still in reach. Its rate of fire is the same; only its first throw comes later. */
+  windup?: number;
 }
 
 /**

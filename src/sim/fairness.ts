@@ -84,6 +84,7 @@ export function checkFairness(f: FactionSpec): string[] {
       if (!(a.mechanism > 0) || !(a.crystalMass >= 0.1)) e.push(`${b.id}: a tower needs mechanism > 0 and crystals of at least 0.1 kg`);
       if (!(a.height >= 0)) e.push(`${b.id}: tower height can't be negative`); // height is priced: mechanism × height
       if (a.stockShots !== undefined && !(a.stockShots >= 1)) e.push(`${b.id}: stockShots must be at least 1`);
+      if (a.windup !== undefined && !(a.windup >= 0 && a.windup <= 0.9)) e.push(`${b.id}: windup must be 0 … 0.9`);
     }
     // a gather boost burns crystal for every extra kg, so its reach is paid for as it's used
     if (b.gatherBoost && !(b.gatherBoost.radius > 0)) e.push(`${b.id}: gatherBoost radius must be positive`);
