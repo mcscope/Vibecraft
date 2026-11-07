@@ -353,9 +353,9 @@ const MIMIC_KEYS: MimicKey[] = [
   { t: 0.3, out: 1, c: [[0, 2.0, 0], [0.9, 2.6, 0.1], [1.0, 1.7, 0.15]], curl: -3.6 }, // reaching forward and down over the crystal
   { t: 0.38, out: 1, c: [[0, 2.0, 0], [0.9, 2.6, 0.1], [1.0, 1.7, 0.15]], curl: -4.2 }, // its tip curls round it
   { t: 0.44, out: 1, c: [[0, 2.2, 0], [0, 3.3, 0], [-0.6, 3.6, 0]], curl: -3.5 }, // lifting it high
-  { t: 0.5, out: 1, c: [[0, 1.9, 0], [-0.8, 3.4, 0], [-2.3, 2.9, 0]], curl: -1.2 }, // swung up and back
-  { t: 0.58, out: 1, c: [[0, 1.9, 0], [0.5, 3.6, 0], [2.1, 3.6, 0]], curl: -0.4 }, // the fling: let go at 0.56
-  { t: 0.68, out: 1, c: [[0, 1.7, 0], [1.3, 2.6, 0], [2.4, 2.0, 0]], curl: -1.5 }, // following through
+  { t: 0.5, out: 1, c: [[0, 2.3, 0], [-0.2, 3.7, 0], [-0.9, 4.3, 0]], curl: -2.0 }, // reared up overhead, cocked back
+  { t: 0.58, out: 1, c: [[0, 2.3, 0], [0.2, 3.9, 0], [1.0, 4.5, 0]], curl: -0.6 }, // snapped forward over the top: let go at 0.56
+  { t: 0.68, out: 1, c: [[0, 2.1, 0], [0.6, 3.3, 0], [1.4, 3.3, 0]], curl: -1.8 }, // following through, not far
   { t: 0.82, out: 1, c: CURLED, curl: -5 }, // curled again
   { t: 0.95, out: 0, c: CURLED, curl: -5 }, // gone
 ];
@@ -440,7 +440,7 @@ const mimicMine: TunnelModel = (b, t) => {
   if (held) b.crystal(plucked.len, gripped(hold), plucked.rot);
   if (t !== undefined && t >= MIMIC_LET_GO && t < 0.88) {
     const f = (t - MIMIC_LET_GO) / 0.32, o = mimicPose(MIMIC_LET_GO).hold;
-    b.crystal(plucked.len, [o[0] + f * 4, o[1] + f * 1.4 - f * f * 3.8, o[2]], [0, 0, -1.2 - f * 5]);
+    b.crystal(plucked.len, [o[0] + f * 4, o[1] + f * 1.6 - f * f * 3.0, o[2]], [0, 0, -1.2 - f * 5]); // (from overhead: up and away)
   }
 };
 
