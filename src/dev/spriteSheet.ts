@@ -9,6 +9,7 @@ export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
   if (params.get('faction')) return roster(params);
   if (params.get('tunnels')) return tunnels(params.get('tunnels')!, Number(params.get('frames') ?? 30));
   if (params.get('concepts')) return gallery(params.get('concepts')!);
+  if (params.get('joins')) return joinsPage(params.get('joins')!);
   if (params.get('building') || params.get('bconcept')) return building(params);
   const id = params.get('unit') ?? 'lynx', anim = (params.get('anim') ?? 'attack') as ArtAnim, scale = +(params.get('scale') ?? 2);
   // (&from=wildwelds: which faction's, when two share an id)
@@ -170,6 +171,72 @@ async function building(params: URLSearchParams): Promise<void> {
 }
 
 /** A full-window box that scrolls, over the game, to lay a sheet out in whole however big it is. */
+/** ?mode=sprites&joins=<wall id>: a wall as the game draws it (BuildingArt.joined). First each of its looks joined
+ *  every way it can be (its neighbours shown as pale tiles), then some layouts, each piece joined to the like pieces
+ *  beside it and taking the looks in turn by its tile, exactly as the renderer does. */
+async function joinsPage(id: string): Promise<void> {
+  const spec = PLAYABLE.flatMap((f) => f.buildings ?? []).find((b) => b.id === id) as unknown as { name: string; model: import('../kits/bake3d/types').BuildingModel; size: number; looks?: number } | undefined;
+  if (!spec) return;
+  const { Baker } = await import('../kits/bake3d/baker');
+  const art = new Baker().bakeBuilding(spec.model, spec.size, TEAM_COLORS[0], false, spec.looks ?? 1), joined = art.joined!;
+  const box = scroller();
+  box.style.cssText += ';padding:16px;color:#f3e7c4;font:600 14px Georgia, serif';
+  const heading = (text: string, sub = '') => { const h = document.createElement('div'); h.innerHTML = `<div style="font-size:20px;margin:14px 0 2px">${text}</div><div style="font-weight:400;opacity:.8;margin-bottom:8px">${sub}</div>`; box.appendChild(h); };
+  const row = () => { const r = document.createElement('div'); r.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end'; box.appendChild(r); return r; };
+  const n = spec.size;
+  /** Draw `tiles` (tile corners) on a canvas, the game's way; `ghosts`: pale tiles to show where neighbours are. */
+  const draw = (tiles: Array<[number, number]>, scale: number, ghosts: Array<[number, number]> = [], fixed?: (x: number, y: number) => { look: number; joins: number }) => {
+    const all = [...tiles, ...ghosts], xs = all.map((t) => t[0]), ys = all.map((t) => t[1]);
+    const x0 = Math.min(...xs), y0 = Math.min(...ys), w = Math.max(...xs) - x0 + n, h = Math.max(...ys) - y0 + n;
+    const iso = (x: number, y: number): [number, number] => [(x - x0 - (y - y0)) * 32 * scale, (x - x0 + y - y0) * 16 * scale];
+    const tall = 110 * scale, c = document.createElement('canvas');
+    c.width = Math.ceil((w + h) * 32 * scale + 40); c.height = Math.ceil((w + h) * 16 * scale + tall + 20);
+    const g = c.getContext('2d')!, ox = h * 32 * scale + 20, oy = tall;
+    const diamond = (x: number, y: number, fill: string) => {
+      g.beginPath(); for (const [a, b] of [[x, y], [x + n, y], [x + n, y + n], [x, y + n]]) { const [px, py] = iso(a, b); g.lineTo(ox + px, oy + py); }
+      g.closePath(); g.fillStyle = fill; g.fill();
+    };
+    for (const [x, y] of tiles) diamond(x, y, 'rgba(0,0,0,0.12)');
+    for (const [x, y] of ghosts) diamond(x, y, 'rgba(255,255,255,0.28)');
+    const has = (x: number, y: number) => tiles.some(([a, b]) => a === x && b === y);
+    for (const [x, y] of [...tiles].sort((p, q) => p[0] + p[1] - (q[0] + q[1]))) {
+      const j = (has(x + n, y) ? 1 : 0) | (has(x - n, y) ? 2 : 0) | (has(x, y + n) ? 4 : 0) | (has(x, y - n) ? 8 : 0);
+      const { look, joins } = fixed?.(x, y) ?? { look: (x + y) % joined.length, joins: j }; // (the renderer's rule)
+      const sp = joined[look][joins], k = scale / sp.q, [px, py] = iso(x + n / 2, y + n / 2);
+      g.drawImage(sp.img, sp.sx, sp.sy, sp.sw, sp.sh, ox + px - sp.ax * k, oy + py - sp.ay * k, sp.sw * k, sp.sh * k);
+    }
+    return c;
+  };
+  const cell = (r: HTMLElement, c: HTMLCanvasElement, label: string) => { const d = document.createElement('div'); d.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px'; d.append(c, label); r.appendChild(d); };
+  // 1. every piece
+  const NAMES = ['hedge', 'sprawl', 'billow'], dirs: Array<[number, number, number, string]> = [[1, n, 0, 'SE'], [2, -n, 0, 'NW'], [4, 0, n, 'SW'], [8, 0, -n, 'NE']];
+  heading(`${spec.name}: every piece`, 'One piece (dark tile), joined toward the neighbours it has (pale tiles). Its web reaches to the edge on a joined side and stops short on an open one. 16 ways for each of its looks: these are the extra bakes.');
+  joined.forEach((_, look) => {
+    heading(`Look ${look + 1}: ${NAMES[look] ?? look}`);
+    const r = row();
+    for (let m = 0; m < 16; m++) {
+      const ghosts = dirs.filter(([bit]) => m & bit).map(([, dx, dy]) => [dx, dy] as [number, number]);
+      cell(r, draw([[0, 0]], 1.2, ghosts, () => ({ look, joins: m })), m ? dirs.filter(([bit]) => m & bit).map((d) => d[3]).join(' + ') : 'alone');
+    }
+  });
+  // 2. layouts, as the game draws them
+  heading('Laid out in the game', 'Each piece joined to the like pieces beside it; along a line they take the looks in turn (hedge, sprawl, billow), by tile.');
+  const line = (len: number, dx: number, dy: number, x = 0, y = 0) => Array.from({ length: len }, (_, i) => [x + i * dx * n, y + i * dy * n] as [number, number]);
+  const uniq = (t: Array<[number, number]>) => t.filter(([a, b], i) => t.findIndex(([c, d]) => c === a && d === b) === i);
+  const layouts: Array<[string, Array<[number, number]>]> = [
+    ['a line (along the map’s x)', line(8, 1, 0)],
+    ['a line (along y)', line(8, 0, 1)],
+    ['a corner', uniq([...line(5, 1, 0), ...line(5, 0, 1)])],
+    ['a T', uniq([...line(7, 1, 0), ...line(4, 0, 1, 3 * n, 0)])],
+    ['a cross', uniq([...line(7, 1, 0, 0, 3 * n), ...line(7, 0, 1, 3 * n, 0)])],
+    ['a ring', uniq([...line(6, 1, 0), ...line(6, 1, 0, 0, 5 * n), ...line(6, 0, 1), ...line(6, 0, 1, 5 * n, 0)])],
+    ['a staircase (diagonal)', uniq(Array.from({ length: 5 }, (_, i) => [[i * n, i * n], [(i + 1) * n, i * n]] as Array<[number, number]>).flat())],
+    ['a block, 3 × 3', Array.from({ length: 9 }, (_, i) => [(i % 3) * n, Math.floor(i / 3) * n] as [number, number])],
+  ];
+  const r = row();
+  for (const [name, tiles] of layouts) cell(r, draw(tiles, 0.9), name);
+}
+
 function scroller(): HTMLElement {
   const box = document.createElement('div');
   box.style.cssText = 'position:fixed;inset:0;overflow:auto;z-index:10;background:#5f7440';
