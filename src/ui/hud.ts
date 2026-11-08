@@ -1,4 +1,5 @@
 import { bodyBuilt, piecesFrom } from '../sim/abilities/layDown';
+import { RALLY_ICONS } from './rallyIcons';
 import { capacity } from '../sim/garrison';
 import { FORMATIONS, formationSlots, formationUnit, type Formation } from './formations';
 import { metamorphCost } from '../sim/abilities/metamorph';
@@ -800,8 +801,8 @@ const ICONS: Record<string, string> = {
   resupply: svg('<path d="M4 8 12 4l8 4v8l-8 4-8-4zM4 8l8 4 8-4M12 12v8"/>'),
   give: svg('<path d="M3 16h6l3 2h5l4-3.5M14 4v8M10.5 8.5 14 12l3.5-3.5"/>'),
   garrison: svg('<path d="M4 11 12 4l8 7v9H4zM10 20v-5h4v5"/>'),
-  rallyWork: svg('<path d="M7 10a5 5 0 0 1 10 0"/><path d="M3 10h18l-2.2 10H5.2z"/><path d="M4 14.5h16M8.5 10l.8 10M12 10v10M15.5 10l-.8 10"/>'), // a basket
-  rallyArmy: svg('<path d="M12 2l2 2.5V15h-4V4.5z"/><path d="M7 15h10M12 15v4.5"/><circle cx="12" cy="21" r="1.2"/>'), // a sword
+  rallyWork: svg(RALLY_ICONS.work.map((d) => `<path d="${d}"/>`).join('')), // a basket
+  rallyArmy: svg(RALLY_ICONS.army.map((d) => `<path d="${d}"/>`).join('')), // a sword
   tend: svg('<ellipse cx="9" cy="15" rx="4" ry="5"/><ellipse cx="16" cy="14" rx="3" ry="4"/><path d="M12 4v5M9.5 6.5 12 4l2.5 2.5"/>'),
 };
 

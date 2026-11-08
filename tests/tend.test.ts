@@ -31,3 +31,15 @@ describe('a laid building grows at its body\'s refinement', () => {
     expect(100 - refined.stock.food).toBeCloseTo((100 - plain.stock.food) / 2, 6); // half the food
   });
 });
+
+describe('healing by eating', () => {
+  test('a hurt unit standing idle with food in its pack eats to heal, paying its price per HP', () => {
+    const w = new World({ seed: 3, players: [{ name: 'Meadow', faction: meadowfolk }, { name: 'Wild', faction: wildwelds }] });
+    const u = w.unitsOf(0).find((x) => x.stats.canAttack || x.stats.foodCost > 0)!;
+    u.hp = u.stats.maxHp * 0.5; u.cal = u.stats.maxCalories; u.food = 5;
+    const hp0 = u.hp, food0 = u.food;
+    for (let i = 0; i < 20 * 20; i++) w.step();
+    expect(u.hp).toBeGreaterThan(hp0);
+    expect(u.food).toBeLessThan(food0); // (it ate; then, its pack empty, it may top up at a stocked building in sight)
+  });
+});

@@ -31,12 +31,23 @@ import {
 export const TICK_RATE = 20;
 export const DT = 1 / TICK_RATE;
 
-/** `u` eats for a tick from `avail` kg of food: as fast as it eats, until it's full. Returns the kg it ate (the caller takes them from where they were). */
+/**
+ * `u` eats for a tick from `avail` kg of food, as fast as it eats: calories first, then (its stomach full) it mends its
+ * body, at what that body cost to grow (its price ÷ its max HP per HP, so a refined body heals cheaper). Returns the kg
+ * it ate (the caller takes them from where they were).
+ */
 export function bite(u: Unit, avail: number): number {
-  const kg = Math.max(0, Math.min(avail, (u.stats.eatRate * DT) / K.calPerFood, (u.stats.maxCalories - u.cal) / K.calPerFood));
-  u.cal += kg * K.calPerFood;
-  return kg;
+  const cap = (u.stats.eatRate * DT) / K.calPerFood;
+  const toCal = Math.max(0, Math.min(avail, cap, (u.stats.maxCalories - u.cal) / K.calPerFood));
+  u.cal += toCal * K.calPerFood;
+  const perHp = u.stats.foodCost > 0 && u.stats.maxHp > 0 ? u.stats.foodCost / u.stats.maxHp : 0;
+  const toHp = perHp > 0 ? Math.max(0, Math.min(avail - toCal, cap - toCal, (u.stats.maxHp - u.hp) * perHp)) : 0;
+  u.hp += toHp / Math.max(perHp, 1e-9);
+  return toCal + toHp;
 }
+
+/** Does `u` still want to eat (not full, or hurt)? */
+const wantsFood = (u: Unit): boolean => u.stats.maxCalories - u.cal >= 1 || u.hp < u.stats.maxHp - 0.5;
 
 export const MAX_QUEUE = 5;
 export const MAX_UNITS_PER_PLAYER = 150;
@@ -286,6 +297,8 @@ export interface Building {
   /** Local cache. Training, research and tower shots draw from here. */
   stock: Stock;
   rallyX: number; rallyY: number;
+  /** Has its owner set its rally point (else its flag isn't shown)? */
+  rallySet?: boolean;
   /** Rally point on a resource: new workers go and gather it (that kind, if that one's gone). */
   rallyRes: ResourceKind | null;
   cooldown: number;
@@ -892,7 +905,7 @@ export class World {
       case 'rally': {
         const b = ownBuilding(cmd.building);
         if (!b) return;
-        b.rallyX = cmd.x; b.rallyY = cmd.y;
+        b.rallyX = cmd.x; b.rallyY = cmd.y; b.rallySet = true;
         const n = cmd.node ? this.nodes.get(cmd.node) : undefined;
         b.rallyRes = n ? n.type : null;
         if (n) { b.rallyX = n.x; b.rallyY = n.y; }
@@ -1396,6 +1409,12 @@ export class World {
     if ((o.kind === 'idle' || o.kind === 'gather' || o.kind === 'tend' || o.kind === 'attackMove' || o.kind === 'build' || o.kind === 'cart') && u.engage === 0) {
       if (u.cal < u.stats.maxCalories * K.hungryFraction && this.autoFeed(u)) return false;
     }
+    // hurt and standing idle: it eats to heal, from its pack or a stocked building in sight (it doesn't leave for home)
+    if (o.kind === 'idle' && u.engage === 0 && u.hp < u.stats.maxHp * 0.9 && !u.wild && (this.tick + u.id) % 10 === 0) {
+      if (u.food > 0.01) { this.detour(u, { kind: 'eatPack' }); return false; }
+      const b = this.nearestCache(u, (x) => x.stock.food > 1);
+      if (b && (b.ox + b.size / 2 - u.x) ** 2 + (b.oy + b.size / 2 - u.y) ** 2 < u.stats.sight ** 2) { this.detour(u, { kind: 'resupply', building: b.id }); return false; }
+    }
     switch (o.kind) {
       case 'idle': return this.runIdle(u);
       case 'wild': return eating(this, u) ? false : this.runWild(u, o); // being fed by a tamer: it stands and eats
@@ -1472,8 +1491,7 @@ export class World {
   /** Order kind 'graze': eat straight from a food source until full (or it's gone). Returns whether it moved. */
   private runGraze(u: Unit, nodeId: number): boolean {
     const n = this.nodes.get(nodeId);
-    const room = u.stats.maxCalories - u.cal;
-    if (!n || n.amount <= 0.001 || room < 1) { this.finish(u); return false; }
+    if (!n || n.amount <= 0.001 || !wantsFood(u)) { this.finish(u); return false; }
     if (!this.moveToNear(u, n.x, n.y, 0.85 + u.stats.radius, true)) return u.x !== u.px || u.y !== u.py;
     this.face(u, n.x - u.x, n.y - u.y);
     n.amount -= bite(u, n.amount); u.busy = true; // (eating: anyone can, gatherer or not)
@@ -2229,7 +2247,7 @@ export class World {
 
   /** Eat for one tick from the pack (b = null) or a building's stock. False when done. */
   private eat(u: Unit, b: Building | null): boolean {
-    if (u.stats.maxCalories - u.cal < 1) return false;
+    if (!wantsFood(u)) return false;
     const kg = bite(u, b ? b.stock.food : u.food);
     if (kg <= 1e-6) return false;
     if (b) b.stock.food -= kg; else u.food -= kg;

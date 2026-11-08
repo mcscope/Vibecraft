@@ -11,6 +11,7 @@ import { M_PER_TILE } from '../sim/physics';
 import { buildingSprite, throwFrame, unitShadow, unitSprite, UNITS_PER_TILE, type ArtAnim, type FrameTime, type Sprite, type UnitArt } from '../art/contract';
 import { gpuTexture } from '../art/gpu';
 import { LEVEL_M, TERRAIN_CLIFF } from '../sim/map';
+import { RALLY_ICONS } from '../ui/rallyIcons';
 import { TEAM_COLORS, type ArtBank } from './artbank';
 import { buildFog, buildGround, terrainGeometry } from './ground';
 
@@ -167,6 +168,7 @@ export class Renderer {
   private flagSprite: PixiSprite | null = null;
   /** Your side's work and army rally points (PlayerState.rally), always shown. */
   private sideFlags: PixiSprite[] = [];
+  private sideBadges: PixiSprite[] = [];
   private ghostSprite: PixiSprite | null = null;
   /** A dragged line (a wall): a ghost piece on each tile, joined to the pieces beside it. */
   private ghostLine: PixiSprite[] = [];
@@ -807,24 +809,28 @@ export class Renderer {
     }
     P.end();
     // rally flag
-    if (rally) {
+    if (rally?.rallySet) {
       if (!this.flagSprite) { this.flagSprite = new PixiSprite(); this.objects.addChild(this.flagSprite); }
       this.setFrame(this.flagSprite, this.bank.flag(rally.owner));
       this.flagSprite.position.set(isoX(rally.rallyX, rally.rallyY), this.gy(rally.rallyX, rally.rallyY));
       this.flagSprite.zIndex = rally.rallyX + rally.rallyY;
       this.flagSprite.visible = true;
     } else if (this.flagSprite) this.flagSprite.visible = false;
-    // the side's rally points for units born outside a building: work (green) and army (red)
+    // the side's rally points for units born outside a building: work (green, a basket) and army (red, a sword), each
+    // a flag with its icon on a badge above it
     const sr = w.players[0]?.rally;
-    ([[sr?.work, 0xb8f0a0], [sr?.army, 0xffa898]] as const).forEach(([at, tint], i) => {
-      let f = this.sideFlags[i];
+    ([[sr?.work, 0xb8f0a0, 'work'], [sr?.army, 0xffa898, 'army']] as const).forEach(([at, tint, kind], i) => {
+      let f = this.sideFlags[i], badge = this.sideBadges[i];
       if (!f) { f = this.sideFlags[i] = new PixiSprite(); this.objects.addChild(f); }
-      f.visible = !!at;
-      if (!f.visible || !at) return;
+      if (!badge) { badge = this.sideBadges[i] = new PixiSprite(rallyBadge(kind)); badge.anchor.set(0.5, 1); this.objects.addChild(badge); }
+      f.visible = badge.visible = !!at;
+      if (!at) return;
       this.setFrame(f, this.bank.flag(0));
       f.position.set(isoX(at[0], at[1]), this.gy(at[0], at[1]));
-      f.zIndex = at[0] + at[1];
+      f.zIndex = badge.zIndex = at[0] + at[1] + 0.01;
       f.tint = tint;
+      badge.position.set(f.x, f.y - f.height * f.anchor.y - 4);
+      badge.scale.set(0.5);
     });
   }
 
@@ -1055,4 +1061,23 @@ export class Renderer {
     }
     return tree || byPicture || under;
   }
+}
+
+/** A round badge with a rally icon on it (ui/rallyIcons.ts), for over a side rally flag. */
+const badges = new Map<string, Texture>();
+function rallyBadge(kind: 'work' | 'army'): Texture {
+  let t = badges.get(kind);
+  if (t) return t;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const ctx = c.getContext('2d')!;
+  ctx.beginPath(); ctx.arc(32, 32, 29, 0, Math.PI * 2);
+  ctx.fillStyle = kind === 'work' ? '#2f4a22' : '#5a1f1a'; ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = kind === 'work' ? '#9ad06a' : '#ff8a7a'; ctx.stroke();
+  ctx.translate(12, 12); ctx.scale(40 / 24, 40 / 24);
+  ctx.lineWidth = 1.9; ctx.lineCap = ctx.lineJoin = 'round'; ctx.strokeStyle = '#fff';
+  for (const d of RALLY_ICONS[kind]) ctx.stroke(new Path2D(d));
+  t = Texture.from(c);
+  badges.set(kind, t);
+  return t;
 }
