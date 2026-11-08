@@ -1,7 +1,7 @@
 // GPU-compressed sprite pages: encode each pre-baked faction page (dist/baked/<key>.<n>.webp) to a KTX2 file
 // (Basis UASTC with zstd) beside it, and mark the faction's JSON `ktx2: true`. The game then uploads the pages
 // compressed (about a quarter of the GPU memory of raw pixels: the GPU keeps them compressed and decodes as it draws),
-// falling back to the WebP pages where it can't. Biome art stays WebP: the ground painter draws it on the CPU.
+// falling back to the WebP pages where it can't. Stills' pages (`cpu`: portraits, icons) and biome art stay WebP: 2D canvases draw them.
 // Run: node scripts/ktx2.mjs [dir=dist/baked]   (npm run build runs it after the pre-bake)
 import { Worker, isMainThread, parentPort } from 'node:worker_threads';
 import { availableParallelism } from 'node:os';
@@ -12,8 +12,8 @@ if (isMainThread) {
   const dir = process.argv[2] ?? 'dist/baked';
   const keys = readdirSync(dir).filter((f) => f.endsWith('.json') && !f.startsWith('biome.')).map((f) => f.slice(0, -5));
   const jobs = keys.flatMap((key) => {
-    const { pages } = JSON.parse(readFileSync(join(dir, `${key}.json`), 'utf8'));
-    return Array.from({ length: pages }, (_, i) => join(dir, `${key}.${i}`));
+    const { pages, cpu = [] } = JSON.parse(readFileSync(join(dir, `${key}.json`), 'utf8'));
+    return Array.from({ length: pages }, (_, i) => i).filter((i) => !cpu.includes(i)).map((i) => join(dir, `${key}.${i}`));
   });
   console.log(`ktx2: ${jobs.length} pages from ${keys.length} factions`);
   const t0 = Date.now();
@@ -29,7 +29,7 @@ if (isMainThread) {
   // mark the factions whose pages all encoded
   for (const key of keys) {
     const p = join(dir, `${key}.json`), j = JSON.parse(readFileSync(p, 'utf8'));
-    const ok = Array.from({ length: j.pages }, (_, i) => { try { readFileSync(join(dir, `${key}.${i}.ktx2`)); return true; } catch { return false; } }).every(Boolean);
+    const ok = Array.from({ length: j.pages }, (_, i) => { if (j.cpu?.includes(i)) return true; try { readFileSync(join(dir, `${key}.${i}.ktx2`)); return true; } catch { return false; } }).every(Boolean);
     if (ok) writeFileSync(p, JSON.stringify({ ...j, ktx2: true }));
   }
   console.log(`ktx2: ${done} pages in ${((Date.now() - t0) / 1000).toFixed(0)} s`);

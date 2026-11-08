@@ -9,7 +9,7 @@ import { LEAP_TIME } from '../sim/abilities/flight';
 import { metamorphCost } from '../sim/abilities/metamorph';
 import { M_PER_TILE } from '../sim/physics';
 import { buildingSprite, throwFrame, unitShadow, unitSprite, UNITS_PER_TILE, type ArtAnim, type FrameTime, type Sprite, type UnitArt } from '../art/contract';
-import { gpuTexture, setFrameReader } from '../art/gpu';
+import { gpuTexture } from '../art/gpu';
 import { TEAM_COLORS, type ArtBank } from './artbank';
 import { buildGround } from './ground';
 
@@ -257,8 +257,6 @@ export class Renderer {
     this.diamondTex = shapeTexture((c, w, h) => { c.strokeStyle = '#fff'; c.lineWidth = 5; c.beginPath(); c.moveTo(w / 2, 3); c.lineTo(w - 4, h / 2); c.lineTo(w / 2, h - 3); c.lineTo(4, h / 2); c.closePath(); c.stroke(); });
     // the ground: painted by a shader from small per-tile data (render/ground.ts), its clutter as sprites
     this.ground.addChild(buildGround(this.world, this.extraDirt, { biomes: this.bank.biomes, homes: this.world.homes }, (s) => this.texture(s)));
-    // 2D-canvas art (HUD icons, portraits) read back from compressed pages, which only the GPU holds
-    setFrameReader((tex, x, y, w, h) => this.app.renderer.extract.canvas(new Texture({ source: tex as TextureSource, frame: new Rectangle(x, y, w, h) })) as HTMLCanvasElement);
     // Upload every sprite sheet now, so the first swing or death of each unit
     // doesn't hitch mid-battle while its sheet goes to the GPU.
     for (const img of this.bank.allImages()) this.app.renderer.texture.initSource(this.source(img));

@@ -10,7 +10,7 @@ import { CAP, capitalFor, derive, type DerivedStats } from '../sim/physics';
 import { clock, f1, fmt, have, n0, need, pct, statRow } from './format';
 import { unitFrame } from '../render/renderer';
 import { teamColor } from '../render/artbank';
-import { blit, fitCanvas, spriteIcon, spriteToCanvas } from '../art/draw';
+import { blit, drawable, fitCanvas, spriteIcon, spriteToCanvas } from '../art/draw';
 import { unitSprite } from '../art/contract';
 import type { ArtBank } from '../render/artbank';
 import { keymap, onSettings } from './settings';
@@ -78,8 +78,8 @@ export class Hud {
     const key = `${kind}/${id}/${size}`;
     let url = this.icons.get(key);
     if (url === undefined) {
-      const ua = kind === 'unit' ? this.bank.unit(this.player, id) : undefined;
-      const sprite = kind === 'building' ? this.bank.building(this.player, id)?.complete : ua ? unitSprite(ua, 'idle', 1, { time: 0 }) : undefined;
+      const ua = kind === 'unit' ? this.bank.unit(this.player, id) : undefined, ba = kind === 'building' ? this.bank.building(this.player, id) : undefined;
+      const sprite = ba ? ba.still ?? ba.complete : ua ? ua.still ?? unitSprite(ua, 'idle', 1, { time: 0 }) : undefined;
       if (!sprite) return ''; // (not baked yet: asked again next time)
       url = spriteIcon(sprite, size * 2).toDataURL();
       this.icons.set(key, url);
@@ -99,7 +99,7 @@ export class Hud {
       <span class="res" title="${names.food}: trains units, refills calories.">${icon(spriteToCanvas(bank.biome.bushes[bank.biome.bushes.length - 1], 40, 1.1))}<b data-res="food"></b></span>
       <span class="res" title="${names.wood}: buildings (their capital) and research.">${icon(spriteToCanvas(bank.biome.trees[0], 40, 1.05))}<b data-res="wood"></b></span>
       <span class="res" title="${names.crystal}: weapons and ammo.">${icon(spriteToCanvas(bank.biome.mines[bank.biome.mines.length - 1], 40, 1.1))}<b data-res="crystal"></b></span>
-      <span class="res" title="Units">${villager ? icon(spriteToCanvas(unitSprite(villager, 'idle', 1, { time: 0 }), 40, 1.5)) : ''}<b data-res="pop"></b></span>
+      <span class="res" title="Units">${villager ? icon(spriteToCanvas(villager.still ?? unitSprite(villager, 'idle', 1, { time: 0 }), 40, 1.5)) : ''}<b data-res="pop"></b></span>
       <button class="idle-btn" data-idle title="Select the next idle ${workerName(world.factionOf(player)).toLowerCase()} (.)">Idle <b data-res="idle"></b></button>
       <span class="res clock" data-res="clock"></span>
       <span class="res fps" data-res="fps"></span>`;
@@ -433,7 +433,9 @@ export class Hud {
       const { ctx, w, h } = fit;
       const live = p.unit && this.world.units.has(p.unit.id) ? p.unit : undefined;
       const f = live ? unitFrame(live) : { anim: 'idle' as const, time: this.t };
-      const sprite = unitSprite(sheet, f.anim, live ? live.heading : 1, f);
+      // a build's frames live only on the GPU: then its still
+      const sprite = drawable(unitSprite(sheet, f.anim, live ? live.heading : 1, f), sheet.still);
+      if (!sprite) continue;
       const zoom = Math.min(2.4, (h * 0.78) / sheet.height);
       ctx.imageSmoothingQuality = 'high';
       blit(ctx, sprite, w / 2, h * 0.9, zoom);

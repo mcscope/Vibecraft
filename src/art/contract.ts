@@ -56,6 +56,8 @@ export interface UnitArt {
    */
   segments?: Array<{ anims: Partial<Record<ArtAnim, AnimArt>> & { idle: AnimArt }; behind: number }>;
   anims: Partial<Record<ArtAnim, AnimArt>> & { idle: AnimArt };
+  /** Its picture for portraits and icons, on a page a 2D canvas can draw (a build's frames live only on the GPU: art/prebaked.ts). */
+  still?: Sprite;
   sounds?: UnitSounds;
 }
 
@@ -75,6 +77,8 @@ export interface BuildingArt {
    * sim throws); after `to` it goes back to rest. Shot after shot it plays `from` … `to` again.
    */
   attack?: ThrowArt;
+  /** Its picture for icons, as UnitArt.still. */
+  still?: Sprite;
   sounds?: { placed?: SoundSpec; complete?: SoundSpec; destroyed?: SoundSpec };
 }
 

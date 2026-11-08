@@ -27,9 +27,9 @@ try {
     const t = Date.now();
     // a fresh page for each bake: one page baking everything slows down and loses its GL context
     const page = await open();
-    const { json, pages } = await page.evaluate((k) => window.prebake(k), key);
+    const { json, pages, cpu } = await page.evaluate((k) => window.prebake(k), key);
     await page.close();
-    await writeFile(join(out, `${key}.json`), JSON.stringify({ pages: pages.length, art: JSON.parse(json) }));
+    await writeFile(join(out, `${key}.json`), JSON.stringify({ pages: pages.length, cpu, art: JSON.parse(json) }));
     let bytes = 0;
     for (const [i, d] of pages.entries()) { const buf = Buffer.from(d.split(',')[1], 'base64'); bytes += buf.length; await writeFile(join(out, `${key}.${i}.webp`), buf); }
     console.log(`${key}: ${pages.length} pages, ${(bytes / 1e6).toFixed(1)} MB, ${((Date.now() - t) / 1000).toFixed(0)} s`);
