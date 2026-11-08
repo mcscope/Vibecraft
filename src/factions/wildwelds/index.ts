@@ -90,11 +90,15 @@ function drawVimmer(b: ModelBuilder, p: Pose, mass: number): void {
           const k = i / steps, cw = (chord + (chord2 - chord) * k) * (i % 2 ? 0.72 : 1); // ribs at the full width: scalloped between
           return { at: [k * len, 0, cw * 0.9] as V, w: Math.max(0.01, cw), up: 0.008, down: 0.008 };
         }), membrane);
+        w.loft(Array.from({ length: steps + 1 }, (_, i) => { // (its underside, in its side's colour)
+          const k = i / steps, cw = (chord + (chord2 - chord) * k) * (i % 2 ? 0.72 : 1);
+          return { at: [k * len, -0.006, cw * 0.9] as V, w: Math.max(0.01, cw * 0.97), up: 0.002, down: 0.008 };
+        }), DARK);
         for (let i = 0; i <= steps; i += 2) { const k = i / steps, cw = chord + (chord2 - chord) * k; if (cw > 0.03) w.limb([k * len, 0, 0], [k * len - 0.03, 0, cw * 1.8], 0.009, rib, 0.005); }
       }
     });
   };
-  const body = (c: ModelBuilder) => spikeBody(c, p.armed, '#2a9aa6');
+  const body = (c: ModelBuilder) => spikeBody(c, p.armed, '#2a9aa6', 1, { saddle: false, body: { ...DARK, tex: 'leather', metal: 0.35 }, rims: [LIGHT, { color: '#2a9aa6', tex: 'leather', rough: 0.3, metal: 0.4 }] }); // (its torso in its side's dark, ringed light and teal)
   b.joint([0, 0, 0], [0, 0, 0], (o) => {
     // the V, `open` from folded tight back along its body (0) to spread (1), beating by `flap`. During a leap its
     // joints unfold in turn from the ones it stood on: `legs` (1 → 0) is how much the inner and outer joints still
@@ -200,7 +204,7 @@ function drawVimmer(b: ModelBuilder, p: Pose, mass: number): void {
  * one). `tint` colours its barbs and every other segment rim; the rest of the rims and a plate over its back are in
  * its side's colour.
  */
-function spikeBody(c: ModelBuilder, armed: boolean, tint: string, len = 1): void {
+function spikeBody(c: ModelBuilder, armed: boolean, tint: string, len = 1, look: { body?: Mat; rims?: [Mat, Mat]; saddle?: boolean } = {}): void {
   type V = [number, number, number];
   const chitin: Mat = { color: '#1a2628', tex: 'leather', rough: 0.3, metal: 0.35 };
   const sheen: Mat = { color: tint, tex: 'leather', rough: 0.3, metal: 0.4 };
@@ -210,12 +214,12 @@ function spikeBody(c: ModelBuilder, armed: boolean, tint: string, len = 1): void
   // (`len`: drawn that much longer, a pike of a body: its trunk stretched, head and point pushed forward with it, as thick)
   const X = (x: number) => x * len, dh = 0.25 * (len - 1);
   c.loft([[-0.58, 0.02, 0.02, 0.02], [-0.44, 0.06, 0.05, 0.05], [-0.28, 0.08, 0.07, 0.08], [-0.12, 0.1, 0.085, 0.1], [0.02, 0.11, 0.1, 0.1], [0.14, 0.08, 0.075, 0.075], [0.2, 0.055, 0.055, 0.055]]
-    .map(([x, w, up, down]) => ({ at: [X(x), 0, 0] as V, w, up, down, keel: 0.4 })), chitin);
-  for (let x = -0.4, i = 0; x <= 0.03; x += 0.14 / len, i++) c.sphere([i % 2 ? 0.012 : 0.02, 0.095, 0.105], [X(x), 0, 0], i % 2 ? sheen : DARK); // segment rims
+    .map(([x, w, up, down]) => ({ at: [X(x), 0, 0] as V, w, up, down, keel: 0.4 })), look.body ?? chitin); // (its trunk: `look.body` recolours it)
+  for (let x = -0.4, i = 0; x <= 0.03; x += 0.14 / len, i++) c.sphere([i % 2 ? 0.012 : 0.02, 0.095, 0.105], [X(x), 0, 0], (look.rims ?? [DARK, sheen])[i % 2]); // segment rims
   // a plate over its back in its side's light tone, rimmed in its dark
   const saddle = [[-0.3, 0.07, 0.078], [-0.16, 0.088, 0.1], [-0.02, 0.102, 0.112], [0.1, 0.082, 0.088]];
-  c.loft(saddle.map(([x, w, up]) => ({ at: [X(x), 0.008, 0] as V, w: w * 1.18, up: up * 1.06, down: 0.02, flat: 0.2 })), DARK);
-  c.loft(saddle.map(([x, w, up]) => ({ at: [X(x), 0.012, 0] as V, w: w * 1.08, up: up * 1.08, down: 0.02, flat: 0.2 })), LIGHT);
+  if (look.saddle !== false) c.loft(saddle.map(([x, w, up]) => ({ at: [X(x), 0.008, 0] as V, w: w * 1.18, up: up * 1.06, down: 0.02, flat: 0.2 })), DARK);
+  if (look.saddle !== false) c.loft(saddle.map(([x, w, up]) => ({ at: [X(x), 0.012, 0] as V, w: w * 1.08, up: up * 1.08, down: 0.02, flat: 0.2 })), LIGHT);
   for (let i = 0; i < Math.round(6 * len); i++) c.cone(0.015, 0.07, [X(0.08) - i * 0.12, 0.08 - i * 0.004, 0], chitin, [0, 0, 0.6], 4); // spines down its back
   c.cone(0.025, 0.1, [X(-0.62), 0, 0], sheen, [0, 0, Math.PI / 2], 4); // the tail barb
   c.sphere([0.08, 0.07, 0.075], [0.25 + dh, 0, 0], chitin);
@@ -227,14 +231,14 @@ function spikeBody(c: ModelBuilder, armed: boolean, tint: string, len = 1): void
 
 /** A charger's build: its legs (hip height standing, thigh, shin, the foot bone from toes up to ankle), how wide it
  *  stands, how thick its legs, its body's size and colour, and how far it strides walking and running. */
-interface ChargerBuild { /** How far its ram slams forward (body units; 0.45 default), to its sim reach. */ ram?: number; H: number; thigh: number; shin: number; foot: [number, number, number]; hipZ: number; footZ: number; thighR: number; shinR: number; body: number; tint: string; walk: number; run: number; whip?: number; trebuchet?: boolean; long?: number; sling?: number }
-const CHARGER: ChargerBuild = { ram: 0.89, H: 0.62, thigh: 0.3, shin: 0.32, foot: [-0.07, 0.21, 0], hipZ: 0.09, footZ: 0.11, thighR: 0.055, shinR: 0.035, body: 0.7, tint: '#7fbf4a', walk: 0.22, run: 0.34 };
+interface ChargerBuild { /** Its thighs and segment rims in its side's dark (the charger: its body otherwise reads as its own green). */ dark?: boolean; /** How far its ram slams forward (body units; 0.45 default), to its sim reach. */ ram?: number; H: number; thigh: number; shin: number; foot: [number, number, number]; hipZ: number; footZ: number; thighR: number; shinR: number; body: number; tint: string; walk: number; run: number; whip?: number; trebuchet?: boolean; long?: number; sling?: number }
+const CHARGER: ChargerBuild = { dark: true, ram: 0.89, H: 0.62, thigh: 0.3, shin: 0.32, foot: [-0.07, 0.21, 0], hipZ: 0.09, footZ: 0.11, thighR: 0.055, shinR: 0.035, body: 0.7, tint: '#7fbf4a', walk: 0.22, run: 0.34 };
 // the T2 lasher: the charger's legs and body, and two whip arms held back along its torso (the user's design); `whip`:
 // metres of lash (its attack.whip)
 const LASHER: ChargerBuild = { H: 0.6, thigh: 0.29, shin: 0.31, foot: [-0.07, 0.2, 0], hipZ: 0.1, footZ: 0.12, thighR: 0.06, shinR: 0.038, body: 0.8, tint: '#2a8a96', walk: 0.21, run: 0.33, whip: 2 };
 // the T2 slinger: the charger's build, its body the arm of a trebuchet (the user's design)
 // (`sling`: metres of throwing arm and cord past its own reach, its attack.sling: the art draws the arm that long)
-const SLINGER: ChargerBuild = { ...CHARGER, H: 0.6, body: 0.75, tint: '#3ab0bc', trebuchet: true, sling: 2 };
+const SLINGER: ChargerBuild = { ...CHARGER, dark: false, H: 0.6, body: 0.75, tint: '#3ab0bc', trebuchet: true, sling: 2 };
 // the T1 micropike: the tripod pendulum (the user's pick of three concepts); its own colour
 const MP = {
   hub: 1.65, // its hub's height at rest (model units): the hanging pike's crystal just clears the ground
@@ -422,7 +426,7 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
       const foot = running ? footAt(restFoot, ph, k.run, 0.2, 0.35) : walking ? footAt(restFoot, ph, k.walk, 0.12, 0.55) : restFoot;
       const ankle: V = [foot[0] + k.foot[0], foot[1] + k.foot[1], foot[2]];
       const knee = jointBetween(hip, ankle, k.thigh, k.shin, [1, 0.3, S * 0.4]); // (its knee forward, its ankle bending back)
-      shapedLimb(c, hip, knee, k.thighR, [1.1, 1.4, 1.35, 1.0, 0.7], muscle); // the thigh, thick with muscle, tapering to the knee
+      shapedLimb(c, hip, knee, k.thighR, [1.1, 1.4, 1.35, 1.0, 0.7], k.dark ? { ...DARK, tex: 'leather', metal: 0.2 } : muscle); // the thigh, thick with muscle, tapering to the knee
       c.sphere(k.thighR * 0.85, knee, LIGHT); // (its knees in its side's light)
       shapedLimb(c, knee, ankle, k.shinR, [1.0, 0.85, 0.72, 0.66, 0.7], chitin, { flat: 0.3 }); // the shin
       c.sphere(k.shinR * 0.68, ankle, chitin);
@@ -440,8 +444,8 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
     const dip = k.whip ? Math.sin(Math.min(1, p.phase / 0.7) * Math.PI) * (p.anim === 'attack' ? 1 : 0) : 0;
     const bodyY = H + bob + ramLift + 0.04 - 0.08 * dip - 0.07 * spear, bodyRot = tilt + ramTilt + treb + (running ? (spear ? -0.02 : -0.15) : 0) - 0.35 * dip;
     c.joint([ramShift + 0.08 * spear, bodyY, 0], [0, 0, bodyRot], (t) => t.joint([0, 0, 0], [0, 0, 0], (q) => {
-      spikeBody(q, k.whip || k.trebuchet ? false : p.armed, k.tint);
-      if (k.trebuchet) trebuchetParts(q, p, tp, rp, k.tint, { y: bodyY, rot: bodyRot, scale: k.body }, ((k.sling ?? 1.6) / (k.body * LOOK.charger.scale(mass)) - 0.16) / 8);
+      spikeBody(q, k.whip || k.trebuchet ? false : p.armed, k.tint, 1, k.dark ? { rims: [DARK, DARK] } : {});
+      if (k.trebuchet) trebuchetParts(q, p, tp, rp, { y: bodyY, rot: bodyRot, scale: k.body }, ((k.sling ?? 1.6) / (k.body * LOOK.charger.scale(mass)) - 0.16) / 8);
       if (k.whip) whipArms(q, p, ((k.whip + 0.9) / LOOK.lasher.scale(mass)) / k.body); // (the lash is its arm too: an arm's length and the whip's, the sim's reach)
     }, k.body));
   }, (k.whip ? LOOK.lasher : LOOK.charger).scale(mass));
@@ -500,10 +504,9 @@ function whipArms(c: ModelBuilder, p: Pose, len: number): void {
  * counterweight: reloading, the arm swings up over its back to it, takes a crystal into the sling, and swings back down
  * low behind, cocked. Before a throw the arm is pulled down to the ground. `tp`, `rp`: the throw's and the reload's progress (-1 when not).
  */
-function trebuchetParts(q: ModelBuilder, p: Pose, tp: number, rp: number, tint: string, body: { y: number; rot: number; scale: number }, seg = 0.16): void {
+function trebuchetParts(q: ModelBuilder, p: Pose, tp: number, rp: number, body: { y: number; rot: number; scale: number }, seg = 0.16): void {
   type V = [number, number, number];
   const chitin: Mat = { color: '#1a2628', tex: 'leather', rough: 0.3, metal: 0.35 };
-  const sheen: Mat = { color: tint, tex: 'leather', rough: 0.3, metal: 0.4 };
   const cord: Mat = { color: '#6a5640', tex: 'leather', rough: 0.8 };
   // the counterweight: plates over a heavy head in its side's light, a crest of spines in its dark
   q.loft([[0.16, 0.1, 0.1, 0.08], [0.26, 0.13, 0.13, 0.09], [0.36, 0.1, 0.1, 0.07], [0.42, 0.05, 0.05, 0.04]].map(([x, w, u, d]) => ({ at: [x, 0.04, 0] as V, w, up: u, down: d, flat: 0.25 })), { ...LIGHT, tex: 'leather', metal: 0.3 });
@@ -525,12 +528,12 @@ function trebuchetParts(q: ModelBuilder, p: Pose, tp: number, rp: number, tint: 
     const ax = -0.58 + x * Math.cos(-arm) - y * Math.sin(-arm), ay = x * Math.sin(-arm) + y * Math.cos(-arm);
     return body.y + body.scale * (ax * Math.sin(body.rot) + ay * Math.cos(body.rot));
   };
-  q.joint([-0.58, 0, 0], [0, 0, -arm], (a) => trebuchetArm(a, tp, loaded, curl, chitin, sheen, cord, groundY, seg));
+  q.joint([-0.58, 0, 0], [0, 0, -arm], (a) => trebuchetArm(a, tp, loaded, curl, chitin, cord, groundY, seg));
   for (const z of [1, -1]) q.limb([-0.3, -0.06, z * 0.06], [-0.58, 0, z * 0.015], 0.008, chitin, 0.005); // struts
 }
 
 /** The slinger's throwing arm, from the tail's base (local origin) out along -x, with its sling. */
-function trebuchetArm(q: ModelBuilder, tp: number, loaded: boolean, curl: number, chitin: Mat, sheen: Mat, cord: Mat, groundY: (x: number, y: number) => number, seg = 0.16): void {
+function trebuchetArm(q: ModelBuilder, tp: number, loaded: boolean, curl: number, chitin: Mat, cord: Mat, groundY: (x: number, y: number) => number, seg = 0.16): void {
   type V = [number, number, number];
   let at: V = [0, 0, 0];
   for (let i = 1; i <= 8; i++) { // (a long arm: eight segments)
@@ -538,7 +541,7 @@ function trebuchetArm(q: ModelBuilder, tp: number, loaded: boolean, curl: number
     const step = (a: number): V => [at[0] - seg * Math.cos(a), at[1] + 0.012 + seg * Math.sin(a), 0]; // (its segments as long as the sim's sling makes the arm)
     for (let k = 0; k < 40 && groundY(step(th)[0], step(th)[1]) < 0.035; k++) th += 0.06; // (never into the ground: it lies along it, dragging)
     const nx = step(th);
-    shapedLimb(q, at, nx, 0.038 * (1 - i * 0.08), [1.1, 0.85, 0.9, 1.05], i % 2 ? chitin : sheen, { flat: 0.3 });
+    shapedLimb(q, at, nx, 0.038 * (1 - i * 0.08), [1.1, 0.85, 0.9, 1.05], i % 2 ? DARK : LIGHT, { flat: 0.3 }); // (its arm banded in its side's dark and light)
     q.cone(0.012, 0.045, [nx[0] + 0.05, nx[1] + 0.03, 0], chitin, [0, 0, 0.6], 4);
     at = nx;
   }
@@ -603,17 +606,15 @@ function caterpillar(b: ModelBuilder, p: Pose, color: string, mass: number): voi
  * fed, cooking ('grow'), it's bright and pulses, its pleats glowing; hatching ('hatch', its last moments) it shudders and
  * its top opens out petal by petal, the young one's head rising out of it.
  */
-function origamiBun(b: ModelBuilder, p: Pose, tint: string, mass: number, teamPleats = false): void {
+function origamiBun(b: ModelBuilder, p: Pose, tint: string, mass: number): void {
   const t = p.phase * TAU, h = p.anim === 'hatch' ? p.phase : 0, hungry = p.anim === 'hungry', cooking = p.anim === 'grow' || p.anim === 'hatch';
   const sm = (x: number) => { const k = Math.max(0, Math.min(1, x)); return k * k * (3 - 2 * k); };
   const dim = (c: string) => (hungry ? mix(c, '#2a2520', 0.5) : c);
   const pulse = p.anim === 'grow' ? Math.sin(t) : 0;
   const paper: Mat = { color: dim(mix('#f4efe2', tint, 0.35)), tex: 'none', rough: 0.85 };
   const fold: Mat = { color: dim(mix('#d8d0bc', tint, 0.55)), tex: 'none', rough: 0.85 };
-  const pleat: Mat = teamPleats // (a cocoon's pleats are in its side's colour, glowing as it cooks)
-    ? (cooking ? { team: 'light', tex: 'none', rough: 0.4, emissive: b.team.primary } : TEAM)
-    : cooking ? { color: mix(mix('#ffffff', tint, 0.5), tint, 0.5 - 0.5 * pulse), tex: 'none', rough: 0.4, emissive: tint } : fold;
-  const pw = teamPleats ? 1.5 : 1; // (its pleats drawn thicker, to show)
+  // its pleats in its side's colour, glowing as it cooks (drawn thicker, to show)
+  const pleat: Mat = cooking ? { team: 'light', tex: 'none', rough: 0.4, emissive: b.team.primary } : TEAM, pw = 1.5;
   // its swell: pulsing as it cooks, sagging hungry, breathing at rest
   const sx = 1 + (p.anim === 'grow' ? 0.05 * pulse : p.anim === 'idle' ? 0.015 * Math.sin(t) : hungry ? 0.008 * Math.sin(t) : 0);
   const sy = (hungry ? 0.9 : 1) * (1 + (p.anim === 'grow' ? 0.08 * pulse : p.anim === 'idle' ? 0.02 * Math.sin(t) : 0));
@@ -622,7 +623,6 @@ function origamiBun(b: ModelBuilder, p: Pose, tint: string, mass: number, teamPl
   b.joint([0, 0, 0], [shake * 0.6, 0, shake], (e) => {
     e.cylinder(0.24 * sx, 0.21 * sx, 0.06 * sy, [0, 0.03 * sy, 0], fold, [0, oct, 0], N); // its flat underside
     e.cylinder(0.17 * sx, 0.24 * sx, 0.12 * sy, [0, 0.12 * sy, 0], paper, [0, oct, 0], N); // the lower dome
-    if (!teamPleats) e.cylinder(0.178 * sx, 0.192 * sx, 0.035 * sy, [0, 0.165 * sy, 0], TEAM, [0, oct, 0], N); // (an egg: a paper band round its waist, in the side's colour)
     const open = sm((h - 0.35) / 0.45);
     if (open <= 0) {
       e.cylinder(0.06 * sx, 0.17 * sx, 0.1 * sy, [0, 0.23 * sy, 0], paper, [0, oct, 0], N); // the upper dome
@@ -687,7 +687,7 @@ function drawDragonFly(b: ModelBuilder, p: Pose, mass: number): void {
       tp = [tp[0] - 0.12, tp[1] + 0.05 - i * 0.004 + wave(-i * 0.6, 1, 0.02), wave(-i * 0.55, 1, 0.02 * i)];
       const r = 0.11 * (1 - i * 0.075) * (i === 1 ? 1.05 : 1);
       body.push({ at: tp, w: r, up: r, down: r });
-      if (i % 2 === 0) c.sphere([0.03, r * 1.1, r * 1.1], tp, DARK); // a band at each segment, in its side's dark
+      if (i % 2 === 0) c.sphere([0.055, r * 1.12, r * 1.12], tp, DARK); // a wide band at every other segment, in its side's dark
     }
     body.push({ at: [tp[0] - 0.05, tp[1], tp[2]], w: 0.02, up: 0.02, down: 0.02 });
     c.loft(body, scale);
@@ -744,15 +744,15 @@ function drawDragonFly(b: ModelBuilder, p: Pose, mass: number): void {
     // butterfly wings, a monarch's or a swallowtail's: a long swept forewing, bright at the base and deepening to a dark
     // tip, a black margin spotted white, black veins fanning from the body, a blue shimmer by the body; a rounded
     // hindwing with an eyespot and a swallowtail. Beating in flight; at rest raised together upright over its back
-    const deep: Mat = { color: '#c0581c', tex: 'none', rough: 0.55 }, margin: Mat = { color: '#141016', tex: 'none', rough: 0.7 };
-    const dot: Mat = { color: '#fbf6e8', tex: 'none', rough: 0.5 }, shimmer: Mat = { color: '#3a7ae0', tex: 'none', rough: 0.2, metal: 0.6 };
+    const margin: Mat = { color: '#141016', tex: 'none', rough: 0.7 };
+    const dot: Mat = { color: '#fbf6e8', tex: 'none', rough: 0.5 };
     for (const z of [1, -1]) {
       const up = flying ? -z * beat : -z * 1.45, lean = flying ? 0.15 : -0.2;
       c.joint([0.04, y0 + 0.17, z * 0.1], [up, 0, lean + 0.42], (wg) => wg.joint([0, 0, 0], [0, 0, 0], (wg) => {
         wg.sphere([0.4, 0.006, 0.74], [0.06, 0, z * 0.66], margin); // the black margin, under it all
         wg.sphere([0.34, 0.01, 0.6], [0.05, 0, z * 0.58], wing); // the wing
-        wg.sphere([0.22, 0.012, 0.3], [0.12, 0, z * 0.92], deep); // deepening toward the tip
-        wg.sphere([0.12, 0.013, 0.18], [0.02, 0, z * 0.18], shimmer); // a blue shimmer by the body
+        wg.sphere([0.22, 0.012, 0.3], [0.12, 0, z * 0.92], LIGHT); // toward the tip, its side's light
+        wg.sphere([0.12, 0.013, 0.18], [0.02, 0, z * 0.18], LIGHT); // by the body, its side's light
         for (let k = 0; k < 6; k++) { const a = -0.9 + k * 0.36; wg.limb([0, 0, z * 0.08], [Math.sin(a) * 0.3, 0, z * (0.1 + Math.cos(a) * 0.8)], 0.015, margin, 0.014); } // veins
         for (let k = 0; k < 9; k++) { const a = -1.0 + k * 0.25; wg.sphere([0.022, 0.017, 0.022], [0.06 + Math.sin(a) * 0.37, 0, z * (0.66 + Math.cos(a) * 0.7)], dot); } // white spots in the margin
         for (const [r, m, th] of [[0.11, eyeOut, 0.016], [0.075, LIGHT, 0.018], [0.035, eyeIn, 0.02]] as const) wg.sphere([r, th, r], [-0.05, 0, z * 0.72], m); // eyespot, its ring in its side's light
@@ -760,7 +760,7 @@ function drawDragonFly(b: ModelBuilder, p: Pose, mass: number): void {
       c.joint([-0.1, y0 + 0.08, z * 0.1], [flying ? -z * beat * 0.85 : -z * 1.4, 0, (flying ? -0.1 : -0.35) + 0.42], (wg) => wg.joint([0, 0, 0], [0, 0, 0], (wg) => {
         wg.sphere([0.34, 0.006, 0.54], [-0.14, 0, z * 0.46], margin);
         wg.sphere([0.29, 0.01, 0.46], [-0.13, 0, z * 0.42], wing);
-        wg.sphere([0.1, 0.013, 0.14], [-0.04, 0, z * 0.16], shimmer);
+        wg.sphere([0.2, 0.012, 0.26], [-0.12, 0, z * 0.4], LIGHT); // its middle, its side's light
         for (let k = 0; k < 4; k++) { const a = -0.5 - k * 0.35; wg.limb([0, 0, z * 0.06], [Math.sin(a) * 0.34, 0, z * (0.06 + Math.cos(a) * 0.5)], 0.015, margin, 0.014); }
         for (let k = 0; k < 6; k++) { const a = -0.6 - k * 0.3; wg.sphere([0.02, 0.017, 0.02], [-0.14 + Math.sin(a) * 0.34, 0, z * (0.46 + Math.cos(a) * 0.52)], dot); }
         for (const [r, m, th] of [[0.08, eyeOut, 0.016], [0.05, DARK, 0.018], [0.025, eyeIn, 0.02]] as const) wg.sphere([r, th, r], [-0.24, 0, z * 0.6], m); // eyespot, its ring in its side's dark
@@ -820,8 +820,8 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
     const detail = o.detail ?? 1; // (lower tiers: simpler, fewer plates, spines and spurs)
     // (the plate over her thorax: in her side's colour on the smallest; on the bigger ones a smaller plate of it over
     // the front of the thorax, up by her neck)
-    c.loft([[-0.18, 0.1, 0.1], [-0.06, 0.18, 0.17], [0.08, 0.17, 0.16], [0.18, 0.08, 0.1]].map(([x, w, u]) => ({ at: [x, y0 + 0.01, 0] as V3, w, up: u, down: 0.03, flat: 0.3 })), detail < 0.5 ? { ...TEAM, tex: 'leather' } : plate);
-    if (detail >= 0.5) c.loft([[-0.02, 0.12, 0.16], [0.07, 0.19, 0.21], [0.15, 0.15, 0.17], [0.21, 0.07, 0.1]].map(([x, w, u]) => ({ at: [x, y0 + 0.02, 0] as V3, w, up: u, down: 0.03, flat: 0.3 })), { ...TEAM, tex: 'leather' });
+    c.loft([[-0.18, 0.1, 0.1], [-0.06, 0.18, 0.17], [0.08, 0.17, 0.16], [0.18, 0.08, 0.1]].map(([x, w, u]) => ({ at: [x, y0 + 0.01, 0] as V3, w: detail < 0.5 ? w * 1.4 : w, up: u, down: 0.03, flat: detail < 0.5 ? 0.6 : 0.3 })), detail < 0.5 ? { ...TEAM, tex: 'leather' } : plate); // (on the smallest a frill, wider than her thorax)
+    if (detail >= 0.5) c.loft([[-0.02, 0.2, 0.16], [0.07, 0.38, 0.22], [0.15, 0.32, 0.18], [0.21, 0.13, 0.1]].map(([x, w, u]) => ({ at: [x, y0 + 0.02, 0] as V3, w, up: u, down: 0.03, flat: 0.6 })), { ...TEAM, tex: 'leather' }); // (a frill, flaring out wider than her thorax)
     if (detail > 0.5) for (const x of [-0.1, 0.0, 0.1]) c.cone(0.025, 0.07, [x, y0 + 0.17, 0], plate, [0, 0, 0.4], 4);
     // the abdomen: a clearly enlarged brood abdomen, arched up into the air behind her thorax so its weight rides over
     // her legs: one sculpted shape, broad and keeled, plated over the top, cavities on its sides, curling over at its
@@ -946,7 +946,7 @@ const egg = (tier: 1 | 2 | 3, mass: number) => unit({ id: `egg${tier}`, name: `T
 // the shell larvae change inside (at the larva's own mass): mostly frame, tough
 // (its spec at the biggest larva's mass: it's baked that size and drawn down for smaller ones, never blown up blurry)
 const cocoon = unit({ id: 'cocoon', name: 'Cocoon', mass: 179, physique: SHELL, canGather: false, description: 'A larva changing. Give it food to finish.',
-  model: (b, p) => origamiBun(b, p, '#c8b88a', 179, true) }, 'egg');
+  model: (b, p) => origamiBun(b, p, '#c8b88a', 179) }, 'egg');
 
 // mothers: lay anything up to their own refinement (a mother carries at least her cheapest egg's price)
 // (each tier's form is its own shape: its collision as wide as that tier is drawn, × its drawn scale)
@@ -971,7 +971,7 @@ function gHopper(b: ModelBuilder, p: Pose, gait = HOPPER_GAIT): void {
   const sm = (x: number) => { const k = Math.max(0, Math.min(1, x)); return k * k * (3 - 2 * k); };
   const plate: Mat = { color: '#5a2418', tex: 'leather', rough: 0.25, metal: 0.35 };
   const edge: Mat = { color: '#2a120c', tex: 'none', rough: 0.2, metal: 0.4 }, belly: Mat = { color: '#7a3424', tex: 'leather', rough: 0.4 };
-  const leg: Mat = { color: '#7a3424', tex: 'leather', rough: 0.35 };
+  const leg: Mat = { team: 'primary', tex: 'leather', rough: 0.35 }; // (its leg in its side's colour)
   const moving = p.anim === 'walk', ph = ((p.phase % 1) + 1) % 1, t = p.phase * Math.PI * 2;
   // the bound as the sim plays it (sim/abilities/gait.ts): crouching and pushing off for UP of it, then in the air for
   // AIR, then landing; in the air it flies as a thrown body does, its apex g·t²/8 above where it left the ground (in
