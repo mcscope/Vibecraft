@@ -24,6 +24,12 @@ const TAU = Math.PI * 2;
 /** The larvae's colours by tier (the user's). */
 const TIER = { 1: '#5fae3a', 2: '#2fb8c4', 3: '#b04fb8' } as const;
 
+/** The side's colour, for its markings: bands, plates, a crest, ribbons. Each body carries it in a few set places, so
+ *  you can tell whose it is at a glance while its own colours stay its own. */
+const TEAM: Mat = { team: 'primary', tex: 'none', rough: 0.4 };
+/** A pale edge beside a team marking: it sets the marking off a body of a near colour (a green larva on the green side). */
+const RIM: Mat = { color: '#f2ead2', tex: 'none', rough: 0.5 };
+
 /**
  * Each look's drawn scale for a mass (a body's length grows with ∛ of its mass), and its footprint: the metres across
  * it's drawn (a long body: how wide), which is its collision size (UnitSpec.size).
@@ -69,11 +75,11 @@ function drawVimmer(b: ModelBuilder, p: Pose, mass: number): void {
   const along = (a: V, d: V, len: number): V => [a[0] + d[0] * len, a[1] + d[1] * len, a[2] + d[2] * len];
   // one wing bone from a to b: a spined spar along its leading edge, the membrane trailing behind it toward `aft` (its
   // body's tail, however the body is turned), ribbed, its edge scalloped, `chord` wide at a and `chord2` at b
-  const bone = (c: ModelBuilder, a: V, bb: V, chord: number, chord2: number, aft: V = [-1, 0, 0]) => {
+  const bone = (c: ModelBuilder, a: V, bb: V, chord: number, chord2: number, aft: V = [-1, 0, 0], spar: Mat = chitin) => {
     const d: V = [bb[0] - a[0], bb[1] - a[1], bb[2] - a[2]], len = Math.hypot(...d);
     if (len < 1e-3) return;
     c.joint(a, aim(d, aft), (w) => {
-      shapedLimb(w, [0, 0, 0], [len, 0, 0], 0.03, [1.15, 1.0, 0.9, 0.8, 0.72], chitin, { flat: 0.3 }); // (the spar, tapering out)
+      shapedLimb(w, [0, 0, 0], [len, 0, 0], 0.03, [1.15, 1.0, 0.9, 0.8, 0.72], spar, { flat: 0.3 }); // (the spar, tapering out)
       for (let x = 0.08; x < len - 0.04; x += 0.13) w.cone(0.012, 0.06, [x, 0.03, 0], sheen, [0, 0, -0.5], 4); // spines
       if (chord > 0.01 || chord2 > 0.01) {
         const steps = 6;
@@ -96,7 +102,7 @@ function drawVimmer(b: ModelBuilder, p: Pose, mass: number): void {
         const { sh, wrist, knuckle, tip } = veePoints(S, open, flap);
         const f = 0.35 + 0.65 * open;
         bone(c, sh, wrist, 0.18 * f, 0.22 * f);
-        bone(c, wrist, knuckle, 0.22 * f, 0.18 * f);
+        bone(c, wrist, knuckle, 0.22 * f, 0.18 * f, undefined, TEAM); // (its middle spar in its side's colour)
         bone(c, knuckle, tip, 0.18 * f, 0.02);
         c.cone(0.02, 0.08, tip, chitin, [0, 0, -Math.PI / 2], 4);
       }
@@ -137,7 +143,7 @@ function drawVimmer(b: ModelBuilder, p: Pose, mass: number): void {
           const knuckle = mixV(jointBetween(wrist, tip, bl[1], bl[2], [0.02, 1, S * 0.05]), toGround(fly.knuckle), up2);
           const f = 0.35 + 0.65 * open, aft = sub(toGround([-1, 0, 0]), at); // (its tail's way, as it turns)
           bone(g, sh, wrist, 0.05 + 0.13 * f * up1, 0.03 + 0.19 * f * up1, aft);
-          bone(g, wrist, knuckle, 0.06 + 0.16 * f * up2, 0.1 + 0.08 * f * up2, aft);
+          bone(g, wrist, knuckle, 0.06 + 0.16 * f * up2, 0.1 + 0.08 * f * up2, aft, TEAM);
           bone(g, knuckle, tip, 0.1 + 0.08 * f * up2, 0.01, aft);
         }
       });
@@ -176,7 +182,7 @@ function drawVimmer(b: ModelBuilder, p: Pose, mass: number): void {
       const step = (rest: V): V => (p.anim === 'walk' ? footAt(rest, p.phase + leg++ * 0.25 + (S > 0 ? 0 : 0.5), 0.1, 0.08) : rest);
       const { sh, wrist, knuckle, tip } = standing(S, y0, step);
       bone(o, sh, wrist, 0.05, 0.03);
-      bone(o, wrist, knuckle, 0.06, 0.1);
+      bone(o, wrist, knuckle, 0.06, 0.1, undefined, TEAM);
       bone(o, knuckle, tip, 0.1, 0.01);
       for (const foot of [wrist, tip]) for (const dz of [-0.025, 0.025]) o.cone(0.012, 0.06, [foot[0] + 0.03, foot[1] + 0.01 - (foot === wrist ? 0.06 : 0.012), foot[2] + dz], rib, [0, 0, -Math.PI / 2], 4); // claws
     }
@@ -188,7 +194,8 @@ function drawVimmer(b: ModelBuilder, p: Pose, mass: number): void {
 /**
  * The body of the Vimmer and the charger: slim and segmented, tapering back to a barbed tail, spined down its back; at the
  * front a cluster of glossy eyes over a round maw ringed with teeth, the crystal spike thrust out of it (when it has
- * one). `tint` colours its segment rims and barbs.
+ * one). `tint` colours its barbs and every other segment rim; the rest of the rims and a plate over its back are in
+ * its side's colour.
  */
 function spikeBody(c: ModelBuilder, armed: boolean, tint: string, len = 1): void {
   type V = [number, number, number];
@@ -201,7 +208,11 @@ function spikeBody(c: ModelBuilder, armed: boolean, tint: string, len = 1): void
   const X = (x: number) => x * len, dh = 0.25 * (len - 1);
   c.loft([[-0.58, 0.02, 0.02, 0.02], [-0.44, 0.06, 0.05, 0.05], [-0.28, 0.08, 0.07, 0.08], [-0.12, 0.1, 0.085, 0.1], [0.02, 0.11, 0.1, 0.1], [0.14, 0.08, 0.075, 0.075], [0.2, 0.055, 0.055, 0.055]]
     .map(([x, w, up, down]) => ({ at: [X(x), 0, 0] as V, w, up, down, keel: 0.4 })), chitin);
-  for (let x = -0.4; x <= 0.03; x += 0.14 / len) c.sphere([0.012, 0.09, 0.1], [X(x), 0, 0], sheen); // segment rims
+  for (let x = -0.4, i = 0; x <= 0.03; x += 0.14 / len, i++) c.sphere([i % 2 ? 0.012 : 0.02, 0.095, 0.105], [X(x), 0, 0], i % 2 ? sheen : TEAM); // segment rims
+  // a plate over its back, in its side's colour, rimmed pale
+  const saddle = [[-0.3, 0.07, 0.078], [-0.16, 0.088, 0.1], [-0.02, 0.102, 0.112], [0.1, 0.082, 0.088]];
+  c.loft(saddle.map(([x, w, up]) => ({ at: [X(x), 0.008, 0] as V, w: w * 1.18, up: up * 1.06, down: 0.02, flat: 0.2 })), RIM);
+  c.loft(saddle.map(([x, w, up]) => ({ at: [X(x), 0.012, 0] as V, w: w * 1.08, up: up * 1.08, down: 0.02, flat: 0.2 })), TEAM);
   for (let i = 0; i < Math.round(6 * len); i++) c.cone(0.015, 0.07, [X(0.08) - i * 0.12, 0.08 - i * 0.004, 0], chitin, [0, 0, 0.6], 4); // spines down its back
   c.cone(0.025, 0.1, [X(-0.62), 0, 0], sheen, [0, 0, Math.PI / 2], 4); // the tail barb
   c.sphere([0.08, 0.07, 0.075], [0.25 + dh, 0, 0], chitin);
@@ -344,7 +355,7 @@ function drawMicropike(b: ModelBuilder, p: Pose): void {
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
     // the hub: squashing and stretching, its volume kept
     c.sphere([0.16 * sw, 0.13 * sy, 0.16 * sw], hub, muscle);
-    c.sphere([0.17 * sw, 0.035, 0.17 * sw], [hub[0], hub[1] + 0.025 * sy, hub[2]], sheen); // its collar
+    c.sphere([0.17 * sw, 0.035, 0.17 * sw], [hub[0], hub[1] + 0.025 * sy, hub[2]], TEAM); // its collar, in its side's colour
     for (const z of [1, -1]) c.sphere(0.024, [hub[0] + 0.14 * sw, hub[1] + 0.04 * sy, hub[2] + z * 0.06], eye);
     // the legs: from round the hub toward each foot, knees raised above it and out
     m.feet.forEach((foot) => {
@@ -352,14 +363,14 @@ function drawMicropike(b: ModelBuilder, p: Pose): void {
       const hip: V3m = [hub[0] + (dx / out) * 0.12 * sw, hub[1], hub[2] + (dz / out) * 0.12 * sw];
       const knee = jointBetween(hip, foot, MP.thigh, MP.shin, [dx / out, 1.5, (dz / out) * 0.45]); // (out toward its foot, but more up than sideways: a narrow stance)
       shapedLimb(c, hip, knee, 0.03, [1.2, 1.0, 0.85, 0.8, 0.9], chitin);
-      c.sphere(0.03, knee, sheen);
+      c.sphere(0.05, knee, TEAM); // (its knees, high over its hub, in its side's colour)
       shapedLimb(c, knee, foot, 0.026, [1.0, 0.85, 0.7, 0.55, 0.4], chitin, { flat: 0.3 });
       c.cone(0.014, 0.06, [foot[0] + (dx / out) * 0.02, foot[1] + 0.002, foot[2] + (dz / out) * 0.02], claw, [0, Math.atan2(-dz, dx), -Math.PI / 2], 4);
     });
     // the pike: its butt held at the hub, hanging and swinging from it
     c.joint([hub[0], hub[1] - 0.06 * sy, hub[2]], [m.roll, 0, -Math.PI / 2 + m.swing], (k) => {
       k.loft([0, 0.3, 0.7, 1].map((f) => { const r = MP.r0 + (MP.r1 - MP.r0) * f; return { at: [f * MP.pike, 0, 0] as V3m, w: r, up: r, down: r * 0.9, keel: 0.3 }; }), chitin);
-      for (let i = 1; i < 6; i++) { const f = i / 6, r = MP.r0 + (MP.r1 - MP.r0) * f; k.sphere([0.012, r * 1.1, r * 1.1], [f * MP.pike, 0, 0], sheen); }
+      for (let i = 1; i < 6; i++) { const f = i / 6, r = MP.r0 + (MP.r1 - MP.r0) * f; k.sphere([0.012 * (i % 2 ? 1 : 1.6), r * 1.15, r * 1.15], [f * MP.pike, 0, 0], i % 2 ? sheen : TEAM); } // (rings: its own colour and its side's, in turn)
       if (p.armed) k.crystal(MP.crystal, [MP.pike + 0.02, 0, 0], [0, 0, -Math.PI / 2]);
     });
   }, LOOK.charger.scale(35));
@@ -408,7 +419,7 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
       const ankle: V = [foot[0] + k.foot[0], foot[1] + k.foot[1], foot[2]];
       const knee = jointBetween(hip, ankle, k.thigh, k.shin, [1, 0.3, S * 0.4]); // (its knee forward, its ankle bending back)
       shapedLimb(c, hip, knee, k.thighR, [1.1, 1.4, 1.35, 1.0, 0.7], muscle); // the thigh, thick with muscle, tapering to the knee
-      c.sphere(k.thighR * 0.75, knee, chitin);
+      c.sphere(k.thighR * 0.85, knee, TEAM); // (its knees in its side's colour)
       shapedLimb(c, knee, ankle, k.shinR, [1.0, 0.85, 0.72, 0.66, 0.7], chitin, { flat: 0.3 }); // the shin
       c.sphere(k.shinR * 0.68, ankle, chitin);
       shapedLimb(c, ankle, foot, k.shinR * 0.65, [1.0, 0.85, 0.75, 0.8], chitin); // the foot bone
@@ -472,7 +483,7 @@ function whipArms(c: ModelBuilder, p: Pose, len: number, tint: string): void {
         : [Math.cos(a) * Math.cos(e), Math.sin(e), z * Math.sin(a) * Math.cos(e) * 0.3];
       const l = Math.hypot(...dir), next: V = [at[0] + (dir[0] / l) * seg, at[1] + (dir[1] / l) * seg, at[2] + (dir[2] / l) * seg];
       const r = 0.032 * (1 - u * 0.75);
-      c.limb(at, next, r, i % 3 === 2 ? sheen : chitin, 0.032 * (1 - (i + 1) / n * 0.75));
+      c.limb(at, next, r, i % 6 === 2 ? TEAM : i % 6 === 5 ? sheen : chitin, 0.032 * (1 - (i + 1) / n * 0.75)); // (banded, its side's colour and its own in turn)
       at = next;
     }
     if (p.armed && z > 0) c.crystal(0.14, at, [0, 0, -Math.PI / 2 + (1 - out) * Math.PI]); // the crystal at the near lash's tip
@@ -491,9 +502,9 @@ function trebuchetParts(q: ModelBuilder, p: Pose, tp: number, rp: number, tint: 
   const chitin: Mat = { color: '#1a2628', tex: 'leather', rough: 0.3, metal: 0.35 };
   const sheen: Mat = { color: tint, tex: 'leather', rough: 0.3, metal: 0.4 };
   const cord: Mat = { color: '#6a5640', tex: 'leather', rough: 0.8 };
-  // the counterweight: plates over a heavy head
-  q.loft([[0.16, 0.1, 0.1, 0.08], [0.26, 0.13, 0.13, 0.09], [0.36, 0.1, 0.1, 0.07], [0.42, 0.05, 0.05, 0.04]].map(([x, w, u, d]) => ({ at: [x, 0.04, 0] as V, w, up: u, down: d, flat: 0.25 })), sheen);
-  for (const x of [0.2, 0.28, 0.36]) q.cone(0.022, 0.07, [x, 0.17, 0], chitin, [0, 0, 0.5], 4);
+  // the counterweight: plates over a heavy head, in its side's colour, a crest of spines in its own
+  q.loft([[0.16, 0.1, 0.1, 0.08], [0.26, 0.13, 0.13, 0.09], [0.36, 0.1, 0.1, 0.07], [0.42, 0.05, 0.05, 0.04]].map(([x, w, u, d]) => ({ at: [x, 0.04, 0] as V, w, up: u, down: d, flat: 0.25 })), { ...TEAM, tex: 'leather', metal: 0.3 });
+  for (const x of [0.2, 0.28, 0.36]) q.cone(0.022, 0.07, [x, 0.17, 0], sheen, [0, 0, 0.5], 4);
   // the pouch of crystals on its counterweight
   q.sphere([0.06, 0.045, 0.05], [0.24, 0.2, 0.07], cord); // (on its counterweight)
   for (const [dx, dz] of [[-0.02, 0.05], [0.02, 0.08], [0.0, 0.065]] as const) q.crystal(0.05, [0.24 + dx, 0.23, dz], [0.3, 0, 0.2]);
@@ -565,7 +576,10 @@ function caterpillar(b: ModelBuilder, p: Pose, color: string, mass: number): voi
         if (!(seg === 0 && k === 0 && rise)) for (const z of [1, -1]) c.limb([x, 0.06 + up, z * r * 0.7], [x, 0.0, z * r * 1.0], 0.016, skin); // stubby legs
         else for (const z of [1, -1]) c.limb([x, 0.08 + up, z * r * 0.7], [x + 0.06, 0.04 + up, z * r * 1.0], 0.016, skin); // (raised: its front legs held up, curled)
       }
-      c.sphere(0.022, [at(seg), 0.2 + lift, 0], { team: 'primary', tex: 'none' }); // a team dot on each segment
+      // a band of the side's colour round each segment's front ball, edged pale either side
+      const r = 0.1 - seg * 0.006, x = at(seg) + 0.065 - (seg === 0 ? 0.03 * rise : 0), y = r + lift + (seg === 0 ? rise * 0.11 : 0);
+      c.sphere([r * 0.45, r * 1.13, r * 1.13], [x, y, 0], TEAM);
+      for (const dx of [-0.5, 0.5]) c.sphere([r * 0.1, r * 1.03, r * 1.03], [x + dx * r, y, 0], RIM);
     }
     if (!segs.includes(0)) return;
     // giving: it rears its head up and over, takes the food off its back in its mouth, and dips to set it down in front
@@ -574,6 +588,10 @@ function caterpillar(b: ModelBuilder, p: Pose, color: string, mass: number): voi
     const hx = 0.22 + 0.06 * rear - 0.04 * rise, hy = 0.12 + eat + 0.1 * rear * (give < 0.5 ? 1 : 1 - (give - 0.5) * 2.2) + 0.2 * rise;
     c.sphere(0.11, [hx, hy, 0], skin); // head
     for (const z of [1, -1]) c.sphere(0.018, [hx + 0.09, hy + 0.03, z * 0.05], { color: '#111111' });
+    for (const z of [1, -1]) { // two little feelers, tipped with the side's colour
+      c.limb([hx + 0.03, hy + 0.09, z * 0.04], [hx + 0.01, hy + 0.17, z * 0.07], 0.008, skin);
+      c.sphere(0.024, [hx + 0.01, hy + 0.18, z * 0.07], TEAM);
+    }
     const food = { color: '#a83a4a', tex: 'skin' as const, rough: 0.5 };
     if (give >= 0) { if (give < 0.92) { const k = Math.min(1, give / 0.45), mouth: V3 = [hx + 0.12, hy - 0.02, 0]; c.sphere([0.07, 0.055, 0.07], give < 0.45 ? [mouth[0] * k, 0.24 + (mouth[1] - 0.24) * k, 0] : mouth, food); } }
     else if (p.cargo) c.sphere([0.08, 0.06, 0.08], [0, 0.24, 0], { color: p.cargo === 'food' ? '#a83a4a' : p.cargo === 'wood' ? '#7a5634' : '#8fe6ff' });
@@ -602,10 +620,11 @@ function origamiBun(b: ModelBuilder, p: Pose, tint: string, mass: number): void 
   b.joint([0, 0, 0], [shake * 0.6, 0, shake], (e) => {
     e.cylinder(0.24 * sx, 0.21 * sx, 0.06 * sy, [0, 0.03 * sy, 0], fold, [0, oct, 0], N); // its flat underside
     e.cylinder(0.17 * sx, 0.24 * sx, 0.12 * sy, [0, 0.12 * sy, 0], paper, [0, oct, 0], N); // the lower dome
+    e.cylinder(0.178 * sx, 0.192 * sx, 0.035 * sy, [0, 0.165 * sy, 0], TEAM, [0, oct, 0], N); // a paper band round its waist, in the side's colour
     const open = sm((h - 0.35) / 0.45);
     if (open <= 0) {
       e.cylinder(0.06 * sx, 0.17 * sx, 0.1 * sy, [0, 0.23 * sy, 0], paper, [0, oct, 0], N); // the upper dome
-      e.cylinder(0.0, 0.06 * sx, 0.07 * sy, [0, 0.315 * sy, 0], fold, [0, oct + 0.4, 0], N); // the twisted knot
+      e.cylinder(0.0, 0.065 * sx, 0.075 * sy, [0, 0.315 * sy, 0], TEAM, [0, oct + 0.4, 0], N); // the twisted knot, in the side's colour
       for (let i = 0; i < N; i++) { // the pleats, spiralling up to the knot
         const a = (i / N) * TAU, pt = (r: number, y: number, tw: number): V3 => [Math.cos(a + tw) * r * sx, y * sy, Math.sin(a + tw) * r * sx];
         e.limb(pt(0.235, 0.07, 0), pt(0.18, 0.19, 0.25), 0.013, pleat, 0.011);
@@ -640,11 +659,10 @@ function drawDragonFly(b: ModelBuilder, p: Pose, mass: number): void {
   // an insect's body, iridescent: metallic violet-blue, teal compound eyes, its decorated butterfly wings
   const scale: Mat = { color: '#4a3aa0', tex: 'leather', rough: 0.25, metal: 0.55 };
   const belly: Mat = { color: '#8a70c8', tex: 'skin', rough: 0.35, metal: 0.3 };
-  const band: Mat = { color: '#2ad0c4', tex: 'none', rough: 0.3, metal: 0.5 };
   const horn: Mat = { color: '#1a1430', tex: 'none', rough: 0.4 };
   const eyeMat: Mat = { color: '#28d8c8', tex: 'none', rough: 0.15, metal: 0.6, emissive: '#0a3a38' };
   const wing: Mat = { color: '#f0a040', tex: 'none', rough: 0.6 };
-  const eyeOut: Mat = { color: '#18101a', tex: 'none' }, eyeMid: Mat = { color: '#3fa8e0', tex: 'none' }, eyeIn: Mat = { color: '#fbfbf4', tex: 'none' };
+  const eyeOut: Mat = { color: '#18101a', tex: 'none' }, eyeIn: Mat = { color: '#fbfbf4', tex: 'none' };
   // (a leap's first part is the crouch on the ground: legs bent, wings still folded; then it springs up into the air)
   const flying = p.anim === 'fly' || p.anim === 'climb' || p.anim === 'soar' || p.anim === 'glide' || p.anim === 'land' || (p.anim === 'leap' && p.phase >= 0.3);
   const t = p.phase * TAU, beat = flying ? Math.sin(t) * 0.75 : 0;
@@ -667,18 +685,19 @@ function drawDragonFly(b: ModelBuilder, p: Pose, mass: number): void {
       tp = [tp[0] - 0.12, tp[1] + 0.05 - i * 0.004 + wave(-i * 0.6, 1, 0.02), wave(-i * 0.55, 1, 0.02 * i)];
       const r = 0.11 * (1 - i * 0.075) * (i === 1 ? 1.05 : 1);
       body.push({ at: tp, w: r, up: r, down: r });
-      if (i % 2 === 0) c.sphere([0.014, r * 1.06, r * 1.06], tp, band); // a band at each segment
+      if (i % 2 === 0) c.sphere([0.03, r * 1.1, r * 1.1], tp, TEAM); // a band at each segment, in its side's colour
     }
     body.push({ at: [tp[0] - 0.05, tp[1], tp[2]], w: 0.02, up: 0.02, down: 0.02 });
     c.loft(body, scale);
     c.sphere([0.16, 0.09, 0.12], [0.04, -0.1, 0], belly);
+    c.sphere([0.2, 0.08, 0.16], [0.04, 0.13, 0], TEAM); // a plate over its thorax, in its side's colour
     // the long mantis neck, segmented and swaying, rising from the thorax
     let n: [number, number, number] = [0.22, 0.05, 0];
     for (let i = 1; i <= 6; i++) {
       const rise = i <= 4 ? 0.09 : 0.0, fwd = i <= 4 ? 0.07 : 0.1;
       const next: [number, number, number] = [n[0] + fwd, n[1] + rise + wave(i, 1, 0.012), wave(i * 0.8, 1, 0.045) * (i / 6)];
       shapedLimb(c, n, next, 0.042 - i * 0.003, [1.0, 0.88, 0.85, 0.95], scale, { flat: 0.15 }); // (a segment pinched at its middle)
-      c.sphere(0.046 - i * 0.003, next, belly); // its joints
+      c.sphere(0.05 - i * 0.003, next, i % 2 ? TEAM : belly); // its joints (every other one in its side's colour)
       n = next;
     }
     // a mantis's head: a broad triangle, wide across the top where its eyes bulge at the corners, narrowing to its
@@ -717,7 +736,7 @@ function drawDragonFly(b: ModelBuilder, p: Pose, mass: number): void {
       const foot: V3 = flying ? [x - 0.18, y0 - 0.16, z * 0.12] : p.anim === 'walk' ? footAt(rest, p.phase + ph + (z > 0 ? 0 : 0.5), 0.1, 0.06) : rest;
       const knee: V3 = flying ? [x - 0.08, y0 - 0.12, z * 0.14] : jointBetween(hip, foot, span(hip, kneeRest), span(kneeRest, rest), [0, 1, z]);
       shapedLimb(c, hip, knee, 0.022, [1.15, 1.05, 0.9, 0.82], horn, { flat: 0.3 });
-      c.sphere(0.017, knee, horn);
+      c.sphere(0.03, knee, TEAM); // (its knees in its side's colour)
       shapedLimb(c, knee, foot, 0.018, [0.95, 0.8, 0.65, 0.5], horn);
     }
     // butterfly wings, a monarch's or a swallowtail's: a long swept forewing, bright at the base and deepening to a dark
@@ -734,7 +753,7 @@ function drawDragonFly(b: ModelBuilder, p: Pose, mass: number): void {
         wg.sphere([0.12, 0.013, 0.18], [0.02, 0, z * 0.18], shimmer); // a blue shimmer by the body
         for (let k = 0; k < 6; k++) { const a = -0.9 + k * 0.36; wg.limb([0, 0, z * 0.08], [Math.sin(a) * 0.3, 0, z * (0.1 + Math.cos(a) * 0.8)], 0.015, margin, 0.014); } // veins
         for (let k = 0; k < 9; k++) { const a = -1.0 + k * 0.25; wg.sphere([0.022, 0.017, 0.022], [0.06 + Math.sin(a) * 0.37, 0, z * (0.66 + Math.cos(a) * 0.7)], dot); } // white spots in the margin
-        for (const [r, m, th] of [[0.11, eyeOut, 0.016], [0.075, eyeMid, 0.018], [0.035, eyeIn, 0.02]] as const) wg.sphere([r, th, r], [-0.05, 0, z * 0.72], m); // eyespot
+        for (const [r, m, th] of [[0.11, eyeOut, 0.016], [0.075, TEAM, 0.018], [0.035, eyeIn, 0.02]] as const) wg.sphere([r, th, r], [-0.05, 0, z * 0.72], m); // eyespot, its ring in its side's colour
       }, 0.7));
       c.joint([-0.1, y0 + 0.08, z * 0.1], [flying ? -z * beat * 0.85 : -z * 1.4, 0, (flying ? -0.1 : -0.35) + 0.42], (wg) => wg.joint([0, 0, 0], [0, 0, 0], (wg) => {
         wg.sphere([0.34, 0.006, 0.54], [-0.14, 0, z * 0.46], margin);
@@ -742,7 +761,7 @@ function drawDragonFly(b: ModelBuilder, p: Pose, mass: number): void {
         wg.sphere([0.1, 0.013, 0.14], [-0.04, 0, z * 0.16], shimmer);
         for (let k = 0; k < 4; k++) { const a = -0.5 - k * 0.35; wg.limb([0, 0, z * 0.06], [Math.sin(a) * 0.34, 0, z * (0.06 + Math.cos(a) * 0.5)], 0.015, margin, 0.014); }
         for (let k = 0; k < 6; k++) { const a = -0.6 - k * 0.3; wg.sphere([0.02, 0.017, 0.02], [-0.14 + Math.sin(a) * 0.34, 0, z * (0.46 + Math.cos(a) * 0.52)], dot); }
-        for (const [r, m, th] of [[0.08, eyeOut, 0.016], [0.05, band, 0.018], [0.025, eyeIn, 0.02]] as const) wg.sphere([r, th, r], [-0.24, 0, z * 0.6], m); // eyespot
+        for (const [r, m, th] of [[0.08, eyeOut, 0.016], [0.05, TEAM, 0.018], [0.025, eyeIn, 0.02]] as const) wg.sphere([r, th, r], [-0.24, 0, z * 0.6], m); // eyespot
         wg.limb([-0.36, 0, z * 0.62], [-0.72, 0, z * 0.7], 0.03, margin, 0.012); // the swallowtail
       }, 0.7));
     }
@@ -796,8 +815,9 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
     // thorax: a sculpted, keeled segment, plated over the top, a ridge of short spines down it
     c.loft([[-0.2, 0.09, 0.08, 0.08, 0.2], [-0.08, 0.17, 0.15, 0.13, 0.5], [0.06, 0.16, 0.15, 0.12, 0.5], [0.16, 0.1, 0.1, 0.08, 0.3], [0.22, 0.05, 0.05, 0.05, 0]]
       .map(([x, w, u, d, keel]) => ({ at: [x, y0, 0] as V3, w, up: u, down: d, keel })), under);
-    c.loft([[-0.18, 0.1, 0.1], [-0.06, 0.18, 0.17], [0.08, 0.17, 0.16], [0.18, 0.08, 0.1]].map(([x, w, u]) => ({ at: [x, y0 + 0.01, 0] as V3, w, up: u, down: 0.03, flat: 0.3 })), plate);
     const detail = o.detail ?? 1; // (lower tiers: simpler, fewer plates, spines and spurs)
+    // (the plate over her thorax: in her side's colour on the smallest, whose brood lies low behind her where it's hidden)
+    c.loft([[-0.18, 0.1, 0.1], [-0.06, 0.18, 0.17], [0.08, 0.17, 0.16], [0.18, 0.08, 0.1]].map(([x, w, u]) => ({ at: [x, y0 + 0.01, 0] as V3, w, up: u, down: 0.03, flat: 0.3 })), detail < 0.5 ? { ...TEAM, tex: 'leather' } : plate);
     if (detail > 0.5) for (const x of [-0.1, 0.0, 0.1]) c.cone(0.025, 0.07, [x, y0 + 0.17, 0], plate, [0, 0, 0.4], 4);
     // the abdomen: a clearly enlarged brood abdomen, arched up into the air behind her thorax so its weight rides over
     // her legs: one sculpted shape, broad and keeled, plated over the top, cavities on its sides, curling over at its
@@ -824,12 +844,14 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
     c.joint(abAt, [0, 0, pitch + layDip + (walking ? Math.sin(t * 2) * 0.03 : 0)], (abs) => abs.joint([0, 0, 0], [0, 0, 0], (ab) => {
       const g = 1 + (lay > 0.3 && lay < 0.85 ? Math.sin(lay * Math.PI * 8) * 0.035 : 0); // (laying, it pulses)
       ab.loft(shape.map(([x, w, up, down, keel]) => ({ at: centre(x, up), w: w * g, up: up * g, down: down * g, keel })), under);
-      for (const [from, to] of (detail > 0.5 ? [[0, 3], [2, 5], [4, 6]] : [[0, 3], [3, 6]]) as Array<[number, number]>) {
+      // (the plate over the top of her brood, its broadest, in her side's colour: it reads from afar)
+      const plates = (detail > 0.5 ? [[0, 3], [2, 5], [4, 6]] : [[0, 3], [3, 6]]) as Array<[number, number]>;
+      plates.forEach(([from, to], pi) => {
         ab.loft(shape.slice(from, to + 1).map(([x, w, up, , keel], i, all) => {
           const end = i === 0 || i === all.length - 1 ? 0.6 : 1; // (each plate's ends tuck in)
           return { at: centre(x, up * g, 0.02), w: w * g * 1.04 * end, up: (up * g + 0.015) * end, down: 0.04 * (w / 0.3), keel, flat: 0.15 };
-        }), plate);
-      }
+        }), pi === 1 ? { ...TEAM, tex: 'leather' } : plate);
+      });
       if (lay > 0.4 && lay < 0.95) { // the egg, swelling out of its tip
         const e = Math.min(1, (lay - 0.4) / 0.4), tip = centre(-0.88, 0.06);
         ab.sphere([0.07 * e, 0.09 * e, 0.07 * e], [tip[0] - 0.05 * e, tip[1], tip[2]], { color: '#e8e0f0', tex: 'none', rough: 0.85 });
@@ -1023,7 +1045,7 @@ function gHopper(b: ModelBuilder, p: Pose, gait = HOPPER_GAIT): void {
       const girth = (x: number) => { for (let j = 1; j < prof.length; j++) if (x <= prof[j][0]) { const [x0, r0] = prof[j - 1], [x1, r1] = prof[j]; return r0 + ((x - x0) / (x1 - x0)) * (r1 - r0); } return prof[prof.length - 1][1]; };
       for (let i = 0; i < 9; i++) { // overlapping armour bands down its whole length, each over the next toward the front
         const x = (-0.78 + i * 0.15) * L, r = girth(x + 0.1) + 0.012;
-        bd.loft([0, 1].map((k) => ({ at: [x + k * 0.13 * L, 0.01 + lag(x + k * 0.13 * L), 0] as V3, w: r * sz * (k ? 1 : 0.9), up: r * sy * (k ? 1 : 0.9), down: r * 0.88 * sy * (k ? 1 : 0.9) })), i % 2 ? plate : shell);
+        bd.loft([0, 1].map((k) => ({ at: [x + k * 0.13 * L, 0.01 + lag(x + k * 0.13 * L), 0] as V3, w: r * sz * (k ? 1 : 0.9), up: r * sy * (k ? 1 : 0.9), down: r * 0.88 * sy * (k ? 1 : 0.9) })), i % 2 ? TEAM : shell); // (every other band in its side's colour)
         bd.loft([0, 1].map((k) => ({ at: [x + 0.13 * L + k * 0.02, 0.01 + lag(x + 0.13 * L), 0] as V3, w: r * 1.02 * sz, up: r * 1.02 * sy, down: r * 0.9 * sy })), edge); // its lip
         bd.cone(0.022, 0.07, [x + 0.08, r * sy + 0.02 + lag(x + 0.08), 0], edge, [0, 0, -0.5], 4); // the spine ridge
       }

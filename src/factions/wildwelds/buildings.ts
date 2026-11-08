@@ -4,12 +4,14 @@ import type { BuildingState, Mat, ModelBuilder, Vec3 } from '../../kits/bake3d/t
 
 const SILK: Mat = { color: '#ece6d6', tex: 'none', rough: 0.85 };
 const DEW: Mat = { color: '#cfe8ff', tex: 'none', rough: 0.05, metal: 0.2 };
+/** Silk dyed the side's colour: one strand in a few through the web, so you can tell whose it is. */
+const DYED: Mat = { team: 'primary', tex: 'none', rough: 0.6 };
 
 /** A web thread from `a` to `b`, sagging `sag` m at its middle (a catenary, near enough), `r` thick, a dewdrop or two on it. */
-function thread(c: ModelBuilder, a: Vec3, b: Vec3, sag: number, r = 0.012, drops = 0): void {
+function thread(c: ModelBuilder, a: Vec3, b: Vec3, sag: number, r = 0.012, drops = 0, silk = SILK): void {
   const n = 6;
   const at = (k: number): Vec3 => [a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k - sag * 4 * k * (1 - k), a[2] + (b[2] - a[2]) * k];
-  for (let i = 0; i < n; i++) c.limb(at(i / n), at((i + 1) / n), r, SILK);
+  for (let i = 0; i < n; i++) c.limb(at(i / n), at((i + 1) / n), r, silk);
   for (let i = 1; i <= drops; i++) c.sphere(r * 1.8, at(i / (drops + 1)), DEW);
 }
 
@@ -32,7 +34,10 @@ export function tangle(b: ModelBuilder, state: BuildingState | undefined, width:
     const w = width * (1 + bulge * (1 - t * t)) * (0.6 + 0.4 * (1 - h)); // (wider low down, and through the middle if it bulges)
     return onX ? [t, 0.04 + h ** 1.6 * height, side * w] : [side * w, 0.04 + h ** 1.6 * height, t];
   };
-  for (let i = 0; i < n; i++) thread(b, pt(i), pt(i + 211), 0.03 + 0.04 * jit(i, 9), 0.007 + 0.002 * ((jit(i, 11) + 1) / 2));
+  for (let i = 0; i < n; i++) { // (one strand in four dyed the side's colour, and a little thicker, so it shows)
+    const dyed = i % 4 === 0, r = 0.007 + 0.002 * ((jit(i, 11) + 1) / 2);
+    thread(b, pt(i), pt(i + 211), 0.03 + 0.04 * jit(i, 9), dyed ? r * 1.6 : r, 0, dyed ? DYED : SILK);
+  }
   for (let i = 0; i < Math.round(n / 7); i++) { const p = pt(i * 13 + 5); thread(b, [p[0], 0.02, p[2]], pt(i * 13 + 6), 0.01, 0.008); } // (threads down to the ground: web only, no wads, no dew)
 }
 /** The web wall's looks, in turn along a line (Building art `looks`): a hedge of web (dense), a sprawl (wide and low

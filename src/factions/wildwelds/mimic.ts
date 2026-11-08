@@ -159,8 +159,8 @@ const TEAM: Mat = { team: 'primary', tex: 'none', rough: 0.6 }, SILK: Mat = { co
 
 /**
  * The Mimic Mine (2 tiles): a crystal mine half again as big as the land's, with a burrow at its middle where the big
- * rock should be, its crystals evenly round it and leaning out, a few strands of silk between its rocks and a lump of
- * its side's colour at one's foot. `state.attack`: its throw at `t`, toward `facing` (radians, map axes).
+ * rock should be, its crystals evenly round it and leaning out, a few strands of silk between its rocks; silk dyed
+ * its side's colour wadded on each rock and slung from rock to rock, and banding its tentacle. `state.attack`: its throw at `t`, toward `facing` (radians, map axes).
  */
 export function webTower(b: ModelBuilder, state?: BuildingState): void {
   const t = state?.attack?.t, facing = state?.attack?.facing ?? 0;
@@ -171,13 +171,20 @@ export function webTower(b: ModelBuilder, state?: BuildingState): void {
   b.sphere([0.55, 0.2, 0.55], [0, 0.18, 0], { color: '#6f6a62', tex: 'stone', rough: 0.95 }); // its rim, worn
   const top = (i: number): Vec3 => [MINE.rocks[i].at[0], MINE.rocks[i].size * 1.1, MINE.rocks[i].at[2]];
   for (const [i, j] of [[0, 2], [3, 5], [1, 4]]) { const p = top(i), q = top(j); b.limb(p, [(p[0] + q[0]) / 2, Math.min(p[1], q[1]) * 0.6, (p[2] + q[2]) / 2], 0.006, SILK); }
-  b.sphere([0.14, 0.08, 0.14], [MINE.rocks[4].at[0] * 0.6, 0.06, MINE.rocks[4].at[2] * 0.6], TEAM);
+  // its side's colour: a wad of dyed silk on each rock's crown, and a dyed strand slung from each rock to the next
+  const crown = (i: number): Vec3 => [MINE.rocks[i].at[0], MINE.rocks[i].at[1] + MINE.rocks[i].size * 0.85, MINE.rocks[i].at[2]]; // (about its top)
+  MINE.rocks.forEach((k, i) => {
+    const p = crown(i), q = crown((i + 1) % MINE.rocks.length);
+    b.sphere([k.size * 0.42, 0.15, k.size * 0.42], p, TEAM);
+    const at = (u: number): Vec3 => [p[0] + (q[0] - p[0]) * u, p[1] + (q[1] - p[1]) * u - 0.3 * 4 * u * (1 - u), p[2] + (q[2] - p[2]) * u];
+    for (let j = 0; j < 4; j++) b.limb(at(j / 4), at((j + 1) / 4), 0.04, TEAM);
+  });
   if (t === undefined) return;
   // the tentacle, turned to face its target (its pose is drawn throwing toward +x)
   b.joint([0, 0, 0], [0, -face * (Math.PI / 4), 0], (m) => {
     const { pts, r, hold } = mimicPose(t);
     for (let i = 0; i < pts.length - 1; i++) {
-      m.limb(pts[i], pts[i + 1], r[i], i % 3 === 1 && i < BODY ? BANDED : SKIN, r[i + 1]);
+      m.limb(pts[i], pts[i + 1], r[i], i % 3 === 1 && i < BODY ? (i % 6 === 1 ? TEAM : BANDED) : SKIN, r[i + 1]); // (banded, its own colour and its side's in turn)
       if (i > 1 && i < BODY && i % 2 === 0) for (const z of [1, -1]) m.sphere(r[i] * 0.3, [(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2, pts[i][2] + z * r[i] * 0.8], PALE);
     }
     // the crystal in its grip: held as it stood, gripped two thirds up (thrown, it's the sim's to fly)
