@@ -1,6 +1,7 @@
 // Living buildings (BuildingSpec.living): planted as a seedling (workers carry
 // `seed` × materials to the site like any building), then the building grows by
-// eating food from its own stock until it reaches its full materials. HP and
+// eating food from its own stock until it reaches its full materials (one laid down by a refined body: food ÷ that
+// body's refinement per kg, as refinement makes the body cheaper). HP and
 // capital come from what it has grown so far, so a young one is frail and can
 // only train what its current capital supports.
 import type { BuildingSpec, FactionSpec } from '../../factions/types';
@@ -21,15 +22,18 @@ export function livingStats(spec: BuildingSpec, faction: FactionSpec, materials:
   return { ...deriveBuilding({ ...spec, materials }, faction), totalCost: full.totalCost };
 }
 
+/** Food per kg it grows: 1, or ÷ the refinement of the body that laid it. */
+const foodPerKg = (b: Building): number => 1 / Math.max(1, b.growRefinement ?? 1);
+
 /** One tick of growth: eat food from stock into materials. Returns true if its stats changed. */
 export function grow(b: Building, faction: FactionSpec, dt: number): boolean {
   const spec = b.spec;
   if (!spec.living || b.grown === undefined || b.grown >= spec.materials) return false;
-  const eat = Math.min(spec.living.grow * dt, spec.materials - b.grown, b.stock.food);
-  if (eat <= 0) return false;
-  b.stock.food -= eat;
+  const per = foodPerKg(b), kg = Math.min(spec.living.grow * dt, spec.materials - b.grown, b.stock.food / per);
+  if (kg <= 0) return false;
+  b.stock.food = Math.max(0, b.stock.food - kg * per);
   const before = Math.floor(b.grown / 5);
-  b.grown += eat;
+  b.grown += kg;
   if (Math.floor(b.grown / 5) === before && b.grown < spec.materials) return false; // restat every 5 kg
   const st = livingStats(spec, faction, b.grown);
   b.hp += st.maxHp - b.maxHp;
@@ -40,7 +44,7 @@ export function grow(b: Building, faction: FactionSpec, dt: number): boolean {
 
 /** Food it wants on hand to keep growing. */
 export const growWant = (b: Building): number =>
-  b.spec.living && b.grown !== undefined && b.grown < b.spec.materials ? Math.min(GROW_STASH, b.spec.materials - b.grown) : 0;
+  b.spec.living && b.grown !== undefined && b.grown < b.spec.materials ? Math.min(GROW_STASH, (b.spec.materials - b.grown) * foodPerKg(b)) : 0;
 
 /** Can this building, at its current size, train a unit of this refinement? */
 export const grownEnough = (b: Building, refinement: number): boolean =>

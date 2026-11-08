@@ -3,7 +3,7 @@
 // the building's materials), and whatever it carried goes into the building's stock. Ordered to lay several pieces
 // (a line of wall), each takes a seed's worth of its body, the last all that's left; laid alone, a piece takes its
 // whole body (up to its full materials). Then, like any living building, it grows by eating food from its stock to
-// its full size. A building only bodies lay down can't be built any other way.
+// its full size, at its body's refinement: food ÷ r per kg (as refinement made the body cheaper). A building only bodies lay down can't be built any other way.
 import type { BuildingSpec, UnitSpec } from '../../factions/types';
 import type { DerivedStats } from '../physics';
 import type { Unit, World } from '../world';
@@ -28,6 +28,7 @@ export function runLayDown(w: World, u: Unit, siteId: number): boolean {
   const left = u.stats.mass - (u.bodySpent ?? 0), more = u.queue.some((q) => q.kind === 'layDown' && !w.buildings.get(q.site)?.complete);
   const give = Math.min(more ? seedMaterials(site.spec) : site.spec.materials, left);
   site.grown = give;
+  site.growRefinement = u.stats.refinement;
   site.stats = livingStats(site.spec, w.factionOf(site.owner), give);
   site.maxHp = site.stats.maxHp;
   site.hp = site.maxHp;
@@ -47,6 +48,6 @@ export const layDown: Ability = {
   },
   unitCodex(u: UnitSpec, d: DerivedStats): string | null {
     if (!u.laysDown?.length) return null;
-    return `Lays down its body: it can become ${u.laysDown.join(' or ')}, its ${d.mass.toFixed(0)} kg the seed (several pieces in a line, a seed's worth each); then it grows on food.`;
+    return `Lays down its body: it can become ${u.laysDown.join(' or ')}, its ${d.mass.toFixed(0)} kg the seed (several pieces in a line, a seed's worth each); then it grows on food, ${d.refinement > 1 ? `1 kg for each ${(1 / d.refinement).toFixed(2)} kg of food (its refinement)` : '1 kg for 1 kg'}.`;
   },
 };

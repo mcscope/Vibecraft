@@ -271,6 +271,8 @@ export interface Building {
   stats: BuildingStats;
   /** Living buildings: materials grown so far (see abilities/living.ts). */
   grown?: number;
+  /** A living building laid down by a body (abilities/layDown.ts): that body's refinement. It grows on food ÷ this. */
+  growRefinement?: number;
   ox: number; oy: number; // top-left tile
   size: number;
   hp: number;

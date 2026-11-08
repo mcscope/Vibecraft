@@ -18,3 +18,16 @@ describe('tending', () => {
     expect(Math.hypot(u.x - u.px, u.y - u.py) > 0 || u.busy || u.food > 0).toBe(true); // off doing something, not stuck
   });
 });
+
+describe('a laid building grows at its body\'s refinement', () => {
+  test('food per kg grown is 1 ÷ the refinement of the body that laid it', async () => {
+    const { grow } = await import('../src/sim/abilities/living');
+    const w = new World({ seed: 3, players: [{ name: 'Wild', faction: wildwelds }, { name: 'Meadow', faction: meadowfolk }] });
+    const spec = w.buildingSpecOf(0, 'web-wall')!;
+    const piece = (r?: number) => ({ spec, grown: 12, growRefinement: r, stock: { food: 100, wood: 0, crystal: 0 }, hp: 10, maxHp: 10, stats: {} }) as never as Parameters<typeof grow>[0];
+    const plain = piece(), refined = piece(2);
+    for (let i = 0; i < 100; i++) { grow(plain, wildwelds, 0.05); grow(refined, wildwelds, 0.05); }
+    expect(refined.grown).toBeCloseTo(plain.grown!, 6); // same pace
+    expect(100 - refined.stock.food).toBeCloseTo((100 - plain.stock.food) / 2, 6); // half the food
+  });
+});
