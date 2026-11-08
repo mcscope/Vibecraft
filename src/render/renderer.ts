@@ -1,18 +1,18 @@
 // Draws the world with WebGL (PixiJS) from pre-baked sprites. Sprites persist
 // between frames and are batched by the GPU, so thousands of trees and units
 // stay cheap. Reads simulation state, never writes it.
-import { Application, Container, ImageSource, Matrix, Rectangle, Sprite as PixiSprite, Text, Texture, type TextureSource } from 'pixi.js';
+import { Application, Container, type Geometry, ImageSource, Rectangle, Sprite as PixiSprite, Text, Texture, type TextureSource } from 'pixi.js';
 import { DT, type Building, type Order, type ResourceNode, type Unit, World, type WorldEvent } from '../sim/world';
-import { Camera, isoX, isoY, TILE_H, TILE_W } from './camera';
+import { Camera, isoX, isoY, PX_PER_M_UP } from './camera';
 import { isUnderfoot, parcelPos } from '../sim/abilities/underfoot';
 import { LEAP_TIME } from '../sim/abilities/flight';
 import { metamorphCost } from '../sim/abilities/metamorph';
 import { M_PER_TILE } from '../sim/physics';
 import { buildingSprite, throwFrame, unitShadow, unitSprite, UNITS_PER_TILE, type ArtAnim, type FrameTime, type Sprite, type UnitArt } from '../art/contract';
 import { gpuTexture } from '../art/gpu';
-import { TERRAIN_CLIFF } from '../sim/map';
+import { LEVEL_M, TERRAIN_CLIFF } from '../sim/map';
 import { TEAM_COLORS, type ArtBank } from './artbank';
-import { buildGround } from './ground';
+import { buildFog, buildGround, terrainGeometry } from './ground';
 
 export { TEAM_COLORS };
 
@@ -182,7 +182,11 @@ export class Renderer {
   lift(id: number): number { return this.alt.get(id) ?? 0; }
   /** Screen height for an altitude in metres: 6 px per metre (108 px at 18 m). */
   static altPx(m: number): number { return Math.max(0, m) * 6; }
-  private fog: { canvas: HTMLCanvasElement; img: ImageData; tex: Texture; sprite: PixiSprite; tick: number } | null = null;
+  private fog: (ReturnType<typeof buildFog> & { tick: number }) | null = null;
+  /** The ground's shape (render/ground.ts), shared by the ground and the fog. */
+  private shape: Geometry | null = null;
+  /** World-layer y of ground point (x, y): raised by the ground's height there. */
+  private gy(x: number, y: number): number { return isoY(x, y) - this.cam.ground(x, y); }
 
   /** Can the viewer see this spot right now? (Their own things always.) */
   seen(owner: number, x: number, y: number): boolean {
@@ -194,35 +198,25 @@ export class Renderer {
     return this.viewer < 0 || this.world.vision(this.viewer, x, y) > 0;
   }
 
-  /** Black over ground never seen, a dim veil over ground out of sight. One pixel per tile, laid on the iso grid. */
+  /** Black over ground never seen, a dim veil over ground out of sight: one value per tile, on the ground's own shape. */
   private drawFog(): void {
-    if (this.viewer < 0) return;
-    const { grid } = this.world;
-    if (!this.fog) {
-      const canvas = document.createElement('canvas');
-      canvas.width = grid.width; canvas.height = grid.height;
-      const img = canvas.getContext('2d')!.createImageData(grid.width, grid.height);
-      const tex = Texture.from(canvas);
-      const sprite = new PixiSprite(tex);
-      sprite.setFromMatrix(new Matrix(TILE_W / 2, TILE_H / 2, -TILE_W / 2, TILE_H / 2, 0, 0));
-      this.worldLayer.addChild(sprite);
-      this.fog = { canvas, img, tex, sprite, tick: -1 };
-    }
-    const f = this.fog;
+    if (this.viewer < 0 || !this.shape) return;
+    if (!this.fog) { this.fog = { ...buildFog(this.world.grid, this.shape), tick: -1 }; this.worldLayer.addChild(this.fog.mesh); }
+    const { grid } = this.world, f = this.fog;
     if (f.tick === this.world.tick) return;
     f.tick = this.world.tick;
-    const d = f.img.data;
     for (let y = 0; y < grid.height; y++) for (let x = 0; x < grid.width; x++) {
-      const v = this.world.vision(this.viewer, x, y), i = (y * grid.width + x) * 4;
-      d[i] = 6; d[i + 1] = 8; d[i + 2] = 10;
-      d[i + 3] = v === 2 ? 0 : v === 1 ? 120 : 255;
+      const v = this.world.vision(this.viewer, x, y);
+      f.alpha[y * grid.width + x] = v === 2 ? 0 : v === 1 ? 120 : 255;
     }
-    f.canvas.getContext('2d')!.putImageData(f.img, 0, 0);
-    f.tex.source.update();
+    f.update();
   }
 
   constructor(private canvas: HTMLCanvasElement, private world: World, readonly bank: ArtBank, private opts: RenderOptions, extraDirt: Array<[number, number, number]> = []) {
     this.extraDirt = extraDirt;
+    const g = world.grid;
+    this.cam.ground = (x, y) => g.heightAt(x, y) * PX_PER_M_UP;
+    this.cam.maxGround = g.rise.reduce((m, r) => Math.max(m, r), 0) * LEVEL_M * PX_PER_M_UP;
   }
 
   async init(): Promise<void> {
@@ -259,27 +253,36 @@ export class Renderer {
     this.tileTex = shapeTexture((c, w, h) => { c.fillStyle = '#fff'; c.beginPath(); c.moveTo(w / 2, 0); c.lineTo(w, h / 2); c.lineTo(w / 2, h); c.lineTo(0, h / 2); c.closePath(); c.fill(); });
     this.diamondTex = shapeTexture((c, w, h) => { c.strokeStyle = '#fff'; c.lineWidth = 5; c.beginPath(); c.moveTo(w / 2, 3); c.lineTo(w - 4, h / 2); c.lineTo(w / 2, h - 3); c.lineTo(4, h / 2); c.closePath(); c.stroke(); });
     // the ground: painted by a shader from small per-tile data (render/ground.ts), its clutter as sprites
-    this.ground.addChild(buildGround(this.world, this.extraDirt, { biomes: this.bank.biomes, homes: this.world.homes }, (s) => this.texture(s)));
+    const shape = this.shape = terrainGeometry(this.world.grid);
+    this.ground.addChild(buildGround(this.world, shape, this.extraDirt, { biomes: this.bank.biomes, homes: this.world.homes }, (s) => this.texture(s)));
     this.placeCliffs();
     // Upload every sprite sheet now, so the first swing or death of each unit
     // doesn't hitch mid-battle while its sheet goes to the GPU.
     for (const img of this.bank.allImages()) this.app.renderer.texture.initSource(this.source(img));
   }
 
-  /** Rock stands up as cliff: a piece on each rock tile, joined to the rock beside it, with the trees (it never changes). */
+  /**
+   * Cliffs: on each cliff tile, baked rock (a level tall) stacked from the foot of the drop, the lowest ground beside
+   * it, up to the tile's own height; joined to the cliff beside it. With the trees (it never changes).
+   */
   private placeCliffs(): void {
-    const g = this.world.grid;
-    const rock = (x: number, y: number) => g.inBounds(x, y) && g.terrain[y * g.width + x] === TERRAIN_CLIFF;
-    for (let y = 0; y < g.height; y++) for (let x = 0; x < g.width; x++) {
-      if (!rock(x, y)) continue;
+    const g = this.world.grid, W = g.width;
+    const cliff = (x: number, y: number) => g.inBounds(x, y) && g.terrain[y * W + x] === TERRAIN_CLIFF;
+    for (let y = 0; y < g.height; y++) for (let x = 0; x < W; x++) {
+      if (!cliff(x, y)) continue;
       const looks = this.bank.biomeAt(x + 0.5, y + 0.5).cliffs ?? this.bank.biome.cliffs;
       if (!looks?.length) continue;
-      const joins = (rock(x + 1, y) ? 1 : 0) | (rock(x - 1, y) ? 2 : 0) | (rock(x, y + 1) ? 4 : 0) | (rock(x, y - 1) ? 8 : 0);
-      const sp = new PixiSprite();
-      this.setFrame(sp, looks[(x * 7 + y * 13) % looks.length][joins]);
-      sp.position.set(isoX(x + 0.5, y + 0.5), isoY(x + 0.5, y + 0.5));
-      sp.zIndex = x + y + 1;
-      this.trees.addChild(sp);
+      let foot = g.rise[y * W + x];
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (g.inBounds(x + dx, y + dy)) foot = Math.min(foot, g.rise[(y + dy) * W + x + dx]);
+      const top = g.rise[y * W + x], levels = Math.max(1, Math.round(top - foot));
+      const joins = (cliff(x + 1, y) ? 1 : 0) | (cliff(x - 1, y) ? 2 : 0) | (cliff(x, y + 1) ? 4 : 0) | (cliff(x, y - 1) ? 8 : 0);
+      for (let k = 0; k < levels; k++) {
+        const sp = new PixiSprite();
+        this.setFrame(sp, looks[(x * 7 + y * 13 + k) % looks.length][joins]);
+        sp.position.set(isoX(x + 0.5, y + 0.5), isoY(x + 0.5, y + 0.5) - (top - levels + k) * LEVEL_M * PX_PER_M_UP);
+        sp.zIndex = x + y + 1 + k * 0.01;
+        this.trees.addChild(sp);
+      }
     }
   }
 
@@ -358,7 +361,7 @@ export class Renderer {
       let sp = seen.get(n.id);
       if (!sp) {
         sp = new PixiSprite();
-        sp.position.set(isoX(n.x, n.y), isoY(n.x, n.y));
+        sp.position.set(isoX(n.x, n.y), this.gy(n.x, n.y));
         sp.zIndex = n.x + n.y;
         (n.tree ? this.trees : this.objects).addChild(sp);
         seen.set(n.id, sp);
@@ -471,7 +474,7 @@ export class Renderer {
       if (!sp) {
         sp = new PixiSprite();
         const cx = b.ox + b.size / 2, cy = b.oy + b.size / 2;
-        sp.position.set(isoX(cx, cy), isoY(cx, cy));
+        sp.position.set(isoX(cx, cy), this.gy(cx, cy));
         sp.zIndex = b.ox + b.oy + b.size;
         // underfoot pieces (sim/abilities/underfoot.ts) lie on the ground, under everyone
         (isUnderfoot(b.spec) ? this.ground : this.objects).addChild(sp);
@@ -506,7 +509,7 @@ export class Renderer {
         f.anchor.set(s.ax / s.sw, s.ay / s.sh);
         f.scale.set(1.35 / s.q); // a little larger than life, so it reads
         const x = b.ox + b.size + 0.1, y = b.oy - 0.1; // the right-hand corner
-        f.position.set(isoX(x, y), isoY(x, y) - Math.abs(Math.sin(this.time * 3 + b.id)) * 3);
+        f.position.set(isoX(x, y), this.gy(x, y) - Math.abs(Math.sin(this.time * 3 + b.id)) * 3);
         f.zIndex = b.ox + b.oy + b.size + 0.5;
       }
     }
@@ -530,7 +533,7 @@ export class Renderer {
         const a0 = this.alt.get(u.id) ?? 0, target = u.airborne ? Renderer.altPx(u.alt) : 0;
         this.alt.set(u.id, a0 + (target - a0) * Math.min(1, this.dt * 18)); // (close behind its real height: a dive reads as a dive)
       }
-      sp.position.set(isoX(x, y), isoY(x, y) - this.lift(u.id));
+      sp.position.set(isoX(x, y), this.gy(x, y) - this.lift(u.id));
       sp.zIndex = x + y + (u.airborne ? 2 : 0) - (this.world.crawls(u) ? 1.5 : 0); // (a crawler goes under the bodies it crawls beneath)
       const art = this.bank.unit(u.owner, u.specId);
       if (art) {
@@ -590,7 +593,8 @@ export class Renderer {
       // (its path is fixed when it leaves the hand: up to where the thrower aimed, the bird's body there)
       const end = p.tz === undefined ? 0 : Renderer.altPx(p.tz) + AIR_BODY_PX;
       const h = p.drop ? (Renderer.altPx(p.sz) + AIR_BODY_PX) * (1 - t * t) : (10 + dist * 6) * 4 * t * (1 - t) + (26 + p.sz * 16) * (1 - t) + end * t;
-      sp.position.set(isoX(x, y), isoY(x, y) - h);
+      const gs = this.cam.ground(p.sx, p.sy), gt = this.cam.ground(p.tx, p.ty); // (from the thrower's ground to the target's)
+      sp.position.set(isoX(x, y), isoY(x, y) - (gs + (gt - gs) * t) - h);
       sp.rotation = this.time * 14 + p.id;
       sp.visible = this.seen(p.owner, x, y);
     }
@@ -604,7 +608,7 @@ export class Renderer {
       s.anchor.set(0.5, 1);
       s.width = 9; s.height = 7;
       s.tint = p.res === 'food' ? 0xc0392b : p.res === 'wood' ? 0x8a5a2e : 0x7ae7ff;
-      s.position.set(isoX(x, y), isoY(x, y) - 2);
+      s.position.set(isoX(x, y), this.gy(x, y) - 2);
       s.zIndex = x + y;
     }
     this.parcelPool.end();
@@ -620,7 +624,7 @@ export class Renderer {
       for (let n = rate + Math.random(); n >= 1; n--) {
         const px = b.ox + 0.3 + Math.random() * (b.size - 0.6), py = b.oy + 0.3 + Math.random() * (b.size - 0.6);
         const fire = hurt > 0.66 && Math.random() < 0.4;
-        this.puffs.push({ x: isoX(px, py), y: isoY(px, py) - 30 - Math.random() * 40 * b.size, t: 0, life: fire ? 0.6 : 2.6, fire, drift: 6 + Math.random() * 10, size: fire ? 5 : 8 + Math.random() * 6 });
+        this.puffs.push({ x: isoX(px, py), y: this.gy(px, py) - 30 - Math.random() * 40 * b.size, t: 0, life: fire ? 0.6 : 2.6, fire, drift: 6 + Math.random() * 10, size: fire ? 5 : 8 + Math.random() * 6 });
       }
     }
     const P = this.fxPool;
@@ -653,15 +657,15 @@ export class Renderer {
     };
     const ring = (x: number, y: number, r: number, color: number, a: number) => {
       const rx = Math.max(9, r * 64 * 0.75);
-      ellipse(this.ringTex, isoX(x, y), isoY(x, y), rx, rx * 0.5, color, a);
+      ellipse(this.ringTex, isoX(x, y), this.gy(x, y), rx, rx * 0.5, color, a);
     };
     // a formation preview: a ring for each spot, and a tick out of it the way that unit will face
     for (const f of rs.formation ?? []) {
-      ellipse(this.ringTex, isoX(f.x, f.y), isoY(f.x, f.y), 9, 4.5, 0xffffff, 0.7);
+      ellipse(this.ringTex, isoX(f.x, f.y), this.gy(f.x, f.y), 9, 4.5, 0xffffff, 0.7);
       const tx = f.x + Math.cos(f.face) * 0.45, ty = f.y + Math.sin(f.face) * 0.45;
-      ellipse(this.discTex, isoX(tx, ty), isoY(tx, ty), 2.4, 1.2, 0xffffff, 0.8);
+      ellipse(this.discTex, isoX(tx, ty), this.gy(tx, ty), 2.4, 1.2, 0xffffff, 0.8);
     }
-    for (const [x, y] of rs.zone ?? []) ellipse(this.tileTex, isoX(x + 0.5, y + 0.5), isoY(x + 0.5, y + 0.5), 32, 16, 0x9fd8ff, 0.14);
+    for (const [x, y] of rs.zone ?? []) ellipse(this.tileTex, isoX(x + 0.5, y + 0.5), this.gy(x + 0.5, y + 0.5), 32, 16, 0x9fd8ff, 0.14);
     let rally: Building | null = null, ownUnit = false;
     for (const id of rs.selected) {
       const u = w.units.get(id);
@@ -673,10 +677,10 @@ export class Renderer {
       const b = w.buildings.get(id);
       if (b) {
         const cx = b.ox + b.size / 2, cy = b.oy + b.size / 2;
-        ellipse(this.diamondTex, isoX(cx, cy), isoY(cx, cy), b.size * 32, b.size * 16, 0xffffff, 0.85);
+        ellipse(this.diamondTex, isoX(cx, cy), this.gy(cx, cy), b.size * 32, b.size * 16, 0xffffff, 0.85);
         // infrastructure reach
         const reach = Math.max(b.spec.gatherBoost?.radius ?? 0, b.spec.sow?.radius ?? 0);
-        if (reach) ellipse(this.ringTex, isoX(cx, cy), isoY(cx, cy), (reach + b.size / 2) * 45.25, (reach + b.size / 2) * 22.6, 0xa8e070, 0.6);
+        if (reach) ellipse(this.ringTex, isoX(cx, cy), this.gy(cx, cy), (reach + b.size / 2) * 45.25, (reach + b.size / 2) * 22.6, 0xa8e070, 0.6);
         if (b.owner === 0) rally = b;
       }
     }
@@ -709,8 +713,8 @@ export class Renderer {
         const s = stop(o);
         if (!s) continue;
         const [tx, ty, color] = s, d = Math.hypot(tx - fx, ty - fy);
-        for (let k = 0.5; k < d; k += 0.5) { const x = fx + ((tx - fx) * k) / d, y = fy + ((ty - fy) * k) / d; ellipse(this.discTex, isoX(x, y), isoY(x, y), 2.2, 1.1, color, 0.55); }
-        ellipse(this.ringTex, isoX(tx, ty), isoY(tx, ty), 9, 4.5, color, 0.85);
+        for (let k = 0.5; k < d; k += 0.5) { const x = fx + ((tx - fx) * k) / d, y = fy + ((ty - fy) * k) / d; ellipse(this.discTex, isoX(x, y), this.gy(x, y), 2.2, 1.1, color, 0.55); }
+        ellipse(this.ringTex, isoX(tx, ty), this.gy(tx, ty), 9, 4.5, color, 0.85);
         fx = tx; fy = ty;
       }
     }
@@ -722,26 +726,26 @@ export class Renderer {
       const p = rs.ping;
       p.t += dt;
       if (p.t > 0.6) rs.ping = null;
-      else for (const k of [1, 0.55]) ellipse(this.ringTex, isoX(p.x, p.y), isoY(p.x, p.y), (14 - p.t * 12) * k, (7 - p.t * 6) * k, hexNum(p.color), 1 - p.t / 0.6);
+      else for (const k of [1, 0.55]) ellipse(this.ringTex, isoX(p.x, p.y), this.gy(p.x, p.y), (14 - p.t * 12) * k, (7 - p.t * 6) * k, hexNum(p.color), 1 - p.t / 0.6);
     }
     for (const p of w.projectiles.values()) {
       const t = Math.min(1, (p.t + alpha / 20) / p.duration);
       const x = p.sx + (p.tx - p.sx) * t, y = p.sy + (p.ty - p.sy) * t;
-      ellipse(this.discTex, isoX(x, y), isoY(x, y), 4, 2, 0x000000, 0.35);
+      ellipse(this.discTex, isoX(x, y), this.gy(x, y), 4, 2, 0x000000, 0.35);
     }
     const gh = rs.ghost;
     if (gh) {
-      for (const [x, y, ok] of gh.line ?? []) ellipse(this.diamondTex, isoX(x + 0.5, y + 0.5), isoY(x + 0.5, y + 0.5), 32, 16, ok ? 0x7aff7a : 0xff5a4a, 0.8);
+      for (const [x, y, ok] of gh.line ?? []) ellipse(this.diamondTex, isoX(x + 0.5, y + 0.5), this.gy(x + 0.5, y + 0.5), 32, 16, ok ? 0x7aff7a : 0xff5a4a, 0.8);
       const cx = gh.ox + gh.size / 2, cy = gh.oy + gh.size / 2;
-      ellipse(this.diamondTex, isoX(cx, cy), isoY(cx, cy), gh.size * 32, gh.size * 16, gh.ok ? 0x7aff7a : 0xff5a4a, 0.95);
+      ellipse(this.diamondTex, isoX(cx, cy), this.gy(cx, cy), gh.size * 32, gh.size * 16, gh.ok ? 0x7aff7a : 0xff5a4a, 0.95);
       const gs = this.world.buildingSpecOf(0, gh.specId);
       const reach = Math.max(gs?.gatherBoost?.radius ?? 0, gs?.sow?.radius ?? 0);
-      if (reach) ellipse(this.ringTex, isoX(cx, cy), isoY(cx, cy), (reach + gh.size / 2) * 45.25, (reach + gh.size / 2) * 22.6, 0xa8e070, 0.6);
+      if (reach) ellipse(this.ringTex, isoX(cx, cy), this.gy(cx, cy), (reach + gh.size / 2) * 45.25, (reach + gh.size / 2) * 22.6, 0xa8e070, 0.6);
       const art = this.bank.building(0, gh.specId)?.complete;
       if (art) {
         if (!this.ghostSprite) { this.ghostSprite = new PixiSprite(); this.objects.addChild(this.ghostSprite); }
         this.setFrame(this.ghostSprite, art);
-        this.ghostSprite.position.set(isoX(cx, cy), isoY(cx, cy));
+        this.ghostSprite.position.set(isoX(cx, cy), this.gy(cx, cy));
         this.ghostSprite.zIndex = gh.ox + gh.oy + gh.size;
         this.ghostSprite.alpha = 0.55;
         this.ghostSprite.tint = gh.ok ? 0xc8ffc8 : 0xff9a8a;
@@ -757,7 +761,7 @@ export class Renderer {
       const art = this.bank.unit(u.owner, u.specId);
       const f = u.stats.flight && !u.airborne && lift > 6 ? { anim: 'fly' as const, time: this.time } : unitFrame(u);
       const sh = art && unitShadow(art, f.anim, u.heading, f);
-      const gx = isoX(x, y) + lift * SUN_SHADOW[0], gy = isoY(x, y) + lift * SUN_SHADOW[1];
+      const gx = isoX(x, y) + lift * SUN_SHADOW[0], gy = this.gy(x, y) + lift * SUN_SHADOW[1];
       if (!sh) { const r = u.stats.radius * 40; ellipse(this.discTex, gx, gy, r, r * 0.5, 0x000000, 0.3); continue; } // (art without baked shadows)
       const sp = P.get(this.texture(sh));
       sp.anchor.set(sh.ax / sh.sw, sh.ay / sh.sh);
@@ -770,7 +774,7 @@ export class Renderer {
     if (rally) {
       if (!this.flagSprite) { this.flagSprite = new PixiSprite(); this.objects.addChild(this.flagSprite); }
       this.setFrame(this.flagSprite, this.bank.flag(rally.owner));
-      this.flagSprite.position.set(isoX(rally.rallyX, rally.rallyY), isoY(rally.rallyX, rally.rallyY));
+      this.flagSprite.position.set(isoX(rally.rallyX, rally.rallyY), this.gy(rally.rallyX, rally.rallyY));
       this.flagSprite.zIndex = rally.rallyX + rally.rallyY;
       this.flagSprite.visible = true;
     } else if (this.flagSprite) this.flagSprite.visible = false;
@@ -782,7 +786,7 @@ export class Renderer {
       f.visible = ownUnit && !!at;
       if (!f.visible || !at) return;
       this.setFrame(f, this.bank.flag(0));
-      f.position.set(isoX(at[0], at[1]), isoY(at[0], at[1]));
+      f.position.set(isoX(at[0], at[1]), this.gy(at[0], at[1]));
       f.zIndex = at[0] + at[1];
       f.tint = tint;
     });
@@ -839,7 +843,7 @@ export class Renderer {
       const frame = unitSprite({ height: art.height, anims: seg.anims }, moving ? 'walk' : 'idle', octant, moving ? f : { time: this.time });
       this.setFrame(s, frame);
       s.scale.set(k / frame.q);
-      s.position.set(isoX(px, py), isoY(px, py));
+      s.position.set(isoX(px, py), this.gy(px, py));
       s.zIndex = px + py - (this.world.crawls(u) ? 1.5 : 0);
       s.tint = front.tint;
       s.visible = front.visible;
@@ -948,7 +952,7 @@ export class Renderer {
         if (!art) continue;
         if (!e.sprite) {
           e.sprite = new PixiSprite();
-          e.sprite.position.set(isoX(e.x, e.y), isoY(e.x, e.y));
+          e.sprite.position.set(isoX(e.x, e.y), this.gy(e.x, e.y));
           this.corpses.addChild(e.sprite);
         }
         this.setFrame(e.sprite, unitSprite(art, 'die', e.heading!, { progress: Math.min(1, e.t / 0.6) }));

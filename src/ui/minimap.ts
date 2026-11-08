@@ -7,10 +7,10 @@ import { teamColor } from '../render/artbank';
 /** Diamond-shaped minimap matching the isometric view. */
 
 const rgbOf = (h: string): [number, number, number] => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
-/** The map behind the dots: greyed and darkened, so they stand out. */
-function muted(h: string): string {
+/** The map behind the dots: greyed and darkened, so they stand out. `k` lightens it (high ground) or darkens it. */
+function muted(h: string, k = 1): string {
   const [r, g, b] = rgbOf(h), grey = (r + g + b) / 3;
-  return `rgb(${[r, g, b].map((c) => Math.round((c * 0.45 + grey * 0.55) * 0.7)).join(',')})`;
+  return `rgb(${[r, g, b].map((c) => Math.min(255, Math.round((c * 0.45 + grey * 0.55) * 0.7 * k))).join(',')})`;
 }
 /** A team's colour as a minimap dot: its hue at full saturation, light (the Wilds' stays as it is). */
 const vividCache = new Map<string, string>();
@@ -50,7 +50,8 @@ export class Minimap {
     for (let y = 0; y < g.height; y++) for (let x = 0; x < g.width; x++) {
       const t = g.terrain[y * g.width + x];
       const gr = this.ground?.(x + 0.5, y + 0.5);
-      b.fillStyle = muted(t === TERRAIN_CLIFF ? '#8b8375' : t === TERRAIN_WATER ? gr?.shallow ?? '#2f5f7a' : t === TERRAIN_SAND ? gr?.sand ?? '#b8a070' : gr?.grass[0] ?? '#5d7a2f');
+      const k = 0.8 + g.rise[y * g.width + x] * 0.22; // each level up a shade lighter
+      b.fillStyle = muted(t === TERRAIN_CLIFF ? '#6e675c' : t === TERRAIN_WATER ? gr?.shallow ?? '#2f5f7a' : t === TERRAIN_SAND ? gr?.sand ?? '#b8a070' : gr?.grass[0] ?? '#5d7a2f', k);
       const [px, py] = this.toMini(x + 0.5, y + 0.5);
       b.fillRect(px - 1.6, py - 0.8, 3.2, 1.6);
     }

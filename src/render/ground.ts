@@ -2,11 +2,13 @@
 // patches, dirt round buildings and mines, shores and water, rock with moss and cracks, and each player's land
 // blended into the next at the border. Each frame the GPU reads that texture and a small tiling grain texture, two
 // reads per pixel, so the ground costs about the same on any machine. Grass tufts, flowers and stones are sprites.
-import { Container, GlProgram, Mesh, MeshGeometry, Shader, Sprite as PixiSprite, Texture, BufferImageSource } from 'pixi.js';
-import { TERRAIN_CLIFF, TERRAIN_SAND, TERRAIN_WATER } from '../sim/map';
+// The ground's shape is a mesh: each tile a quad at its own height (sloped on a ramp), with a rock face dropping from
+// each edge above lower ground. The fog of war is drawn on the same mesh.
+import { Container, Geometry, GlProgram, Mesh, Shader, Sprite as PixiSprite, Texture, BufferImageSource } from 'pixi.js';
+import { TERRAIN_CLIFF, TERRAIN_SAND, TERRAIN_WATER, type Grid } from '../sim/map';
 import type { World } from '../sim/world';
 import type { BiomeArt, Sprite } from '../art/contract';
-import { isoX, isoY } from './camera';
+import { isoX, isoY, PX_PER_M_UP } from './camera';
 
 export interface Doodads { grass: Sprite[]; flowers: Sprite[]; stones: Sprite[]; forest: Sprite[] }
 /** Which biome paints each part of the map: each player's half has its own (blended at the border). */
@@ -34,7 +36,11 @@ function vnoise(layer: number, x: number, y: number): number {
 
 const vertex = /* glsl */ `#version 300 es
 in vec2 aPosition;
+in vec2 aWorld;
+in float aShade;
 out vec2 vPos;
+out vec2 vWorld;
+out float vShade;
 uniform mat3 uProjectionMatrix;
 uniform mat3 uWorldTransformMatrix;
 uniform mat3 uTransformMatrix;
@@ -42,28 +48,102 @@ void main() {
   mat3 mvp = uProjectionMatrix * uWorldTransformMatrix * uTransformMatrix;
   gl_Position = vec4((mvp * vec3(aPosition, 1.0)).xy, 0.0, 1.0);
   vPos = aPosition;
+  vWorld = aWorld;
+  vShade = aShade;
 }`;
 
-// screen position to tile coordinates (the isometric projection undone), the painted colour there, and fine grain
+// a top: the painted colour at its tile coordinates, and fine grain; a face: rock in layers, lit by which way it faces
 const fragment = /* glsl */ `#version 300 es
 in vec2 vPos;
+in vec2 vWorld;
+in float vShade;
 out vec4 finalColor;
 uniform sampler2D uGround;
 uniform sampler2D uGrain;
 uniform vec2 uSize;
 void main() {
-  float a = vPos.x / 32.0, b = vPos.y / 16.0;
-  vec2 w = vec2((a + b) * 0.5, (b - a) * 0.5);
-  if (w.x < 0.0 || w.y < 0.0 || w.x >= uSize.x || w.y >= uSize.y) discard;
   float grain = texture(uGrain, vec2(vPos.x * 0.45, vPos.y * 0.9) / ${GRAIN}.0).r;
-  finalColor = vec4(min(vec3(1.0), texture(uGround, w / uSize).rgb * (0.9 + grain * 0.16)), 1.0);
+  if (vShade > 0.0) {
+    float layer = texture(uGrain, vec2((vWorld.x - vWorld.y) * 0.08, vPos.y * 0.07)).r;
+    vec3 rock = mix(vec3(${TOP0.join(', ')}), vec3(${TOP1.join(', ')}), layer) * (0.85 + grain * 0.3);
+    finalColor = vec4(rock * vShade, 1.0);
+    return;
+  }
+  finalColor = vec4(min(vec3(1.0), texture(uGround, vWorld / uSize).rgb * (0.9 + grain * 0.16)), 1.0);
 }`;
+
+// the fog of war: dark over ground never seen, a veil over ground out of sight (one texel per tile)
+const fogFragment = /* glsl */ `#version 300 es
+in vec2 vPos;
+in vec2 vWorld;
+in float vShade;
+out vec4 finalColor;
+uniform sampler2D uFog;
+uniform vec2 uSize;
+void main() {
+  float a = texture(uFog, vWorld / uSize).r;
+  finalColor = vec4(vec3(0.024, 0.031, 0.039) * a, a);
+}`;
+
+/** How lit a face is, at its top and at its foot: the bake's sun is upper left, so faces looking down-left catch more. */
+const FACE_X = [0.62, 0.42], FACE_Y = [0.9, 0.62];
+
+/**
+ * The ground's shape: each tile a quad at its height (corners from Grid.heightAt, so a ramp slopes), and a face down
+ * from each edge that stands above the ground in front of it (the edges facing the viewer; the others are hidden).
+ * Laid back to front, so nearer ground draws over farther.
+ */
+export function terrainGeometry(g: Grid): Geometry {
+  const W = g.width, H = g.height, E = 1e-3;
+  const lift = (x: number, y: number) => g.heightAt(x, y) * PX_PER_M_UP;
+  const pos: number[] = [], world: number[] = [], shade: number[] = [], idx: number[] = [];
+  const vert = (x: number, y: number, h: number, s: number) => { pos.push(isoX(x, y), isoY(x, y) - h); world.push(x, y); shade.push(s); return shade.length - 1; };
+  const quad = (a: number, b: number, c: number, d: number) => idx.push(a, b, c, a, c, d);
+  for (let sum = 0; sum < W + H - 1; sum++) for (let x = Math.max(0, sum - H + 1); x <= Math.min(W - 1, sum); x++) {
+    const y = sum - x;
+    const h00 = lift(x + E, y + E), h10 = lift(x + 1 - E, y + E), h11 = lift(x + 1 - E, y + 1 - E), h01 = lift(x + E, y + 1 - E);
+    quad(vert(x, y, h00, 0), vert(x + 1, y, h10, 0), vert(x + 1, y + 1, h11, 0), vert(x, y + 1, h01, 0));
+    // the face on its +x edge, down to the ground beyond (or to nothing, off the map)
+    const a0 = x + 1 < W ? lift(x + 1 + E, y + E) : 0, a1 = x + 1 < W ? lift(x + 1 + E, y + 1 - E) : 0;
+    if (h10 > a0 + 0.5 || h11 > a1 + 0.5) {
+      quad(vert(x + 1, y, h10, FACE_X[0]), vert(x + 1, y + 1, h11, FACE_X[0]), vert(x + 1, y + 1, Math.min(h11, a1), FACE_X[1]), vert(x + 1, y, Math.min(h10, a0), FACE_X[1]));
+    }
+    // and on its +y edge
+    const b0 = y + 1 < H ? lift(x + E, y + 1 + E) : 0, b1 = y + 1 < H ? lift(x + 1 - E, y + 1 + E) : 0;
+    if (h01 > b0 + 0.5 || h11 > b1 + 0.5) {
+      quad(vert(x, y + 1, h01, FACE_Y[0]), vert(x + 1, y + 1, h11, FACE_Y[0]), vert(x + 1, y + 1, Math.min(h11, b1), FACE_Y[1]), vert(x, y + 1, Math.min(h01, b0), FACE_Y[1]));
+    }
+  }
+  return new Geometry({
+    attributes: {
+      aPosition: { buffer: new Float32Array(pos), format: 'float32x2' },
+      aWorld: { buffer: new Float32Array(world), format: 'float32x2' },
+      aShade: { buffer: new Float32Array(shade), format: 'float32' },
+    },
+    indexBuffer: new Uint32Array(idx),
+  });
+}
+
+/** The fog of war over `shape` (terrainGeometry): set `alpha[tile]` (0 clear … 255 black), then call `update()`. */
+export function buildFog(g: Grid, shape: Geometry): { mesh: Mesh<Geometry, Shader>; alpha: Uint8Array; update(): void } {
+  const px = new Uint8Array(g.width * g.height * 4), alpha = new Uint8Array(g.width * g.height);
+  const source = new BufferImageSource({ resource: px, width: g.width, height: g.height, format: 'rgba8unorm', scaleMode: 'linear', addressMode: 'clamp-to-edge' });
+  const shader = new Shader({
+    glProgram: new GlProgram({ vertex, fragment: fogFragment, name: 'fog' }),
+    resources: { uFog: source, fogUniforms: { uSize: { value: new Float32Array([g.width, g.height]), type: 'vec2<f32>' } } },
+  });
+  return {
+    mesh: new Mesh<Geometry, Shader>({ geometry: shape, shader }),
+    alpha,
+    update() { for (let i = 0; i < alpha.length; i++) px[i * 4] = alpha[i]; source.update(); },
+  };
+}
 
 /**
  * The ground for `world`: a mesh over the whole map painted from one texture, and its clutter (grass tufts, flowers,
  * stones) as sprites. `texture` turns a baked sprite into a renderer texture.
  */
-export function buildGround(world: World, extraDirt: Array<[number, number, number]>, looks: Looks, texture: (s: Sprite) => Texture): Container {
+export function buildGround(world: World, shape: Geometry, extraDirt: Array<[number, number, number]>, looks: Looks, texture: (s: Sprite) => Texture): Container {
   const g = world.grid, W = g.width, H = g.height;
   // per-tile weights: forest floor under trees, trodden dirt round buildings and mines
   const forest = new Float32Array(W * H), dirt = new Float32Array(W * H);
@@ -140,11 +220,8 @@ export function buildGround(world: World, extraDirt: Array<[number, number, numb
       groundUniforms: { uSize: { value: new Float32Array([W, H]), type: 'vec2<f32>' } },
     },
   });
-  // one quad over the map's diamond
-  const x0 = -H * 32, x1 = W * 32, y0 = 0, y1 = (W + H) * 16;
-  const geometry = new MeshGeometry({ positions: new Float32Array([x0, y0, x1, y0, x1, y1, x0, y1]), uvs: new Float32Array([0, 0, 1, 0, 1, 1, 0, 1]), indices: new Uint32Array([0, 1, 2, 0, 2, 3]) });
   const out = new Container();
-  out.addChild(new Mesh({ geometry, shader }));
+  out.addChild(new Mesh<Geometry, Shader>({ geometry: shape, shader }));
   out.addChild(clutter(world, looks, { forest, dirt, water }, texture));
   return out;
 }
@@ -202,7 +279,7 @@ function clutter(world: World, looks: Looks, f: { forest: Float32Array; dirt: Fl
       for (const p of props) {
         const sp = new PixiSprite(texture(p.s));
         sp.anchor.set(p.s.ax / p.s.sw, p.s.ay / p.s.sh);
-        sp.position.set(isoX(p.wx, p.wy), isoY(p.wx, p.wy));
+        sp.position.set(isoX(p.wx, p.wy), isoY(p.wx, p.wy) - g.heightAt(p.wx, p.wy) * PX_PER_M_UP);
         sp.scale.set(p.k);
         layer.addChild(sp);
       }
