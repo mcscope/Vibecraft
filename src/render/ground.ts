@@ -48,7 +48,7 @@ void main() {
 }`;
 
 // screen position to tile coordinates (the isometric projection undone), the painted colour there, and fine grain.
-// The ground texture's alpha is how much rock is there (over 0.5: rock). Near rock (uNear, per tile) a pixel shows the
+// uRock is how much rock is there (over 0.5: rock). Near rock (uNear, per tile) a pixel shows the
 // rock's top if there's rock CLIFF_PX below it on screen, its face if there's rock less far below, else the ground,
 // shaded where the cliff stands up-left of it.
 const fragment = /* glsl */ `#version 300 es
@@ -57,11 +57,12 @@ out vec4 finalColor;
 uniform sampler2D uGround;
 uniform sampler2D uGrain;
 uniform sampler2D uNear;
+uniform sampler2D uRock;
 uniform vec2 uSize;
 vec2 toTile(vec2 p) { float a = p.x / 32.0, b = p.y / 16.0; return vec2((a + b) * 0.5, (b - a) * 0.5); }
 float rockAt(vec2 p) {
   vec2 w = toTile(p);
-  return w.x < 0.0 || w.y < 0.0 || w.x >= uSize.x || w.y >= uSize.y ? 0.0 : texture(uGround, w / uSize).a;
+  return w.x < 0.0 || w.y < 0.0 || w.x >= uSize.x || w.y >= uSize.y ? 0.0 : texture(uRock, w / uSize).r;
 }
 float grainAt(vec2 p) { return texture(uGrain, vec2(p.x * 0.45, p.y * 0.9) / ${GRAIN}.0).r; }
 void main() {
@@ -89,7 +90,7 @@ void main() {
         }
       }
       // the cliff's shadow, down-right of its foot
-      if (!face) c *= 1.0 - 0.4 * smoothstep(0.3, 0.7, texture(uGround, (w - vec2(0.9, 0.2)) / uSize).a);
+      if (!face) c *= 1.0 - 0.4 * smoothstep(0.3, 0.7, texture(uRock, (w - vec2(0.9, 0.2)) / uSize).r);
     }
   }
   finalColor = vec4(min(vec3(1.0), c * (0.9 + grain * 0.16)), 1.0);
@@ -137,7 +138,7 @@ export function buildGround(world: World, extraDirt: Array<[number, number, numb
     return c;
   };
   const D = Math.max(1, Math.min(DETAIL, Math.floor(4096 / Math.max(W, H)))), TW = W * D, TH = H * D;
-  const px = new Uint8Array(TW * TH * 4);
+  const px = new Uint8Array(TW * TH * 4), rockPx = new Uint8Array(TW * TH);
   for (let ty = 0; ty < TH; ty++) for (let tx = 0; tx < TW; tx++) {
     const x = (tx + 0.5) / D, y = (ty + 0.5) / D;
     const big = vnoise(1, x * 0.18, y * 0.18), mid = vnoise(2, x * 0.7, y * 0.7), fine = vnoise(3, x * 3.1, y * 3.1);
@@ -165,7 +166,8 @@ export function buildGround(world: World, extraDirt: Array<[number, number, numb
       c = [c[0] * k, c[1] * k, c[2] * k];
     }
     const i = (ty * TW + tx) * 4;
-    px[i] = Math.min(255, c[0] * 255); px[i + 1] = Math.min(255, c[1] * 255); px[i + 2] = Math.min(255, c[2] * 255); px[i + 3] = Math.round(Math.max(0, Math.min(1, rv)) * 255);
+    px[i] = Math.min(255, c[0] * 255); px[i + 1] = Math.min(255, c[1] * 255); px[i + 2] = Math.min(255, c[2] * 255); px[i + 3] = 255;
+    rockPx[i / 4] = Math.round(Math.max(0, Math.min(1, rv)) * 255);
   }
   // the tiles near rock (its top and face cover the tiles up-left of it on screen, its shadow falls down-right)
   const near = new Uint8Array(W * H * 4), reach = Math.ceil(CLIFF_PX / 32) + 2;
@@ -179,6 +181,7 @@ export function buildGround(world: World, extraDirt: Array<[number, number, numb
     glProgram: new GlProgram({ vertex, fragment, name: 'ground' }),
     resources: {
       uGround: new BufferImageSource({ resource: px, width: TW, height: TH, format: 'rgba8unorm', scaleMode: 'linear', addressMode: 'clamp-to-edge' }),
+      uRock: new BufferImageSource({ resource: rockPx, width: TW, height: TH, format: 'r8unorm', scaleMode: 'linear', addressMode: 'clamp-to-edge' }),
       uNear: new BufferImageSource({ resource: near, width: W, height: H, format: 'rgba8unorm', scaleMode: 'nearest', addressMode: 'clamp-to-edge' }),
       uGrain: new BufferImageSource({ resource: grain, width: GRAIN, height: GRAIN, format: 'rgba8unorm', scaleMode: 'linear', addressMode: 'repeat' }),
       groundUniforms: { uSize: { value: new Float32Array([W, H]), type: 'vec2<f32>' } },
