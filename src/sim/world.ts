@@ -1006,7 +1006,7 @@ export class World {
   addNode(n: Omit<ResourceNode, 'id' | 'maxAmount'>): ResourceNode {
     const node: ResourceNode = { ...n, id: this.nextId++, maxAmount: n.amount };
     this.nodes.set(node.id, node);
-    if (!node.shard) this.grid.block(node.x, node.y, 1);
+    if (!node.shard && !node.carcass) this.grid.block(node.x, node.y, 1); // (a carcass lies flat: walk over it)
     return node;
   }
 
@@ -2437,7 +2437,7 @@ export class World {
   private removeNode(n: ResourceNode): void {
     if (!this.nodes.has(n.id)) return;
     this.nodes.delete(n.id);
-    if (!n.shard) this.grid.block(n.x, n.y, -1);
+    if (!n.shard && !n.carcass) this.grid.block(n.x, n.y, -1);
   }
 
   // ───────────────────────────── movement ─────────────────────────────
@@ -2780,12 +2780,17 @@ export class World {
       this.events.push({ type: 'buildingDestroyed', id: b.id, owner: b.owner, x: b.ox + b.size / 2, y: b.oy + b.size / 2, size: b.size });
     }
     if (this.tick % TICK_RATE !== 0 || !this.scenario.victory) return;
+    // a side is beaten when its army and its economy are gone: no unit that fights, gathers (or will grow into one: an
+    // egg, a cocoon), and no finished building that trains a gatherer. Other buildings don't keep it in.
+    const economic = (s: UnitSpec | undefined) => !!s && (s.canGather ?? true) && s.role !== 'carter' && !s.bearer && !s.dummy;
     for (const p of this.players) {
       if (p.defeated || p.neutral) continue;
-      const fighters = this.unitsOf(p.id).filter((u) => !u.carter);
-      const standing = this.buildingsOf(p.id).filter((b) => !b.spec.wall).length; // (walls alone don't keep a side in it)
-      if (standing === 0 && fighters.length === 0) p.defeated = true;
-      else if (standing === 0 && fighters.every((u) => !this.armed(u))) p.defeated = true;
+      const unitIn = (u: Unit) => {
+        const s = this.specOf(u.owner, u.specId)?.spec;
+        return !u.carter && !u.dummy && (u.stats.canAttack || economic(s) || u.order.kind === 'metamorph' || !!s?.becomes?.length || !!s?.spawns?.length);
+      };
+      const buildingIn = (b: Building) => b.complete && (b.spec.trains ?? []).some((id) => economic(this.specOf(p.id, id)?.spec));
+      if (!this.unitsOf(p.id).some(unitIn) && !this.buildingsOf(p.id).some(buildingIn)) p.defeated = true;
     }
     const alive = this.players.filter((p) => !p.defeated && !p.neutral);
     if (alive.length <= 1 && this.players.filter((p) => !p.neutral).length > 1) {

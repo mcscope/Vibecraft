@@ -6,7 +6,7 @@ import type { ArtAnim, FactionArt, Sprite } from './art/contract';
 import { unitSprite } from './art/contract';
 import { blit, fitCanvas, spriteIcon } from './art/draw';
 import { meadowfolk } from './factions/meadowfolk';
-import { training } from './factions/training';
+import { wildwelds } from './factions/wildwelds';
 import { fenfolk } from './factions/fenfolk';
 import { capitalFor, CAP, derive, deriveBuilding, K, prerequisites, techCost, techGate, techStart, techTime } from './sim/physics';
 import { TEAM_COLORS } from './render/artbank';
@@ -14,7 +14,7 @@ import { statsTable } from './ui/hud';
 import { esc, f1, n0, statRow } from './ui/format';
 import { buildingAbilityLines, unitAbilityLines } from './sim/abilities';
 
-const FACTIONS: FactionSpec[] = [meadowfolk, fenfolk, training];
+const FACTIONS: FactionSpec[] = [meadowfolk, fenfolk, wildwelds];
 const ANIMS: ArtAnim[] = ['idle', 'walk', 'attack', 'gather', 'eat', 'tired', 'die', 'carryFood', 'carryWood', 'carryCrystal'];
 const FACING = ['E', 'SE', 'S', 'SW', 'W', 'NW', 'N', 'NE'];
 

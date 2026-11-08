@@ -52,10 +52,10 @@ export function statsTable(spec: UnitSpec, stats: DerivedStats = derive(spec), f
       ${row('Calories', fmt(d.maxCalories), 'From reserve mass')}
       ${row('Speed', `${fmt(d.speed, 2)} t/s`, 'Unloaded; packs slow you down')}
       ${row('Carry', d.loadoutCrystal > 0 ? `${have(d.cargoCapacity)} kg + ${f1(d.loadoutCrystal)} kg weapon` : `${have(d.cargoCapacity)} kg`, 'Cargo pack, plus the weapon pack for its crystals')}
-      ${row('Crystal', spec.attack && d.canAttack ? `${spec.attack.crystalMass} kg ${spec.attack.style}${spec.attack.style === 'throw' ? ` ×${Math.round(d.loadoutCrystal / spec.attack.crystalMass)}` : ''}` : 'none')}
+      ${spec.attack && d.canAttack ? `${row('Crystal', `${spec.attack.crystalMass} kg ${spec.attack.style}${spec.attack.style === 'throw' ? ` ×${Math.round(d.loadoutCrystal / spec.attack.crystalMass)}` : ''}`)}
       ${row('Damage', fmt(d.damage), '½·m·v² × efficiency × refinement^⅔')}
       ${row('Dmg / sec', fmt(d.dps, 1))}
-      ${row('Range', `${fmt(d.range, 1)} t`)}
+      ${row('Range', `${fmt(d.range, 1)} t`)}` : ''}
       ${row('Cost', `${d.foodCost} ${food} · ${d.crystalCost} crys`)}
     </div>`;
 }
@@ -143,8 +143,10 @@ export class Hud {
     onSettings(() => { this.sig = ''; }); // rebuild panels so key hints update
   }
 
+  /** Whose faction's resource words the panel uses: the selected unit's or building's (the top bar: your own). */
+  private namesOf = -1;
   private names(): Record<ResourceKind, string> {
-    const n = this.world.factionOf(this.player).resourceNames ?? {};
+    const n = this.world.factionOf(this.namesOf >= 0 ? this.namesOf : this.player).resourceNames ?? {};
     return { food: n.food ?? 'Food', wood: n.wood ?? 'Wood', crystal: n.crystal ?? 'Crystal' };
   }
 
@@ -250,6 +252,7 @@ export class Hud {
     const sig = units.length === 1 ? `u${units[0].id}:${stances}${doing(units)}:${units[0].order.kind}:${units[0].brood.map((b) => b.into).join(',')}`
       : building ? `b${building.id}:${building.complete}:${building.queue.map((q) => (q.kind === 'unit' ? q.specId : q.techId)).join(',')}:${p.researched.length}:${building.owner}:${building.sowing.join('')}:${building.garrison.length}:${building.grown !== undefined && building.grown < building.spec.materials - 0.5}`
       : `m${units.map((u) => u.id).join(',')}:${stances}`;
+    this.namesOf = units[0]?.owner ?? building?.owner ?? -1;
     if (sig !== this.sig) {
       this.sig = sig;
       this.portraits = [];
@@ -280,7 +283,7 @@ export class Hud {
 
   private updateUnit(u: Unit): void {
     const w = this.world;
-    this.setBar('hp', u.hp, u.stats.maxHp, `${Math.ceil(u.hp)} / ${Math.round(u.stats.maxHp)}`);
+    this.setBar('hp', u.hp, u.stats.maxHp, `${Math.min(Math.ceil(u.hp), Math.round(u.stats.maxHp))} / ${Math.round(u.stats.maxHp)}`);
     if (!u.dummy) {
       this.setBar('cal', u.cal, u.stats.maxCalories, `${Math.floor(u.cal)} / ${Math.round(u.stats.maxCalories)} cal${u.exhausted ? ' — exhausted' : u.cal < u.stats.maxCalories * 0.2 ? ' — hungry' : ''}`);
       const load = w.cargo(u);
@@ -336,7 +339,7 @@ export class Hud {
 
   private updateBuilding(b: Building): void {
     const w = this.world;
-    this.setBar('bhp', b.hp, b.maxHp, `${Math.ceil(b.hp)} / ${Math.round(b.maxHp)}`);
+    this.setBar('bhp', b.hp, b.maxHp, `${Math.min(Math.ceil(b.hp), Math.round(b.maxHp))} / ${Math.round(b.maxHp)}`);
     if (!b.complete) { this.setBar('built', b.built, b.stats.totalCost, `${have(b.built)} / ${need(b.stats.totalCost)} ${this.names().wood} delivered`); return; }
     const item = b.queue[0];
     const bar = this.panel.querySelector<HTMLElement>('[data-bar="train"]');
@@ -542,7 +545,7 @@ export class Hud {
   }
 
   /** Does this side have buildings at all (else there's nothing to garrison)? */
-  private hasBuildings(): boolean { return (this.world.factionOf(this.player).buildings ?? []).length > 0; }
+  private hasBuildings(): boolean { return (this.world.factionOf(this.player).buildings ?? []).some((b) => !b.living && !b.wall); }
 
   /**
    * A side whose units are laid or change in place (no building to rally from) sets its two rally points from buttons
@@ -664,7 +667,10 @@ export class Hud {
     const trainsOrResearches = !!(b.spec.trains?.length || b.spec.researches?.length);
     const hasCarts = w.factionOf(b.owner).units.some((u) => u.role === 'carter');
     const growing = b.grown !== undefined && b.grown < b.spec.materials - 0.5;
-    const stocks = b.spec.living ? RESOURCES.filter((r) => (r === 'food' && growing) || (r === 'crystal' && !!st.tower)) : RESOURCES;
+    // stock bars for what it uses (a tower's crystal shows as its ammo instead)
+    const target = w.logistics.supplyTargets(b);
+    const stocks = (b.spec.living ? RESOURCES.filter((r) => r === 'food' && growing)
+      : trainsOrResearches ? RESOURCES : RESOURCES.filter((r) => target[r] > 0 || b.stock[r] > 0.5)).filter((r) => !(r === 'crystal' && st.tower));
     const info = `
       ${trainsOrResearches ? `<div class="capital" title="Capital is this building's materials. Links add its prerequisites' capital at 100%.">
         Capital <b>${n0(st.capital)}</b>${st.effectiveCapital > st.capital ? ` · with links <b>${n0(st.effectiveCapital)}</b>` : ''} · supports refinement <b>≤ ${fmt(st.maxRefinement, 2)}×</b>

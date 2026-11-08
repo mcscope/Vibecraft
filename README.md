@@ -42,13 +42,15 @@ Counters come straight out of the physics: spears beat cavalry, and cavalry runs
 
 ## The factions
 
-Two factions ship with the game. Each roster below shows every unit to scale.
+Three factions ship with the game. Each roster below shows every unit to scale.
 
 **The Meadowfolk:** farmers and knights of the green country. They fight with crystal maces, pikes, lancers on great lynxes, and the siege beast Hurlhorn.
 ![The Meadowfolk: villager, slinger, crystal maceman, pikeman, lynx lancer, hurlhorn and mule cart](docs/screenshots/roster-meadowfolk.png)
 
 **The Fenfolk:** frog-folk of the marsh. They fight with slingers, reed-spear guards, ridden bog toads, and a great siege heron.
 ![The Fenfolk: fenling, reedguard, bog toad, pack tortoise and great siege heron](docs/screenshots/roster-fenfolk.png)
+
+**The Wildwelds:** a brood of bugs with no halls. Mothers lay eggs, larvae tend the nest and change in cocoons into fighters, and big larvae lay their own bodies down as web walls and the Mimic Mine.
 
 ---
 

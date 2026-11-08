@@ -98,7 +98,14 @@ export function swapInto(w: World, u: Unit, into: string, mass?: number): Unit |
   if (mass !== undefined) n.stats = statsAtMass(w, u.owner, into, mass);
   n.x = n.px = u.x; n.y = n.py = u.y; n.facing = u.facing;
   n.hp = n.stats.maxHp * hpShare; n.cal = n.stats.maxCalories * calShare;
-  n.food = u.food; n.wood = u.wood; n.crystal = u.crystal;
+  // its pack: what fits in the new body's (a smaller pack: spare crystal put down, spare food eaten, spare wood dropped)
+  // (a shell, `mass` given, holds it all: it pays for the change)
+  const load = u.food + u.wood + u.crystal, keep = load > 0 && mass === undefined ? Math.min(1, n.stats.carryCapacity / load) : 1;
+  n.food = u.food * keep; n.wood = u.wood * keep; n.crystal = u.crystal * keep;
+  if (keep < 1) {
+    w.dropShard(n.x, n.y, u.crystal - n.crystal);
+    n.cal = Math.min(n.stats.maxCalories, n.cal + (u.food - n.food) * K.calPerFood);
+  }
   n.ammo = 0; // born without crystal: it gets its own (what it was carrying arms it first)
   w.newFighter(n); // (it goes for its crystal, picked up or mined, then to its side's army rally point)
   w.events.push({ type: 'metamorph', id: u.id, into: n.id, owner: u.owner, x: n.x, y: n.y, specId: u.specId, intoSpec: into, heading: u.heading });

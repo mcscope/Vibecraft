@@ -96,7 +96,7 @@ export class Minimap {
     for (const n of this.world.nodes.values()) {
       if (n.shard) continue;
       const [x, y] = this.toMini(n.x, n.y);
-      ctx.fillStyle = n.tree ? muted(this.ground?.(n.x, n.y)?.forest ?? '#2d4a22') : n.type === 'food' ? '#c0392b' : '#7ad7ef';
+      ctx.fillStyle = n.tree ? muted(this.ground?.(n.x, n.y)?.forest ?? '#2d4a22') : n.type === 'food' ? '#ff7ad9' : '#7ad7ef';
       ctx.fillRect(x - 1, y - 1, 2, 2);
     }
     return (this.layer = c);
