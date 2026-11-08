@@ -5,7 +5,7 @@ import type { FactionSpec } from './factions/types';
 import { training } from './factions/training';
 import { World, DT, TICK_RATE } from './sim/world';
 import { faceoff, provingGrounds, skirmish } from './sim/scenarios';
-import { LESSONS, tutorialScenario } from './tutorial';
+import { LESSONS, tutorialWorld } from './tutorial';
 import { soundDebug } from './ui/soundDebug';
 import { aiDraft, BattleAI, defaultDeployment, pitchedBattle } from './sim/battle';
 import { draftBattle } from './ui/battleSetup';
@@ -33,6 +33,8 @@ import { mountSettingsDialog, onSettings, settings } from './ui/settings';
 
 type Mode = 'demo' | 'skirmish' | 'spectate' | 'online' | 'faceoff' | 'tutorial' | 'battle';
 const params = new URLSearchParams(location.search);
+/** ?mode=tutorial: which lesson (&lesson=N, from 0). */
+const lessonIx = Math.max(0, Math.min(LESSONS.length - 1, +(params.get('lesson') ?? 0) || 0)), lesson = LESSONS[lessonIx];
 // Seed choice happens outside the sim, so Math.random is fine here.
 const seed = Number(params.get('seed') ?? Math.floor(Math.random() * 1e9));
 
@@ -99,9 +101,8 @@ async function start(m: Mode): Promise<void> {
     await run({ mode: m, world, me: 0, transport: new LoopbackTransport(), delay: 2, sources: (local) => [local, battleAI!] });
     return;
   }
-  const lessonIx = Math.max(0, Math.min(LESSONS.length - 1, +(params.get('lesson') ?? 0) || 0)), lesson = LESSONS[lessonIx];
   const world = m === 'tutorial'
-    ? new World({ seed, scenario: tutorialScenario(lesson), players: [{ name: 'You', faction: lesson.you }, { name: lesson.foe.name, faction: lesson.foe }] })
+    ? tutorialWorld(lesson, seed)
     : m === 'faceoff'
     ? new World({ seed, scenario: faceoff(), players: [{ name: pick('you').name, faction: pick('you') }, { name: pick('foe').name, faction: pick('foe') }] })
     : m === 'demo'
@@ -199,8 +200,8 @@ async function run(g: GameSetup): Promise<void> {
   const renderer = new Renderer(canvas, world, bank, { damageNumbers: m === 'demo' || m === 'tutorial' }, m === 'demo' ? [[18, 26, 4], [31, 26, 5]] : []);
   await renderer.init();
   const minimap = new Minimap(document.getElementById('minimap') as HTMLCanvasElement, world, 200, (x, y) => bank.biomeAt(x, y).ground);
-  // fog of war for whoever's playing (spectators and the proving grounds see everything)
-  renderer.viewer = minimap.viewer = m === 'spectate' || m === 'demo' || m === 'faceoff' || m === 'tutorial' ? -1 : HUMAN;
+  // fog of war for whoever's playing (spectators, the proving grounds and most lessons see everything)
+  renderer.viewer = minimap.viewer = m === 'spectate' || m === 'demo' || m === 'faceoff' || (m === 'tutorial' && !lesson.fog) ? -1 : HUMAN;
   const audio = new AudioEngine(world, bank, HUMAN);
   soundDebug();
   audio.alerts = m === 'skirmish' || m === 'online' || m === 'battle'; // a horn when your side is newly attacked
@@ -236,7 +237,7 @@ async function run(g: GameSetup): Promise<void> {
   if (m === 'faceoff') renderer.cam.centerOn(25, 25);
   else if (m === 'battle') { /* (the deploy step framed the camera) */ }
   else if (m === 'tutorial') {
-    const ix = Math.max(0, Math.min(LESSONS.length - 1, +(params.get('lesson') ?? 0) || 0)), lesson = LESSONS[ix];
+    const ix = lessonIx;
     renderer.cam.centerOn(lesson.look[0], lesson.look[1]);
     input.setSelection(world.unitsOf(HUMAN).filter((u) => u.specId !== world.factionOf(HUMAN).carterId).map((u) => u.id));
     // the lesson's caption, in the help panel: what to try, and Back / Restart / Next (nothing is checked)

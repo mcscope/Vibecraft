@@ -1,11 +1,15 @@
-// Tutorial (?mode=tutorial&lesson=N): short hands-on lessons on the Proving Grounds field. Each sets up a scene,
+// Tutorial (?mode=tutorial&lesson=N): short hands-on lessons, most on the Proving Grounds field. Each sets up a scene,
 // hands you units, and its caption says what to try and what to watch for. Nothing is checked: Next moves on.
+// (tests/tutorial.test.ts plays each lesson's scene, and the steps its caption asks for.)
 import { fenfolk } from './factions/fenfolk';
 import { meadowfolk } from './factions/meadowfolk';
+import { wildwelds } from './factions/wildwelds';
 import type { FactionSpec } from './factions/types';
 import { loadUp } from './sim/abilities/bearer';
+import { MapBuilder, type GeneratedMap } from './sim/map';
 import { provingGrounds, type Scenario } from './sim/scenarios';
-import { TICK_RATE, type World } from './sim/world';
+import { TICK_RATE, TREE_WOOD, World } from './sim/world';
+import { keyName, keymap, type KeyMap } from './ui/settings';
 
 export interface Lesson {
   title: string;
@@ -16,12 +20,19 @@ export interface Lesson {
   text: string;
   /** Where the camera starts. */
   look: [number, number];
+  /** The field (default: the Proving Grounds). */
+  map?(seed: number): GeneratedMap;
+  /** Fog of war: you see only what your units see (default: you see everything). */
+  fog?: boolean;
   setup(w: World): void;
   /** Each tick, after setup (timed events: an attack that comes later). */
   tick?(w: World): void;
 }
 
 const FOE = 1;
+
+/** A key as the player's control scheme has it (settings.ts keymap). */
+const key = (cmd: Exclude<keyof KeyMap, 'label' | 'description' | 'pan' | 'train'>) => `<kbd>${keyName(keymap()[cmd])}</kbd>`;
 
 /** Spawn `n` of a unit in a block around (x, y), `cols` wide, facing `heading` (octant; 0 is south-east on screen). */
 function block(w: World, owner: number, id: string, n: number, x: number, y: number, cols = 4, heading = 0): number[] {
@@ -45,13 +56,26 @@ const hold = (w: World, ids: number[], player = FOE) => w.enqueue({ player, cmd:
 /** Your units wait for your orders (an order, or a charge with C, still sends them). */
 const wait = (w: World, ids: number[]) => hold(w, ids, 0);
 
+/** The High ground field: open grass with a hill in the middle, a level up, ringed by cliff, a ramp up each side. */
+export const HILL = { x0: 23, x1: 32, y0: 20, y1: 35, rampY0: 25, rampY1: 30 } as const;
+function hillField(seed: number): GeneratedMap {
+  const m = new MapBuilder(seed, 56, [-50, -50]); // (no bases to keep clear)
+  for (let y = HILL.y0; y <= HILL.y1; y++) for (let x = HILL.x0; x <= HILL.x1; x++) m.raise(x, y, 1);
+  // the west ramp, three tiles long (the builder mirrors it through the middle: the east ramp)
+  for (let y = HILL.rampY0; y <= HILL.rampY1; y++) for (let x = HILL.x0 - 3; x < HILL.x0; x++) m.ramp(x, y);
+  m.forest(10, 10, 3.5);
+  m.forest(44, 20, 2.5);
+  m.borderWoods(2, 3);
+  return m.done();
+}
+
 export const LESSONS: Lesson[] = [
   {
     title: 'Calories',
     you: meadowfolk, foe: fenfolk, look: [16, 26],
-    text: `<p>Every unit carries a <b>calorie tank</b>: the orange bar under its health. Walking burns it, sprinting burns it about four times as fast, and every blow costs some. A big body holds more, and moves each kilo more cheaply.</p>
-<p><b>Try:</b> select the lancers, press <kbd>C</kbd> and right-click a fenling. They sprint in to charge: watch their bars drain. Charge again and again until they run low.</p>
-<p>An empty unit is <b>exhausted</b>: slow, and it can't fight. Select your units and press <kbd>R</kbd> (Resupply). They walk home to the Town Center and eat.</p>`,
+    text: `<p>Every unit has a <b>calorie tank</b>: the orange bar under its health. Walking burns it. Sprinting burns it about four times as fast, and every blow costs some. A big body holds more, and moves each kilo more cheaply.</p>
+<p><b>Try:</b> select the lancers, press ${key('charge')} (Charge) and right-click a fenling. They sprint in to charge: watch their bars drain. Charge again and again until they run low.</p>
+<p>An empty unit is <b>exhausted</b>: it's slow, and it can't fight. Select your units and press ${key('resupply')} (Resupply). They walk home to the Town Center to eat.</p>`,
     setup(w) {
       base(w, 0, 'town-center', 6, 24, { food: 3000, crystal: 200 });
       const yours = [...block(w, 0, 'lynx', 3, 14, 22, 3), ...block(w, 0, 'maceman', 6, 14, 30, 3)];
@@ -64,8 +88,8 @@ export const LESSONS: Lesson[] = [
     title: 'Crystals',
     you: fenfolk, foe: meadowfolk, look: [20, 26],
     text: `<p>Every weapon's tip is <b>crystal</b>. A striker keeps its crystal, but a thrower spends one with every throw. Each fenling carries 6 sling stones.</p>
-<p><b>Try:</b> attack the macemen with your fenlings and count the throws. Spent stones lie on the ground as <b>shards</b>, and anyone can pick them up.</p>
-<p>When a fenling runs dry it goes to restock. The <b>pack tortoise</b> is a walking crystal store. Move it up behind your fenlings: it sweeps up shards within sight and rearms fenlings near it, so they don't have to walk home. The Stilt Hall restocks them too (<kbd>R</kbd>).</p>`,
+<p><b>Try:</b> select your fenlings and right-click a maceman. Count the throws. Spent stones lie on the ground as <b>shards</b>, and anyone can pick them up.</p>
+<p>A fenling that runs dry goes to restock. The <b>pack tortoise</b> is a walking crystal store. Move it up behind your fenlings. It sweeps up the shards it can see and rearms fenlings near it, so they don't walk home. The Stilt Hall restocks them too (${key('resupply')}).</p>`,
     setup(w) {
       const hall = base(w, 0, 'stilt-hall', 6, 24, { food: 1500, crystal: 300 });
       wait(w, block(w, 0, 'fenling', 8, 14, 26, 4));
@@ -77,24 +101,23 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Carts',
     you: meadowfolk, foe: fenfolk, look: [18, 26],
-    text: `<p>Resources stay in the <b>building</b> that gathered them. There's no shared bank. The Town Center is full, but the Barracks and the Lynx Den across the field are empty.</p>
-<p>Units are already queued at both. Watch the <b>mule carts</b>: they load where there's spare and drive it to where it's needed, most urgent first. Your waiting orders are first in line.</p>
-<p><b>Try:</b> click a building to see its stock, and queue more units at the far ones. Train extra carts at the Town Center for faster supply. Where you build, and keeping the roads clear, matters.</p>`,
+    text: `<p>Resources stay in the <b>building</b> that gathered them. There's no shared bank. Here the Town Center is full, but the Barracks and the Lynx Den across the field are empty.</p>
+<p>Both already have units queued. Watch the <b>mule carts</b>: they load where there's spare and drive it where it's needed, most urgent first. Your queued units come first.</p>
+<p><b>Try:</b> click a building to see its stock. Queue more units at the far ones. Train extra carts at the Town Center for faster supply. Where you build matters, and so do clear roads.</p>`,
     setup(w) {
-      const tc = base(w, 0, 'town-center', 6, 24, { food: 4000, wood: 1500, crystal: 800 });
+      base(w, 0, 'town-center', 6, 24, { food: 4000, wood: 1500, crystal: 800 });
       const bar = base(w, 0, 'barracks', 30, 18, {}), den = base(w, 0, 'lynx-den', 30, 32, {});
       for (let i = 0; i < 3; i++) w.spawnAt(0, 'mule', 12, 24 + i, 0);
       if (bar) for (let i = 0; i < 3; i++) w.enqueue({ player: 0, cmd: { type: 'train', building: bar.id, specId: 'maceman' } });
       if (den) w.enqueue({ player: 0, cmd: { type: 'train', building: den.id, specId: 'lynx' } });
-      void tc;
     },
   },
   {
     title: 'Fen hauling',
     you: fenfolk, foe: meadowfolk, look: [16, 26],
-    text: `<p>The Fenfolk have <b>no carts</b>. Each little <b>reed hut</b> is its own base: fenlings drop what they gather at the nearest one, and each hut trains from its own stock.</p>
-<p><b>Try:</b> the Stilt Hall is stocked, but the two reed huts are empty. Click a hut and queue some reedguards: now it needs food and crystal. Then select all your fenlings and right-click that hut. They <b>haul</b> what it needs from the Stilt Hall, but each fenling carries only about 9 kg a trip.</p>
-<p>That's why Fen strategy is about building huts where the work is: gather beside a hut, train beside it, and nothing has to travel far.</p>`,
+    text: `<p>The Fenfolk have <b>no carts</b>. Each little <b>reed hut</b> is its own base. Fenlings drop what they gather at the nearest one, and each hut trains from its own stock.</p>
+<p><b>Try:</b> the Stilt Hall is stocked, but both reed huts are empty. Click a hut and queue some reedguards: now it needs food and crystal. Then select all your fenlings and right-click that hut. They <b>haul</b> what it needs from the Stilt Hall. Each fenling carries only about 9 kg a trip.</p>
+<p>So Fen players build huts where the work is. Gather beside a hut and train beside it, and nothing travels far.</p>`,
     setup(w) {
       base(w, 0, 'stilt-hall', 6, 24, { food: 2500, wood: 800, crystal: 400 });
       base(w, 0, 'reed-hut', 16, 19, {});
@@ -105,9 +128,9 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Charges',
     you: meadowfolk, foe: fenfolk, look: [24, 26],
-    text: `<p>A charge turns speed into damage. A running body adds the <b>collision</b> to its blow: ½·μ·v². A couched lance takes the whole impact, so a charging lancer hits many times harder than a standing one.</p>
-<p><b>Try:</b> select the lancers, press <kbd>C</kbd> and right-click the fenlings (top). The lancers sprint in, strike, and ride on through. Standing in a fight, they only swing, so pull them out: right-click open ground and they run clear, sprinting while enemies are close. Then charge again.</p>
-<p>Now try the <b>reedguards</b> (bottom). Their spears are planted, so your charge runs onto their points and the impact comes back into your lynx. Up close, your lancers cut with their swords instead.</p>`,
+    text: `<p>A charge turns speed into damage. A running body adds the energy of the <b>collision</b> to its blow, and that grows with the square of its speed. A lance held level takes the whole impact, so a charging lancer hits many times harder than a standing one.</p>
+<p><b>Try:</b> select the lancers, press ${key('charge')} and right-click the fenlings (top). The lancers sprint in, strike, and ride on through. Standing in a fight, they only swing, so pull them out: right-click open ground. They run clear, sprinting while enemies are close. Then charge again.</p>
+<p>Now try the <b>reedguards</b> (bottom). Their spears are planted, so your charge runs onto their points, and the impact comes back into your lynx. Up close, your lancers cut with their swords instead.</p>`,
     setup(w) {
       wait(w, block(w, 0, 'lynx', 4, 14, 26, 2));
       hold(w, block(w, FOE, 'fenling', 8, 34, 19, 4, 4));
@@ -118,8 +141,8 @@ export const LESSONS: Lesson[] = [
     title: 'Groupings',
     you: meadowfolk, foe: meadowfolk, look: [26, 26],
     text: `<p>Who wins depends on <b>how bodies meet</b>, not on a bonus table. Enemy lancers will charge you in <b>30 seconds</b>.</p>
-<p>As it stands, your pikemen are a tight block in front, with the slingers behind. Pikemen plant their pikes by themselves when they see a charge coming, so lancers run onto set points and take the whole collision. <b>Watch</b> it play out.</p>
-<p><b>Then try:</b> press Restart, and in those 30 seconds scatter the pikemen across the field, or move the slingers out in front. Same units, different grouping, and the same lancers win. The <b>Arena</b> scores every matchup if you want the numbers.</p>`,
+<p>Your pikemen stand in a tight block in front, with the slingers behind. Pikemen plant their pikes by themselves when they see a charge coming. So the lancers run onto set points and take the whole collision. <b>Watch</b> it play out.</p>
+<p><b>Then try:</b> press Restart. In those 30 seconds, scatter the pikemen across the field, or move the slingers out in front. Same units, different grouping, and now the same lancers win. The <b>Arena</b> scores every matchup if you want the numbers.</p>`,
     setup(w) {
       block(w, 0, 'pikeman', 8, 20, 26, 4);
       block(w, 0, 'slinger', 6, 15, 26, 3);
@@ -137,9 +160,9 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Birds',
     you: fenfolk, foe: meadowfolk, look: [24, 26],
-    text: `<p><b>Siege herons</b> fly. In the air they wheel round in wide turns, as a bird does, instead of stopping on a spot. Crystals dropped from height fall harder, so they hit harder.</p>
-<p><b>Try:</b> select the herons and attack the macemen. They take off, climb, and bomb from overhead, out of reach of maces. Now attack the slingers: thrown stones can hit a flier, and a heron flying low can even be struck from the ground.</p>
-<p>Flying burns calories about three times as fast as walking. Land the herons and rest them (or <kbd>R</kbd> to resupply) before they run dry.</p>`,
+    text: `<p><b>Siege herons</b> fly. In the air they wheel round in wide turns, as birds do, instead of stopping on a spot. A crystal dropped from higher up falls further, so it hits harder.</p>
+<p><b>Try:</b> select the herons and right-click a maceman. They take off, climb and bomb from overhead, out of reach of maces. Now right-click a slinger. Thrown stones can hit a flier, and a heron flying low can even be struck from the ground.</p>
+<p>Climbing costs a heron a lot of calories, but once up high it soars cheaply. It lands by itself when it stops or runs low. Press ${key('resupply')} to send them home to eat.</p>`,
     setup(w) {
       base(w, 0, 'stilt-hall', 6, 24, { food: 3000, crystal: 400 });
       wait(w, block(w, 0, 'great-siege-heron', 2, 14, 26, 2));
@@ -147,10 +170,48 @@ export const LESSONS: Lesson[] = [
       hold(w, block(w, FOE, 'slinger', 6, 34, 32, 3, 4));
     },
   },
+  {
+    title: 'High ground',
+    you: meadowfolk, foe: meadowfolk, look: [20, 25], map: hillField, fog: true,
+    text: `<p>The ground has <b>levels</b>. A <b>cliff</b> is a rock face where the ground drops a level, and nothing walks up it. A <b>ramp</b> is a smooth slope that joins two levels. The hill ahead has a ramp on each side.</p>
+<p><b>Try:</b> send one hurlhorn round the hill to the macemen on the low ground beyond it. From down there, each stone does about 90 damage, so a maceman takes two. Then walk the other hurlhorn up the ramp, to the hill's edge above the macemen. A stone thrown down gains the energy of its fall: about 125 damage, and one stone drops a maceman.</p>
+<p>High ground also <b>sees further</b>: 2 tiles more for each level. Watch the fog pull back as your hurlhorn climbs.</p>`,
+    setup(w) {
+      wait(w, block(w, 0, 'hurlhorn', 2, 10, 27, 2));
+      hold(w, block(w, FOE, 'maceman', 6, 26, 16, 3, 1));
+    },
+  },
+  {
+    title: 'Wildwelds',
+    you: wildwelds, foe: meadowfolk, look: [16, 25],
+    text: `<p>The <b>Wildwelds</b> have no buildings to train from. Mothers lay eggs, eggs hatch into larvae, and larvae change into everything else. It all runs on food.</p>
+<ol>
+<li>Select the mother and click <b>T1 Egg</b> in her panel. She lays an egg beside her.</li>
+<li>An egg hatches once it's fed. Select the green larvae and press ${key('tend')} (Tend). They carry food to whoever is waiting for it.</li>
+<li>Short of food? Select a green larva and right-click a tree. It turns the whole tree into food, and is gone into it.</li>
+<li>Select a larva and click a tile marked →. It changes inside a cocoon, and tenders feed it.</li>
+<li>Select the cyan T2 larva and click <b>↓ Web Wall</b>. Right-drag a line: its body becomes the wall, which grows on food. A T3 larva lays a <b>Mimic Mine</b> instead: a tower that throws crystal.</li>
+<li>Click the basket in the minimap's top-left corner, then right-click a spot. Tenders look for food near it. The sword (top-right) sets where new fighters go.</li>
+</ol>`,
+    setup(w) {
+      const mother = w.spawnAt(0, 'mother1', 14, 25, 0);
+      if (mother) mother.food = mother.stats.cargoCapacity; // enough in her pack to lay an egg
+      block(w, 0, 'larva1', 3, 17, 29, 3);
+      block(w, 0, 'larva2', 1, 17, 21, 1);
+      // a few trees to digest, and spare crystal for new fighters (the berries are the field's own)
+      for (const [x, y] of [[22, 22], [23, 23], [22, 24], [24, 21]]) w.addNode({ type: 'wood', x: x + 0.5, y: y + 0.5, amount: TREE_WOOD, shard: false, tree: true });
+      w.addNode({ type: 'crystal', x: 11.5, y: 21.5, amount: 60, shard: true, tree: false });
+    },
+  },
 ];
 
-/** The lesson's scenario: the Proving Grounds field, no wildlife, nobody wins. */
+/** The lesson's scenario: its field (the Proving Grounds unless it has its own), no wildlife, nobody wins. */
 export function tutorialScenario(lesson: Lesson): Scenario {
   const pg = provingGrounds();
-  return { id: 'tutorial', victory: false, wildlife: false, map: (seed) => pg.map(seed), setup: (w) => lesson.setup(w), tick: lesson.tick && ((w) => lesson.tick!(w)) };
+  return { id: 'tutorial', victory: false, wildlife: false, map: lesson.map ?? ((seed) => pg.map(seed)), setup: (w) => lesson.setup(w), tick: lesson.tick && ((w) => lesson.tick!(w)) };
+}
+
+/** The lesson's world: you are player 0, the other side player 1. */
+export function tutorialWorld(lesson: Lesson, seed: number): World {
+  return new World({ seed, scenario: tutorialScenario(lesson), players: [{ name: 'You', faction: lesson.you }, { name: lesson.foe.name, faction: lesson.foe }] });
 }
