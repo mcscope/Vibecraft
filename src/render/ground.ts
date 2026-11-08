@@ -1,6 +1,7 @@
 // The ground, painted once. At load the CPU paints the whole map into one texture, a few texels per tile: grass with
 // patches, dirt round buildings and mines, shores and water, rock with moss and cracks, and each player's land
-// blended into the next at the border. Each frame the GPU reads that texture and a small tiling grain texture, two
+// blended into the next at the border. Rock stands up as a cliff: the shader draws its top lifted, a face below it and
+// a shadow at its foot. Each frame the GPU reads that texture and a small tiling grain texture, two
 // reads per pixel, so the ground costs about the same on any machine. Grass tufts, flowers and stones are sprites.
 import { Container, GlProgram, Mesh, MeshGeometry, Shader, Sprite as PixiSprite, Texture, BufferImageSource } from 'pixi.js';
 import { TERRAIN_ROCK, TERRAIN_SAND, TERRAIN_WATER } from '../sim/map';
@@ -18,6 +19,8 @@ const GRAIN = 128; // the grain texture's side, in texels
 const BORDER = 3;
 const DEFAULT_GROUND: NonNullable<BiomeArt['ground']> = { grass: ['#5d7a2f', '#6f8a37', '#4b6627'], dirt: ['#86704a', '#6d5a3a'], forest: '#3f4a22', sand: '#c2a978', shallow: '#4b8299', deep: '#24506b' };
 const TOP0 = [0.435, 0.408, 0.361], TOP1 = [0.549, 0.518, 0.451], FACE0 = [0.173, 0.153, 0.133];
+/** How high rock stands, in screen pixels at zoom 1 (a tile is 32 px top to bottom): its top drawn lifted, a cliff face below. */
+const CLIFF_PX = 48;
 const rgb = (h: string): number[] => [parseInt(h.slice(1, 3), 16) / 255, parseInt(h.slice(3, 5), 16) / 255, parseInt(h.slice(5, 7), 16) / 255];
 /** A biome's nine ground colours: three grass, two dirt, forest floor, sand, shallow and deep water. */
 const palette = (g: BiomeArt['ground']): number[][] => { const x = g ?? DEFAULT_GROUND; return [...x.grass, ...x.dirt, x.forest, x.sand, x.shallow, x.deep].map(rgb); };
@@ -44,19 +47,52 @@ void main() {
   vPos = aPosition;
 }`;
 
-// screen position to tile coordinates (the isometric projection undone), the painted colour there, and fine grain
+// screen position to tile coordinates (the isometric projection undone), the painted colour there, and fine grain.
+// The ground texture's alpha is how much rock is there (over 0.5: rock). Near rock (uNear, per tile) a pixel shows the
+// rock's top if there's rock CLIFF_PX below it on screen, its face if there's rock less far below, else the ground,
+// shaded where the cliff stands up-left of it.
 const fragment = /* glsl */ `#version 300 es
 in vec2 vPos;
 out vec4 finalColor;
 uniform sampler2D uGround;
 uniform sampler2D uGrain;
+uniform sampler2D uNear;
 uniform vec2 uSize;
+vec2 toTile(vec2 p) { float a = p.x / 32.0, b = p.y / 16.0; return vec2((a + b) * 0.5, (b - a) * 0.5); }
+float rockAt(vec2 p) {
+  vec2 w = toTile(p);
+  return w.x < 0.0 || w.y < 0.0 || w.x >= uSize.x || w.y >= uSize.y ? 0.0 : texture(uGround, w / uSize).a;
+}
+float grainAt(vec2 p) { return texture(uGrain, vec2(p.x * 0.45, p.y * 0.9) / ${GRAIN}.0).r; }
 void main() {
-  float a = vPos.x / 32.0, b = vPos.y / 16.0;
-  vec2 w = vec2((a + b) * 0.5, (b - a) * 0.5);
+  vec2 w = toTile(vPos);
   if (w.x < 0.0 || w.y < 0.0 || w.x >= uSize.x || w.y >= uSize.y) discard;
-  float grain = texture(uGrain, vec2(vPos.x * 0.45, vPos.y * 0.9) / ${GRAIN}.0).r;
-  finalColor = vec4(min(vec3(1.0), texture(uGround, w / uSize).rgb * (0.9 + grain * 0.16)), 1.0);
+  float grain = grainAt(vPos);
+  vec3 c = texture(uGround, w / uSize).rgb;
+  if (texture(uNear, w / uSize).r > 0.5) {
+    const float CLIFF = ${CLIFF_PX}.0;
+    vec2 top = vPos + vec2(0.0, CLIFF);
+    if (rockAt(top) > 0.5) {
+      c = texture(uGround, toTile(top) / uSize).rgb;
+      if (rockAt(top - vec2(0.0, 3.0)) <= 0.5) c = mix(c, vec3(0.706, 0.667, 0.58), 0.6); // the lit lip
+    } else {
+      bool face = false;
+      for (int i = 1; i <= ${CLIFF_PX}; i++) {
+        float k = CLIFF - float(i);
+        if (rockAt(vPos + vec2(0.0, k)) > 0.5) {
+          float up = 1.0 - k / CLIFF; // 0 at the foot, 1 at the lip
+          float strata = sin((vPos.y + k) * 0.9 + grainAt(vec2(vPos.x * 0.1, 3.0)) * 6.0) * 0.5 + 0.5;
+          float crag = grainAt(vec2(vPos.x * 0.5, (vPos.y + k) * 0.15));
+          c = mix(vec3(${FACE0.join(', ')}), vec3(0.353, 0.31, 0.263), min(1.0, up * 0.7 + crag * 0.45 + strata * 0.15));
+          face = true;
+          break;
+        }
+      }
+      // the cliff's shadow, down-right of its foot
+      if (!face) c *= 1.0 - 0.4 * smoothstep(0.3, 0.7, texture(uGround, (w - vec2(0.9, 0.2)) / uSize).a);
+    }
+  }
+  finalColor = vec4(min(vec3(1.0), c * (0.9 + grain * 0.16)), 1.0);
 }`;
 
 /**
@@ -112,7 +148,8 @@ export function buildGround(world: World, extraDirt: Array<[number, number, numb
     const sv = Math.max(sample(sand, W, H, x, y), smooth(0.05, 0.4, wv)) + wobble * 0.4;
     const wt = smooth(0.42, 0.52, wv);
     let c: number[];
-    if (sample(rock, W, H, x, y) + (vnoise(2, x * 0.9, y * 0.9) - 0.5) * 0.5 + (vnoise(3, x * 2.2, y * 2.2) - 0.5) * 0.2 > 0.5) {
+    const rv = sample(rock, W, H, x, y) + (vnoise(2, x * 0.9, y * 0.9) - 0.5) * 0.5 + (vnoise(3, x * 2.2, y * 2.2) - 0.5) * 0.2;
+    if (rv > 0.5) {
       c = mix(TOP0, TOP1, big * 0.5 + fine * 0.5);
       c = mix(c, pals[0][5], smooth(0.55, 0.8, mid) * 0.55); // moss
       if (fine > 0.8) c = mix(c, FACE0, 0.55);               // cracks
@@ -128,7 +165,13 @@ export function buildGround(world: World, extraDirt: Array<[number, number, numb
       c = [c[0] * k, c[1] * k, c[2] * k];
     }
     const i = (ty * TW + tx) * 4;
-    px[i] = Math.min(255, c[0] * 255); px[i + 1] = Math.min(255, c[1] * 255); px[i + 2] = Math.min(255, c[2] * 255); px[i + 3] = 255;
+    px[i] = Math.min(255, c[0] * 255); px[i + 1] = Math.min(255, c[1] * 255); px[i + 2] = Math.min(255, c[2] * 255); px[i + 3] = Math.round(Math.max(0, Math.min(1, rv)) * 255);
+  }
+  // the tiles near rock (its top and face cover the tiles up-left of it on screen, its shadow falls down-right)
+  const near = new Uint8Array(W * H * 4), reach = Math.ceil(CLIFF_PX / 32) + 2;
+  for (let i = 0; i < W * H; i++) if (g.terrain[i] === TERRAIN_ROCK) {
+    const rx = i % W, ry = Math.floor(i / W);
+    for (let y = Math.max(0, ry - reach); y <= Math.min(H - 1, ry + 2); y++) for (let x = Math.max(0, rx - reach); x <= Math.min(W - 1, rx + 2); x++) near[(y * W + x) * 4] = 255;
   }
   const grain = new Uint8Array(GRAIN * GRAIN * 4);
   for (let i = 0; i < GRAIN * GRAIN; i++) { const v = Math.round(lattice(i % GRAIN, Math.floor(i / GRAIN), 4) * 255); grain.set([v, v, v, 255], i * 4); }
@@ -136,6 +179,7 @@ export function buildGround(world: World, extraDirt: Array<[number, number, numb
     glProgram: new GlProgram({ vertex, fragment, name: 'ground' }),
     resources: {
       uGround: new BufferImageSource({ resource: px, width: TW, height: TH, format: 'rgba8unorm', scaleMode: 'linear', addressMode: 'clamp-to-edge' }),
+      uNear: new BufferImageSource({ resource: near, width: W, height: H, format: 'rgba8unorm', scaleMode: 'nearest', addressMode: 'clamp-to-edge' }),
       uGrain: new BufferImageSource({ resource: grain, width: GRAIN, height: GRAIN, format: 'rgba8unorm', scaleMode: 'linear', addressMode: 'repeat' }),
       groundUniforms: { uSize: { value: new Float32Array([W, H]), type: 'vec2<f32>' } },
     },
@@ -173,6 +217,12 @@ function clutter(world: World, looks: Looks, f: { forest: Float32Array; dirt: Fl
     homes.forEach(([hx, hy], i) => { const d = Math.hypot(hx - x, hy - y); if (d < bd) { bd = d; best = i; } });
     return (looks.biomes[best] ?? looks.biomes[0]).doodads;
   };
+  // rock, or ground a cliff's raised top covers (rock just down-right of it)
+  const lift = Math.ceil(CLIFF_PX / 32);
+  const underCliff = (x: number, y: number): boolean => {
+    for (let d = 0; d <= lift; d++) for (const [dx, dy] of [[d, d], [d + 1, d], [d, d + 1]]) if (g.inBounds(x + dx, y + dy) && g.terrain[(y + dy) * W + x + dx] === TERRAIN_ROCK) return true;
+    return false;
+  };
   const occupied = new Uint8Array(W * H);
   for (const b of world.buildings.values()) for (let y = b.oy - 1; y <= b.oy + b.size; y++) for (let x = b.ox - 1; x <= b.ox + b.size; x++) if (g.inBounds(x, y)) occupied[y * W + x] = 1;
   for (const n of world.nodes.values()) if (!n.tree) occupied[g.idx(n.x, n.y)] = 1;
@@ -182,7 +232,7 @@ function clutter(world: World, looks: Looks, f: { forest: Float32Array; dirt: Fl
   for (let sum = 0; sum < W + H - 1; sum++) {
     for (let x = Math.max(0, sum - H + 1); x <= Math.min(W - 1, sum); x++) {
       const y = sum - x, i = y * W + x;
-      if (occupied[i] || g.terrain[i] === TERRAIN_WATER || g.terrain[i] === TERRAIN_ROCK) continue;
+      if (occupied[i] || g.terrain[i] === TERRAIN_WATER || underCliff(x, y)) continue;
       seed = (x * 73856093) ^ (y * 19349663) ^ 0x5bd1e995;
       const cx = x + 0.5, cy = y + 0.5, d = doodadsAt(cx, cy);
       const forest = sample(f.forest, W, H, cx, cy), dirt = sample(f.dirt, W, H, cx, cy), shore = sample(f.water, W, H, cx, cy);
