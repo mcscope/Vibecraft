@@ -5,16 +5,48 @@ import { Rng } from './rng';
 export const TERRAIN_GRASS = 0;
 export const TERRAIN_WATER = 1;
 export const TERRAIN_SAND = 2;
-/** Rock: a cliff face or outcrop. Blocks the way like water. */
-export const TERRAIN_ROCK = 3;
+/**
+ * Cliff: the rocky edge where the ground drops a level. MapBuilder works it out from the levels: a tile above a
+ * neighbour (ramps aside) is cliff. It blocks the way like water.
+ */
+export const TERRAIN_CLIFF = 3;
+
+/** Metres the ground rises per level. The sim, the renderer and the baked cliff art all use it. */
+export const LEVEL_M = 2.5;
+/** Two walkable tiles side by side differ by at most this many levels (a ramp's steps); more is a cliff. */
+const STEP = 0.5 + 1e-6;
 
 export class Grid {
   readonly terrain: Uint8Array;
   /** Reference count of things blocking each tile (water counts as 1). */
   readonly blocked: Uint8Array;
+  /** Each tile's ground level: 0 low ground, 1 high ground, 2 higher. */
+  readonly level: Uint8Array;
+  /** Ground height at each tile's centre, in levels: its level, or part way between two on a ramp. */
+  readonly rise: Float32Array;
   constructor(readonly width: number, readonly height: number) {
     this.terrain = new Uint8Array(width * height);
     this.blocked = new Uint8Array(width * height);
+    this.level = new Uint8Array(width * height);
+    this.rise = new Float32Array(width * height);
+  }
+  /**
+   * Ground height at (x, y), in metres: the one source for the sim, the renderer and mouse picking. Flat on each
+   * tile, smooth across ramps: blended with the tile centres nearby, but only those within a step of this tile's own
+   * height (a cliff's foot or top stays where it is).
+   */
+  heightAt(x: number, y: number): number {
+    const W = this.width, H = this.height;
+    x = Math.min(W - 1e-3, Math.max(0, x)); y = Math.min(H - 1e-3, Math.max(0, y));
+    const own = this.rise[Math.floor(y) * W + Math.floor(x)];
+    const fx = x - 0.5, fy = y - 0.5, ax = Math.floor(fx), ay = Math.floor(fy), u = fx - ax, v = fy - ay;
+    const at = (tx: number, ty: number): number => {
+      if (tx < 0 || ty < 0 || tx >= W || ty >= H) return own;
+      const i = ty * W + tx, h = this.rise[i];
+      return this.terrain[i] === TERRAIN_CLIFF || Math.abs(h - own) > STEP ? own : h;
+    };
+    const top = at(ax, ay) + (at(ax + 1, ay) - at(ax, ay)) * u, bottom = at(ax, ay + 1) + (at(ax + 1, ay + 1) - at(ax, ay + 1)) * u;
+    return (top + (bottom - top) * v) * LEVEL_M;
   }
   inBounds(x: number, y: number): boolean {
     return x >= 0 && y >= 0 && x < this.width && y < this.height;
@@ -92,6 +124,7 @@ export class MapBuilder {
     this.rng = new Rng(seed);
     this.grid = new Grid(size, size);
     this.taken = new Uint8Array(size * size);
+    this.ramps = new Uint8Array(size * size);
     this.starts = [start, [size - 3 - start[0], size - 3 - start[1]]];
   }
   mirror(x: number, y: number): [number, number] { return [this.size - 1 - x, this.size - 1 - y]; }
@@ -102,17 +135,46 @@ export class MapBuilder {
   }
   free(x: number, y: number): boolean {
     const n = this.size;
-    return x > 0 && y > 0 && x < n - 1 && y < n - 1 && !this.taken[y * n + x] && !this.reserved(x, y);
+    return x > 0 && y > 0 && x < n - 1 && y < n - 1 && !this.taken[y * n + x] && !this.reserved(x, y) && !this.cliff(x, y) && !this.byRamp(x, y);
   }
-  /** Set a tile's terrain (and its mirror). Water and rock block; base areas stay clear. */
+  /** Set a tile's terrain (and its mirror). Water blocks; base areas stay clear. */
   terrain(x: number, y: number, t: number, pad = 0): void {
     if (!this.grid.inBounds(x, y) || this.reserved(x, y, pad)) return;
     for (const [tx, ty] of [[x, y], this.mirror(x, y)]) {
       const i = ty * this.size + tx;
       if (t === TERRAIN_SAND && this.grid.terrain[i] !== TERRAIN_GRASS) continue; // sand only edges grass
       this.grid.terrain[i] = t;
-      if (t === TERRAIN_WATER || t === TERRAIN_ROCK) this.taken[i] = 1;
+      if (t === TERRAIN_WATER) this.taken[i] = 1;
     }
+  }
+  /** Set a tile's ground level (and its mirror's). `max`: only ever raise it. Cliffs form wherever it drops. */
+  raise(x: number, y: number, level: number, max = false): void {
+    if (!this.grid.inBounds(x, y)) return;
+    for (const [tx, ty] of [[x, y], this.mirror(x, y)]) {
+      const i = ty * this.size + tx;
+      this.grid.level[i] = max ? Math.max(this.grid.level[i], level) : level;
+    }
+  }
+  /** Make a tile (and its mirror) part of a ramp: it slopes between the levels at its two ends. Nothing grows on it. */
+  ramp(x: number, y: number): void {
+    if (!this.grid.inBounds(x, y)) return;
+    for (const [tx, ty] of [[x, y], this.mirror(x, y)]) { const i = ty * this.size + tx; this.ramps[i] = 1; this.taken[i] = 1; }
+  }
+  private readonly ramps: Uint8Array;
+  /** Will (x, y) be cliff? (A tile above a neighbour, ramps aside.) */
+  private cliff(x: number, y: number): boolean {
+    const g = this.grid, n = this.size, i = y * n + x;
+    if (this.ramps[i]) return false;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      const nx = x + dx, ny = y + dy, j = ny * n + nx;
+      if (g.inBounds(nx, ny) && !this.ramps[j] && g.level[j] < g.level[i]) return true;
+    }
+    return false;
+  }
+  /** Next to a ramp (kept clear, so the way up stays open)? */
+  private byRamp(x: number, y: number): boolean {
+    for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) if (this.grid.inBounds(x + dx, y + dy) && this.ramps[(y + dy) * this.size + x + dx]) return true;
+    return false;
   }
   /** Is (x, y) far enough from the other sort of feature (trees vs food/crystal), and trees from home? */
   private spaced(kind: MapFeature['kind'], x: number, y: number): boolean {
@@ -165,10 +227,46 @@ export class MapBuilder {
     this.cluster('food', x + 8, y + 1, food, 400, 1.6);
     this.cluster('crystal', x + 1, y + 8, crystal, 200, 1.3);
   }
+  /**
+   * Finish the map: cliffs where the ground drops, ramps sloped between the levels at their ends, then what blocks.
+   * A ramp tile's height goes by how far it is (along the ramp) from the ground at each end. Last, any walkable
+   * tile more than a step above a walkable neighbour turns to cliff, so levels only ever join by ramps.
+   */
   done(): GeneratedMap {
-    const g = this.grid;
-    for (let i = 0; i < g.terrain.length; i++) if (g.terrain[i] === TERRAIN_WATER || g.terrain[i] === TERRAIN_ROCK) g.blocked[i] = 1;
-    return { grid: g, features: this.features, starts: this.starts, seed: this.seed };
+    const g = this.grid, n = this.size, N = n * n;
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (this.cliff(x, y)) g.terrain[y * n + x] = TERRAIN_CLIFF;
+    for (let i = 0; i < N; i++) g.rise[i] = g.level[i];
+    const ground = (i: number) => !this.ramps[i] && g.terrain[i] !== TERRAIN_CLIFF;
+    const near = (i: number): number[] => {
+      const x = i % n, y = (i - x) / n, out: number[] = [];
+      if (x > 0) out.push(i - 1);
+      if (x < n - 1) out.push(i + 1);
+      if (y > 0) out.push(i - n);
+      if (y < n - 1) out.push(i + n);
+      return out;
+    };
+    // steps along the ramps from the ground of each level
+    const levels = [...new Set(Array.from(g.level))].sort((a, b) => a - b);
+    const dist = levels.map((lv) => {
+      const d = new Float32Array(N).fill(Infinity), q: number[] = [];
+      for (let i = 0; i < N; i++) if (this.ramps[i] && near(i).some((j) => ground(j) && g.level[j] === lv)) { d[i] = 1; q.push(i); }
+      for (let k = 0; k < q.length; k++) for (const j of near(q[k])) if (this.ramps[j] && d[j] > d[q[k]] + 1) { d[j] = d[q[k]] + 1; q.push(j); }
+      return d;
+    });
+    for (let i = 0; i < N; i++) {
+      if (!this.ramps[i]) continue;
+      const ends = levels.map((lv, k) => [lv, dist[k][i]]).filter(([, d]) => d < Infinity);
+      if (!ends.length) continue;
+      const [lo, dl] = ends[0], [hi, dh] = ends[ends.length - 1];
+      g.rise[i] = hi === lo ? lo : lo + ((hi - lo) * (dl - 0.5)) / (dl + dh - 1);
+      g.level[i] = Math.floor(g.rise[i] + 1e-6);
+    }
+    const walk = (i: number) => g.terrain[i] !== TERRAIN_CLIFF && g.terrain[i] !== TERRAIN_WATER;
+    const steep = Array.from({ length: N }, (_, i) => walk(i) && near(i).some((j) => walk(j) && g.rise[i] - g.rise[j] > STEP));
+    steep.forEach((s, i) => { if (s) g.terrain[i] = TERRAIN_CLIFF; });
+    for (let i = 0; i < N; i++) if (g.terrain[i] === TERRAIN_WATER || g.terrain[i] === TERRAIN_CLIFF) g.blocked[i] = 1;
+    const features = this.features.filter((f) => g.terrain[f.y * n + f.x] !== TERRAIN_CLIFF);
+    return { grid: g, features, starts: this.starts, seed: this.seed };
   }
 }
 
@@ -228,14 +326,15 @@ function waterDonut(seed: number, size: number): GeneratedMap {
 }
 
 /**
- * Cliff Maze: rock walls cut the map into rooms joined by gaps. Every room can be
- * reached (the walls are knocked through like a maze, then a few more for
- * loops), but the way to the enemy winds.
+ * Cliff Maze: rooms on terraces of different heights, cut apart by cliffs. Neighbouring rooms that join meet on open
+ * ground (on one level) or by a ramp; rooms on one level that don't join have a rocky ridge between them. Every room
+ * can be reached (the walls are knocked through like a maze, then a few more for loops), but the way to the enemy winds.
  */
 function cliffMaze(seed: number, size: number): GeneratedMap {
   const m = new MapBuilder(seed, size), rng = m.rng;
   const CELL = 8, n = Math.floor(size / CELL);
   const cid = (cx: number, cy: number) => cy * n + cx;
+  const room = (x: number, y: number) => cid(Math.min(n - 1, Math.floor(x / CELL)), Math.min(n - 1, Math.floor(y / CELL)));
   // walls between neighbouring rooms: [a, b, vertical?, cx, cy]
   type Wall = { a: number; b: number; v: boolean; cx: number; cy: number };
   const walls: Wall[] = [];
@@ -246,25 +345,44 @@ function cliffMaze(seed: number, size: number): GeneratedMap {
   const mirrorCell = (id: number) => cid(n - 1 - (id % n), n - 1 - Math.floor(id / n));
   const key = (w: Wall) => `${Math.min(w.a, w.b)}-${Math.max(w.a, w.b)}`;
   const twin = (w: Wall) => { const a = mirrorCell(w.a), b = mirrorCell(w.b); return `${Math.min(a, b)}-${Math.max(a, b)}`; };
-  // knock walls through (each with its mirror) until every room joins up
   const parent = Array.from({ length: n * n }, (_, i) => i);
   const find = (i: number): number => (parent[i] === i ? i : (parent[i] = find(parent[i])));
   const open = new Set<string>();
+  const knock = (w: Wall) => {
+    open.add(key(w)); open.add(twin(w));
+    const t = walls.find((x) => key(x) === twin(w))!;
+    parent[find(w.a)] = find(w.b); parent[find(t.a)] = find(t.b);
+  };
+  // the rooms a base covers make one room, on one level
+  const [sx, sy] = m.starts[0], home = new Set<number>();
+  for (let y = sy - 3; y <= sy + 5; y++) for (let x = sx - 3; x <= sx + 5; x++) { home.add(room(x, y)); home.add(mirrorCell(room(x, y))); }
+  for (const w of walls) if (home.has(w.a) && home.has(w.b)) knock(w);
+  // knock walls through (each with its mirror) until every room joins up
   const order = walls.map((w) => ({ w, r: rng.next() })).sort((p, q) => p.r - q.r).map((p) => p.w);
   for (const w of order) {
     const extra = rng.next() < 0.06; // some loops, so there's more than one way round
     if (find(w.a) === find(w.b) && !extra) continue;
-    open.add(key(w)); open.add(twin(w));
-    const t = walls.find((x) => key(x) === twin(w))!;
-    parent[find(w.a)] = find(w.b); parent[find(t.a)] = find(t.b);
+    knock(w);
   }
-  // draw the walls left standing: two tiles thick along the room edges, with pillars at corners
+  // each room's level (its mirror's the same): low or high ground; a high room among high rooms may stand higher still
+  const lv = new Array<number>(n * n).fill(0), homeLevel = rng.next() < 0.5 ? 0 : 1;
+  for (let id = 0; id < n * n; id++) if (id <= mirrorCell(id)) lv[id] = lv[mirrorCell(id)] = home.has(id) ? homeLevel : rng.next() < 0.45 ? 0 : 1;
+  const around = (id: number) => [[1, 0], [-1, 0], [0, 1], [0, -1]].map(([dx, dy]) => [(id % n) + dx, Math.floor(id / n) + dy]).filter(([x, y]) => x >= 0 && y >= 0 && x < n && y < n).map(([x, y]) => cid(x, y));
+  for (let id = 0; id < n * n; id++) {
+    if (id > mirrorCell(id) || lv[id] !== 1 || home.has(id) || !around(id).every((j) => lv[j] >= 1)) continue;
+    if (rng.next() < 0.7) lv[id] = lv[mirrorCell(id)] = 2;
+  }
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) if (x + y <= size - 1) m.raise(x, y, lv[room(x, y)]);
+  // between rooms: a ramp where joined rooms differ (by one level at most), a ridge where unjoined rooms don't
   for (const w of walls) {
-    if (open.has(key(w))) continue;
+    const same = lv[w.a] === lv[w.b], joined = open.has(key(w));
+    if (joined === same) continue; // open ground, or a cliff already
     for (let k = -1; k <= CELL; k++) for (const t of [-1, 0]) {
       const x = w.v ? (w.cx + 1) * CELL + t : w.cx * CELL + k;
       const y = w.v ? w.cy * CELL + k : (w.cy + 1) * CELL + t;
-      if (x + y <= size - 1) m.terrain(x, y, TERRAIN_ROCK, 1);
+      if (x + y > size - 1) continue; // (the mirror draws the other half)
+      if (!joined) m.raise(x, y, lv[w.a] + 1, true);
+      else if (k >= CELL / 2 - 2 && k < CELL / 2 + 2) m.ramp(x, y);
     }
   }
   m.home(6, 4);
@@ -306,28 +424,25 @@ function steppe(seed: number, size: number): GeneratedMap {
 }
 
 /**
- * Sunken Temple (after StarCraft's Lost Temple): each main sits on a cliff-ringed
- * plateau with one ramp; a natural expansion waits below the ramp; the other two
- * corners are empty plateaus to expand to; a walled temple holds the centre.
+ * Sunken Temple (after StarCraft's Lost Temple): each main sits on a high plateau with one ramp down; a natural
+ * expansion waits below the ramp; the other two corners are high plateaus to expand to; the temple in the middle is
+ * sunk below the field, with two ramps down to its crystal.
  */
 function sunkenTemple(seed: number, size: number): GeneratedMap {
   const m = new MapBuilder(seed, size), rng = m.rng, c = (size - 1) / 2;
   const [sx, sy] = m.starts[0], hx = sx + 1.5, hy = sy + 1.5;
-  const ring = (cx: number, cy: number, r: number, gaps: number[], gapW: number) => {
-    for (let y = Math.floor(cy - r - 2); y <= cy + r + 2; y++) for (let x = Math.floor(cx - r - 2); x <= cx + r + 2; x++) {
-      const d = Math.hypot(x - cx, y - cy);
-      if (d < r || d >= r + 2) continue;
-      const a = Math.atan2(y - cy, x - cx);
-      if (gaps.some((g) => Math.abs(Math.atan2(Math.sin(a - g), Math.cos(a - g))) * d < gapW)) continue; // the ramp
-      m.terrain(x, y, TERRAIN_ROCK);
+  m.grid.level.fill(1); // the field; the plateaus stand a level above it, the temple a level below
+  /** Ground at `level` within about `r` of (cx, cy), its edge a cliff, with a ramp out along each angle in `ramps`, `w` tiles either side. */
+  const mesa = (cx: number, cy: number, r: number, level: number, ramps: number[], w: number) => {
+    for (let y = Math.floor(cy - r - 4); y <= cy + r + 4; y++) for (let x = Math.floor(cx - r - 4); x <= cx + r + 4; x++) {
+      const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy), a = Math.atan2(y + 0.5 - cy, x + 0.5 - cx);
+      if (d < r + 1) m.raise(x, y, level);
+      if (d >= r - 1.5 && d < r + 2.5 && ramps.some((g) => Math.cos(a - g) > 0 && Math.abs(Math.sin(a - g)) * d < w)) m.ramp(x, y);
     }
   };
-  // main plateau, ramp facing along the edge toward the natural
-  ring(hx, hy, 12, [0.25], 2);
-  // the other corners: plateaus to expand to (ramp facing the middle)
-  ring(sx + 1.5, size - sy - 1.5, 9, [-Math.PI / 4], 2);
-  // the temple in the middle: a walled court with two doors
-  ring(c, c, 4.5, [Math.PI * 0.75, -Math.PI * 0.25], 1.6);
+  mesa(hx, hy, 12, 2, [0.25], 2); // the main, its ramp facing along the edge toward the natural
+  mesa(sx + 1.5, size - sy - 1.5, 9, 2, [-Math.PI / 4], 2); // the other corners, their ramps facing the middle
+  mesa(c + 0.5, c + 0.5, 4.5, 0, [Math.PI * 0.75, -Math.PI * 0.25], 1.6); // the temple, two ramps down
   m.home(6, 4);
   m.forest(sx - 2, sy + 10, 2, 0.85);
   m.cluster('crystal', hx + 17, hy + 5, 4, 300, 1.3); // the natural, below the ramp
@@ -349,8 +464,8 @@ export const MAPS: MapInfo[] = [
   { id: 'woodlands', name: 'Woodlands', description: 'Ponds and thick woods that shape the lanes.', generate: woodlands },
   { id: 'steppe', name: 'Steppe', description: 'Open ground with small woodlines, so armies meet early. After Age of Empires II\'s Arabia.', generate: steppe },
   { id: 'water-donut', name: 'Water Donut', description: 'A ring of water around a rich island, crossed by two fords.', generate: waterDonut },
-  { id: 'cliff-maze', name: 'Cliff Maze', description: 'Rock walls make a maze of rooms; the way to the enemy winds.', generate: cliffMaze },
-  { id: 'sunken-temple', name: 'Sunken Temple', description: 'Plateau bases with one ramp each, naturals below, a walled temple in the middle. After StarCraft\'s Lost Temple.', generate: sunkenTemple },
+  { id: 'cliff-maze', name: 'Cliff Maze', description: 'Rooms on terraces, joined by ramps; the way to the enemy winds.', generate: cliffMaze },
+  { id: 'sunken-temple', name: 'Sunken Temple', description: 'High plateau bases with one ramp each, naturals below, a sunken temple in the middle. After StarCraft\'s Lost Temple.', generate: sunkenTemple },
 ];
 
 /** Map side in tiles (2 m each). */

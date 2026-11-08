@@ -3,7 +3,7 @@
 // blended into the next at the border. Each frame the GPU reads that texture and a small tiling grain texture, two
 // reads per pixel, so the ground costs about the same on any machine. Grass tufts, flowers and stones are sprites.
 import { Container, GlProgram, Mesh, MeshGeometry, Shader, Sprite as PixiSprite, Texture, BufferImageSource } from 'pixi.js';
-import { TERRAIN_ROCK, TERRAIN_SAND, TERRAIN_WATER } from '../sim/map';
+import { TERRAIN_CLIFF, TERRAIN_SAND, TERRAIN_WATER } from '../sim/map';
 import type { World } from '../sim/world';
 import type { BiomeArt, Sprite } from '../art/contract';
 import { isoX, isoY } from './camera';
@@ -82,7 +82,7 @@ export function buildGround(world: World, extraDirt: Array<[number, number, numb
     else if (n.type === 'food') splat(dirt, n.x, n.y, 0.9, 0.35);
   }
   const of = (t: number) => Float32Array.from(g.terrain, (v) => (v === t ? 1 : 0));
-  const sand = of(TERRAIN_SAND), water = of(TERRAIN_WATER), rock = of(TERRAIN_ROCK);
+  const sand = of(TERRAIN_SAND), water = of(TERRAIN_WATER), rock = of(TERRAIN_CLIFF);
   const homes = looks.homes.length ? looks.homes : [[0, 0] as [number, number]];
   const pals = homes.map((_, i) => palette((looks.biomes[i] ?? looks.biomes[0])?.ground));
 
@@ -182,7 +182,7 @@ function clutter(world: World, looks: Looks, f: { forest: Float32Array; dirt: Fl
   for (let sum = 0; sum < W + H - 1; sum++) {
     for (let x = Math.max(0, sum - H + 1); x <= Math.min(W - 1, sum); x++) {
       const y = sum - x, i = y * W + x;
-      if (occupied[i] || g.terrain[i] === TERRAIN_WATER || g.terrain[i] === TERRAIN_ROCK) continue;
+      if (occupied[i] || g.terrain[i] === TERRAIN_WATER || g.terrain[i] === TERRAIN_CLIFF) continue;
       seed = (x * 73856093) ^ (y * 19349663) ^ 0x5bd1e995;
       const cx = x + 0.5, cy = y + 0.5, d = doodadsAt(cx, cy);
       const forest = sample(f.forest, W, H, cx, cy), dirt = sample(f.dirt, W, H, cx, cy), shore = sample(f.water, W, H, cx, cy);

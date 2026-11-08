@@ -10,7 +10,7 @@ import { metamorphCost } from '../sim/abilities/metamorph';
 import { M_PER_TILE } from '../sim/physics';
 import { buildingSprite, throwFrame, unitShadow, unitSprite, UNITS_PER_TILE, type ArtAnim, type FrameTime, type Sprite, type UnitArt } from '../art/contract';
 import { gpuTexture } from '../art/gpu';
-import { TERRAIN_ROCK } from '../sim/map';
+import { TERRAIN_CLIFF } from '../sim/map';
 import { TEAM_COLORS, type ArtBank } from './artbank';
 import { buildGround } from './ground';
 
@@ -269,7 +269,7 @@ export class Renderer {
   /** Rock stands up as cliff: a piece on each rock tile, joined to the rock beside it, with the trees (it never changes). */
   private placeCliffs(): void {
     const g = this.world.grid;
-    const rock = (x: number, y: number) => g.inBounds(x, y) && g.terrain[y * g.width + x] === TERRAIN_ROCK;
+    const rock = (x: number, y: number) => g.inBounds(x, y) && g.terrain[y * g.width + x] === TERRAIN_CLIFF;
     for (let y = 0; y < g.height; y++) for (let x = 0; x < g.width; x++) {
       if (!rock(x, y)) continue;
       const looks = this.bank.biomeAt(x + 0.5, y + 0.5).cliffs ?? this.bank.biome.cliffs;
