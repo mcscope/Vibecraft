@@ -745,7 +745,8 @@ export class World {
 
   private apply({ player, cmd }: PlayerCommand): void {
     if (this.players[player]?.defeated) return;
-    const mineAll = (ids: number[]) => ids.map((id) => this.units.get(id)).filter((u): u is Unit => !!u && u.owner === player);
+    // (a body that has started laying itself down (abilities/layDown.ts) is committed: it takes no more orders)
+    const mineAll = (ids: number[]) => ids.map((id) => this.units.get(id)).filter((u): u is Unit => !!u && u.owner === player && !u.bodySpent);
     const mine = (ids: number[]) => mineAll(ids).filter((u) => !u.carter);
     const set = (units: Unit[], order: Order) => {
       for (const u of units) {
