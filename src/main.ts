@@ -3,7 +3,7 @@ import { meadowfolk } from './factions/meadowfolk';
 import { PLAYABLE } from './factions';
 import type { FactionSpec } from './factions/types';
 import { training } from './factions/training';
-import { World, DT } from './sim/world';
+import { World, DT, TICK_RATE } from './sim/world';
 import { faceoff, provingGrounds, skirmish } from './sim/scenarios';
 import { LESSONS, tutorialScenario } from './tutorial';
 import { soundDebug } from './ui/soundDebug';
@@ -107,15 +107,35 @@ async function start(m: Mode): Promise<void> {
     : m === 'demo'
     ? new World({ seed, scenario: provingGrounds(), players: [{ name: 'You', faction: pick('you') }, { name: 'Training Grounds', faction: training }] })
     : new World({ seed, scenario: skirmish(mapSel.value), players: [{ name: m === 'spectate' ? pick('you').name : 'You', faction: pick('you') }, { name: pick('foe').name, faction: pick('foe') }] });
+  const d = difficulty(), ais = m === 'spectate' || m === 'skirmish' ? [new SkirmishAI(0, d), new SkirmishAI(1, d)] : [];
+  // ?skip=120: start that many seconds in, the AI playing both sides till then (dev shortcut; then you take over)
+  const skip = Math.min(1800, Math.max(0, +(params.get('skip') ?? 0) || 0));
+  if (skip && ais.length) await fastForward(world, ais, skip);
   await run({
     mode: m, world, me: 0, transport: new LoopbackTransport(), delay: 2,
     sources: (local) => {
-      const d = difficulty();
-      const s: CommandSource[] = m === 'spectate' ? [new SkirmishAI(0, d), new SkirmishAI(1, d)] : m === 'skirmish' ? [local, new SkirmishAI(1, d)] : [local];
+      const s: CommandSource[] = m === 'spectate' ? ais : m === 'skirmish' ? [local, ais[1]] : [local];
       if (m === 'demo' || m === 'faceoff' || m === 'tutorial') s.push({ player: 1, poll: () => [] }); // the dummies never act (a faceoff just stands; a lesson's foes do only what it set up)
       return s;
     },
   });
+}
+
+/** Run the game `secs` seconds on with these AIs giving the orders (the loading screen counts it). */
+async function fastForward(world: World, ais: CommandSource[], secs: number): Promise<void> {
+  menu.style.display = 'none';
+  loading.style.display = 'flex';
+  const bar = loading.querySelector<HTMLElement>('.fill')!, label = loading.querySelector<HTMLElement>('.label')!;
+  const end = world.tick + secs * TICK_RATE;
+  while (world.tick < end) {
+    for (let i = 0; i < 100 && world.tick < end; i++) {
+      for (const ai of ais) for (const cmd of ai.poll(world)) world.enqueue({ player: ai.player, cmd });
+      world.step();
+    }
+    bar.style.width = `${Math.round((100 * (secs * TICK_RATE - (end - world.tick))) / (secs * TICK_RATE))}%`;
+    label.textContent = `Skipping ahead: ${Math.floor(world.tick / TICK_RATE)} s`;
+    await new Promise((r) => setTimeout(r, 0));
+  }
 }
 
 /** An online game: every seat's faction arrived as a bundle; commands go through the relay. */

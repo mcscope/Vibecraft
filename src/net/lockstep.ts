@@ -45,6 +45,8 @@ export class Lockstep {
   private bundles = new Map<number, Map<number, TickBundle>>();
   private sentThrough = -1;
   private hashes = new Map<number, Map<number, number>>();
+  /** The tick it started at (a game fast-forwarded first starts later): no commands are due for the first inputDelay ticks. */
+  private readonly startTick: number;
   onDesync?: (tick: number, hashes: Map<number, number>) => void;
 
   constructor(
@@ -54,6 +56,7 @@ export class Lockstep {
     private readonly transport: Transport,
     readonly inputDelay = 3,
   ) {
+    this.startTick = world.tick;
     transport.onMessage((b) => this.receive(b));
   }
 
@@ -87,7 +90,7 @@ export class Lockstep {
     }
     const t = w.tick;
     let cmds: PlayerCommand[] = [];
-    if (t >= this.inputDelay) {
+    if (t >= this.startTick + this.inputDelay) {
       const m = this.bundles.get(t);
       if (!m || m.size < this.allPlayers.length) return false; // waiting on the network
       for (const p of this.allPlayers) for (const cmd of m.get(p)!.commands) cmds.push({ player: p, cmd });
