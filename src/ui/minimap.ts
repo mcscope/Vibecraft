@@ -149,6 +149,15 @@ export class Minimap {
       ctx.fillStyle = world.players[u.owner]?.neutral ? teamColor(this.world, u.owner).primary : vivid(teamColor(this.world, u.owner).primary);
       ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
     }
+    // your side's rally points: work (green), army (red)
+    const sr = me >= 0 ? world.players[me]?.rally : undefined;
+    for (const [at, c] of [[sr?.work, '#9ad06a'], [sr?.army, '#ff6b5a']] as const) {
+      if (!at) continue;
+      const [x, y] = this.toMini(at[0], at[1]);
+      ctx.fillStyle = '#0b0b0b'; ctx.fillRect(x - 1, y - 9, 3, 10);
+      ctx.fillStyle = c; ctx.beginPath(); ctx.moveTo(x + 1, y - 9); ctx.lineTo(x + 8, y - 6); ctx.lineTo(x + 1, y - 3); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle = '#0b0b0b'; ctx.lineWidth = 1; ctx.stroke();
+    }
     // camera viewport
     const corners = [cam.toWorld(0, 0), cam.toWorld(cam.width, 0), cam.toWorld(cam.width, cam.height), cam.toWorld(0, cam.height)].map(([x, y]) => this.toMini(x, y));
     ctx.strokeStyle = 'rgba(255,255,255,0.9)';

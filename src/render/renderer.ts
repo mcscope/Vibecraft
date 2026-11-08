@@ -165,7 +165,7 @@ export class Renderer {
   private buildingSprites = new Map<number, PixiSprite>();
   private projSprites = new Map<number, PixiSprite>();
   private flagSprite: PixiSprite | null = null;
-  /** The side's work and army rally points (PlayerState.rally), shown while one of your units is selected. */
+  /** Your side's work and army rally points (PlayerState.rally), always shown. */
   private sideFlags: PixiSprite[] = [];
   private ghostSprite: PixiSprite | null = null;
   private textPool: Text[] = [];
@@ -480,9 +480,10 @@ export class Renderer {
       // the faction supplies the looks; we pick construction stage / damage level
       const art = this.bank.building(b.owner, b.specId);
       if (art) {
-        let look = buildingSprite(art, b.complete, b.built / b.stats.totalCost, b.hp, b.maxHp);
+        // a living building (sim/abilities/living.ts) has no scaffolding: its site already looks like it, just low
+        let look = b.spec.living ? buildingSprite(art, true, 1, b.hp, b.maxHp) : buildingSprite(art, b.complete, b.built / b.stats.totalCost, b.hp, b.maxHp);
         // a finished wall piece reaches out to the like pieces beside it; pieces in a line take its looks in turn
-        if (art.joined && look === art.complete) {
+        if (art.joined && look === art.complete && (b.complete || b.spec.living)) {
           const n = b.size, like = (x: number, y: number) => { const o = walls.get(`${x},${y}`); return !!o && o.specId === b.specId && o.owner === b.owner; };
           const joins = (like(b.ox + n, b.oy) ? 1 : 0) | (like(b.ox - n, b.oy) ? 2 : 0) | (like(b.ox, b.oy + n) ? 4 : 0) | (like(b.ox, b.oy - n) ? 8 : 0);
           look = art.joined[(b.ox + b.oy) % art.joined.length][joins];
@@ -494,8 +495,13 @@ export class Renderer {
           if (thrown) look = thrown;
         }
         this.setFrame(sp, look);
-        // a living building (sim/abilities/living.ts) swells as it grows
-        if (b.grown !== undefined && b.complete) sp.scale.set((0.6 + 0.4 * Math.min(1, b.grown / b.spec.materials)) / look.q);
+        // a living building grows taller (not narrower: a wall piece still meets the ones beside it); a site waiting
+        // for its seed shows faint and low
+        if (b.spec.living) {
+          const k = !b.complete ? 0.35 : 0.5 + 0.5 * Math.min(1, (b.grown ?? b.spec.materials) / b.spec.materials);
+          sp.scale.set(1 / look.q, k / look.q);
+          sp.alpha = b.complete ? 1 : 0.55;
+        }
       }
       sp.tint = b.complete && b.spec.attack && b.stock.crystal < b.spec.attack.crystalMass ? 0x808080 : 0xffffff; // tower out of ammo
       sp.visible = b.owner === this.viewer || this.explored(b.ox + b.size / 2, b.oy + b.size / 2); // once found, a building stays on the map
@@ -662,11 +668,10 @@ export class Renderer {
       ellipse(this.discTex, isoX(tx, ty), isoY(tx, ty), 2.4, 1.2, 0xffffff, 0.8);
     }
     for (const [x, y] of rs.zone ?? []) ellipse(this.tileTex, isoX(x + 0.5, y + 0.5), isoY(x + 0.5, y + 0.5), 32, 16, 0x9fd8ff, 0.14);
-    let rally: Building | null = null, ownUnit = false;
+    let rally: Building | null = null;
     for (const id of rs.selected) {
       const u = w.units.get(id);
       if (u) {
-        if (u.owner === 0) ownUnit = true;
         const x = u.px + (u.x - u.px) * alpha, y = u.py + (u.y - u.py) * alpha;
         ring(x, y, u.stats.radius, u.owner === 0 ? 0xffffff : 0xff7864, 0.9);
       }
@@ -779,7 +784,7 @@ export class Renderer {
     ([[sr?.work, 0xb8f0a0], [sr?.army, 0xffa898]] as const).forEach(([at, tint], i) => {
       let f = this.sideFlags[i];
       if (!f) { f = this.sideFlags[i] = new PixiSprite(); this.objects.addChild(f); }
-      f.visible = ownUnit && !!at;
+      f.visible = !!at;
       if (!f.visible || !at) return;
       this.setFrame(f, this.bank.flag(0));
       f.position.set(isoX(at[0], at[1]), isoY(at[0], at[1]));

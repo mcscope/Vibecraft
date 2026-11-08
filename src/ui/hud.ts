@@ -247,7 +247,7 @@ export class Hud {
     const p = w.players[this.player];
     const stances = units.map((u) => u.stance[0] + u.brood.length).join('') + (units.length > 1 ? this.actions.formationOf() + doing(units) : '');
     const sig = units.length === 1 ? `u${units[0].id}:${stances}${doing(units)}:${units[0].order.kind}:${units[0].brood.map((b) => b.into).join(',')}`
-      : building ? `b${building.id}:${building.complete}:${building.queue.map((q) => (q.kind === 'unit' ? q.specId : q.techId)).join(',')}:${p.researched.length}:${building.owner}:${building.sowing.join('')}:${building.garrison.length}`
+      : building ? `b${building.id}:${building.complete}:${building.queue.map((q) => (q.kind === 'unit' ? q.specId : q.techId)).join(',')}:${p.researched.length}:${building.owner}:${building.sowing.join('')}:${building.garrison.length}:${building.grown !== undefined && building.grown < building.spec.materials - 0.5}`
       : `m${units.map((u) => u.id).join(',')}:${stances}`;
     if (sig !== this.sig) {
       this.sig = sig;
@@ -335,7 +335,7 @@ export class Hud {
 
   private updateBuilding(b: Building): void {
     const w = this.world;
-    this.setBar('bhp', b.hp, b.maxHp, `${Math.ceil(b.hp)} / ${b.maxHp}`);
+    this.setBar('bhp', b.hp, b.maxHp, `${Math.ceil(b.hp)} / ${Math.round(b.maxHp)}`);
     if (!b.complete) { this.setBar('built', b.built, b.stats.totalCost, `${have(b.built)} / ${need(b.stats.totalCost)} ${this.names().wood} delivered`); return; }
     const item = b.queue[0];
     const bar = this.panel.querySelector<HTMLElement>('[data-bar="train"]');
@@ -353,9 +353,11 @@ export class Hud {
       const grow = this.panel.querySelector<HTMLElement>('[data-grow]');
       if (grow && b.grown !== undefined) {
         // a living building (sim/abilities/living.ts)
+        const food = this.names().food.toLowerCase();
         grow.textContent = b.grown >= b.spec.materials - 0.5
-          ? `Fully grown (${Math.round(b.spec.materials)} kg)`
-          : `Growing ${Math.floor(b.grown)} / ${Math.round(b.spec.materials)} kg · eats ${this.names().food.toLowerCase()} from its stock${b.stock.food < 0.5 ? ' (none here: haul some over)' : ''}`;
+          ? 'Fully grown'
+          : b.stock.food < 0.5 ? `Growing: it needs ${food} (tenders bring it, or Give it some)` : `Growing on the ${food} it's been given`;
+        this.setBar('grow', b.grown, b.spec.materials, `${Math.floor(b.grown)} / ${Math.round(b.spec.materials)} kg grown`);
       }
     const carts = this.panel.querySelector('[data-carts]');
     if (carts) {
@@ -656,13 +658,19 @@ export class Hud {
         ${own ? `<div class="hint">Right-click it with ${workerName(w.factionOf(b.owner)).toLowerCase()}s selected to help build.</div>` : ''}</div></div>`;
     }
     const names = this.names();
+    // capital only matters to a building that trains or researches; carts only to a side that has them; a living
+    // building's stock is the food it grows on (and a tower's crystal)
+    const trainsOrResearches = !!(b.spec.trains?.length || b.spec.researches?.length);
+    const hasCarts = w.factionOf(b.owner).units.some((u) => u.role === 'carter');
+    const growing = b.grown !== undefined && b.grown < b.spec.materials - 0.5;
+    const stocks = b.spec.living ? RESOURCES.filter((r) => (r === 'food' && growing) || (r === 'crystal' && !!st.tower)) : RESOURCES;
     const info = `
-      <div class="capital" title="Capital is this building's materials. Links add its prerequisites' capital at 100%.">
+      ${trainsOrResearches ? `<div class="capital" title="Capital is this building's materials. Links add its prerequisites' capital at 100%.">
         Capital <b>${n0(st.capital)}</b>${st.effectiveCapital > st.capital ? ` · with links <b>${n0(st.effectiveCapital)}</b>` : ''} · supports refinement <b>≤ ${fmt(st.maxRefinement, 2)}×</b>
-      </div>
-      ${RESOURCES.map((r) => `<div class="bar stock ${r}" data-bar="stock-${r}"><i></i><span></span></div>`).join('')}
-      <div class="state" data-carts></div>
-      ${b.grown !== undefined ? '<div class="state" data-grow></div>' : ''}
+      </div>` : ''}
+      ${b.grown !== undefined ? `<div class="state" data-grow></div>${growing ? '<div class="bar built" data-bar="grow"><i></i><span></span></div>' : ''}` : ''}
+      ${stocks.map((r) => `<div class="bar stock ${r}" data-bar="stock-${r}"><i></i><span></span></div>`).join('')}
+      ${hasCarts ? '<div class="state" data-carts></div>' : ''}
       ${st.tower ? '<div class="ammo" data-ammo></div>' : ''}
       ${b.spec.gatherBoost ? `<div class="state">${b.stock.crystal > 1e-6 ? `Gathering nearby ×${fmt(st.gatherBoost, 2)} (within ${b.spec.gatherBoost.radius} tiles), burning crystal` : 'No crystal: gathering boost off'}</div>` : ''}
       ${b.spec.sow && own ? `<div class="sow">Sowing ${b.spec.sow.resources.map((r) => `<button data-sow="${r}" data-building="${b.id}" class="${b.sowing.includes(r) ? 'on' : ''}" title="Plants a ${plantKg(b.spec, r)} kg ${r === 'food' ? 'bush' : 'tree'} for ${need(plantKg(b.spec, r) * CAP.sowSeedFraction)} ${names[r].toLowerCase()} of seed from this building; it grows over ${CAP.sowGrowSec} s">${names[r]} ${b.sowing.includes(r) ? 'on' : 'off'}</button>`).join(' ')}</div>` : ''}

@@ -314,7 +314,7 @@ const loneCoil: TunnelModel = (b, t) => {
 };
 
 
-/** 12. Mimic mine: the Web Tower (mimic.ts) throwing toward +x, the crystal it lets go flying on (in the game the sim flies it). */
+/** 12. Mimic mine (mimic.ts) throwing toward +x, the crystal it lets go flying on (in the game the sim flies it). */
 const mimicMine: TunnelModel = (b, t) => {
   webTower(b, t === undefined ? undefined : { phase: 'complete', level: 0, attack: { t, facing: 0 } });
   if (t !== undefined && t >= THROW_AT && t < THROW_AT + 0.3) {

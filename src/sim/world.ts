@@ -1102,7 +1102,7 @@ export class World {
     }
   }
 
-  private dropShard(x: number, y: number, kg: number): void {
+  dropShard(x: number, y: number, kg: number): void {
     if (kg <= 0.01) return;
     for (const n of this.nodes.values()) {
       if (n.shard && (n.x - x) ** 2 + (n.y - y) ** 2 < 0.36) {
@@ -2060,9 +2060,21 @@ export class World {
     return u.x !== u.px || u.y !== u.py;
   }
 
-  /** Tending the nest (order 'tend'): deliver, else gather, else wait full; it never runs out of things to do. */
+  /**
+   * Tending the nest (order 'tend'): food first (to whoever's waiting on it, then a growing building), then crystal to
+   * a tower of its side that's short; else it gathers food and waits full. It never runs out of things to do.
+   */
   private runTend(u: Unit, o: Extract<Order, { kind: 'tend' }>): boolean {
     const to = nearestHungry(this, u), full = this.freeCapacity(u) < 1;
+    // crystal in its pack: to a tower that's short, or (none) put down for fighters to pick up, so its pack is free
+    if (u.crystal > 0.05) {
+      const tower = this.crystalShort(u);
+      if (!tower) { this.dropShard(u.x, u.y, u.crystal); u.crystal = 0; o.g = null; }
+      else if (full || !o.g || o.g.phase === 'toDrop' || o.g.nodeType !== 'crystal') {
+        if (this.moveToBuilding(u, tower)) { this.deposit(u, tower, ['crystal']); o.g = null; }
+        return u.x !== u.px || u.y !== u.py;
+      }
+    }
     // carrying food and someone's waiting: take it to them (once full, or with enough for them, or the trip's done)
     if (to && u.food >= 0.5 && (full || !o.g || o.g.phase === 'toDrop' || u.food >= foodOwed(this, to))) {
       if (this.moveTo(u, to.x, to.y, u.stats.radius + to.stats.radius + 0.1) && this.handOver(u, to, o)) o.g = null; // (right up to it, and handed over)
@@ -2075,6 +2087,19 @@ export class World {
       return u.x !== u.px || u.y !== u.py;
     }
     if (full) return false; // full and nobody waiting: it waits with the food
+    // nobody needs food: crystal for a tower that's short, a trip at a time
+    if (!to && !grower && (!o.g || o.g.nodeType === 'crystal') && this.gathers(u, 'crystal') && this.crystalShort(u)) {
+      if (!o.g || o.g.phase === 'toDrop' || !this.nodes.get(o.g.node)) {
+        const n = this.nearestNode(u, 'crystal', 40, false);
+        if (n) o.g = { kind: 'gather', node: n.id, nodeType: 'crystal', phase: 'toNode', stopWhenArmed: false };
+      }
+      if (o.g) {
+        const moved = this.runGather(u, o.g);
+        if (u.order !== o) u.order = o;
+        return moved;
+      }
+    }
+    if (o.g?.nodeType === 'crystal') o.g = null; // (back to food)
     // gather food: the nearest source, a trip at a time
     if (!o.g || o.g.phase === 'toDrop' || !this.nodes.get(o.g.node)) {
       const at = o.at ?? this.players[u.owner]?.rally.work;
@@ -2085,6 +2110,18 @@ export class World {
     const moved = this.runGather(u, o.g);
     if (u.order !== o) u.order = o; // (a gathering trip that finishes doesn't end the tending)
     return moved;
+  }
+
+  /** The nearest finished tower of `u`'s side short of crystal (under half its stock), if any. */
+  private crystalShort(u: Unit): Building | null {
+    let best: Building | null = null, bestD = Infinity;
+    for (const b of this.buildings.values()) {
+      if (b.owner !== u.owner || !b.complete || !b.stats.tower) continue;
+      if (b.stock.crystal >= this.logistics.supplyTargets(b).crystal * 0.5) continue;
+      const d = (b.ox + b.size / 2 - u.x) ** 2 + (b.oy + b.size / 2 - u.y) ** 2;
+      if (d < bestD) { bestD = d; best = b; }
+    }
+    return best;
   }
 
   /** An ammo bearer: a walking crystal pile (see sim/abilities/bearer.ts). */

@@ -1,4 +1,4 @@
-// The Web Tower, a mimic mine (the user's design, 2026-11-07): at rest a crystal mine like any other, a few things off
+// The Mimic Mine (id web-tower), a tower (the user's design, 2026-11-07): at rest a crystal mine like any other, a few things off
 // about it; when it attacks a big tentacle slides up out of a burrow at its middle, curled, reaches down to pluck the
 // crystal on the side it's throwing to, lifts it, uncoils up and back and whips it over the top (the coiling
 // tentacle's throw). While it has targets it stays out, plucking the next; then it coils back down out of sight. It
@@ -158,7 +158,7 @@ const PALE: Mat = { color: '#9fb3a8', tex: 'skin', rough: 0.4 }, PIT: Mat = { co
 const TEAM: Mat = { team: 'primary', tex: 'none', rough: 0.6 }, SILK: Mat = { color: '#ece6d6', tex: 'none', rough: 0.85 };
 
 /**
- * The Web Tower (2 tiles): a crystal mine half again as big as the land's, with a burrow at its middle where the big
+ * The Mimic Mine (2 tiles): a crystal mine half again as big as the land's, with a burrow at its middle where the big
  * rock should be, its crystals evenly round it and leaning out, a few strands of silk between its rocks and a lump of
  * its side's colour at one's foot. `state.attack`: its throw at `t`, toward `facing` (radians, map axes).
  */

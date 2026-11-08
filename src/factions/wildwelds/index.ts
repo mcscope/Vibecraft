@@ -1077,7 +1077,7 @@ export const units: Unit[] = [
 export const buildings: Array<BuildingSpec & { model: BuildingModel; looks?: number; throws?: ThrowTiming }> = [
   { id: 'web-wall', name: 'Web Wall', description: 'Laid down by a T2 larva\'s body (dragged, a strand of up to 5 pieces). It blocks the way. It starts as strong as the body that went into it and grows on food to its full strength.',
     size: 1, materials: 150, wall: true, living: { seed: 0.08, grow: 0.5 }, model: webWall, looks: WEB_WALL_LOOKS },
-  { id: 'web-tower', name: 'Web Tower', description: 'Laid down by a T3 larva\'s body. It throws crystals from its stock at enemies in range (Give it crystal). It starts as strong as the body that went into it and grows on food to its full strength.',
+  { id: 'web-tower', name: 'Mimic Mine', description: 'Laid down by a T3 larva\'s body. It looks like a crystal mine; a tentacle in its burrow throws crystals from its stock at enemies in range (Give it crystal). It starts as strong as the body that went into it and grows on food to its full strength.',
     size: 2, materials: 400, living: { seed: 0.4, grow: 0.8 }, attack: { mechanism: 30, crystalMass: 0.6, height: 5, stockShots: 30, windup: 0.6 }, model: webTower, throws: { frames: 24, from: SHOT_FROM, release: THROW_AT, to: SHOT_TO } },
 ];
 
