@@ -5,6 +5,25 @@ import type { Camera } from '../render/camera';
 import { teamColor } from '../render/artbank';
 
 /** Diamond-shaped minimap matching the isometric view. */
+
+const rgbOf = (h: string): [number, number, number] => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+/** The map behind the dots: greyed and darkened, so they stand out. */
+function muted(h: string): string {
+  const [r, g, b] = rgbOf(h), grey = (r + g + b) / 3;
+  return `rgb(${[r, g, b].map((c) => Math.round((c * 0.45 + grey * 0.55) * 0.7)).join(',')})`;
+}
+/** A team's colour as a minimap dot: its hue at full saturation, light (the Wilds' stays as it is). */
+const vividCache = new Map<string, string>();
+function vivid(h: string): string {
+  let v = vividCache.get(h);
+  if (v) return v;
+  const [r, g, b] = rgbOf(h).map((c) => c / 255), max = Math.max(r, g, b), min = Math.min(r, g, b), d = max - min;
+  const hue = d === 0 ? 0 : max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  v = `hsl(${Math.round(hue * 60)}, 100%, 62%)`;
+  vividCache.set(h, v);
+  return v;
+}
+
 export class Minimap {
   private base: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -31,7 +50,7 @@ export class Minimap {
     for (let y = 0; y < g.height; y++) for (let x = 0; x < g.width; x++) {
       const t = g.terrain[y * g.width + x];
       const gr = this.ground?.(x + 0.5, y + 0.5);
-      b.fillStyle = t === TERRAIN_ROCK ? '#8b8375' : t === TERRAIN_WATER ? gr?.shallow ?? '#2f5f7a' : t === TERRAIN_SAND ? gr?.sand ?? '#b8a070' : gr?.grass[0] ?? '#5d7a2f';
+      b.fillStyle = muted(t === TERRAIN_ROCK ? '#8b8375' : t === TERRAIN_WATER ? gr?.shallow ?? '#2f5f7a' : t === TERRAIN_SAND ? gr?.sand ?? '#b8a070' : gr?.grass[0] ?? '#5d7a2f');
       const [px, py] = this.toMini(x + 0.5, y + 0.5);
       b.fillRect(px - 1.6, py - 0.8, 3.2, 1.6);
     }
@@ -76,7 +95,7 @@ export class Minimap {
     for (const n of this.world.nodes.values()) {
       if (n.shard) continue;
       const [x, y] = this.toMini(n.x, n.y);
-      ctx.fillStyle = n.tree ? this.ground?.(n.x, n.y)?.forest ?? '#2d4a22' : n.type === 'food' ? '#c0392b' : '#7ad7ef';
+      ctx.fillStyle = n.tree ? muted(this.ground?.(n.x, n.y)?.forest ?? '#2d4a22') : n.type === 'food' ? '#c0392b' : '#7ad7ef';
       ctx.fillRect(x - 1, y - 1, 2, 2);
     }
     return (this.layer = c);
@@ -116,7 +135,7 @@ export class Minimap {
     for (const b of world.buildings.values()) {
       if (me >= 0 && b.owner !== me && world.vision(me, b.ox + b.size / 2, b.oy + b.size / 2) === 0) continue;
       const [x, y] = this.toMini(b.ox + b.size / 2, b.oy + b.size / 2);
-      ctx.fillStyle = teamColor(this.world, b.owner).primary;
+      ctx.fillStyle = world.players[b.owner]?.neutral ? teamColor(this.world, b.owner).primary : vivid(teamColor(this.world, b.owner).primary);
       ctx.fillRect(x - 4, y - 3, 8, 6);
       ctx.strokeStyle = '#fff';
       ctx.strokeRect(x - 4, y - 3, 8, 6);
@@ -124,7 +143,10 @@ export class Minimap {
     for (const u of world.units.values()) {
       if (me >= 0 && u.owner !== me && world.vision(me, u.x, u.y) !== 2) continue;
       const [x, y] = this.toMini(u.x, u.y);
-      ctx.fillStyle = teamColor(this.world, u.owner).primary;
+      // a bright dot, outlined dark so it shows on any ground
+      ctx.fillStyle = '#0b0b0b';
+      ctx.fillRect(x - 2.5, y - 2.5, 5, 5);
+      ctx.fillStyle = world.players[u.owner]?.neutral ? teamColor(this.world, u.owner).primary : vivid(teamColor(this.world, u.owner).primary);
       ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
     }
     // camera viewport
