@@ -14,13 +14,21 @@ const url = server.resolvedUrls.local[0];
 // a real GPU bakes in seconds; software GL takes minutes
 const browser = await chromium.launch({ channel: 'chrome', args: ['--use-angle=metal', '--ignore-gpu-blocklist', '--enable-gpu'] });
 try {
-  const page = await browser.newPage();
-  await page.goto(`${url}?mode=prebake`);
-  await page.waitForFunction(() => document.title === 'prebake ready', null, { timeout: 120000 });
-  const keys = await page.evaluate(() => window.prebakeKeys());
+  const open = async () => {
+    const page = await browser.newPage();
+    await page.goto(`${url}?mode=prebake`);
+    await page.waitForFunction(() => document.title === 'prebake ready', null, { timeout: 120000 });
+    return page;
+  };
+  const first = await open();
+  const keys = await first.evaluate(() => window.prebakeKeys());
+  await first.close();
   for (const key of keys) {
     const t = Date.now();
+    // a fresh page for each bake: one page baking everything slows down and loses its GL context
+    const page = await open();
     const { json, pages } = await page.evaluate((k) => window.prebake(k), key);
+    await page.close();
     await writeFile(join(out, `${key}.json`), JSON.stringify({ pages: pages.length, art: JSON.parse(json) }));
     let bytes = 0;
     for (const [i, d] of pages.entries()) { const buf = Buffer.from(d.split(',')[1], 'base64'); bytes += buf.length; await writeFile(join(out, `${key}.${i}.webp`), buf); }
