@@ -35,8 +35,11 @@ function tiled(t: THREE.Texture, ru: number, rv: number, key: string): THREE.Tex
   }
   return c;
 }
+/** A team's light tone: its primary colour, a third of the way to white (mixed as the hex colours read, not in linear light). */
+const lightOf = (primary: string) => '#' + [1, 3, 5].map((i) => { const v = parseInt(primary.slice(i, i + 2), 16); return Math.round(v + (255 - v) * 0.38).toString(16).padStart(2, '0'); }).join('');
+
 function material(m: Mat, team: TeamColors, rep: [number, number], o: BuildOpts): THREE.Material {
-  const color = m.team ? team[m.team] : (m.color ?? '#888888');
+  const color = m.team === 'light' ? lightOf(team.primary) : m.team ? team[m.team] : (m.color ?? '#888888');
   const tex = m.tex ?? 'none';
   const q = (v: number) => Math.max(0.25, Math.round(v * 4) / 4);
   const ru = q(rep[0] * TEX_PER_UNIT), rv = q(rep[1] * TEX_PER_UNIT);

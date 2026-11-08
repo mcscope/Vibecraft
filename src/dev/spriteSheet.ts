@@ -241,24 +241,30 @@ async function joinsPage(id: string): Promise<void> {
   for (const [name, tiles] of layouts) cell(r, draw(tiles, 0.9), name);
 }
 
-/** ?mode=sprites&teams=<faction>[&facing=1][&cell=170]: every unit (standing, one still) and every building (finished)
- *  of a faction, a row each, in each of the four sides' colours side by side: to check its team colours read. Each row
- *  drawn at its own scale to fill its cells, the same size cells throughout (so before and after shots line up). */
+/** ?mode=sprites&teams=<faction>[&facing=1|&facings=1,3,6][&only=<id>,<id>][&cell=170]: every unit (standing, one
+ *  still per facing) and every building (finished, and mid-throw if it throws) of a faction, a row each, in each of the
+ *  four sides' colours side by side: to check its team colours read. Each row drawn at its own scale to fill its cells,
+ *  the same size cells throughout (so before and after shots line up). */
 async function teamsPage(params: URLSearchParams): Promise<void> {
   const faction = PLAYABLE.find((f) => f.id === params.get('teams'));
   if (!faction) return;
-  const facing = +(params.get('facing') ?? 1), CELL = +(params.get('cell') ?? 170), LABEL = 170, HEAD = 30;
+  const facings = (params.get('facings') ?? params.get('facing') ?? '1').split(',').map(Number), CELL = +(params.get('cell') ?? 170), LABEL = 170, HEAD = 30;
+  const only = params.get('only')?.split(','), wanted = (id: string) => !only || only.includes(id);
   const { Baker } = await import('../kits/bake3d/baker');
   const baker = new Baker();
   type Row = { name: string; sprites: import('../art/contract').Sprite[] };
   const rows: Row[] = [];
   for (const u of faction.units as unknown as Array<{ id: string; name: string; model: import('../kits/bake3d/types').UnitModel }>) {
-    const sprites = [];
-    for (const team of TEAM_COLORS) { const f = (await baker.bakeUnit(u.model, team, { dummy: true, frames: { idle: 1, die: 2 } })).anims.idle!.frames; sprites.push(f[facing % f.length][0]); }
-    rows.push({ name: u.name, sprites });
+    if (!wanted(u.id)) continue;
+    const baked = [];
+    for (const team of TEAM_COLORS) baked.push((await baker.bakeUnit(u.model, team, { dummy: true, frames: { idle: 1, die: 2 } })).anims.idle!.frames);
+    for (const facing of facings) rows.push({ name: `${u.name} ${facing}`, sprites: baked.map((f) => f[facing % f.length][0]) });
   }
-  for (const b of (faction.buildings ?? []) as unknown as Array<{ name: string; model: import('../kits/bake3d/types').BuildingModel; size: number }>)
+  for (const b of (faction.buildings ?? []) as unknown as Array<{ id: string; name: string; model: import('../kits/bake3d/types').BuildingModel; size: number; throws?: unknown }>) {
+    if (!wanted(b.id)) continue;
     rows.push({ name: b.name, sprites: TEAM_COLORS.map((team) => baker.bakeBuilding(b.model, b.size, team).complete) });
+    if (b.throws) rows.push({ name: `${b.name} throwing`, sprites: TEAM_COLORS.map((team) => baker.bakeStatic((mb) => b.model(mb, { phase: 'complete', level: 0, attack: { t: 0.45, facing: Math.PI / 4 } }), team, true, {}, b.size * Math.SQRT2 + 3)) });
+  }
   baker.dispose();
   const c = document.createElement('canvas');
   c.width = LABEL + CELL * 4; c.height = HEAD + CELL * rows.length;
