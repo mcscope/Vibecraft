@@ -13,8 +13,13 @@ export type CommandBody =
   | { type: 'attackMove'; units: number[]; x: number; y: number; charge?: boolean; face?: number }
   /** Change where they stand into `into` (units whose spec `becomes` it), or with `spawn`, queue one to train in their bodies (`spawns`): sim/abilities/metamorph.ts. */
   | { type: 'metamorph'; units: number[]; into: string; spawn?: boolean }
-  /** Units that digest trees walk to this tree and turn it into food (sim/abilities/digest.ts). */
-  | { type: 'digest'; units: number[]; node: number }
+  /**
+   * Units that digest trees walk to this tree and turn it into food (sim/abilities/digest.ts). `one`: only the
+   * nearest of them not already off to a tree goes; the rest of `units` tend, looking for food from there.
+   */
+  | { type: 'digest'; units: number[]; node: number; one?: boolean }
+  /** Set a side's rally point for units born outside a building (PlayerState.rally): `work` for tenders, `army` for fighters. */
+  | { type: 'sideRally'; kind: 'work' | 'army'; x: number; y: number }
   /** Like a building's auto-train: keep queuing this spawn whenever their queue is empty (null = off). */
   | { type: 'autoSpawn'; units: number[]; specId: string | null }
   /** Cancel the last spawn queued in each of them (what it had paid goes back into its pack). */

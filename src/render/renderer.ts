@@ -164,6 +164,8 @@ export class Renderer {
   private buildingSprites = new Map<number, PixiSprite>();
   private projSprites = new Map<number, PixiSprite>();
   private flagSprite: PixiSprite | null = null;
+  /** The side's work and army rally points (PlayerState.rally), shown while one of your units is selected. */
+  private sideFlags: PixiSprite[] = [];
   private ghostSprite: PixiSprite | null = null;
   private textPool: Text[] = [];
 
@@ -641,10 +643,11 @@ export class Renderer {
       ellipse(this.discTex, isoX(tx, ty), isoY(tx, ty), 2.4, 1.2, 0xffffff, 0.8);
     }
     for (const [x, y] of rs.zone ?? []) ellipse(this.tileTex, isoX(x + 0.5, y + 0.5), isoY(x + 0.5, y + 0.5), 32, 16, 0x9fd8ff, 0.14);
-    let rally: Building | null = null;
+    let rally: Building | null = null, ownUnit = false;
     for (const id of rs.selected) {
       const u = w.units.get(id);
       if (u) {
+        if (u.owner === 0) ownUnit = true;
         const x = u.px + (u.x - u.px) * alpha, y = u.py + (u.y - u.py) * alpha;
         ring(x, y, u.stats.radius, u.owner === 0 ? 0xffffff : 0xff7864, 0.9);
       }
@@ -752,6 +755,18 @@ export class Renderer {
       this.flagSprite.zIndex = rally.rallyX + rally.rallyY;
       this.flagSprite.visible = true;
     } else if (this.flagSprite) this.flagSprite.visible = false;
+    // the side's rally points for units born outside a building: work (green) and army (red)
+    const sr = w.players[0]?.rally;
+    ([[sr?.work, 0xb8f0a0], [sr?.army, 0xffa898]] as const).forEach(([at, tint], i) => {
+      let f = this.sideFlags[i];
+      if (!f) { f = this.sideFlags[i] = new PixiSprite(); this.objects.addChild(f); }
+      f.visible = ownUnit && !!at;
+      if (!f.visible || !at) return;
+      this.setFrame(f, this.bank.flag(0));
+      f.position.set(isoX(at[0], at[1]), isoY(at[0], at[1]));
+      f.zIndex = at[0] + at[1];
+      f.tint = tint;
+    });
   }
 
   /**

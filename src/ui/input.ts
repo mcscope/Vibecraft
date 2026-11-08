@@ -14,7 +14,8 @@ import { keymap, settings, settingsOpen, updateSettings } from './settings';
 import { formationSlots, formationUnit, type Formation, type Slot } from './formations';
 
 /** resupplyDest: units were just sent to resupply; a ground click picks where they go afterwards. */
-type Mode = 'attackMove' | 'charge' | 'move' | 'give' | 'garrison' | 'resupplyDest' | 'place' | null;
+/** rallyWork / rallyArmy: a ground click sets the side's rally point (PlayerState.rally). */
+type Mode = 'attackMove' | 'charge' | 'move' | 'give' | 'garrison' | 'resupplyDest' | 'place' | 'rallyWork' | 'rallyArmy' | null;
 
 export class Input {
   readonly rs: RenderState = { selected: new Set(), hoverId: 0, box: null, ping: null, ghost: null };
@@ -208,6 +209,12 @@ export class Input {
         }
         return;
       }
+      if (this.mode === 'rallyWork' || this.mode === 'rallyArmy') {
+        this.issue({ type: 'sideRally', kind: this.mode === 'rallyWork' ? 'work' : 'army', x: wx, y: wy });
+        this.ping(wx, wy, this.mode === 'rallyWork' ? '#9ad06a' : '#ff6b5a');
+        this.mode = null;
+        return;
+      }
       if (this.mode === 'garrison') {
         const b = this.world.buildings.get(target);
         if (b && b.owner === this.player) { this.issue({ type: 'garrison', units, building: b.id }); this.ping(b.ox + b.size / 2, b.oy + b.size / 2, '#ffd23f'); }
@@ -321,11 +328,9 @@ export class Input {
       this.issue({ type: 'attack', units, target });
       this.ping(wx, wy, '#ff6b5a');
     } else if (tn?.tree && units.some((id) => { const u = w.units.get(id); return u && digestsTrees(w, u); })) {
-      // tree digesters go and digest it; anyone else gathers it
-      const eaters = units.filter((id) => { const u = w.units.get(id); return u && digestsTrees(w, u); });
-      this.issue({ type: 'digest', units: eaters, node: tn.id });
-      const rest = units.filter((id) => !eaters.includes(id));
-      if (rest.length) this.issue({ type: 'gather', units: rest, node: tn.id });
+      // one tree digester goes and digests it (the nearest free one: Shift-click tree after tree, one each); the rest
+      // tend, looking for food from there
+      this.send({ type: 'digest', units, node: tn.id, one: true });
       this.ping(tn.x, tn.y, '#e0457a');
     } else if (tn) {
       // on food: anyone low on calories (under half, or worn out) eats from it till full; the rest gather it
@@ -451,11 +456,12 @@ export class Input {
       attackMove: 'Attack: right-click a spot or an enemy', move: 'Move: right-click where to go', charge: 'Charge: right-click an enemy or a spot',
       give: 'Give: right-click a unit or building of yours', garrison: 'Garrison: right-click one of your buildings',
       place: 'Place: right-click where to build (right-drag: a line)', resupplyDest: 'Resupply, then: right-click where to go after',
+      rallyWork: 'Work rally point: right-click where tenders look for food', rallyArmy: 'Army rally point: right-click where new fighters go',
     };
     const text = this.mode && this.mouse.inside ? what[this.mode] : undefined;
     if (!text) { if (this.armedEl) this.armedEl.style.display = 'none'; return; }
     if (!this.armedEl) { this.armedEl = document.createElement('div'); this.armedEl.className = 'armed-hint'; document.body.appendChild(this.armedEl); }
-    const full = `${text} · left-click or Esc to cancel${this.mode === 'place' || this.mode === 'resupplyDest' ? '' : ' · Shift: do it again'}`;
+    const full = `${text} · left-click or Esc to cancel${this.mode === 'place' || this.mode === 'resupplyDest' || this.mode === 'rallyWork' || this.mode === 'rallyArmy' ? '' : ' · Shift: do it again'}`;
     if (this.armedEl.textContent !== full) this.armedEl.textContent = full;
     this.armedEl.style.display = 'block';
     this.armedEl.style.left = `${this.mouse.x + 18}px`;
@@ -624,7 +630,8 @@ export class Input {
   }
 
   /** Commands triggered from HUD buttons. */
-  hudCommand(kind: 'stop' | 'attackMove' | 'move' | 'resupply' | 'give' | 'garrison' | 'hold' | 'charge' | 'tend'): void {
+  hudCommand(kind: 'stop' | 'attackMove' | 'move' | 'resupply' | 'give' | 'garrison' | 'hold' | 'charge' | 'tend' | 'rallyWork' | 'rallyArmy'): void {
+    if (kind === 'rallyWork' || kind === 'rallyArmy') { this.mode = kind; return; } // then right-click where (no units needed)
     const units = this.selectedUnits();
     if (!units.length) return;
     if (kind === 'tend') { this.issue({ type: 'tend', units }); return; }

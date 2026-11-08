@@ -20,7 +20,7 @@ export interface HudActions {
   research(buildingId: number, techId: string): void;
   cancelTrain(buildingId: number, index?: number): void;
   select(ids: number[]): void;
-  command(kind: 'stop' | 'attackMove' | 'move' | 'resupply' | 'give' | 'garrison' | 'hold' | 'charge' | 'tend'): void;
+  command(kind: 'stop' | 'attackMove' | 'move' | 'resupply' | 'give' | 'garrison' | 'hold' | 'charge' | 'tend' | 'rallyWork' | 'rallyArmy'): void;
   /** Put the selection in a formation, and which one it's in now. */
   formation(f: Formation): void;
   formationOf(): Formation;
@@ -534,11 +534,19 @@ export class Hud {
       ${btn('give', 'Give', km.give, 'Give surplus to a friendly unit (then right-click it)')}
       ${this.hasBuildings() ? btn('garrison', 'Garrison', km.garrison, 'Shelter inside one of your buildings (then right-click it). Throwers inside throw from cover. Only bodies that fit through a door (up to 150 kg): no mounts or beasts.') : ''}
       ${this.tends(units) ? `<button data-cmd="tend" title="Tend the nest until told otherwise: carry food to whoever's waiting on it (an egg, a cocoon, a mother with an egg queued), gathering more in between.">${ICONS.tend}<span>Tend</span><kbd>${km.tend.toUpperCase()}</kbd></button>` : ''}
+      ${this.sideRallies()}
     </div>`;
   }
 
   /** Does this side have buildings at all (else there's nothing to garrison)? */
   private hasBuildings(): boolean { return (this.world.factionOf(this.player).buildings ?? []).length > 0; }
+
+  /** A side whose units are laid or change in place (no building to rally from) sets its two rally points here. */
+  private sideRallies(): string {
+    if (!this.world.factionOf(this.player).units.some((x) => x.spawns?.length || x.becomes?.length)) return '';
+    return `<button data-cmd="rallyWork" title="Work rally point: right-click a spot. Tenders look for food nearest it.">${ICONS.rallyWork}<span>Work rally</span></button>
+      <button data-cmd="rallyArmy" title="Army rally point: right-click a spot. New fighters (hatched or laid) pick up their crystal nearby, then go there.">${ICONS.rallyArmy}<span>Army rally</span></button>`;
+  }
 
   /** Could these tend a nest: they gather food, and their side has things that lay or change (and so wait on food)? */
   private tends(units: Unit[]): boolean {
@@ -618,6 +626,7 @@ export class Hud {
       <div class="tiles forms">${FORMATIONS.map((f) => `<button data-formation="${f.id}" class="ftile ${f.id === formation ? 'on' : ''}" title="${f.tip}">${formationPicture(f.id, fus)}<span>${f.name}</span></button>`).join('')}</div>
       <div class="cmds small">
         ${(this.hasBuildings() ? ['resupply', 'give', 'garrison'] as const : ['give'] as const).map((c) => `<button data-cmd="${c}" title="${{ resupply: 'Resupply at the nearest stocked building, then come back.', give: 'Give surplus to a friendly unit (then right-click it).', garrison: 'Shelter inside one of your buildings (then right-click it). Only bodies that fit through a door (up to 150 kg): no mounts or beasts.' }[c]}">${ICONS[c]}<span>${c[0].toUpperCase() + c.slice(1)}</span><kbd>${km[c].toUpperCase()}</kbd></button>`).join('')}
+        ${this.sideRallies()}
       </div>
     </div>`;
   }
@@ -771,6 +780,8 @@ const ICONS: Record<string, string> = {
   resupply: svg('<path d="M4 8 12 4l8 4v8l-8 4-8-4zM4 8l8 4 8-4M12 12v8"/>'),
   give: svg('<path d="M3 16h6l3 2h5l4-3.5M14 4v8M10.5 8.5 14 12l3.5-3.5"/>'),
   garrison: svg('<path d="M4 11 12 4l8 7v9H4zM10 20v-5h4v5"/>'),
+  rallyWork: svg('<path d="M6 21V4M6 4h11l-3 4 3 4H6"/><circle cx="16" cy="18" r="2.5"/>'),
+  rallyArmy: svg('<path d="M6 21V4M6 4h11l-3 4 3 4H6"/><path d="M13 21l6-6M17 21l-4-4"/>'),
   tend: svg('<ellipse cx="9" cy="15" rx="4" ry="5"/><ellipse cx="16" cy="14" rx="3" ry="4"/><path d="M12 4v5M9.5 6.5 12 4l2.5 2.5"/>'),
 };
 

@@ -149,3 +149,17 @@ describe('metamorphosis', () => {
     expect(validateFaction(fen).filter((e) => e.includes('frog-knight'))).toEqual([]);
   });
 });
+
+describe('side rally points', () => {
+  test('a fighter hatched outside a building gets its crystal, then goes to the army rally point', async () => {
+    const { wildwelds } = await import('../src/factions/wildwelds');
+    const { swapInto } = await import('../src/sim/abilities/metamorph');
+    const w = new World({ seed: 3, players: [{ name: 'Wild', faction: wildwelds }, { name: 'Meadow', faction: meadowfolk }] });
+    const m = w.unitsOf(0)[0], l = w.spawnAt(0, 'larva1', m.x + 2, m.y)!;
+    const go = { kind: 'move', x: l.x + 6, y: l.y };
+    w.enqueue({ player: 0, cmd: { type: 'sideRally', kind: 'army', x: go.x, y: go.y } });
+    w.step();
+    const n = swapInto(w, l, 'charger')!;
+    expect(n.order.kind === 'move' ? n.order : n.queue.at(-1)).toMatchObject(go);
+  });
+});

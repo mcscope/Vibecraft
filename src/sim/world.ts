@@ -76,6 +76,11 @@ export interface PlayerState {
   researched: string[];
   /** The Wilds: owns the wildlife, never wins or loses, isn't anyone's opponent. */
   neutral?: boolean;
+  /**
+   * The side's rally points for units born outside a building (laid, hatched or changed in place): `work`, where its
+   * tenders look for food; `army`, where its fighters go once they have their crystal. Null: unset.
+   */
+  rally: { work: [number, number] | null; army: [number, number] | null };
 }
 
 /** Wildlife tuning (engine-wide). */
@@ -117,7 +122,8 @@ export type Order =
    * Tending the nest, until told otherwise: carrying food to whoever of its side is waiting on it (an egg, a cocoon, a
    * mother with an egg queued), gathering more in between (`g`: the gathering trip it's on), waiting full when nobody is.
    */
-  | { kind: 'tend'; g: Extract<Order, { kind: 'gather' }> | null; handT?: number }
+  /** `at`: where it looks for food (the nearest to there); else its side's work rally point, else itself. */
+  | { kind: 'tend'; g: Extract<Order, { kind: 'gather' }> | null; handT?: number; at?: [number, number] }
   | { kind: 'resupply'; building: number }
   | { kind: 'give'; to: number; handT?: number }
   | { kind: 'eatPack' }
@@ -516,7 +522,7 @@ export class World {
       // two players may bring different factions under the same id: give the later one its own key
       const key = this.factions.has(p.faction.id) && this.factions.get(p.faction.id) !== p.faction ? `${p.faction.id}#${i}` : p.faction.id;
       this.factions.set(key, p.faction);
-      this.players.push({ id: i, name: p.name, factionId: key, defeated: false, refine: {}, refineWork: {}, refineGrow: {}, techs: [], researched: [] });
+      this.players.push({ id: i, name: p.name, factionId: key, defeated: false, refine: {}, refineWork: {}, refineGrow: {}, techs: [], researched: [], rally: { work: null, army: null } });
       for (const s of p.faction.units) this.unitSpecs.set(`${i}/${s.id}`, { spec: s, stats: derive(s) });
       for (const b of p.faction.buildings ?? []) this.buildingStats.set(`${key}/${b.id}`, deriveBuilding(b, p.faction));
     });
@@ -554,7 +560,7 @@ export class World {
     this.wildsId = id;
     const wilds: FactionSpec = { id: 'wilds', name: 'The Wilds', workerId: '', units: specs };
     this.factions.set(wilds.id, wilds);
-    this.players.push({ id, name: 'Wilds', factionId: wilds.id, defeated: false, refine: {}, refineWork: {}, refineGrow: {}, techs: [], researched: [], neutral: true });
+    this.players.push({ id, name: 'Wilds', factionId: wilds.id, defeated: false, refine: {}, refineWork: {}, refineGrow: {}, techs: [], researched: [], neutral: true, rally: { work: null, army: null } });
     for (const s of specs) this.unitSpecs.set(`${id}/${s.id}`, { spec: s, stats: derive(s) });
     const dens: Array<[number, number]> = [];
     factions.forEach((f, owner) => {
@@ -765,10 +771,25 @@ export class World {
       }
       case 'digest': {
         const n = this.nodes.get(cmd.node);
-        if (n?.tree) set(mine(cmd.units).filter((u) => digestsTrees(this, u)), { kind: 'digest', node: n.id });
+        if (!n?.tree) return;
+        const eaters = mine(cmd.units).filter((u) => digestsTrees(this, u));
+        if (!cmd.one) { set(eaters, { kind: 'digest', node: n.id }); return; }
+        // one to each tree (Shift-clicking tree after tree sends one more each time, never queues): the nearest not
+        // already off to one; the rest tend from there
+        if (eaters.some((u) => u.order.kind === 'digest' && u.order.node === n.id)) return;
+        const d2 = (u: Unit) => (u.x - n.x) ** 2 + (u.y - n.y) ** 2;
+        const one = eaters.filter((u) => u.order.kind !== 'digest' && u.order.kind !== 'metamorph').reduce<Unit | null>((b, u) => (!b || d2(u) < d2(b) ? u : b), null);
+        if (!one) return;
+        const now = (u: Unit, order: Order) => { u.order = order; u.resume = null; u.engage = 0; u.path = []; u.repathIn = 0; u.queue = []; u.faceTo = null; u.stance = 'auto'; };
+        now(one, { kind: 'digest', node: n.id });
+        for (const u of mine(cmd.units)) if (u !== one && u.order.kind !== 'digest' && u.order.kind !== 'metamorph' && this.gathers(u, 'food')) now(u, { kind: 'tend', g: null, at: [n.x, n.y] });
         return;
       }
       case 'tend': return set(mine(cmd.units).filter((u) => this.gathers(u, 'food')), { kind: 'tend', g: null });
+      case 'sideRally': {
+        this.players[player].rally[cmd.kind] = [cmd.x, cmd.y];
+        return;
+      }
       case 'graze': {
         const n = this.nodes.get(cmd.node);
         if (n?.type === 'food') set(mineAll(cmd.units), { kind: 'graze', node: n.id });
@@ -2056,7 +2077,8 @@ export class World {
     if (full) return false; // full and nobody waiting: it waits with the food
     // gather food: the nearest source, a trip at a time
     if (!o.g || o.g.phase === 'toDrop' || !this.nodes.get(o.g.node)) {
-      const n = this.nearestNode(u, 'food', 40, false);
+      const at = o.at ?? this.players[u.owner]?.rally.work;
+      const n = at ? this.nearestNodeTo(at[0], at[1], 'food', 40) ?? this.nearestNode(u, 'food', 40, false) : this.nearestNode(u, 'food', 40, false);
       if (!n) return false;
       o.g = { kind: 'gather', node: n.id, nodeType: 'food', phase: 'toNode', stopWhenArmed: false };
     }
@@ -2099,6 +2121,19 @@ export class World {
     const order: Order = db < ds ? { kind: 'rearm', unit: bearer!.id } : { kind: 'gather', node: shard!.id, nodeType: 'crystal', phase: 'toNode', stopWhenArmed: true };
     if (detour) this.detour(u, order); else u.order = order;
     return true;
+  }
+
+  /**
+   * A fighter born outside a building (laid, hatched or changed in place): it gets its crystal nearby, then (not a
+   * tender or a parent) goes to its side's army rally point, if set.
+   */
+  newFighter(u: Unit): void {
+    if (!u.stats.canAttack || u.order.kind !== 'idle') return;
+    if (u.crystal < u.crystalMass) this.fetchCrystal(u);
+    const spec = this.specOf(u.owner, u.specId)?.spec, at = this.players[u.owner]?.rally.army;
+    if (!at || spec?.tends || spec?.spawns?.length) return;
+    const go: Order = { kind: 'move', x: at[0], y: at[1] };
+    if (u.order.kind === 'idle') u.order = go; else u.queue.push(go);
   }
 
   /**
@@ -2299,11 +2334,16 @@ export class World {
   /** Carts: load at the pool's building, take it where it's most needed, repeat. */
   /** @internal sim helper, also used by abilities */
   nearestNode(u: Unit, type: ResourceKind, radius: number, shardsOnly: boolean, exclude?: ResourceNode): ResourceNode | null {
+    return this.nearestNodeTo(u.x, u.y, type, radius, shardsOnly, exclude);
+  }
+
+  /** The nearest resource of a kind to a point, within `radius`. */
+  nearestNodeTo(x: number, y: number, type: ResourceKind, radius: number, shardsOnly = false, exclude?: ResourceNode): ResourceNode | null {
     let best: ResourceNode | null = null, bestD = radius * radius;
     for (const n of this.nodes.values()) {
       if (n.type !== type || n.amount <= 0.001 || n === exclude) continue;
       if (shardsOnly && !n.shard) continue;
-      const d = (n.x - u.x) ** 2 + (n.y - u.y) ** 2;
+      const d = (n.x - x) ** 2 + (n.y - y) ** 2;
       if (d < bestD) { bestD = d; best = n; }
     }
     return best;
