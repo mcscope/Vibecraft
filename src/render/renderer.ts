@@ -177,9 +177,14 @@ export class Renderer {
   private dt = 0;
   /** Screen px a flier is drawn above the ground at full height (zoom 1). */
   static readonly FLY_PX = 56;
-  /** Px above the ground unit `id` is drawn at (zoom 1). */
+  /**
+   * A flier's altitude is above the ground below it, which steps a level at a cliff: in the air it's drawn over ground
+   * that eases to the new level instead (px it lags the real ground there, + above it, − below).
+   */
+  private groundLag = new Map<number, number>();
+  private flewOver = new Map<number, number>();
   /** Pixels a flier is drawn above its ground spot (at zoom 1). */
-  lift(id: number): number { return this.alt.get(id) ?? 0; }
+  lift(id: number): number { return (this.alt.get(id) ?? 0) + (this.groundLag.get(id) ?? 0); }
   /** Screen height for an altitude in metres: 6 px per metre (108 px at 18 m). */
   static altPx(m: number): number { return Math.max(0, m) * 6; }
   private fog: (ReturnType<typeof buildFog> & { tick: number }) | null = null;
@@ -532,6 +537,12 @@ export class Renderer {
         // drawn at its real altitude (sim/abilities/flight.ts), smoothed between ticks
         const a0 = this.alt.get(u.id) ?? 0, target = u.airborne ? Renderer.altPx(u.alt) : 0;
         this.alt.set(u.id, a0 + (target - a0) * Math.min(1, this.dt * 18)); // (close behind its real height: a dive reads as a dive)
+        // over a cliff edge: the ground it's drawn over eases to the new level (about half a second), no jump
+        const now = this.cam.ground(x, y), prev = this.flewOver.get(u.id), up = u.airborne || this.alt.get(u.id)! > 1;
+        let lag = up ? (this.groundLag.get(u.id) ?? 0) * Math.max(0, 1 - this.dt * 5) : 0;
+        if (up && prev !== undefined) lag += prev - now; // (the ground stepped under it: keep its drawn height, then ease)
+        this.groundLag.set(u.id, lag);
+        this.flewOver.set(u.id, now);
       }
       sp.position.set(isoX(x, y), this.gy(x, y) - this.lift(u.id));
       sp.zIndex = x + y + (u.airborne ? 2 : 0) - (this.world.crawls(u) ? 1.5 : 0); // (a crawler goes under the bodies it crawls beneath)
@@ -570,7 +581,7 @@ export class Renderer {
       sp.visible = this.seen(u.owner, u.x, u.y); // fog of war
       if (art?.segments) this.drawSegments(u, art, x, y, sp);
     }
-    for (const [id, sp] of this.unitSprites) if (!this.world.units.has(id)) { sp.destroy(); this.unitSprites.delete(id); this.alt.delete(id); }
+    for (const [id, sp] of this.unitSprites) if (!this.world.units.has(id)) { sp.destroy(); this.unitSprites.delete(id); this.alt.delete(id); this.groundLag.delete(id); this.flewOver.delete(id); }
     for (const [id, segs] of this.segSprites) if (!this.world.units.has(id)) { segs.forEach((s) => s.destroy()); this.segSprites.delete(id); this.trails.delete(id); }
     for (const id of this.posture.keys()) if (!this.world.units.has(id)) this.posture.delete(id);
   }
