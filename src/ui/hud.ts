@@ -92,6 +92,7 @@ export class Hud {
     this.top = root.querySelector('#topbar')!;
     this.panel = root.querySelector('#panel')!;
     this.tooltip = root.querySelector('#tooltip')!;
+    this.mountSideRallies();
     const icon = (c: HTMLCanvasElement) => `<img class="icon" src="${c.toDataURL()}" alt="">`;
     const villager = bank.unit(player, world.factionOf(player).workerId);
     const names = this.names();
@@ -534,18 +535,30 @@ export class Hud {
       ${btn('give', 'Give', km.give, 'Give surplus to a friendly unit (then right-click it)')}
       ${this.hasBuildings() ? btn('garrison', 'Garrison', km.garrison, 'Shelter inside one of your buildings (then right-click it). Throwers inside throw from cover. Only bodies that fit through a door (up to 150 kg): no mounts or beasts.') : ''}
       ${this.tends(units) ? `<button data-cmd="tend" title="Tend the nest until told otherwise: carry food to whoever's waiting on it (an egg, a cocoon, a mother with an egg queued), gathering more in between.">${ICONS.tend}<span>Tend</span><kbd>${km.tend.toUpperCase()}</kbd></button>` : ''}
-      ${this.sideRallies()}
     </div>`;
   }
 
   /** Does this side have buildings at all (else there's nothing to garrison)? */
   private hasBuildings(): boolean { return (this.world.factionOf(this.player).buildings ?? []).length > 0; }
 
-  /** A side whose units are laid or change in place (no building to rally from) sets its two rally points here. */
-  private sideRallies(): string {
-    if (!this.world.factionOf(this.player).units.some((x) => x.spawns?.length || x.becomes?.length)) return '';
-    return `<button data-cmd="rallyWork" title="Work rally point: right-click a spot. Tenders look for food nearest it.">${ICONS.rallyWork}<span>Work rally</span></button>
-      <button data-cmd="rallyArmy" title="Army rally point: right-click a spot. New fighters (hatched or laid) pick up their crystal nearby, then go there.">${ICONS.rallyArmy}<span>Army rally</span></button>`;
+  /**
+   * A side whose units are laid or change in place (no building to rally from) sets its two rally points from buttons
+   * in the minimap's top corners.
+   */
+  private mountSideRallies(): void {
+    const wrap = document.getElementById('minimap-wrap');
+    wrap?.querySelectorAll('.side-rally').forEach((e) => e.remove());
+    if (!wrap || !this.world.factionOf(this.player).units.some((x) => x.spawns?.length || x.becomes?.length)) return;
+    const add = (cmd: 'rallyWork' | 'rallyArmy', corner: string, tip: string) => {
+      const b = document.createElement('button');
+      b.className = `side-rally ${corner}`;
+      b.title = tip;
+      b.innerHTML = ICONS[cmd];
+      b.addEventListener('click', () => this.actions.command(cmd));
+      wrap.appendChild(b);
+    };
+    add('rallyWork', 'left', 'Work rally point: then right-click a spot. Tenders look for food nearest it.');
+    add('rallyArmy', 'right', 'Army rally point: then right-click a spot. New fighters (hatched or laid) pick up their crystal nearby, then go there.');
   }
 
   /** Could these tend a nest: they gather food, and their side has things that lay or change (and so wait on food)? */
@@ -626,7 +639,6 @@ export class Hud {
       <div class="tiles forms">${FORMATIONS.map((f) => `<button data-formation="${f.id}" class="ftile ${f.id === formation ? 'on' : ''}" title="${f.tip}">${formationPicture(f.id, fus)}<span>${f.name}</span></button>`).join('')}</div>
       <div class="cmds small">
         ${(this.hasBuildings() ? ['resupply', 'give', 'garrison'] as const : ['give'] as const).map((c) => `<button data-cmd="${c}" title="${{ resupply: 'Resupply at the nearest stocked building, then come back.', give: 'Give surplus to a friendly unit (then right-click it).', garrison: 'Shelter inside one of your buildings (then right-click it). Only bodies that fit through a door (up to 150 kg): no mounts or beasts.' }[c]}">${ICONS[c]}<span>${c[0].toUpperCase() + c.slice(1)}</span><kbd>${km[c].toUpperCase()}</kbd></button>`).join('')}
-        ${this.sideRallies()}
       </div>
     </div>`;
   }

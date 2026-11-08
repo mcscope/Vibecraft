@@ -549,3 +549,9 @@ button.garrison-btn span { font-size: 11.5px; color: var(--dim); }
 
 /* a command armed: by the cursor, what it is and how to use or cancel it */
 .armed-hint { position: fixed; z-index: 50; pointer-events: none; padding: 3px 8px; font-size: 12.5px; color: var(--gold); background: rgba(20, 16, 10, 0.85); border: 1px solid var(--bronze); white-space: nowrap; }
+
+/* side rally buttons in the minimap's empty top corners (the map is a diamond) */
+.side-rally { position: absolute; top: 8px; width: 30px; height: 30px; padding: 3px; display: flex; align-items: center; justify-content: center; }
+.side-rally.left { left: 8px; color: #9ad06a; }
+.side-rally.right { right: 8px; color: #ff8a7a; }
+.side-rally svg { width: 22px; height: 22px; }
