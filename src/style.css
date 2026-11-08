@@ -50,8 +50,10 @@ kbd {
 #menu, #loading {
   position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
   background: radial-gradient(ellipse at center, #2a2a1c 0%, #0b0a08 70%);
-  z-index: 10;
+  z-index: 10; overflow-y: auto;
 }
+/* (centred while it fits; scrolls from the top when the screen is shorter than the menu) */
+#menu > .menu-box, #loading > .menu-box { margin: auto; }
 .menu-box { width: min(480px, calc(100vw - 32px)); padding: 28px 30px; border-radius: 6px; text-align: center; }
 .menu-box h1 { margin: 0; font-size: 44px; }
 .menu-box h2 { margin: 0 0 16px; }
@@ -272,7 +274,8 @@ button:active { background: linear-gradient(180deg, #2a231b, #3a3026); }
 }
 
 @media (max-width: 760px) {
-  #minimap-wrap, #panel .stats, #tooltip .stats, #help { display: none !important; }
+  /* (a small desktop window; a touch screen has its own small layout, at the end of this file) */
+  html:not(.touch) #minimap-wrap, #panel .stats, #tooltip .stats, html:not(.touch) #help { display: none !important; }
   .unit-panel .info, .building-panel .info, .group-panel .info { width: auto; flex: 1; }
 }
 
@@ -555,3 +558,95 @@ button.garrison-btn span { font-size: 11.5px; color: var(--dim); }
 .side-rally.left { left: 8px; color: #9ad06a; }
 .side-rally.right { right: 8px; color: #ff8a7a; }
 .side-rally svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ── touch screens (html.touch, set by ui/touch.ts). A desktop never gets these. ── */
+#touchbar { display: none; }
+.armed-banner { display: none; }
+html.touch, .touch body {
+  overscroll-behavior: none; touch-action: pan-x pan-y; /* no page zoom or bounce; panels still scroll */
+  -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; -webkit-user-select: none; -webkit-text-size-adjust: 100%;
+}
+.touch #game, .touch #minimap { touch-action: none; }
+.touch #hud img { pointer-events: none; -webkit-user-drag: none; }
+.touch input, .touch select, .touch textarea { font-size: 16px; } /* (iOS zooms into smaller text fields) */
+.touch .settings-box, .touch .lobby-box { max-height: calc(100dvh - 32px); }
+.touch #battle-draft .draft-units button { width: 44px; min-height: 40px; }
+
+/* tap targets: 44 px */
+.touch #hud button { min-height: 44px; min-width: 44px; }
+.touch #hud button kbd { display: none; }
+.touch .cmds button { padding: 6px 12px 6px 8px; }
+.touch .q { padding: 8px 10px; }
+.touch .sow button { padding: 4px 12px; }
+
+/* notches and rounded corners */
+.touch #topbar {
+  height: calc(44px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) calc(104px + env(safe-area-inset-right)) 0 calc(12px + env(safe-area-inset-left));
+  gap: 14px; overflow-x: auto; scrollbar-width: none;
+}
+.touch #topbar button { min-height: 38px; }
+.touch #gear, .touch #resign { top: calc(3px + env(safe-area-inset-top)); height: 38px; min-height: 38px; }
+.touch #gear { right: calc(6px + env(safe-area-inset-right)); width: 42px; }
+.touch #resign { right: calc(54px + env(safe-area-inset-right)); }
+.touch #speed { top: calc(56px + env(safe-area-inset-top)); }
+.touch #minimap-wrap { padding-left: calc(10px + env(safe-area-inset-left)); }
+.touch #panel { padding-right: calc(10px + env(safe-area-inset-right)); padding-bottom: calc(6px + env(safe-area-inset-bottom)); }
+.touch #tooltip { max-width: calc(100vw - 16px); max-height: 60vh; overflow: hidden; z-index: 6; }
+
+/* the touch bar: what the keyboard does, as buttons, just above the bottom panel */
+.touch #touchbar {
+  display: flex; position: absolute; right: env(safe-area-inset-right); bottom: 100%; max-width: 100%;
+  gap: 4px; padding: 4px 6px; overflow-x: auto; scrollbar-width: none; touch-action: pan-x;
+}
+.touch #touchbar button { flex: none; min-width: 48px; height: 44px; padding: 0 9px; font-size: 13.5px; font-weight: 700; opacity: 0.94; }
+.touch #touchbar button.on { color: var(--gold); box-shadow: inset 0 0 0 2px var(--gold); }
+.touch #touchbar button.set { color: var(--gold); }
+.touch #bottom.collapsed #panel { display: none; }
+.touch #bottom.collapsed { padding-bottom: env(safe-area-inset-bottom); }
+
+/* an armed command: what the next tap does, and Cancel */
+.armed-banner {
+  position: absolute; top: calc(52px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%); z-index: 5;
+  align-items: center; gap: 10px; padding: 3px 3px 3px 12px; width: max-content; max-width: calc(100vw - 16px);
+  font-size: 14px; color: var(--gold); background: rgba(20, 16, 10, 0.92); border: 1px solid var(--bronze);
+}
+.armed-banner button { flex: none; padding: 0 14px; }
+
+/* a phone (or any small touch screen): the minimap moves up under the top bar, and the panel takes the bottom */
+@media (max-width: 760px), (max-height: 520px) {
+  .touch #topbar { font-size: 15px; gap: 10px; }
+  .touch .res .icon { width: 24px; height: 24px; }
+  .touch .res.fps { display: none; }
+  .touch #minimap-wrap { position: fixed; top: calc(48px + env(safe-area-inset-top)); left: calc(4px + env(safe-area-inset-left)); padding: 4px; }
+  .touch #minimap, .touch .minimap-static { width: 150px !important; height: 75px !important; }
+  .touch .minimap-static { left: 5px; }
+  .touch .side-rally { top: 2px; width: 34px; height: 34px; min-width: 0 !important; min-height: 0 !important; }
+  .touch .side-rally.left { left: 2px; }
+  .touch .side-rally.right { right: 2px; }
+  .touch #panel { max-height: 40vh; min-height: 0; overflow-y: auto; padding-left: calc(8px + env(safe-area-inset-left)); }
+  .touch #panel .empty { padding: 12px 4px; }
+  .touch #panel .stats, .touch #tooltip .stats { display: none; }
+  .touch .unit-panel, .touch .building-panel, .touch .group-panel { flex-wrap: wrap; }
+  .touch .unit-panel .info, .touch .building-panel .info, .touch .group-panel .info { flex: 1 1 220px; width: auto; min-width: 0; }
+  .touch .portrait.big { width: 64px; height: 70px; }
+  .touch .build, .touch .army, .touch .actions { flex: 1 1 100%; min-width: 0; }
+  .touch .army .tile { width: 62px; height: 56px; }
+  .touch .army .ftile { width: 80px; height: 64px; }
+  .touch .army .ftile svg { width: 66px; height: 42px; }
+  .touch #help { top: calc(48px + env(safe-area-inset-top)); left: calc(170px + env(safe-area-inset-left)); right: calc(8px + env(safe-area-inset-right)); width: auto; max-height: 38vh; overflow-y: auto; font-size: 13px; padding: 10px 34px 10px 12px; }
+  .touch #help.lesson { width: auto; font-size: 13.5px; }
+  .touch #overlay { font-size: 36px; }
+  .touch #chat { bottom: 50vh; }
+  .touch .menu-box { padding: 20px 18px; }
+  .touch .menu-box h1 { font-size: 34px; }
+}
+@media (max-width: 760px) and (orientation: portrait) {
+  .touch #help { left: calc(8px + env(safe-area-inset-left)); top: calc(136px + env(safe-area-inset-top)); max-height: 28vh; }
+}
+@media (max-width: 760px) {
+  .touch #topbar { padding-right: calc(124px + env(safe-area-inset-right)); }
+  .touch #resign { padding: 0 8px; font-size: 12.5px; }
+}
+@media (max-width: 520px) {
+  .touch .armed-banner { top: calc(136px + env(safe-area-inset-top)); }
+}

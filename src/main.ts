@@ -30,12 +30,14 @@ import { Input } from './ui/input';
 import { Minimap } from './ui/minimap';
 import { AudioEngine } from './audio/engine';
 import { mountSettingsDialog, onSettings, settings } from './ui/settings';
+import { TOUCH, TouchControls, initTouchPage, mountTouchbar, renderScale, words } from './ui/touch';
 
 type Mode = 'demo' | 'skirmish' | 'spectate' | 'online' | 'faceoff' | 'tutorial' | 'battle';
 const params = new URLSearchParams(location.search);
 // Seed choice happens outside the sim, so Math.random is fine here.
 const seed = Number(params.get('seed') ?? Math.floor(Math.random() * 1e9));
 
+initTouchPage();
 mountSettingsDialog();
 const menu = document.getElementById('menu')!;
 
@@ -209,6 +211,10 @@ async function run(g: GameSetup): Promise<void> {
     audio.answerOrder(cmd, HUMAN);
   });
   input.onSelect = (ids, group) => audio.answerSelect(ids, group, HUMAN);
+  // fingers: tap selects, long-press does, drag and pinch move the camera (ui/touch.ts)
+  const touch = new TouchControls(canvas, input, renderer.cam, minimap.canvas);
+  input.viaTouch = TOUCH;
+  mountTouchbar(document.getElementById('touchbar')!, input, touch, { chat: m === 'online' });
   const hud = new Hud(world, HUMAN, bank, {
     train: (building, specId) => local.issue({ type: 'train', building, specId }),
     research: (building, techId) => local.issue({ type: 'research', building, techId }),
@@ -227,12 +233,13 @@ async function run(g: GameSetup): Promise<void> {
     ungarrison: (building) => local.issue({ type: 'ungarrison', building }),
   });
 
-  const resize = () => renderer.resize(window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
+  const resize = () => renderer.resize(window.innerWidth, window.innerHeight, renderScale(window.innerWidth, window.innerHeight));
   window.addEventListener('resize', resize);
   resize();
 
   // a pitched battle opens on deployment: the world holds still until Ready
   const deploy = m === 'battle' ? new BattleDeploy(world, renderer, canvas, input.rs, (ids) => input.setSelection(ids), () => { if (battleAI) battleAI.started = true; }) : null;
+  if (deploy) touch.intercept = (x, y, button) => deploy.press(x, y, button);
   if (m === 'faceoff') renderer.cam.centerOn(25, 25);
   else if (m === 'battle') { /* (the deploy step framed the camera) */ }
   else if (m === 'tutorial') {
@@ -257,7 +264,11 @@ async function run(g: GameSetup): Promise<void> {
   }
   loading.style.display = 'none';
   document.getElementById('hud')!.style.display = 'block';
-  if (m === 'demo' || m === 'tutorial') document.getElementById('help')!.style.display = 'block';
+  if (m === 'demo' || m === 'tutorial') {
+    const help = document.getElementById('help')!;
+    help.style.display = 'block';
+    if (TOUCH) help.innerHTML = words(help.innerHTML);
+  }
 
   let acc = 0;
   let last = performance.now();
@@ -333,7 +344,7 @@ async function run(g: GameSetup): Promise<void> {
       overlay.textContent = status;
       overlay.style.display = status ? 'flex' : 'none';
     }
-    speedEl.textContent = input.mode === 'resupplyDest' ? 'Holding R: click where they should go after resupplying' : input.speed !== 1 ? `${input.speed}× speed` : '';
+    speedEl.textContent = input.mode === 'resupplyDest' && !input.viaTouch ? 'Holding R: click where they should go after resupplying' : input.speed !== 1 ? `${input.speed}× speed` : '';
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);

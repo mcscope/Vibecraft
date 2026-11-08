@@ -1,4 +1,5 @@
 // Player settings (control scheme etc.), remembered in localStorage.
+import { TOUCH, TOUCH_HELP } from './touch';
 
 export interface KeyMap {
   label: string;
@@ -95,7 +96,8 @@ export function mountSettingsDialog(): void {
     const s = current;
     const km = keymap();
     dlg.querySelector('.body')!.innerHTML = `
-      <h3>Controls</h3>
+      ${TOUCH ? `<h3>Touch</h3>${TOUCH_HELP}` : ''}
+      <h3>${TOUCH ? 'Keyboard' : 'Controls'}</h3>
       ${Object.entries(SCHEMES).map(([id, m]) => `
         <label class="opt"><input type="radio" name="scheme" value="${id}" ${s.scheme === id ? 'checked' : ''}>
           <b>${m.label}</b><span>${m.description}</span></label>`).join('')}
