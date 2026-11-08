@@ -5,7 +5,11 @@ import { PLAYABLE } from '../factions';
 import { TEAM_COLORS } from '../render/artbank';
 import type { ArtAnim, UnitArt } from '../art/contract';
 
+/** &team=<0-3>: which side's colours to bake in (the first, blue, by default). */
+const teamOf = (params: URLSearchParams) => TEAM_COLORS[+(params.get('team') ?? 0) % TEAM_COLORS.length];
+
 export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
+  if (params.get('teams')) return teamsPage(params);
   if (params.get('faction')) return roster(params);
   if (params.get('tunnels')) return tunnels(params.get('tunnels')!, Number(params.get('frames') ?? 30));
   if (params.get('concepts')) return gallery(params.get('concepts')!);
@@ -20,7 +24,7 @@ export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
   document.body.appendChild(out);
   if (!faction?.art) { out.textContent = `no art for ${id}`; return; }
   out.textContent = `baking ${id}…`;
-  const art = (await faction.art(TEAM_COLORS[0], undefined, [id])).units[id];
+  const art = (await faction.art(teamOf(params), undefined, [id])).units[id];
   if (art && anim === ('all' as ArtAnim)) { out.textContent = ''; return playAll(out, art, scale, params.get('facing') ?? '3'); }
   const found = art?.anims[anim];
   if (!found) { out.textContent = `${id} has no '${anim}' (has: ${Object.keys(art?.anims ?? {}).join(', ')})`; return; }
@@ -57,7 +61,7 @@ async function roster(params: URLSearchParams): Promise<void> {
   const facing = +(params.get('facing') ?? 2), scale = +(params.get('scale') ?? 2);
   document.body.style.background = '#5f7440';
   if (!faction?.art) return;
-  const art = await faction.art(TEAM_COLORS[0], undefined, faction.units.map((u) => u.id));
+  const art = await faction.art(teamOf(params), undefined, faction.units.map((u) => u.id));
   const units = faction.units.filter((u) => art.units[u.id]);
   const frames = units.map((u) => { const f = art.units[u.id].anims.idle.frames; return f[facing % f.length][0]; });
   const w = frames.map((s) => Math.max(130, (s.sw / s.q) * scale + 24)), h = Math.max(...frames.map((s) => (s.sh / s.q) * scale)) + 56;
@@ -124,7 +128,7 @@ async function building(params: URLSearchParams): Promise<void> {
   if (!spec) return;
   const { Baker } = await import('../kits/bake3d/baker');
   const baker = new Baker();
-  const b = baker.bakeBuilding(spec.model, spec.size, TEAM_COLORS[0]);
+  const team = teamOf(params), b = baker.bakeBuilding(spec.model, spec.size, team);
   // (&line=N: N pieces laid in an L along both of the map's axes, as the game places them, back to front on its tile grid)
   const line = +(params.get('line') ?? 0);
   if (line > 0) {
@@ -148,7 +152,7 @@ async function building(params: URLSearchParams): Promise<void> {
     const has = (x: number, y: number) => tiles.some(([a, c]) => a === x && c === y), n = spec.size, joined = new Map<number, typeof s>();
     for (const [tx, ty] of tiles) {
       const m = (has(tx + n, ty) ? 1 : 0) | (has(tx - n, ty) ? 2 : 0) | (has(tx, ty + n) ? 4 : 0) | (has(tx, ty - n) ? 8 : 0);
-      if (!joined.has(m)) joined.set(m, baker.bakeStatic((mb) => spec.model(mb, { phase: 'complete', level: 0, joins: m }), TEAM_COLORS[0], true, {}, n * Math.SQRT2 + 1.1));
+      if (!joined.has(m)) joined.set(m, baker.bakeStatic((mb) => spec.model(mb, { phase: 'complete', level: 0, joins: m }), team, true, {}, n * Math.SQRT2 + 1.1));
       const sj = joined.get(m)!, kj = scale / sj.q, [x, y] = iso(tx + n / 2, ty + n / 2);
       g.drawImage(sj.img, sj.sx, sj.sy, sj.sw, sj.sh, ox + x - sj.ax * kj, oy + y - sj.ay * kj, sj.sw * kj, sj.sh * kj);
     }
@@ -178,7 +182,7 @@ async function joinsPage(id: string): Promise<void> {
   const spec = PLAYABLE.flatMap((f) => f.buildings ?? []).find((b) => b.id === id) as unknown as { name: string; model: import('../kits/bake3d/types').BuildingModel; size: number; looks?: number } | undefined;
   if (!spec) return;
   const { Baker } = await import('../kits/bake3d/baker');
-  const art = new Baker().bakeBuilding(spec.model, spec.size, TEAM_COLORS[0], false, spec.looks ?? 1), joined = art.joined!;
+  const art = new Baker().bakeBuilding(spec.model, spec.size, teamOf(new URLSearchParams(location.search)), false, spec.looks ?? 1), joined = art.joined!;
   const box = scroller();
   box.style.cssText += ';padding:16px;color:#f3e7c4;font:600 14px Georgia, serif';
   const heading = (text: string, sub = '') => { const h = document.createElement('div'); h.innerHTML = `<div style="font-size:20px;margin:14px 0 2px">${text}</div><div style="font-weight:400;opacity:.8;margin-bottom:8px">${sub}</div>`; box.appendChild(h); };
@@ -235,6 +239,57 @@ async function joinsPage(id: string): Promise<void> {
   ];
   const r = row();
   for (const [name, tiles] of layouts) cell(r, draw(tiles, 0.9), name);
+}
+
+/** ?mode=sprites&teams=<faction>[&facing=1][&cell=170]: every unit (standing, one still) and every building (finished)
+ *  of a faction, a row each, in each of the four sides' colours side by side: to check its team colours read. Each row
+ *  drawn at its own scale to fill its cells, the same size cells throughout (so before and after shots line up). */
+async function teamsPage(params: URLSearchParams): Promise<void> {
+  const faction = PLAYABLE.find((f) => f.id === params.get('teams'));
+  if (!faction) return;
+  const facing = +(params.get('facing') ?? 1), CELL = +(params.get('cell') ?? 170), LABEL = 170, HEAD = 30;
+  const { Baker } = await import('../kits/bake3d/baker');
+  const baker = new Baker();
+  type Row = { name: string; sprites: import('../art/contract').Sprite[] };
+  const rows: Row[] = [];
+  for (const u of faction.units as unknown as Array<{ id: string; name: string; model: import('../kits/bake3d/types').UnitModel }>) {
+    const sprites = [];
+    for (const team of TEAM_COLORS) { const f = (await baker.bakeUnit(u.model, team, { dummy: true, frames: { idle: 1, die: 2 } })).anims.idle!.frames; sprites.push(f[facing % f.length][0]); }
+    rows.push({ name: u.name, sprites });
+  }
+  for (const b of (faction.buildings ?? []) as unknown as Array<{ name: string; model: import('../kits/bake3d/types').BuildingModel; size: number }>)
+    rows.push({ name: b.name, sprites: TEAM_COLORS.map((team) => baker.bakeBuilding(b.model, b.size, team).complete) });
+  baker.dispose();
+  const c = document.createElement('canvas');
+  c.width = LABEL + CELL * 4; c.height = HEAD + CELL * rows.length;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#5f7440'; g.fillRect(0, 0, c.width, c.height);
+  g.font = '600 15px Georgia, serif'; g.fillStyle = '#f3e7c4';
+  TEAM_COLORS.forEach((t, i) => { g.fillStyle = t.primary; g.fillRect(LABEL + i * CELL + 4, 4, CELL - 8, HEAD - 8); });
+  // each sprite's solid part (its body, not its soft shadow), so a row can be framed tight on it
+  const solid = (s: import('../art/contract').Sprite) => {
+    const t = document.createElement('canvas'); t.width = s.sw; t.height = s.sh;
+    const tg = t.getContext('2d', { willReadFrequently: true })!;
+    tg.drawImage(s.img, s.sx, s.sy, s.sw, s.sh, 0, 0, s.sw, s.sh);
+    const a = tg.getImageData(0, 0, s.sw, s.sh).data;
+    let x0 = s.sw, y0 = s.sh, x1 = 0, y1 = 0;
+    for (let y = 0; y < s.sh; y++) for (let x = 0; x < s.sw; x++) if (a[(y * s.sw + x) * 4 + 3] > 200) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+    return x1 < x0 ? { x0: 0, y0: 0, x1: s.sw, y1: s.sh } : { x0, y0, x1: x1 + 1, y1: y1 + 1 };
+  };
+  rows.forEach((r, ri) => {
+    const y0 = HEAD + ri * CELL, boxes = r.sprites.map(solid);
+    const big = Math.max(...boxes.map((b) => Math.max(b.x1 - b.x0, b.y1 - b.y0))), k = Math.min(6, (CELL - 12) / big); // (one scale across a row)
+    g.fillStyle = '#f3e7c4'; g.textAlign = 'left'; g.fillText(r.name, 8, y0 + CELL / 2);
+    r.sprites.forEach((s, i) => {
+      const b = boxes[i], cx = LABEL + i * CELL + CELL / 2, cy = y0 + CELL / 2;
+      g.strokeStyle = 'rgba(0,0,0,0.2)'; g.strokeRect(LABEL + i * CELL, y0, CELL, CELL);
+      g.save(); g.beginPath(); g.rect(LABEL + i * CELL, y0, CELL, CELL); g.clip();
+      g.drawImage(s.img, s.sx, s.sy, s.sw, s.sh, cx - ((b.x0 + b.x1) / 2) * k, cy - ((b.y0 + b.y1) / 2) * k, s.sw * k, s.sh * k); // (its body centred in its cell)
+      g.restore();
+    });
+  });
+  scroller().appendChild(c);
+  document.title = 'sprites ready';
 }
 
 function scroller(): HTMLElement {
