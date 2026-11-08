@@ -643,10 +643,14 @@ html.touch, .touch body {
 @media (max-width: 760px) and (orientation: portrait) {
   .touch #help { left: calc(8px + env(safe-area-inset-left)); top: calc(136px + env(safe-area-inset-top)); max-height: 28vh; }
 }
+/* phones: Resign as a flag, so it leaves the resources room */
 @media (max-width: 760px) {
-  .touch #topbar { padding-right: calc(124px + env(safe-area-inset-right)); }
-  .touch #resign { padding: 0 8px; font-size: 12.5px; }
+  .touch #topbar { padding-right: calc(108px + env(safe-area-inset-right)); }
+  .touch #resign { width: 44px; padding: 0; font-size: 0; }
+  .touch #resign::before { content: '⚑'; font-size: 20px; }
 }
+/* errors on a phone (no console to read): tap to dismiss */
+#touch-errors { position: fixed; left: 8px; right: 8px; top: calc(8px + env(safe-area-inset-top)); z-index: 100; padding: 8px 10px; font: 12px/1.35 ui-monospace, Menlo, monospace; color: #ffd0c8; background: rgba(60, 10, 6, 0.92); border: 1px solid #a33; overflow-wrap: anywhere; }
 @media (max-width: 520px) {
   .touch .armed-banner { top: calc(136px + env(safe-area-inset-top)); }
 }

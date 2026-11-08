@@ -8,7 +8,9 @@ import type { Input } from './input';
 export const TOUCH = ((): boolean => {
   const q = new URLSearchParams(location.search).get('touch');
   if (q === '1' || q === '0') return q === '1';
-  return matchMedia('(pointer: coarse)').matches || (navigator.maxTouchPoints > 0 && matchMedia('(hover: none)').matches);
+  if (matchMedia('(pointer: coarse)').matches || (navigator.maxTouchPoints > 0 && matchMedia('(hover: none)').matches)) return true;
+  // (some phone browsers report a fine pointer: a touch screen no wider than a tablet is a phone or tablet too)
+  return navigator.maxTouchPoints > 0 && 'ontouchstart' in window && Math.min(screen.width, screen.height) <= 900;
 })();
 
 /** How long a finger stays put to count as a long-press (ms). */
@@ -52,6 +54,23 @@ export function initTouchPage(): void {
   document.documentElement.classList.add('touch');
   // iOS Safari ignores user-scalable=no: stop its pinch-zoom of the page (the map has its own)
   for (const t of ['gesturestart', 'gesturechange']) document.addEventListener(t, (e) => e.preventDefault(), { passive: false });
+  // a phone has no console to read: show the first errors on screen, so a player can report them
+  let shown = 0;
+  const report = (what: string) => {
+    if (shown++ >= 3) return;
+    let box = document.getElementById('touch-errors');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'touch-errors';
+      box.addEventListener('click', () => box!.remove());
+      document.body.appendChild(box);
+    }
+    const line = document.createElement('div');
+    line.textContent = what.slice(0, 300);
+    box.appendChild(line);
+  };
+  window.addEventListener('error', (e) => report(`Error: ${e.message} (${(e.filename ?? '').split('/').pop()}:${e.lineno})`));
+  window.addEventListener('unhandledrejection', (e) => report(`Error: ${(e.reason as Error)?.message ?? String(e.reason)}`));
 }
 
 /** The render resolution: at most 2× (sprites are baked at ≤ 2×), and on a big touch screen few enough pixels to keep the frame rate. */
