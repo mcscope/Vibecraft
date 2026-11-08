@@ -6,8 +6,8 @@ import { packArt, unpackArt } from './prebaked';
 
 const DB = 'vibecraft-art', STORE = 'art';
 
-// every source file a bake reads, raw (Vite loads these only in dev, on demand)
-const SOURCES = import.meta.glob(['/src/factions/**/*.ts', '/src/kits/**/*.ts', '/src/biomes/**/*.ts', '/src/art/*.ts'], { query: '?raw', import: 'default' }) as Record<string, () => Promise<string>>;
+// every source file a bake reads, raw (Vite loads these only in dev, on demand); the map's, for the cliffs' height
+const SOURCES = import.meta.glob(['/src/factions/**/*.ts', '/src/kits/**/*.ts', '/src/biomes/**/*.ts', '/src/art/*.ts', '/src/sim/map.ts'],{ query: '?raw', import: 'default' }) as Record<string, () => Promise<string>>;
 
 /** FNV-1a over the text, twice with different seeds: 64 bits as hex. */
 function hash(text: string): string {

@@ -140,6 +140,9 @@ export const K = {
   woodStiffness: 11e9,
 } as const;
 
+/** Damage a crystal of `kg` gains falling `metres` (its m·g·h); none for a climb. */
+export const fallDamage = (kg: number, metres: number): number => kg * K.gravity * Math.max(0, metres) * K.damageScale;
+
 export interface DerivedStats {
   mass: number;
   physique: Physique;

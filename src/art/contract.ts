@@ -109,7 +109,7 @@ export interface BiomeArt {
   wildlife?: Record<string, UnitArt>;
   /** What a killed animal leaves behind (a gatherable food node). */
   carcass?: Sprite;
-  /** Rock tiles standing up as cliff: [look][joins] (joins: rock beside it, 1 +x, 2 −x, 4 +y, 8 −y); tiles take the looks in turn. */
+  /** Cliff, one level tall, for the tiles where the ground drops: [look][joins] (joins: cliff beside it, 1 +x, 2 −x, 4 +y, 8 −y); tiles take the looks in turn. */
   cliffs?: Sprite[][];
 }
 

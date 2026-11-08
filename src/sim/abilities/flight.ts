@@ -11,7 +11,7 @@
 // crystals fall further and hit harder, and they see further.
 import type { UnitSpec } from '../../factions/types';
 import { f1, n0 } from '../../ui/format';
-import { bodyHeight, K, M_PER_TILE, type DerivedStats } from '../physics';
+import { bodyHeight, fallDamage, K, M_PER_TILE, type DerivedStats } from '../physics';
 import type { Unit, World } from '../world';
 import type { Ability } from './index';
 
@@ -236,7 +236,7 @@ export const canReach = (attacker: Unit, target: Unit): boolean =>
 export const verticalReach = (u: Unit): number => 0.8 * bodyHeight(u.stats.mass) + Math.max(0, u.stats.range - u.stats.radius) * M_PER_TILE;
 
 /** Extra damage a crystal gains falling from flying height. */
-export const heightBonus = (u: Unit): number => (u.airborne ? u.crystalMass * K.gravity * u.alt * K.damageScale : 0);
+export const heightBonus = (u: Unit): number => (u.airborne ? fallDamage(u.crystalMass, u.alt) : 0);
 
 export const flight: Ability = {
   id: 'flight',

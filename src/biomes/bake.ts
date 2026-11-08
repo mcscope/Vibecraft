@@ -14,7 +14,7 @@ export interface BiomeModels {
   bush(b: ModelBuilder, level: number): void;
   mine(b: ModelBuilder, level: number): void;
   DOODADS: Record<'grass' | 'flowers' | 'stones' | 'forest', Array<(b: ModelBuilder) => void>>;
-  /** Its rock, standing up as cliff (default: common.cliff). */
+  /** Its cliffs, where the ground drops a level (default: common.cliff). */
   cliff?(b: ModelBuilder, joins: number, look: number): void;
 }
 
@@ -41,7 +41,7 @@ export async function bakeBiome(
   for (let i = 0; i < MINE_LEVELS; i++) mines.push(bake((b) => set.mine(b, i / (MINE_LEVELS - 1))));
   const shard = bake(common.shard), projectile = bake(common.projectile, false);
   const doodads = { grass: set.DOODADS.grass.map((f) => bake(f)), flowers: set.DOODADS.flowers.map((f) => bake(f)), stones: set.DOODADS.stones.map((f) => bake(f)), forest: set.DOODADS.forest.map((f) => bake(f)) };
-  // rock as cliff: each look joined to the rock beside it every way
+  // cliffs: each look joined to the cliff beside it every way
   const cliff = set.cliff ?? common.cliff, cliffs: Sprite[][] = [];
   for (let look = 0; look < common.CLIFF_LOOKS; look++) {
     cliffs.push(Array.from({ length: 16 }, (_, joins) => bake((b) => cliff(b, joins, look))));

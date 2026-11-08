@@ -24,7 +24,7 @@ import { beginMetamorph, canBecome, cancelBrood, feedChange, foodOwed, nearestHu
 import { isUnderfoot, loadBelt, nearestBelt, roadFactor, routeBelts, runBelts, type BeltRoutes, type Parcel } from './abilities/underfoot';
 import { grow, grownEnough, livingStats, seedMaterials } from './abilities/living';
 import {
-  bodyHeight, derive, deriveBuilding, loadedSpeed, CAP, K, M_PER_TILE, techCost, techGate, techTime,
+  bodyHeight, derive, deriveBuilding, fallDamage, loadedSpeed, CAP, K, M_PER_TILE, techCost, techGate, techTime,
   type BuildingStats, type DerivedStats,
 } from './physics';
 
@@ -58,6 +58,8 @@ export const RESOURCES: ResourceKind[] = ['food', 'wood', 'crystal'];
 /** Fog of war: how often sight is refreshed (ticks), and how far a building sees beyond its walls (tiles). */
 export const VISION_EVERY = 4;
 export const BUILDING_SIGHT = 4;
+/** High ground sees further: this many tiles more for each metre the ground stands up (2 tiles a level). */
+export const SIGHT_PER_M_UP = 0.8;
 /** Carters leave this much at the base so it can keep training workers. */
 
 export interface PlayerState {
@@ -1179,10 +1181,11 @@ export class World {
         if ((tx + 0.5 - x) ** 2 + (ty + 0.5 - y) ** 2 <= r * r) v[ty * W + tx] = 2;
       }
     };
-    for (const u of this.units.values()) stamp(u.owner, u.x, u.y, u.stats.sight + (u.airborne ? FLY_SIGHT : 0));
+    const up = (x: number, y: number) => this.grid.heightAt(x, y) * SIGHT_PER_M_UP;
+    for (const u of this.units.values()) stamp(u.owner, u.x, u.y, u.stats.sight + (u.airborne ? FLY_SIGHT : 0) + up(u.x, u.y));
     for (const b of this.buildings.values()) {
       const r = Math.max(b.size / 2 + BUILDING_SIGHT, b.complete && b.stats.tower ? b.stats.tower.range + 1 : 0);
-      stamp(b.owner, b.ox + b.size / 2, b.oy + b.size / 2, r);
+      stamp(b.owner, b.ox + b.size / 2, b.oy + b.size / 2, r + up(b.ox + b.size / 2, b.oy + b.size / 2));
     }
   }
 
@@ -1730,10 +1733,10 @@ export class World {
       const flight = bomb ? dropTime(u.alt) : Math.max(0.1, dm / (cv * Math.cos(0.5 * Math.asin(Math.min(1, (K.gravity * dm) / (cv * cv))))));
       let ax = tx, ay = ty;
       if (tu) [ax, ay] = leadPoint(u, tu, flight); // lead it by how it's been moving
+      const tz = !bomb && tu?.airborne && tu.alt > 0.5 ? leadAlt(tu, flight) : undefined;
       const p: Projectile = {
         id: this.nextId++, owner: u.owner, sx: u.x, sy: u.y, sz: bomb ? u.alt : 0, tx: ax, ty: ay, t: 0, duration: flight,
-        damage: u.stats.damage + heightBonus(u), crystalKg: u.crystalMass, target: targetId, drop: bomb || undefined,
-        tz: !bomb && tu?.airborne && tu.alt > 0.5 ? leadAlt(tu, flight) : undefined,
+        damage: u.stats.damage + heightBonus(u) + this.downhill(u.crystalMass, u.x, u.y, ax, ay, tz ?? 0), crystalKg: u.crystalMass, target: targetId, drop: bomb || undefined, tz,
       };
       this.projectiles.set(p.id, p);
     } else {
@@ -1851,8 +1854,14 @@ export class World {
   launch(owner: number, x: number, y: number, h: number, t: Unit, velocity: number, damage: number, kg: number): void {
     const flight = Math.max(0.3, (Math.hypot(t.x - x, t.y - y) * M_PER_TILE) / (velocity * 0.7)); // metres over its horizontal speed
     const [tx, ty] = leadPoint({ x, y }, t, flight);
-    const p: Projectile = { id: this.nextId++, owner, sx: x, sy: y, sz: h, tx, ty, t: 0, duration: flight, damage, crystalKg: kg, target: t.id, tz: t.airborne && t.alt > 0.5 ? leadAlt(t, flight) : undefined };
+    const tz = t.airborne && t.alt > 0.5 ? leadAlt(t, flight) : undefined;
+    const p: Projectile = { id: this.nextId++, owner, sx: x, sy: y, sz: h, tx, ty, t: 0, duration: flight, damage: damage + this.downhill(kg, x, y, tx, ty, tz ?? 0), crystalKg: kg, target: t.id, tz };
     this.projectiles.set(p.id, p);
+  }
+
+  /** What a crystal of `kg` gains thrown from the ground at (x, y) down to lower ground at (tx, ty) (`up` metres above it): its fall, m·g·Δh. */
+  private downhill(kg: number, x: number, y: number, tx: number, ty: number, up: number): number {
+    return fallDamage(kg, this.grid.heightAt(x, y) - this.grid.heightAt(tx, ty) - up);
   }
 
   private damage(id: number, amount: number, x: number, y: number): void {

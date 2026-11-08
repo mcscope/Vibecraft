@@ -69,6 +69,8 @@ Play the shipped factions in your browser at **[mcscope.com/game/vibecraft](http
 
 **Maps:** Woodlands, Steppe (after AoE2's Arabia), Water Donut, Cliff Maze, and Sunken Temple (after StarCraft's Lost Temple). Pick one in the menu. Online, the host picks.
 
+**High ground:** Cliff Maze and Sunken Temple have raised ground, ringed by cliffs and joined by ramps. Units up high see further, and the crystals they throw down hit harder.
+
 **Computer players** come in **Easy** and **Hard** (the default). Both play fair: they see only what their own units see, and use the same rules and commands as you. Hard thinks faster, runs a tighter economy, scouts, and counters what it has seen. It attacks once its army is stronger, focuses fire and pulls back hurt units. Easy reacts slowly and attacks in small waves.
 
 **Shortcut:** start a game straight from a URL, for example `?mode=skirmish&you=fenfolk&foe=meadowfolk&map=cliff-maze&seed=5&ai=easy`.
