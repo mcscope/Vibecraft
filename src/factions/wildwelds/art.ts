@@ -22,8 +22,12 @@ export function bakeArt(team: TeamColors, onProgress?: (f: number, label: string
   return bakeFaction({
     units, buildings,
     opts: bakeOpts,
-    // PLACEHOLDER flag: an egg; PLACEHOLDER music
-    flag: (baker) => baker.bakeStatic((b) => b.cylinder(0, 0.2, 0.3, [0, 0.35, 0], { team: 'primary', tex: 'none' }, undefined, 5), team),
+    // rally flag: a tall stalk with a banner of silk in the side's colour, a pale strand trailing from it; PLACEHOLDER music
+    flag: (baker) => baker.bakeStatic((b) => {
+      b.cylinder(0.035, 0.05, 1.8, [0, 0.9, 0], { color: '#5a4a30', tex: 'wood' }, undefined, 6);
+      b.box([0.03, 0.55, 0.8], [0, 1.5, 0.42], { team: 'primary', tex: 'none' });
+      b.cylinder(0.008, 0.008, 0.6, [0, 1.05, 0.8], { color: '#e8e4d8', tex: 'none' }, undefined, 4);
+    }, team),
     music: { scale: [0, 2, 3, 7, 8], root: 196, tempo: 76, lead: 'triangle', drone: 'sine' },
     label: (name) => `Hatching the ${name}s`,
   }, team, onProgress, only);

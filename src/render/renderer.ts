@@ -168,6 +168,8 @@ export class Renderer {
   /** Your side's work and army rally points (PlayerState.rally), always shown. */
   private sideFlags: PixiSprite[] = [];
   private ghostSprite: PixiSprite | null = null;
+  /** A dragged line (a wall): a ghost piece on each tile, joined to the pieces beside it. */
+  private ghostLine: PixiSprite[] = [];
   private textPool: Text[] = [];
 
   /** Whose fog of war to show; -1 (spectating) shows everything. */
@@ -753,6 +755,24 @@ export class Renderer {
         this.ghostSprite.visible = true;
       }
     } else if (this.ghostSprite) this.ghostSprite.visible = false;
+    // a dragged line: each piece ghosted, joined to the ones beside it in the line (the single ghost then hides)
+    const line = gh?.line ?? [], lineArt = gh && line.length > 1 ? this.bank.building(0, gh.specId) : undefined;
+    if (lineArt && this.ghostSprite) this.ghostSprite.visible = false;
+    const inLine = new Set(line.map(([x, y]) => `${x},${y}`));
+    line.forEach(([x, y, ok], i) => {
+      let sp = this.ghostLine[i];
+      if (!sp) { sp = this.ghostLine[i] = new PixiSprite(); this.objects.addChild(sp); }
+      if (!lineArt) { sp.visible = false; return; }
+      const has = (dx: number, dy: number) => inLine.has(`${x + dx},${y + dy}`);
+      const joins = (has(1, 0) ? 1 : 0) | (has(-1, 0) ? 2 : 0) | (has(0, 1) ? 4 : 0) | (has(0, -1) ? 8 : 0);
+      this.setFrame(sp, lineArt.joined ? lineArt.joined[(x + y) % lineArt.joined.length][joins] : lineArt.complete);
+      sp.position.set(isoX(x + 0.5, y + 0.5), isoY(x + 0.5, y + 0.5));
+      sp.zIndex = x + y + 1;
+      sp.alpha = 0.5;
+      sp.tint = ok ? 0xc8ffc8 : 0xff9a8a;
+      sp.visible = true;
+    });
+    for (let i = line.length; i < this.ghostLine.length; i++) this.ghostLine[i].visible = false;
     // fliers' shadows: their own silhouette (baked with the art), on the ground, falling away from the sun the higher
     // they fly: the bake's sun (upper left) puts a body h up h·(0.436, 0.417) of its screen lift right and down
     for (const u of w.units.values()) {
