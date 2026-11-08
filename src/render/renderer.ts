@@ -10,6 +10,7 @@ import { metamorphCost } from '../sim/abilities/metamorph';
 import { M_PER_TILE } from '../sim/physics';
 import { buildingSprite, throwFrame, unitShadow, unitSprite, UNITS_PER_TILE, type ArtAnim, type FrameTime, type Sprite, type UnitArt } from '../art/contract';
 import { gpuTexture } from '../art/gpu';
+import { TERRAIN_ROCK } from '../sim/map';
 import { TEAM_COLORS, type ArtBank } from './artbank';
 import { buildGround } from './ground';
 
@@ -259,9 +260,27 @@ export class Renderer {
     this.diamondTex = shapeTexture((c, w, h) => { c.strokeStyle = '#fff'; c.lineWidth = 5; c.beginPath(); c.moveTo(w / 2, 3); c.lineTo(w - 4, h / 2); c.lineTo(w / 2, h - 3); c.lineTo(4, h / 2); c.closePath(); c.stroke(); });
     // the ground: painted by a shader from small per-tile data (render/ground.ts), its clutter as sprites
     this.ground.addChild(buildGround(this.world, this.extraDirt, { biomes: this.bank.biomes, homes: this.world.homes }, (s) => this.texture(s)));
+    this.placeCliffs();
     // Upload every sprite sheet now, so the first swing or death of each unit
     // doesn't hitch mid-battle while its sheet goes to the GPU.
     for (const img of this.bank.allImages()) this.app.renderer.texture.initSource(this.source(img));
+  }
+
+  /** Rock stands up as cliff: a piece on each rock tile, joined to the rock beside it, with the trees (it never changes). */
+  private placeCliffs(): void {
+    const g = this.world.grid;
+    const rock = (x: number, y: number) => g.inBounds(x, y) && g.terrain[y * g.width + x] === TERRAIN_ROCK;
+    for (let y = 0; y < g.height; y++) for (let x = 0; x < g.width; x++) {
+      if (!rock(x, y)) continue;
+      const looks = this.bank.biomeAt(x + 0.5, y + 0.5).cliffs ?? this.bank.biome.cliffs;
+      if (!looks?.length) continue;
+      const joins = (rock(x + 1, y) ? 1 : 0) | (rock(x - 1, y) ? 2 : 0) | (rock(x, y + 1) ? 4 : 0) | (rock(x, y - 1) ? 8 : 0);
+      const sp = new PixiSprite();
+      this.setFrame(sp, looks[(x * 7 + y * 13) % looks.length][joins]);
+      sp.position.set(isoX(x + 0.5, y + 0.5), isoY(x + 0.5, y + 0.5));
+      sp.zIndex = x + y + 1;
+      this.trees.addChild(sp);
+    }
   }
 
   private source(img: CanvasImageSource): TextureSource {

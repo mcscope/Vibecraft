@@ -105,6 +105,7 @@ export class ArtBank {
     for (const b of new Set([this.biome, ...this.biomes])) {
       [...b.trees, ...b.bushes, ...b.mines, b.shard, b.projectile, ...Object.values(b.doodads).flat()].forEach(add);
       if (b.carcass) add(b.carcass);
+      b.cliffs?.flat().forEach(add);
     }
     for (const f of this.factions) {
       add(f.flag);
