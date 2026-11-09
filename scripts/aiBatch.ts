@@ -2,8 +2,7 @@
 // Every pairing of two different playable factions, both seats, on every skirmish map, a few seeds.
 //   npm run aibatch [seeds=2] [minutes=20] [jobs=8] [maps=all|a,b] [pairs=all|fenfolk-meadowfolk,...]
 // It runs `jobs` games at once (child processes) and prints one line per game, then the summary.
-// A game is decided by the engine's own winner, or as soon as one side is out by the victory rule
-// (no unit that fights, gathers or will become one, and no building that trains a gatherer).
+// A game is decided by the engine's own winner (its victory rule: sim/world.ts).
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { PLAYABLE } from '../src/factions';
@@ -38,19 +37,6 @@ interface Side {
 }
 interface Game { map: string; seed: number; factions: [string, string]; winner: number; minutes: number; firstFight: number; sides: Side[] }
 
-/** Is this side still in it by the victory rule? */
-function alive(w: World, p: number): boolean {
-  for (const u of w.units.values()) {
-    if (u.owner !== p || u.carter) continue;
-    const spec = w.specOf(p, u.specId)?.spec;
-    if (u.stats.canAttack || w.gathers(u) || spec?.becomes?.length) return true;
-  }
-  for (const b of w.buildings.values()) {
-    if (b.owner !== p || !b.complete) continue;
-    if ((b.spec.trains ?? []).some((id) => { const s = w.specOf(p, id); return s && s.spec.canGather !== false && !s.spec.bearer && id !== w.factionOf(p).carterId && (id === w.factionOf(p).workerId || !s.stats.canAttack || s.spec.tends); })) return true;
-  }
-  return false;
-}
 
 const isEcon = (w: World, u: Unit) => !u.carter && !w.isBearer(u) && w.gathers(u) && (u.specId === w.factionOf(u.owner).workerId || !u.stats.canAttack || !!w.specOf(u.owner, u.specId)?.spec.tends);
 const isArmy = (w: World, u: Unit) => !u.carter && u.stats.canAttack && !isEcon(w, u) && u.tame !== 'passive';
@@ -92,10 +78,6 @@ export function playGame(fa: string, fb: string, map: string, seed: number, minu
         const g = w.stats.totals[p].gathered;
         s.gatheredAt.push(Math.round(g.food + g.wood + g.crystal));
       }
-    }
-    if (winner < 0) {
-      const out = [0, 1].filter((p) => !alive(w, p));
-      if (out.length === 1) winner = 1 - out[0];
     }
   }
   for (let p = 0; p < 2; p++) {
