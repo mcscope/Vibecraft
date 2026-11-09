@@ -30,3 +30,19 @@ describe('victory', () => {
     expect(w.players[0].defeated).toBe(true);
   });
 });
+
+describe('victory in a battle with no production', () => {
+  test('a side with its army on the field and no buildings is not beaten; one with no army left is', async () => {
+    const { pitchedBattle, defaultDeployment } = await import('../src/sim/battle');
+    expect(typeof pitchedBattle).toBe('function');
+    const army = Object.fromEntries(meadowfolk.units.filter((u) => u.attack && u.id !== meadowfolk.workerId).slice(0, 2).map((u) => [u.id, 3]));
+    const w = new World({ seed: 3, scenario: pitchedBattle('open-steppe', [defaultDeployment(meadowfolk, army, 0), defaultDeployment(meadowfolk, army, 1)]), players: [{ name: 'A', faction: meadowfolk }, { name: 'B', faction: meadowfolk }] });
+    run(w);
+    expect(w.players[0].defeated).toBe(false);
+    expect(w.players[1].defeated).toBe(false);
+    for (const u of w.unitsOf(1)) w.units.delete(u.id);
+    run(w);
+    expect(w.players[1].defeated).toBe(true);
+    expect(w.winner).toBe(0);
+  });
+});

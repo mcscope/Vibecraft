@@ -2871,13 +2871,15 @@ export class World {
       this.events.push({ type: 'buildingDestroyed', id: b.id, owner: b.owner, x: b.ox + b.size / 2, y: b.oy + b.size / 2, size: b.size });
     }
     if (this.tick % TICK_RATE !== 0 || !this.scenario.victory) return;
-    // a side is beaten when it can't make anything any more: a side that trains from buildings, with no buildings
+    // a side is beaten when it can't make anything any more (in a battle with no production: when its army is gone): a side that trains from buildings, with no buildings
     // left (walls don't count); one that doesn't (it grows its own: the Wildwelds), with nothing left that lays or
     // changes into another form (its mothers and larvae, and the eggs and cocoons on their way to being larvae)
     for (const p of this.players) {
       if (p.defeated || p.neutral) continue;
       const trainsFromBuildings = (this.factionOf(p.id).buildings ?? []).some((b) => b.trains?.length);
-      const left = trainsFromBuildings
+      // (a battle with no production, the arena or a pitched battle: the army on the field is all there is)
+      const left = this.scenario.noProduction ? this.unitsOf(p.id).some((u) => u.stats.canAttack && !u.dummy)
+        : trainsFromBuildings
         ? this.buildingsOf(p.id).some((b) => !b.spec.wall)
         : this.unitsOf(p.id).some((u) => { const s = this.specOf(u.owner, u.specId)?.spec; return u.order.kind === 'metamorph' || !!s?.spawns?.length || !!s?.becomes?.length; });
       if (!left) p.defeated = true;
