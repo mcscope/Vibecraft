@@ -1728,7 +1728,7 @@ export class World {
       // buildings: walk to the open tile nearest the closest edge point
       const b = tb!;
       const ex = Math.max(b.ox - 0.5, Math.min(u.x, b.ox + b.size + 0.5)), ey = Math.max(b.oy - 0.5, Math.min(u.y, b.oy + b.size + 0.5));
-      const open = this.grid.nearestOpen(ex, ey, 4);
+      const open = this.openSpot(u, ex, ey, 4);
       if (open) this.moveTo(u, open[0], open[1], 0.1);
       return true;
     }
@@ -2120,7 +2120,7 @@ export class World {
       }
       return u.x !== u.px || u.y !== u.py;
     }
-    if (!drop) return false;
+    if (!drop) { this.finish(u); return false; } // (nowhere it can take it: it keeps it, free for other work)
     if (this.moveToBuilding(u, drop)) {
       this.deposit(u, drop);
       if (u.cal < u.stats.maxCalories * 0.5 && drop.stock.food > 1) {
@@ -2710,7 +2710,7 @@ export class World {
     if ((x - u.x) ** 2 + (y - u.y) ** 2 <= reach * reach) { u.path = []; return true; }
     if (!blocking) return this.moveTo(u, x, y, reach);
     // stand on an open tile right next to it (only if it's boxed in, the nearest open ground)
-    const open = this.besideSpot(u, Math.floor(x), Math.floor(y)) ?? this.grid.nearestOpen(x, y, 3);
+    const open = this.besideSpot(u, Math.floor(x), Math.floor(y)) ?? this.openSpot(u, x, y, 3);
     if (!open) return false;
     const there = this.moveTo(u, open[0], open[1], 0.15);
     const d2 = (x - u.x) ** 2 + (y - u.y) ** 2;
@@ -2718,12 +2718,24 @@ export class World {
     return d2 <= reach * reach || (there && d2 < (reach + 0.35) ** 2);
   }
 
-  /** The open tile beside tile (tx, ty) nearest to `u`: edge-on before corners, walled-in pockets skipped. Null if boxed in. */
+  /** The open tile nearest (x, y) that `u` can walk to (a flier: any open tile), within `maxR` if there's one. */
+  private openSpot(u: Unit, x: number, y: number, maxR: number): [number, number] | null {
+    const p = this.grid.nearestOpen(x, y, maxR);
+    const r = u.stats.flight ? -1 : this.grid.regionNear(u.x, u.y);
+    if (r < 0 || (p && this.grid.region(p[0], p[1]) === r)) return p;
+    return this.grid.nearestIn(r, x, y);
+  }
+
+  /**
+   * The open tile beside tile (tx, ty) nearest to `u`: edge-on before corners, walled-in pockets and ground it can't
+   * walk to (the foot of a cliff it stands on top of) skipped. Null if there's none.
+   */
   private besideSpot(u: Unit, tx: number, ty: number): [number, number] | null {
     let best: [number, number] | null = null, bestD = Infinity;
+    const r = u.stats.flight ? -1 : this.grid.regionNear(u.x, u.y);
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
       const cx = tx + dx + 0.5, cy = ty + dy + 0.5;
-      if ((!dx && !dy) || this.grid.isBlocked(cx, cy)) continue;
+      if ((!dx && !dy) || this.grid.isBlocked(cx, cy) || (r >= 0 && this.grid.region(cx, cy) !== r)) continue;
       const wayIn = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([ex, ey]) => !this.grid.isBlocked(cx + ex, cy + ey));
       if (!wayIn) continue;
       const d = (cx - u.x) ** 2 + (cy - u.y) ** 2 + (dx && dy ? 2 : 0);
@@ -2747,7 +2759,7 @@ export class World {
     const mx = b.ox + b.size / 2, my = b.oy + b.size / 2;
     const d = Math.sqrt((u.x - mx) ** 2 + (u.y - my) ** 2) || 1;
     const ax = mx + ((u.x - mx) / d) * (b.size / 2 + 0.6), ay = my + ((u.y - my) / d) * (b.size / 2 + 0.6);
-    const open = this.grid.nearestOpen(ax, ay, 4);
+    const open = this.openSpot(u, ax, ay, 4);
     if (!open) return false;
     if (this.moveTo(u, open[0], open[1], 0.2)) return true;
     return edgeDist2(b, u.x, u.y) <= reach * reach;
