@@ -153,14 +153,16 @@ export function mimicClear(): { gap: number; at: number; what: string } {
   return worst;
 }
 
-const SKIN: Mat = { color: '#3a4440', tex: 'skin', rough: 0.45 }, BANDED: Mat = { color: '#5fd0d6', tex: 'skin', rough: 0.35, metal: 0.2 };
+const SKIN: Mat = { color: '#3a4440', tex: 'skin', rough: 0.45 };
+/** Its tentacle's bands: a dark and a light tone of its side's colour, in turn. */
+const DARK: Mat = { team: 'primary', tex: 'skin', rough: 0.35 }, LIGHT: Mat = { team: 'light', tex: 'skin', rough: 0.35 };
 const PALE: Mat = { color: '#9fb3a8', tex: 'skin', rough: 0.4 }, PIT: Mat = { color: '#0d0a08', tex: 'none', rough: 1 };
 const TEAM: Mat = { team: 'primary', tex: 'none', rough: 0.6 }, SILK: Mat = { color: '#ece6d6', tex: 'none', rough: 0.85 };
 
 /**
  * The Mimic Mine (2 tiles): a crystal mine half again as big as the land's, with a burrow at its middle where the big
- * rock should be, its crystals evenly round it and leaning out, a few strands of silk between its rocks and a lump of
- * its side's colour at one's foot. `state.attack`: its throw at `t`, toward `facing` (radians, map axes).
+ * rock should be, its crystals evenly round it and leaning out, a few strands of silk between its rocks, a ring of
+ * its side's colour deep among its crystals, and its tentacle banded in its side's dark and light. `state.attack`: its throw at `t`, toward `facing` (radians, map axes).
  */
 export function webTower(b: ModelBuilder, state?: BuildingState): void {
   const t = state?.attack?.t, facing = state?.attack?.facing ?? 0;
@@ -171,13 +173,15 @@ export function webTower(b: ModelBuilder, state?: BuildingState): void {
   b.sphere([0.55, 0.2, 0.55], [0, 0.18, 0], { color: '#6f6a62', tex: 'stone', rough: 0.95 }); // its rim, worn
   const top = (i: number): Vec3 => [MINE.rocks[i].at[0], MINE.rocks[i].size * 1.1, MINE.rocks[i].at[2]];
   for (const [i, j] of [[0, 2], [3, 5], [1, 4]]) { const p = top(i), q = top(j); b.limb(p, [(p[0] + q[0]) / 2, Math.min(p[1], q[1]) * 0.6, (p[2] + q[2]) / 2], 0.006, SILK); }
-  b.sphere([0.14, 0.08, 0.14], [MINE.rocks[4].at[0] * 0.6, 0.06, MINE.rocks[4].at[2] * 0.6], TEAM);
+  // a ring of its side's colour deep among its crystals, low round their feet
+  const ring = (i: number): Vec3 => { const a = (i / 24) * Math.PI * 2; return [Math.cos(a) * CRYSTAL_R, 0.3, Math.sin(a) * CRYSTAL_R]; };
+  for (let i = 0; i < 24; i++) b.limb(ring(i), ring(i + 1), 0.08, TEAM);
   if (t === undefined) return;
   // the tentacle, turned to face its target (its pose is drawn throwing toward +x)
   b.joint([0, 0, 0], [0, -face * (Math.PI / 4), 0], (m) => {
     const { pts, r, hold } = mimicPose(t);
     for (let i = 0; i < pts.length - 1; i++) {
-      m.limb(pts[i], pts[i + 1], r[i], i % 3 === 1 && i < BODY ? BANDED : SKIN, r[i + 1]);
+      m.limb(pts[i], pts[i + 1], r[i], i % 3 === 1 && i < BODY ? (i % 6 === 1 ? DARK : LIGHT) : SKIN, r[i + 1]); // (banded in its side's dark and light, in turn)
       if (i > 1 && i < BODY && i % 2 === 0) for (const z of [1, -1]) m.sphere(r[i] * 0.3, [(pts[i][0] + pts[i + 1][0]) / 2, (pts[i][1] + pts[i + 1][1]) / 2, pts[i][2] + z * r[i] * 0.8], PALE);
     }
     // the crystal in its grip: held as it stood, gripped two thirds up (thrown, it's the sim's to fly)

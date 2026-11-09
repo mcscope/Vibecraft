@@ -31,13 +31,15 @@ export interface Pose {
 
 export type Vec3 = [number, number, number];
 
-/** Surface look. `tex` adds a procedural texture; `team: true` paints it in the team colour. */
+/** Surface look. `tex` adds a procedural texture; `team` paints it in a team colour: its `primary`, `secondary` or
+ *  `dark`, `light` (its primary lightened: with `primary`, a darker and a lighter tone of the side's own colour), or
+ *  `bright` (its primary lighter but as strong: a red stays red, where `light` turns it pink). */
 export interface Mat {
   color?: string;
   tex?: 'cloth' | 'fur' | 'wood' | 'stone' | 'thatch' | 'leather' | 'metal' | 'skin' | 'hair' | 'leaf' | 'plank' | 'brick' | 'shingle' | 'none';
   rough?: number;
   metal?: number;
-  team?: 'primary' | 'secondary';
+  team?: 'primary' | 'secondary' | 'dark' | 'light' | 'bright';
   emissive?: string;
 }
 
