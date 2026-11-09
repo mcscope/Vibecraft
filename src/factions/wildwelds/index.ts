@@ -27,16 +27,11 @@ const TIER = { 1: '#5fae3a', 2: '#2fb8c4', 3: '#b04fb8' } as const;
 /** The side's colour, for its markings: bands, plates, a crest, ribbons. Each body carries it in a few set places, so
  *  you can tell whose it is at a glance while its own colours stay its own. */
 const TEAM: Mat = { team: 'primary', tex: 'none', rough: 0.4 };
-/** A pale edge beside a team marking: it sets the marking off a body of a near colour (a green larva on the green side). */
-const RIM: Mat = { color: '#f2ead2', tex: 'none', rough: 0.5 };
 /** A dark and a light tone of the side's colour, used together: the fighters' markings. (The dark is its primary: the
  *  team's own `dark` is near black, lost on black chitin.) */
 const DARK: Mat = { team: 'primary', tex: 'none', rough: 0.4 }, LIGHT: Mat = { team: 'light', tex: 'none', rough: 0.4 };
 /** The side's colour lighter but as strong (a red stays red): the dragon fly's wing patches and the vimmer's rings. */
 const BRIGHT: Mat = { team: 'bright', tex: 'none', rough: 0.4 };
-/** TEMPORARY, for the user to choose: the vimmer's torso in its own dark (A, false) or its side's dark (B, true).
- *  The sprites page's teams sheet sets it (&vimmer=natural). Delete once chosen. */
-export const VIMMER_LOOK = { teamTorso: true };
 
 /**
  * Each look's drawn scale for a mass (a body's length grows with ∛ of its mass), and its footprint: the metres across
@@ -106,8 +101,8 @@ function drawVimmer(b: ModelBuilder, p: Pose, mass: number): void {
       }
     });
   };
-  // its torso: its own dark (A) or its side's dark (B), ringed bright in its side's colour either way
-  const body = (c: ModelBuilder) => spikeBody(c, p.armed, '#2a9aa6', 1, { saddle: false, body: VIMMER_LOOK.teamTorso ? { team: 'dark', tex: 'leather', rough: 0.3, metal: 0.35 } : undefined, rims: [BRIGHT, BRIGHT] });
+  // its torso its own dark, ringed bright in its side's colour
+  const body = (c: ModelBuilder) => spikeBody(c, p.armed, '#2a9aa6', 1, { saddle: false, rims: [BRIGHT, BRIGHT] });
   b.joint([0, 0, 0], [0, 0, 0], (o) => {
     // the V, `open` from folded tight back along its body (0) to spread (1), beating by `flap`. During a leap its
     // joints unfold in turn from the ones it stood on: `legs` (1 → 0) is how much the inner and outer joints still
@@ -591,7 +586,7 @@ function caterpillar(b: ModelBuilder, p: Pose, color: string, mass: number): voi
         if (!(seg === 0 && k === 0 && rise)) for (const z of [1, -1]) c.limb([x, 0.06 + up, z * r * 0.7], [x, 0.0, z * r * 1.0], 0.016, skin); // stubby legs
         else for (const z of [1, -1]) c.limb([x, 0.08 + up, z * r * 0.7], [x + 0.06, 0.04 + up, z * r * 1.0], 0.016, skin); // (raised: its front legs held up, curled)
       }
-      larvaMarks(c, seg, at(seg), lift, rise);
+      larvaStripe(c, seg, at(seg), lift, rise);
     }
     if (!segs.includes(0)) return;
     // giving: it rears its head up and over, takes the food off its back in its mouth, and dips to set it down in front
@@ -606,49 +601,21 @@ function caterpillar(b: ModelBuilder, p: Pose, color: string, mass: number): voi
   }, LOOK.caterpillar.scale(mass));
 }
 
-/** TEMPORARY, for the user to choose: how a larva wears its side's colour. 'dots' (on top of each segment), 'stripe'
- *  (A: one down the middle of its back, head to tail), 'stripes' (B: a pair along its upper sides), 'spots' (C: a spot
- *  on each side of each segment, like a caterpillar's breathing holes), 'saddle' (D: a patch over its middle segment),
- *  'tufts' (E: tufts of bristles standing up on its back). The sprites page's teams sheet sets it (&larva=…). */
-export const LARVA_LOOK: { marks: 'dots' | 'stripe' | 'stripes' | 'spots' | 'saddle' | 'tufts' } = { marks: 'dots' };
-
-/** A larva segment's markings in its side's colour (LARVA_LOOK): `x0` is where the segment is centred, `lift` its heave,
- *  `rise` how far its front is reared (gathering). */
-function larvaMarks(c: ModelBuilder, seg: number, x0: number, lift: number, rise: number): void {
+/** A larva segment's stripe of its side's colour, down the middle of its back (and, on the front segment, onto its
+ *  head), meeting the next segment's so it reads as one stripe head to tail. `x0` is where the segment is centred,
+ *  `lift` its heave, `rise` how far its front is reared (gathering). */
+function larvaStripe(c: ModelBuilder, seg: number, x0: number, lift: number, rise: number): void {
   // the segment's two balls, as caterpillar() draws them: centre x, y and radius
   const balls = [0, 1].map((k) => {
     const r = 0.1 - seg * 0.006 - k * 0.004;
     return { x: x0 + 0.065 - k * 0.13 - (seg === 0 && k === 0 ? 0.03 * rise : 0), y: r + lift + (seg === 0 ? rise * (k === 0 ? 0.11 : 0.035) : 0), r };
   });
   if (seg === 0) balls.push({ x: 0.22 - 0.04 * rise, y: 0.12 + 0.2 * rise, r: 0.11 / 1.05 }); // (its head, at rest: the stripe runs onto it)
-  // how high its skin is over (x, z): the highest of its balls there
-  const skin = (x: number, z: number) => Math.max(0, ...balls.map((b) => b.y + b.r * Math.sqrt(Math.max(0, 1 - ((x - b.x) / (1.05 * b.r)) ** 2 - (z / b.r) ** 2))));
-  const [front] = balls, look = LARVA_LOOK.marks;
-  if (look === 'dots') { // a dot on top of each segment, ringed pale
-    const y = front.y + front.r;
-    c.sphere([0.048, 0.016, 0.048], [front.x, y - 0.008, 0], RIM);
-    c.sphere([0.036, 0.018, 0.036], [front.x, y - 0.004, 0], TEAM);
-  } else if (look === 'stripe' || look === 'stripes') { // a stripe along its length, each segment's piece meeting the next's
-    const rad = look === 'stripe' ? 0.026 : 0.02, end = seg === 0 ? 0.27 : 0.15;
-    for (const z of look === 'stripe' ? [0] : [0.055, -0.055]) {
-      const pts: V3[] = [];
-      for (let x = -0.15; x <= end + 1e-6; x += 0.05) pts.push([x0 + x, skin(x0 + x, z) - rad * 0.4, z]);
-      for (let i = 1; i < pts.length; i++) c.limb(pts[i - 1], pts[i], rad, TEAM);
-    }
-  } else if (look === 'spots') { // a spot on each side of the segment, ringed pale
-    for (const z of [1, -1]) {
-      c.sphere([0.046, 0.046, 0.01], [front.x, front.y, z * front.r * 0.96], RIM);
-      c.sphere([0.034, 0.034, 0.014], [front.x, front.y, z * front.r * 0.98], TEAM);
-    }
-  } else if (look === 'saddle') { // a wide patch over its middle segment, wrapping over its back
-    if (seg === 1) c.sphere([0.16, front.r * 0.72, front.r * 1.03], [x0, front.r * 1.35 + lift, 0], TEAM);
-  } else { // tufts of bristles standing up on its back, one on each segment
-    const base: V3 = [front.x, front.y + front.r - 0.012, 0];
-    for (let j = 0; j < 7; j++) {
-      const a = (j / 7) * TAU, s = j === 0 ? 0 : 0.035;
-      c.limb(base, [base[0] + Math.cos(a) * s, base[1] + 0.1 - s * 0.6, Math.sin(a) * s], 0.012, BRIGHT, 0.004);
-    }
-  }
+  // how high its skin is along its back: the highest of its balls there
+  const skin = (x: number) => Math.max(0, ...balls.map((b) => b.y + b.r * Math.sqrt(Math.max(0, 1 - ((x - b.x) / (1.05 * b.r)) ** 2))));
+  const rad = 0.026, pts: V3[] = [];
+  for (let x = -0.15; x <= (seg === 0 ? 0.27 : 0.15) + 1e-6; x += 0.05) pts.push([x0 + x, skin(x0 + x) - rad * 0.4, 0]);
+  for (let i = 1; i < pts.length; i++) c.limb(pts[i - 1], pts[i], rad, TEAM);
 }
 
 /**
