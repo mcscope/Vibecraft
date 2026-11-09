@@ -8,14 +8,14 @@ import { esc } from './format';
 
 export interface BattleChoice { you: FactionSpec; foe: FactionSpec; mapId: string; budget: number; army: Army }
 
-const BUDGETS = [1000, 2000, 3500, 6000];
+const BUDGETS = [2000, 4000, 7000, 12000]; // (full prices, refinement undone: sim/battle.ts unitCost)
 
 export function draftBattle(params: URLSearchParams): Promise<BattleChoice> {
   return new Promise((done) => {
     let you = PLAYABLE.find((f) => f.id === params.get('you')) ?? PLAYABLE[0];
     let foe = PLAYABLE.find((f) => f.id === params.get('foe')) ?? PLAYABLE[1] ?? PLAYABLE[0];
     let mapId = params.get('map') && BATTLE_MAPS.some((m) => m.id === params.get('map')) ? params.get('map')! : BATTLE_MAPS[0].id;
-    let budget = +(params.get('budget') ?? 2000) || 2000;
+    let budget = +(params.get('budget') ?? 4000) || 4000;
     let army: Army = {};
     const box = document.createElement('div');
     box.id = 'battle-draft';

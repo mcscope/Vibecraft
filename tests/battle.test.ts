@@ -8,9 +8,9 @@ import { World } from '../src/sim/world';
 describe('pitched battle', () => {
   test("the computer's draft spends its budget, and includes a big unit when it can afford one", () => {
     for (const f of PLAYABLE) {
-      const army = aiDraft(f, 2000);
-      expect(armyCost(f, army), f.id).toBeLessThanOrEqual(2000);
-      expect(armyCost(f, army), f.id).toBeGreaterThan(1500);
+      const army = aiDraft(f, 4000);
+      expect(armyCost(f, army), f.id).toBeLessThanOrEqual(4000);
+      expect(armyCost(f, army), f.id).toBeGreaterThan(3000);
       expect(Object.keys(army).some((id) => (f.units.find((u) => u.id === id)?.mass ?? 0) > 150), f.id).toBe(true);
     }
   });

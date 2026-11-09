@@ -32,7 +32,11 @@ export const supplyCamp = (f: FactionSpec): BuildingSpec | undefined =>
   (f.buildings ?? []).filter((b) => !b.unbuildable && !b.attack && !b.wall && !b.living && !b.sow && !b.carters && !isUnderfoot(b))
     .sort((a, b) => a.materials - b.materials)[0];
 
-export const unitCost = (u: UnitSpec): number => derive(u).foodCost;
+/**
+ * A unit's price in a battle draft: its full food, its refinement undone. Refinement makes a unit cheaper by paying
+ * back the capital behind it (its buildings and research), and a battle has none, so here every body costs what it's made of.
+ */
+export const unitCost = (u: UnitSpec): number => Math.round(derive(u).foodCost * (u.refinement ?? 1));
 /** A camp costs its materials plus its stock. */
 export const campCost = (b: BuildingSpec): number => b.materials + CAMP_STOCK.food + CAMP_STOCK.crystal;
 export const armyCost = (f: FactionSpec, army: Army): number =>
@@ -64,7 +68,7 @@ export function aiDraft(f: FactionSpec, budget: number): Army {
       for (const u of pool) if (unitCost(u) <= money && unitCost(u) <= left) { army[u.id] = (army[u.id] ?? 0) + 1; money -= unitCost(u); left -= unitCost(u); bought = true; }
     }
   };
-  buy(front, 0.45); buy(shooters, 0.3 - (withCamp ? campCost(camp) / budget : 0)); buy(heavy, 0.25);
+  buy(front, 0.4); buy(shooters, 0.3 - (withCamp ? campCost(camp) / budget : 0)); buy(heavy, 0.3);
   const cheapest = [...units].sort((a, b) => unitCost(a) - unitCost(b))[0];
   if (cheapest) { const n = Math.floor(left / unitCost(cheapest)); if (n > 0) army[cheapest.id] = (army[cheapest.id] ?? 0) + n; }
   return army;

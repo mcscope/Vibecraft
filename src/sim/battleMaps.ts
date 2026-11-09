@@ -71,6 +71,24 @@ export const BATTLE_MAPS: BattleMapInfo[] = [
     }),
   },
   {
+    id: 'mesa', name: 'The Mesa',
+    description: 'A flat-topped hill in the middle, with a higher crown and a ramp up each face. Throw down from the top, or storm the ramps.',
+    generate: (seed) => field(seed, (m, c) => {
+      // the hill: level 1 out to a radius of 11, its crown level 2 within 5 (a little ragged at the rim)
+      for (let y = 0; y < BATTLE_SIZE; y++) for (let x = 0; x <= c; x++) {
+        const d = Math.hypot(x - c, y - c);
+        if (d < 11 + m.rng.range(-0.6, 0.6)) m.raise(x, y, d < 5 ? 2 : 1, true);
+      }
+      // ramps up each face: from the field to the hill (west, north; the mirror makes east and south), and onto the crown
+      for (let k = -2; k <= 2; k++) {
+        for (let x = Math.round(c) - 13; x <= Math.round(c) - 9; x++) m.ramp(x, Math.round(c) + k);
+        for (let y = Math.round(c) - 13; y <= Math.round(c) - 9; y++) m.ramp(Math.round(c) + k, y);
+        for (let x = Math.round(c) - 7; x <= Math.round(c) - 3; x++) m.ramp(x, Math.round(c) + k);
+      }
+      m.forest(c - 16, 8, 2.2, 0.7);
+    }),
+  },
+  {
     id: 'lake-lanes', name: 'Lake Lanes',
     description: 'A wide lake fills the centre and splits the battle into a north lane and a south lane. Win one, then turn on the other.',
     generate: (seed) => field(seed, (m, c) => {
