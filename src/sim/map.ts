@@ -61,7 +61,69 @@ export class Grid {
   block(x: number, y: number, delta: 1 | -1): void {
     if (!this.inBounds(x, y)) return;
     const i = this.idx(x, y);
+    const was = this.blocked[i] > 0;
     this.blocked[i] = Math.max(0, this.blocked[i] + delta);
+    if (was !== this.blocked[i] > 0) this.regions = null;
+  }
+  /** Each open tile's region (tiles a walker can get between share one), -1 if blocked. Worked out again after blocking changes. */
+  private regions: Int32Array | null = null;
+  /** The region of the open tile at (x, y), or -1 if it's blocked. */
+  region(x: number, y: number): number {
+    if (!this.inBounds(x, y)) return -1;
+    if (!this.regions) this.regions = this.floodRegions();
+    return this.regions[this.idx(x, y)];
+  }
+  /** Flood fill the open ground, 4-way (paths cut no corners, so that's the same as 8-way with no corner cutting). */
+  private floodRegions(): Int32Array {
+    const W = this.width, N = W * this.height, out = new Int32Array(N).fill(-1), q = new Int32Array(N);
+    let next = 0;
+    for (let s = 0; s < N; s++) {
+      if (out[s] >= 0 || this.blocked[s]) continue;
+      let head = 0, tail = 0;
+      out[s] = next; q[tail++] = s;
+      while (head < tail) {
+        const i = q[head++], x = i % W;
+        for (const j of [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, i - W, i + W]) {
+          if (j < 0 || j >= N || out[j] >= 0 || this.blocked[j]) continue;
+          out[j] = next; q[tail++] = j;
+        }
+      }
+      next++;
+    }
+    return out;
+  }
+  /** The region a walker at (x, y) is in: its tile's, or (on a blocked tile) the nearest open tile's. */
+  regionNear(x: number, y: number): number {
+    const r = this.region(x, y);
+    if (r >= 0) return r;
+    const p = this.nearestOpen(x, y, 3);
+    return p ? this.region(p[0], p[1]) : -1;
+  }
+  /** Can a walker in region `r` get to (x, y), or right beside it (a tree, a rock, a building's tile)? */
+  reaches(r: number, x: number, y: number): boolean {
+    const cx = Math.floor(x), cy = Math.floor(y);
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (this.region(cx + dx, cy + dy) === r) return true;
+    return false;
+  }
+  /** Can a walker in region `r` get right up to the w×h block of tiles at (ox, oy)? */
+  reachesRect(r: number, ox: number, oy: number, w: number, h: number): boolean {
+    for (let y = oy - 1; y <= oy + h; y++) for (let x = ox - 1; x <= ox + w; x++) {
+      if (x >= ox && x < ox + w && y >= oy && y < oy + h) continue;
+      if (this.region(x, y) === r) return true;
+    }
+    return false;
+  }
+  /** The centre of the tile in region `r` nearest to (x, y) (the tile itself if it's in `r`), or null if `r` has none. */
+  nearestIn(r: number, x: number, y: number): [number, number] | null {
+    if (this.region(x, y) === r) return [Math.floor(x) + 0.5, Math.floor(y) + 0.5];
+    const W = this.width;
+    let best = -1, bestD = Infinity;
+    for (let i = 0; i < W * this.height; i++) {
+      if (this.regions![i] !== r) continue;
+      const d = ((i % W) + 0.5 - x) ** 2 + (Math.floor(i / W) + 0.5 - y) ** 2;
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    return best < 0 ? null : [(best % W) + 0.5, Math.floor(best / W) + 0.5];
   }
   lineClear(ax: number, ay: number, bx: number, by: number): boolean {
     const dx = bx - ax, dy = by - ay;
@@ -75,16 +137,17 @@ export class Grid {
     }
     return true;
   }
-  /** Nearest unblocked tile center to (x,y), searching outward in rings. */
-  nearestOpen(x: number, y: number, maxR = 12): [number, number] | null {
+  /** Nearest unblocked tile center to (x,y), searching outward in rings. `level`: only tiles on that ground level. */
+  nearestOpen(x: number, y: number, maxR = 12, level = -1): [number, number] | null {
     const cx = Math.floor(x), cy = Math.floor(y);
-    if (!this.isBlocked(cx, cy)) return [cx + 0.5, cy + 0.5];
+    const open = (tx: number, ty: number) => !this.isBlocked(tx, ty) && (level < 0 || this.level[ty * this.width + tx] === level);
+    if (open(cx, cy)) return [cx + 0.5, cy + 0.5];
     let best: [number, number] | null = null, bestD = Infinity;
     for (let r = 1; r <= maxR; r++) {
       for (let oy = -r; oy <= r; oy++) for (let ox = -r; ox <= r; ox++) {
         if (Math.max(Math.abs(ox), Math.abs(oy)) !== r) continue;
         const tx = cx + ox, ty = cy + oy;
-        if (this.isBlocked(tx, ty)) continue;
+        if (!open(tx, ty)) continue;
         const d = (tx + 0.5 - x) ** 2 + (ty + 0.5 - y) ** 2;
         if (d < bestD) { bestD = d; best = [tx + 0.5, ty + 0.5]; }
       }
