@@ -1354,6 +1354,7 @@ export class World {
   }
 
   private tickUnit(u: Unit): void {
+    if (!u.airborne && this.grid.isBlocked(u.x, u.y)) this.stepOut(u);
     if (u.dummy) { u.animT += DT; this.coast(u); return; } // inert, but a body: shoved, it slides to a stop
     const st = u.stats;
     if (u.wild || u.tame) u.cal = st.maxCalories; // they graze
@@ -1428,6 +1429,7 @@ export class World {
       case 'graze': return this.runGraze(u, o.node);
       case 'metamorph': return runMetamorph(this, u, o, DT);
       case 'move': {
+        this.reachableGoal(u, o);
         const pass = u.queue.length > 0; // more orders after this one: ride on through the waypoint, don't pull up
         // (sent off with an enemy close by, it runs: getting clear of a fight, to come back in at a charge)
         if (this.moveTo(u, o.x, o.y, pass ? 0.8 : 0.3, !u.airborne && this.enemyNear(u, K.sprintRange), pass)) { this.finish(u); u.faceTo = o.face ?? null; }
@@ -1435,11 +1437,12 @@ export class World {
       }
       case 'attackMove': {
         if (this.runEngage(u)) return u.x !== u.px || u.y !== u.py;
+        this.reachableGoal(u, o);
         if (this.moveTo(u, o.x, o.y, u.queue.length ? 0.8 : 0.5, !!o.charge, u.queue.length > 0 || !!o.charge)) { this.finish(u); u.faceTo = o.face ?? null; } // a charge sprints there and runs on
         return u.x !== u.px || u.y !== u.py;
       }
       case 'attack': {
-        if (!this.attackTarget(u, o.target)) this.finish(u);
+        if (!this.canFight(u, o.target) || !this.attackTarget(u, o.target)) this.finish(u); // (one it can't get at: cut off by a cliff or water)
         return u.x !== u.px || u.y !== u.py;
       }
       case 'gather': return this.runGather(u, o);
@@ -1454,6 +1457,29 @@ export class World {
       case 'layDown': return runLayDown(this, u, o.site);
       case 'cart': return this.logistics.runCart(u, o);
     }
+  }
+
+  /** Sent somewhere it can't walk to (up a cliff, into a pond, onto a tree): it goes as close as it can get instead. */
+  private reachableGoal(u: Unit, o: { x: number; y: number }): void {
+    if (u.stats.flight) return;
+    const r = this.grid.regionNear(u.x, u.y);
+    if (r < 0 || this.grid.region(o.x, o.y) === r) return;
+    const p = this.grid.nearestIn(r, o.x, o.y);
+    if (p) { o.x = p[0]; o.y = p[1]; }
+  }
+
+  /**
+   * On a blocked tile (something was put down where it stood: a tree sown, a carcass, a wall): it steps off onto the
+   * nearest open ground on the same level (any open ground if there's none close), just over the tile's edge.
+   */
+  private stepOut(u: Unit): void {
+    const i = this.grid.idx(u.x, u.y);
+    const p = this.grid.nearestOpen(u.x, u.y, 3, this.grid.level[i]) ?? this.grid.nearestOpen(u.x, u.y, 12);
+    if (!p) return;
+    const m = 0.1, tx = p[0] - 0.5, ty = p[1] - 0.5;
+    u.x = Math.max(tx + m, Math.min(tx + 1 - m, u.x));
+    u.y = Math.max(ty + m, Math.min(ty + 1 - m, u.y));
+    u.path = []; u.repathIn = 0;
   }
 
   /** Complete the current order, returning to a resumed one if present. */
@@ -1582,7 +1608,7 @@ export class World {
       // it keeps after what it's fighting while it's within its sight or its charge distance (the run-up it needs, its
       // reach, and a margin: as far as it rides out to come round again); beyond that it lets it go
       const keep = through ? reach + 0.5 : Math.max(u.stats.sight * 1.5, runUpTiles(u) + u.stats.range + 4);
-      if (p && (p[0] - u.x) ** 2 + (p[1] - u.y) ** 2 < keep * keep && this.attackTarget(u, u.engage)) return true;
+      if (p && (p[0] - u.x) ** 2 + (p[1] - u.y) ** 2 < keep * keep && this.canFight(u, u.engage) && this.attackTarget(u, u.engage)) return true;
       u.engage = 0;
     }
     if ((this.tick + u.id) % 5 !== 0 && !had) return false; // (its target just gone: it looks for the next at once, not turning back to its way first)
@@ -1702,7 +1728,7 @@ export class World {
       // buildings: walk to the open tile nearest the closest edge point
       const b = tb!;
       const ex = Math.max(b.ox - 0.5, Math.min(u.x, b.ox + b.size + 0.5)), ey = Math.max(b.oy - 0.5, Math.min(u.y, b.oy + b.size + 0.5));
-      const open = this.grid.nearestOpen(ex, ey, 4);
+      const open = this.openSpot(u, ex, ey, 4);
       if (open) this.moveTo(u, open[0], open[1], 0.1);
       return true;
     }
@@ -1963,15 +1989,29 @@ export class World {
       // animals: only on an explicit attack-move, or when one is attacking one of ours (defend, don't hunt)
       if (e.wild && !includeDummies && !(e.engage && this.units.get(e.engage)?.owner === u.owner)) continue;
       const d = (e.x - u.x) ** 2 + (e.y - u.y) ** 2;
-      if (d < bestD) { bestD = d; best = e.id; }
+      if (d < bestD && this.canFight(u, e.id)) { bestD = d; best = e.id; }
     }
     if (best) return best;
     for (const b of this.buildings.values()) {
       if (b.owner === u.owner || (!includeDummies && this.scenario.inertPlayers?.includes(b.owner))) continue;
       const d = edgeDist2(b, u.x, u.y);
-      if (d < bestD) { bestD = d; best = b.id; }
+      if (d < bestD && this.canFight(u, b.id)) { bestD = d; best = b.id; }
     }
     return best;
+  }
+
+  /**
+   * Can `u` get at an enemy (a body or a building) from where it stands: it can walk up to it, or it's in reach already
+   * (a thrower across a cliff), or one of them is in the air (that's down to canReach and flight).
+   */
+  private canFight(u: Unit, id: number): boolean {
+    const e = this.units.get(id), b = e ? undefined : this.buildings.get(id);
+    if (e) {
+      if (e.airborne || u.airborne || this.canGetTo(u, e.x, e.y)) return true;
+      return Math.hypot(e.x - u.x, e.y - u.y) - e.stats.radius <= u.stats.range;
+    }
+    if (!b) return false;
+    return this.canGetToBuilding(u, b) || Math.sqrt(edgeDist2(b, u.x, u.y)) <= Math.max(u.stats.range, 1);
   }
 
   // ───────────────────────────── economy ─────────────────────────────
@@ -2002,6 +2042,12 @@ export class World {
       if (next) { o.node = next.id; o.phase = 'toNode'; node = next; }
       else if (this.cargo(u) > 0.5 && !o.stopWhenArmed && !bearer) o.phase = 'toDrop';
       else { this.finish(u); return false; }
+    }
+    if (o.phase === 'toNode' && !this.canGetTo(u, node!.x, node!.y)) {
+      // (sent to one it can't get to, on ground no ramp joins to its own: the nearest of that kind it can)
+      const next = this.nearestNode(u, o.nodeType, 40, !!node!.shard, node);
+      if (!next) { this.finish(u); return false; }
+      o.node = next.id; node = next;
     }
     if (o.phase === 'toNode') {
       const n = node!;
@@ -2074,7 +2120,7 @@ export class World {
       }
       return u.x !== u.px || u.y !== u.py;
     }
-    if (!drop) return false;
+    if (!drop) { this.finish(u); return false; } // (nowhere it can take it: it keeps it, free for other work)
     if (this.moveToBuilding(u, drop)) {
       this.deposit(u, drop);
       if (u.cal < u.stats.maxCalories * 0.5 && drop.stock.food > 1) {
@@ -2133,7 +2179,7 @@ export class World {
     // gather food: the nearest source, a trip at a time
     if (!o.g || o.g.phase === 'toDrop' || !this.nodes.get(o.g.node)) {
       const at = o.at ?? this.players[u.owner]?.rally.work;
-      const n = at ? this.nearestNodeTo(at[0], at[1], 'food', 40) ?? this.nearestNode(u, 'food', 40, false) : this.nearestNode(u, 'food', 40, false);
+      const n = at ? this.nearestNodeTo(at[0], at[1], 'food', 40, false, undefined, u) ?? this.nearestNode(u, 'food', 40, false) : this.nearestNode(u, 'food', 40, false);
       if (!n) return false;
       o.g = { kind: 'gather', node: n.id, nodeType: 'food', phase: 'toNode', stopWhenArmed: false };
     }
@@ -2401,19 +2447,31 @@ export class World {
   /** Carts: load at the pool's building, take it where it's most needed, repeat. */
   /** @internal sim helper, also used by abilities */
   nearestNode(u: Unit, type: ResourceKind, radius: number, shardsOnly: boolean, exclude?: ResourceNode): ResourceNode | null {
-    return this.nearestNodeTo(u.x, u.y, type, radius, shardsOnly, exclude);
+    return this.nearestNodeTo(u.x, u.y, type, radius, shardsOnly, exclude, u);
   }
 
-  /** The nearest resource of a kind to a point, within `radius`. */
-  nearestNodeTo(x: number, y: number, type: ResourceKind, radius: number, shardsOnly = false, exclude?: ResourceNode): ResourceNode | null {
+  /** The nearest resource of a kind to a point, within `radius`. `by`: only one that body can get to. */
+  nearestNodeTo(x: number, y: number, type: ResourceKind, radius: number, shardsOnly = false, exclude?: ResourceNode, by?: Unit): ResourceNode | null {
     let best: ResourceNode | null = null, bestD = radius * radius;
     for (const n of this.nodes.values()) {
       if (n.type !== type || n.amount <= 0.001 || n === exclude) continue;
       if (shardsOnly && !n.shard) continue;
       const d = (n.x - x) ** 2 + (n.y - y) ** 2;
-      if (d < bestD) { bestD = d; best = n; }
+      if (d < bestD && (!by || this.canGetTo(by, n.x, n.y))) { bestD = d; best = n; }
     }
     return best;
+  }
+
+  /** @internal sim helper. Can `u` get to (x, y) (or right beside it, for something that blocks its tile)? A flier gets anywhere. */
+  canGetTo(u: Unit, x: number, y: number): boolean {
+    return !!u.stats.flight || this.grid.reaches(this.grid.regionNear(u.x, u.y), x, y);
+  }
+
+  /** @internal sim helper. Can `u` get right up to building `b`? */
+  canGetToBuilding(u: Unit, b: Building): boolean {
+    if (u.stats.flight) return true;
+    const r = this.grid.regionNear(u.x, u.y);
+    return isUnderfoot(b.spec) ? this.grid.reaches(r, b.ox, b.oy) : this.grid.reachesRect(r, b.ox, b.oy, b.size, b.size);
   }
 
   /** Nearest of the unit's finished buildings matching a test. */
@@ -2423,7 +2481,7 @@ export class World {
     for (const b of this.buildings.values()) {
       if (b.owner !== u.owner || !b.complete || isUnderfoot(b.spec) || b.spec.wall || !test(b)) continue; // roads, belts and walls hold nothing
       const d = (b.ox + b.size / 2 - u.x) ** 2 + (b.oy + b.size / 2 - u.y) ** 2;
-      if (d < bestD) { bestD = d; best = b; }
+      if (d < bestD && this.canGetToBuilding(u, b)) { bestD = d; best = b; }
     }
     return best;
   }
@@ -2652,7 +2710,7 @@ export class World {
     if ((x - u.x) ** 2 + (y - u.y) ** 2 <= reach * reach) { u.path = []; return true; }
     if (!blocking) return this.moveTo(u, x, y, reach);
     // stand on an open tile right next to it (only if it's boxed in, the nearest open ground)
-    const open = this.besideSpot(u, Math.floor(x), Math.floor(y)) ?? this.grid.nearestOpen(x, y, 3);
+    const open = this.besideSpot(u, Math.floor(x), Math.floor(y)) ?? this.openSpot(u, x, y, 3);
     if (!open) return false;
     const there = this.moveTo(u, open[0], open[1], 0.15);
     const d2 = (x - u.x) ** 2 + (y - u.y) ** 2;
@@ -2660,12 +2718,24 @@ export class World {
     return d2 <= reach * reach || (there && d2 < (reach + 0.35) ** 2);
   }
 
-  /** The open tile beside tile (tx, ty) nearest to `u`: edge-on before corners, walled-in pockets skipped. Null if boxed in. */
+  /** The open tile nearest (x, y) that `u` can walk to (a flier: any open tile), within `maxR` if there's one. */
+  private openSpot(u: Unit, x: number, y: number, maxR: number): [number, number] | null {
+    const p = this.grid.nearestOpen(x, y, maxR);
+    const r = u.stats.flight ? -1 : this.grid.regionNear(u.x, u.y);
+    if (r < 0 || (p && this.grid.region(p[0], p[1]) === r)) return p;
+    return this.grid.nearestIn(r, x, y);
+  }
+
+  /**
+   * The open tile beside tile (tx, ty) nearest to `u`: edge-on before corners, walled-in pockets and ground it can't
+   * walk to (the foot of a cliff it stands on top of) skipped. Null if there's none.
+   */
   private besideSpot(u: Unit, tx: number, ty: number): [number, number] | null {
     let best: [number, number] | null = null, bestD = Infinity;
+    const r = u.stats.flight ? -1 : this.grid.regionNear(u.x, u.y);
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
       const cx = tx + dx + 0.5, cy = ty + dy + 0.5;
-      if ((!dx && !dy) || this.grid.isBlocked(cx, cy)) continue;
+      if ((!dx && !dy) || this.grid.isBlocked(cx, cy) || (r >= 0 && this.grid.region(cx, cy) !== r)) continue;
       const wayIn = [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([ex, ey]) => !this.grid.isBlocked(cx + ex, cy + ey));
       if (!wayIn) continue;
       const d = (cx - u.x) ** 2 + (cy - u.y) ** 2 + (dx && dy ? 2 : 0);
@@ -2689,7 +2759,7 @@ export class World {
     const mx = b.ox + b.size / 2, my = b.oy + b.size / 2;
     const d = Math.sqrt((u.x - mx) ** 2 + (u.y - my) ** 2) || 1;
     const ax = mx + ((u.x - mx) / d) * (b.size / 2 + 0.6), ay = my + ((u.y - my) / d) * (b.size / 2 + 0.6);
-    const open = this.grid.nearestOpen(ax, ay, 4);
+    const open = this.openSpot(u, ax, ay, 4);
     if (!open) return false;
     if (this.moveTo(u, open[0], open[1], 0.2)) return true;
     return edgeDist2(b, u.x, u.y) <= reach * reach;

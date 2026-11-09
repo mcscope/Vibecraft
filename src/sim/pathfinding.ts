@@ -51,49 +51,47 @@ function octile(ax: number, ay: number, bx: number, by: number): number {
 }
 
 /**
- * Returns tile-center waypoints from start (exclusive) to goal (inclusive),
- * or null. If goal is blocked, paths to the nearest reachable tile instead.
+ * Returns tile-center waypoints from start (exclusive) to goal (inclusive), or null if there's nowhere to go. A goal
+ * the walker can't get to (blocked, or on ground no ramp or gap joins to its own) is swapped for the tile nearest it
+ * that it can, so it always heads as close as it can get.
  */
-export function findPath(grid: Grid, sx: number, sy: number, gx: number, gy: number, maxNodes = 6000): Array<[number, number]> | null {
-  const W = grid.width, H = grid.height;
-  sx = Math.floor(sx); sy = Math.floor(sy); gx = Math.floor(gx); gy = Math.floor(gy);
+export function findPath(grid: Grid, sx: number, sy: number, gx: number, gy: number): Array<[number, number]> | null {
+  const W = grid.width;
   if (!grid.inBounds(gx, gy) || !grid.inBounds(sx, sy)) return null;
+  const to = grid.nearestIn(grid.regionNear(sx, sy), gx, gy);
+  if (!to) return null;
+  sx = Math.floor(sx); sy = Math.floor(sy); gx = Math.floor(to[0]); gy = Math.floor(to[1]);
   if (sx === gx && sy === gy) return [];
   const start = sy * W + sx;
   const goal = gy * W + gx;
-  const g = new Map<number, number>();
-  const came = new Map<number, number>();
+  const N = W * grid.height;
+  const g = new Float64Array(N).fill(Infinity);
+  const came = new Int32Array(N).fill(-1);
   const open = new MinHeap();
-  g.set(start, 0);
+  g[start] = 0;
   open.push(start, octile(sx, sy, gx, gy));
-  let best = start, bestH = octile(sx, sy, gx, gy);
-  let expanded = 0;
-  while (open.size > 0 && expanded < maxNodes) {
+  while (open.size > 0) {
     const cur = open.pop();
-    if (cur === goal) { best = cur; break; }
-    expanded++;
+    if (cur === goal) break;
     const cx = cur % W, cy = (cur / W) | 0;
-    const cg = g.get(cur)!;
+    const cg = g[cur];
     for (const [dx, dy, cost] of DIRS) {
       const nx = cx + dx, ny = cy + dy;
-      if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+      if (nx < 0 || ny < 0 || nx >= W || ny >= grid.height) continue;
       const n = ny * W + nx;
       if (grid.blocked[n]) continue;
       // no corner cutting
       if (dx !== 0 && dy !== 0 && (grid.blocked[cy * W + nx] || grid.blocked[ny * W + cx])) continue;
       const ng = cg + cost;
-      const old = g.get(n);
-      if (old !== undefined && old <= ng) continue;
-      g.set(n, ng);
-      came.set(n, cur);
-      const h = octile(nx, ny, gx, gy);
-      if (h < bestH) { bestH = h; best = n; }
-      open.push(n, ng + h * 1.001);
+      if (g[n] <= ng) continue;
+      g[n] = ng;
+      came[n] = cur;
+      open.push(n, ng + octile(nx, ny, gx, gy) * 1.001);
     }
   }
-  if (best === start) return null;
+  if (came[goal] < 0) return null;
   const out: Array<[number, number]> = [];
-  for (let c = best; c !== start; c = came.get(c)!) out.push([(c % W) + 0.5, ((c / W) | 0) + 0.5]);
+  for (let c = goal; c !== start; c = came[c]) out.push([(c % W) + 0.5, ((c / W) | 0) + 0.5]);
   out.reverse();
   return smooth(grid, sx + 0.5, sy + 0.5, out);
 }
