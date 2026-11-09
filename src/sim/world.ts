@@ -2780,17 +2780,16 @@ export class World {
       this.events.push({ type: 'buildingDestroyed', id: b.id, owner: b.owner, x: b.ox + b.size / 2, y: b.oy + b.size / 2, size: b.size });
     }
     if (this.tick % TICK_RATE !== 0 || !this.scenario.victory) return;
-    // a side is beaten when its army and its economy are gone: no unit that fights, gathers (or will grow into one: an
-    // egg, a cocoon), and no finished building that trains a gatherer. Other buildings don't keep it in.
-    const economic = (s: UnitSpec | undefined) => !!s && (s.canGather ?? true) && s.role !== 'carter' && !s.bearer && !s.dummy;
+    // a side is beaten when it can't make anything any more: a side that trains from buildings, with no buildings
+    // left (walls don't count); one that doesn't (it grows its own: the Wildwelds), with nothing left that lays or
+    // changes into another form (its mothers and larvae, and the eggs and cocoons on their way to being larvae)
     for (const p of this.players) {
       if (p.defeated || p.neutral) continue;
-      const unitIn = (u: Unit) => {
-        const s = this.specOf(u.owner, u.specId)?.spec;
-        return !u.carter && !u.dummy && (u.stats.canAttack || economic(s) || u.order.kind === 'metamorph' || !!s?.becomes?.length || !!s?.spawns?.length);
-      };
-      const buildingIn = (b: Building) => b.complete && (b.spec.trains ?? []).some((id) => economic(this.specOf(p.id, id)?.spec));
-      if (!this.unitsOf(p.id).some(unitIn) && !this.buildingsOf(p.id).some(buildingIn)) p.defeated = true;
+      const trainsFromBuildings = (this.factionOf(p.id).buildings ?? []).some((b) => b.trains?.length);
+      const left = trainsFromBuildings
+        ? this.buildingsOf(p.id).some((b) => !b.spec.wall)
+        : this.unitsOf(p.id).some((u) => { const s = this.specOf(u.owner, u.specId)?.spec; return u.order.kind === 'metamorph' || !!s?.spawns?.length || !!s?.becomes?.length; });
+      if (!left) p.defeated = true;
     }
     const alive = this.players.filter((p) => !p.defeated && !p.neutral);
     if (alive.length <= 1 && this.players.filter((p) => !p.neutral).length > 1) {
