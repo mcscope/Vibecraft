@@ -174,7 +174,7 @@ export const LESSONS: Lesson[] = [
     title: 'High ground',
     you: meadowfolk, foe: meadowfolk, look: [20, 25], map: hillField, fog: true,
     text: `<p>The ground has <b>levels</b>. A <b>cliff</b> is a rock face where the ground drops a level, and nothing walks up it. A <b>ramp</b> is a smooth slope that joins two levels. The hill ahead has a ramp on each side.</p>
-<p><b>Try:</b> send one hurlhorn round the hill to the macemen on the low ground beyond it. From down there, each stone does about 90 damage, so a maceman takes two. Then walk the other hurlhorn up the ramp, to the hill's edge above the macemen. A stone thrown down gains the energy of its fall: about 125 damage, and one stone drops a maceman.</p>
+<p><b>Try:</b> send one hurlhorn round the hill to the macemen on the low ground beyond it. From down there, each stone does about 110 damage, so a maceman takes two. Then walk the other hurlhorn up the ramp, to the hill's edge above the macemen. A stone thrown down gains the energy of its fall: about 145 damage, and one stone drops a maceman.</p>
 <p>High ground also <b>sees further</b>: 2 tiles more for each level. Watch the fog pull back as your hurlhorn climbs.</p>`,
     setup(w) {
       wait(w, block(w, 0, 'hurlhorn', 2, 10, 27, 2));

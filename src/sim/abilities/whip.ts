@@ -1,6 +1,6 @@
 // Whip: `attack.whip` (strikers only, not with a shaft; metres of whip-like limb, 0–3). The crystal is lashed out at its
-// tip: it reaches the lash's whole length, and the lash is a lever, so the crystal leaves faster in proportion to arm +
-// lash, up to what the muscle's energy allows, all of that energy going into the light crystal rather than a heavy arm.
+// tip: it reaches the lash's whole length, and the muscle's whole energy goes into the light crystal (and lash) rather
+// than a heavy arm, so it leaves fast.
 // Drawing the lash back in adds to each blow's recovery (sim/physics.ts).
 import type { UnitSpec } from '../../factions/types';
 import type { DerivedStats } from '../physics';

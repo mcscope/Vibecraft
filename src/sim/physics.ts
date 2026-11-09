@@ -11,7 +11,7 @@
 //   attack energy  E = ½ · m_crystal · v²      (kinetic energy of the crystal)
 //   damage         = E · scale                (a blow or a stone hands over its energy; scale sets fight pace)
 //   calories spent = E / MUSCLE_EFFICIENCY     (muscles are ~50% efficient)
-//   v              = min(limbSpeed, √(2·maxEnergy / m_crystal))
+//   v              = √(2·maxEnergy / m_crystal)  (the muscle's whole energy goes into the blow or the throw)
 //
 // So a crystal too light is capped by how fast limbs move; a crystal too heavy
 // is capped by how much energy the muscles can dump in one go. Damage per
@@ -324,11 +324,12 @@ export function derive(spec: UnitSpec, techRefinement = 0, techWork = 0, techGro
   // (a whip lashes the crystal out alone at its tip, the light lash behind it: sim/abilities/whip.ts)
   const whip = !throwing && !shaft && atk?.whip ? Math.max(0, Math.min(3, atk.whip)) : 0;
   const strikeMass = throwing ? weaponMass : whip ? weaponMass + K.whipKgPerM * whip : weaponMass + K.limbShare * mass;
-  // a sling is a lever: its cord lengthens the throwing arm (~0.4 of the body's height), so the stone leaves faster in
-  // proportion; but never faster than the muscle's energy allows (√(2E/m)), however long the cord
+  // the muscle puts its whole energy into each blow or throw: a heavy crystal leaves slow, a light one fast (no limb-speed
+  // cap: a beast heaving a boulder uses all its strength). A sling's cord (spun up first) and a whip's lash still count
+  // where they apply: the cord's length sets the spin-up, the lash puts the energy into the crystal, not a heavy arm
   const sling = throwing && atk?.sling ? Math.max(0, Math.min(height, atk.sling)) : 0;
   const arm = 0.4 * height;
-  const crystalVelocity = Math.min(limbSpeed * (1 + (sling + whip) / arm), Math.sqrt((2 * maxAttackEnergy) / strikeMass));
+  const crystalVelocity = Math.sqrt((2 * maxAttackEnergy) / strikeMass);
   const attackEnergy = 0.5 * strikeMass * crystalVelocity * crystalVelocity;
   // and it has to be spun up first: about a turn of the arm and cord before release
   const windUp = sling ? (2 * Math.PI * (arm + sling)) / crystalVelocity : 0;

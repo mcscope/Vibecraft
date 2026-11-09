@@ -27,11 +27,11 @@ describe('physics', () => {
     expect(validate(cheat).length).toBeGreaterThan(0);
   });
 
-  test('crystal too light is capped by limb speed, too heavy by muscle energy', () => {
-    // a thrown crystal flies alone (a blow swings the limb too, so it's the muscle that caps it)
+  test("every blow and throw carries the muscle's whole energy: a light crystal leaves fast, a heavy one slow", () => {
     const light = derive({ ...base, attack: { style: 'throw', crystalMass: 0.1 } });
-    const heavy = derive({ ...base, attack: { style: 'strike', crystalMass: 15 } });
-    expect(light.crystalVelocity).toBeCloseTo(light.limbSpeed);
+    const heavy = derive({ ...base, attack: { style: 'throw', crystalMass: 15 } });
+    expect(light.attackEnergy).toBeCloseTo(light.maxAttackEnergy);
     expect(heavy.attackEnergy).toBeCloseTo(heavy.maxAttackEnergy);
+    expect(light.crystalVelocity).toBeGreaterThan(heavy.crystalVelocity);
   });
 });

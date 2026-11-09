@@ -1,6 +1,5 @@
-// Sling: `attack.sling` (throwers only, metres of cord, 0 up to the body's height). A lever: the
-// stone leaves faster in proportion to arm + cord, up to what the muscle's energy allows, and each
-// throw is spun up first (sim/physics.ts). Faster stones fly further (range ∝ v²) and hit harder.
+// Sling: `attack.sling` (throwers only, metres of cord, 0 up to the body's height). The stone leaves with all the
+// muscle's energy (sim/physics.ts); each throw is spun up first, the longer the cord the longer that takes.
 import type { UnitSpec } from '../../factions/types';
 import { bodyHeight, type DerivedStats } from '../physics';
 import type { Ability } from './index';
