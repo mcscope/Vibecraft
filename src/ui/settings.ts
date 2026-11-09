@@ -86,7 +86,7 @@ export function onSettings(fn: (s: Settings) => void): () => void {
   return () => listeners.delete(fn);
 }
 
-const keyName = (k: string) => (k.startsWith('arrow') ? k.replace('arrow', '').replace(/^./, (c) => c.toUpperCase()) : k.toUpperCase());
+export const keyName = (k: string) => (k.startsWith('arrow') ? k.replace('arrow', '').replace(/^./, (c) => c.toUpperCase()) : k.toUpperCase());
 
 /** Wire up the settings dialog in index.html. */
 export function mountSettingsDialog(): void {
