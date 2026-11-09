@@ -4,7 +4,7 @@
 import { PLAYABLE } from '../factions';
 import type { DerivedStats } from '../sim/physics';
 import { World, DT, TICK_RATE } from '../sim/world';
-import { ARENA_SECONDS, ARENA_X, ARENA_Y, alive, arenaCost, arenaRoster, arenaScenario, arenaScore, entryKey, fightOver, setRefinement, stageFight, strength, type ArenaEntry, type ArenaSide } from '../sim/arena';
+import { ARENA_TERRAINS, type ArenaTerrain, ARENA_SECONDS, ARENA_X, ARENA_Y, alive, arenaCost, arenaRoster, arenaScenario, arenaScore, entryKey, fightOver, setRefinement, stageFight, strength, type ArenaEntry, type ArenaSide } from '../sim/arena';
 import { ArtBank, TEAM_COLORS } from '../render/artbank';
 import { Renderer } from '../render/renderer';
 import { Input } from '../ui/input';
@@ -20,9 +20,11 @@ const LEFT = TEAM_COLORS[0], RIGHT = TEAM_COLORS[1];
 export async function runArena(params: URLSearchParams): Promise<void> {
   const roster = arenaRoster(PLAYABLE);
   const n = PLAYABLE.length;
+  // (&terrain=valley|ridge: high ground in the middle or at the sides; changing it reloads the field)
+  const terrain: ArenaTerrain = (ARENA_TERRAINS as readonly string[]).includes(params.get('terrain') ?? '') ? params.get('terrain') as ArenaTerrain : 'flat';
   // one seat per faction per side: left seats 0..n-1 (blue), right seats n..2n-1 (red)
   const world = new World({
-    seed: 1, scenario: arenaScenario(2 * n),
+    seed: 1, scenario: arenaScenario(2 * n, terrain),
     players: [...PLAYABLE.map((f) => ({ name: `${f.name} (left)`, faction: f })), ...PLAYABLE.map((f) => ({ name: `${f.name} (right)`, faction: f }))],
   });
   for (const u of [...world.units.values()]) world.units.delete(u.id);
@@ -90,7 +92,7 @@ export async function runArena(params: URLSearchParams): Promise<void> {
       paintCell(e.data.i, e.data.j);
       if (fight && e.data.i === fight.i && e.data.j === fight.j) drawStats();
     };
-    worker.postMessage({ budget });
+    worker.postMessage({ budget, terrain });
   };
 
   const name = (e: ArenaEntry) => e.faction.units.find((u) => u.id === e.id)?.name ?? e.id;
@@ -102,6 +104,7 @@ export async function runArena(params: URLSearchParams): Promise<void> {
     </div>
     <p class="arena-help">Equal food budgets (crystal is free). Each cell: the share of its budget the winner keeps, <b class="win">+ row wins</b>, <b class="lose">− column wins</b>. Click a cell to watch it live.</p>
     <div class="arena-controls">
+      Ground <select class="arena-terrain" title="Flat; a valley (each side starts on a high plateau, a low valley between); or a ridge (both start low, a high ridge between). Ramps join the levels.">${ARENA_TERRAINS.map((t) => `<option value="${t}"${t === terrain ? ' selected' : ''}>${t[0].toUpperCase() + t.slice(1)}</option>`).join('')}</select>
       Budget <select class="arena-budget">${BUDGETS.map((b) => `<option value="${b}"${b === budget ? ' selected' : ''}>${b}</option>`).join('')}</select>
       ${[0, 1].map((k) => `Refine ${k ? 'B' : 'A'} <select class="arena-refine" data-side="${k}" title="Refinement researched on top for this side, as its faction's research gives it: cheaper, or bigger at the price">${REFINE.map((r) => `<option value="${r}"${r === refine[k] ? ' selected' : ''}>+${r}</option>`).join('')}</select>`).join(' ')}
       <span class="arena-speed">${[0.5, 1, 2, 4].map((s) => `<button data-speed="${s}">${s}×</button>`).join('')}</span>
@@ -150,7 +153,7 @@ export async function runArena(params: URLSearchParams): Promise<void> {
     panel.querySelectorAll('td.sel').forEach((td) => td.classList.remove('sel'));
     cell(i, j).classList.add('sel');
     look();
-    history.replaceState(null, "", `?mode=arena&a=${entryKey(a)}&b=${entryKey(b)}&budget=${budget}${control ? "&control=1" : ""}${refine[0] ? `&refA=${refine[0]}` : ''}${refine[1] ? `&refB=${refine[1]}` : ''}`);
+    history.replaceState(null, "", `?mode=arena&a=${entryKey(a)}&b=${entryKey(b)}&budget=${budget}${terrain !== 'flat' ? `&terrain=${terrain}` : ''}${control ? "&control=1" : ""}${refine[0] ? `&refA=${refine[0]}` : ''}${refine[1] ? `&refB=${refine[1]}` : ''}`);
     drawStats();
   };
 
@@ -164,6 +167,11 @@ export async function runArena(params: URLSearchParams): Promise<void> {
     if (t.closest('.arena-control input')) { control = (t as HTMLInputElement).checked; if (fight) stage(fight.i, fight.j); }
   });
   panel.querySelectorAll<HTMLSelectElement>('.arena-refine').forEach((s) => s.addEventListener('change', () => { refine[+s.dataset.side!] = +s.value; if (fight) stage(fight.i, fight.j); }));
+  panel.querySelector<HTMLSelectElement>('.arena-terrain')!.addEventListener('change', (e) => {
+    const p = new URLSearchParams(location.search);
+    p.set('terrain', (e.target as HTMLSelectElement).value);
+    location.search = p.toString(); // (the ground is built once: a new field)
+  });
   panel.querySelector<HTMLSelectElement>('.arena-budget')!.addEventListener('change', (e) => {
     budget = +(e.target as HTMLSelectElement).value;
     for (let i = 0; i < roster.length; i++) for (let j = 0; j < roster.length; j++) { scores.delete(`${i},${j}`); paintCell(i, j); }
