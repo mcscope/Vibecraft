@@ -447,7 +447,10 @@ export class SkirmishAI {
       const mine = spec ? buildings.filter((b) => b.specId === spec!.id) : [];
       const unit = spec && w.specOf(this.player, spec.trains!.filter(isSoldier).sort((p, q) => value(q) - value(p))[0])!.stats;
       if (spec && unit && mine.length < 4 && mine.every((b) => b.complete && b.queue.length > 0) && stock.food > unit.foodCost * 2 + 200 && stock.wood >= w.buildingStatsOf(this.player, spec.id)!.totalCost) {
-        const spot = placeNear(spec.size);
+        // beside the building where food piles up most (a farm), so what's gathered there is spent there
+        let pile: Building | null = null, most = 200;
+        for (const b of buildings) { const f = w.logistics.spare(b).food; if (f > most) { most = f; pile = b; } }
+        const spot = (pile && w.findBuildSpot(spec.size, pile.ox + pile.size / 2, pile.oy + pile.size / 2, 8)) || placeNear(spec.size);
         const pick = spot ? this.closestFree(workers, builders, spot[0], spot[1], 3) : [];
         if (spot && pick.length) out.push({ type: 'build', units: pick, specId: spec.id, ox: spot[0], oy: spot[1] });
       }
@@ -460,11 +463,14 @@ export class SkirmishAI {
     const unpaid = (worker: boolean) => buildings.reduce((n, b) => n + b.queue.filter((q) => q.kind === 'unit' && !q.paid && (q.specId === faction.workerId) === worker).length, 0);
     // (food piling up: every producer may wait on some, as hauling brings it)
     const waitBudget = { worker: 1 - unpaid(true), soldier: (P.tight ? 2 : 3) + (stock.food > 500 ? 3 : 0) - unpaid(false) };
-    // a farm without seed comes before soldiers (a planting gives back four times its seed): while no other building has
-    // food to spare for it, no soldier orders wait on food, and the ones waiting let go of what they'd claimed
+    // a farm with nothing growing and no seed comes before soldiers (a planting gives back four times its seed, and a farm
+    // with plants keeps its own seed): while no other building can spare the seed, no soldier orders wait on food, and the
+    // ones waiting let go of what they'd claimed
     let seedWanted = 0, foodSpare = 0;
+    const growing = new Set<number>();
+    for (const n of w.nodes.values()) if (n.sownBy) growing.add(n.sownBy);
     for (const b of buildings) {
-      if (b.complete && b.specId === farm?.id && w.sowNext(b) === 'food') seedWanted += w.logistics.shortfall(b).food;
+      if (b.complete && b.specId === farm?.id && !growing.has(b.id) && w.sowNext(b) === 'food') seedWanted += w.logistics.shortfall(b).food;
       foodSpare += w.logistics.spare(b).food;
     }
     if (seedWanted >= 1 && foodSpare < seedWanted) {
@@ -499,7 +505,7 @@ export class SkirmishAI {
         const ranked = [...soldiers].sort((p, q) => value(q) - value(p));
         pick = ranked.length > 1 && i % 4 === 3 ? ranked[1] : ranked[0];
         // the money goes to the best soldiers we can make: a building whose best is far worse waits, unless food piles up
-        if (value(ranked[0]) < bestValue * 0.4 && stock.food < 800) continue;
+        if (value(ranked[0]) < bestValue * 0.4 && stock.food < 400) continue;
       } else pick = soldiers[i % soldiers.length]; // whatever comes next on the list
       if (train(b, pick)) this.trainIndex.set(b.id, i + 1);
     }
@@ -522,7 +528,9 @@ export class SkirmishAI {
       for (const id of b.spec.researches ?? []) {
         const st = w.techStatus(this.player, id, b);
         // (hard only queues what it can pay for now, so a tech never holds up the workers behind it)
-        if (!st.blocker && (!P.tight || stock.wood >= st.cost)) { out.push({ type: 'research', building: b.id, techId: id }); break; }
+        // (and where it would hold up soldiers behind it, only with wood to spare, so it's soon brought)
+        const spare = b.spec.trains?.some(isSoldier) ? 300 : 0;
+        if (!st.blocker && (!P.tight || stock.wood >= st.cost + spare)) { out.push({ type: 'research', building: b.id, techId: id }); break; }
       }
     }
 

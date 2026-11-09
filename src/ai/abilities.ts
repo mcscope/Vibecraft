@@ -166,7 +166,7 @@ export function useBrood(t: AiTurn, minutes: number): void {
   const parents = mine.filter((u) => spec(u.specId)?.spec.spawns?.length);
   const changers = mine.filter((u) => spec(u.specId)?.spec.becomes?.length && !u.shellOf && spec(u.specId)!.spec.tends);
   const changing = mine.filter((u) => u.order.kind === 'metamorph').length;
-  const want = Math.min(10, 3 + Math.floor(minutes * 0.75)); // gatherers it keeps
+  const want = Math.min(18, 3 + Math.floor(minutes)); // gatherers it keeps (food is what a brood grows on)
   // the parents lay: the cheapest while the economy's small, the best they can once it's going; not while more young
   // wait on food than there are hands to bring it. With too few young to tend them, the parents tend them themselves
   const waiting = mine.filter((u) => u.order.kind === 'metamorph' && foodOwed(w, u) > 0.05).length;
