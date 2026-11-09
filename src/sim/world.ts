@@ -130,7 +130,7 @@ export type Order =
   /** Hungry with nowhere else to eat: eating straight from a food source until full. */
   | { kind: 'graze'; node: number }
   | { kind: 'attack'; target: number; charge?: boolean }
-  | { kind: 'gather'; node: number; nodeType: ResourceKind; phase: 'toNode' | 'harvest' | 'toDrop'; stopWhenArmed: boolean; browse?: [number, number] }
+  | { kind: 'gather'; node: number; nodeType: ResourceKind; phase: 'toNode' | 'harvest' | 'toDrop'; stopWhenArmed: boolean; browse?: [number, number]; /** The building it's taking its load to (chosen as it sets out). */ drop?: number }
   /**
    * Tending the nest, until told otherwise: carrying food to whoever of its side is waiting on it (an egg, a cocoon, a
    * mother with an egg queued), gathering more in between (`g`: the gathering trip it's on), waiting full when nobody is.
@@ -2057,8 +2057,10 @@ export class World {
       }
       return false;
     }
-    // toDrop: the nearest finished building (carts move it on from there), or a nearer walking drop-off
-    const drop = this.nearestCache(u, () => true);
+    // toDrop: the nearest finished building (carts move it on from there), or one a little further that's short of
+    // what it carries (it saves a cart the trip); or a nearer walking drop-off
+    let drop = o.drop !== undefined ? this.buildings.get(o.drop) : undefined;
+    if (!drop || drop.owner !== u.owner || !drop.complete) { drop = this.dropFor(u) ?? undefined; o.drop = drop?.id; }
     const dd = drop ? (drop.ox + drop.size / 2 - u.x) ** 2 + (drop.oy + drop.size / 2 - u.y) ** 2 : Infinity;
     const carrier = nearestDropOff(this, u, dd);
     // or a conveyor belt nearer still: unload onto it and the goods ride home
@@ -2077,6 +2079,7 @@ export class World {
     if (!drop) return false;
     if (this.moveToBuilding(u, drop)) {
       this.deposit(u, drop);
+      o.drop = undefined;
       if (u.cal < u.stats.maxCalories * 0.5 && drop.stock.food > 1) {
         this.detour(u, { kind: 'resupply', building: drop.id });
         return false;
@@ -2424,6 +2427,24 @@ export class World {
       if (b.owner !== u.owner || !b.complete || isUnderfoot(b.spec) || b.spec.wall || !test(b)) continue; // roads, belts and walls hold nothing
       const d = (b.ox + b.size / 2 - u.x) ** 2 + (b.oy + b.size / 2 - u.y) ** 2;
       if (d < bestD) { bestD = d; best = b; }
+    }
+    return best;
+  }
+
+  /**
+   * Where a gatherer takes its load: the nearest finished building, or one not much further (twice as far, plus a
+   * few tiles) that's short of what it mostly carries, the nearest such.
+   */
+  dropFor(u: Unit): Building | null {
+    const near = this.nearestCache(u, () => true);
+    if (!near) return null;
+    const r: ResourceKind = u.food >= u.wood && u.food >= u.crystal ? 'food' : u.wood >= u.crystal ? 'wood' : 'crystal';
+    const dist = (b: Building) => Math.hypot(b.ox + b.size / 2 - u.x, b.oy + b.size / 2 - u.y);
+    let best = near, bestD = dist(near) * 2 + 6;
+    for (const b of this.buildings.values()) {
+      if (b === near || b.owner !== u.owner || !b.complete || isUnderfoot(b.spec) || b.spec.wall) continue;
+      const d = dist(b);
+      if (d < bestD && this.logistics.shortfall(b)[r] >= 1) { bestD = d; best = b; }
     }
     return best;
   }
