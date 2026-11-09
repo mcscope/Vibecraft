@@ -32,6 +32,11 @@ const RIM: Mat = { color: '#f2ead2', tex: 'none', rough: 0.5 };
 /** A dark and a light tone of the side's colour, used together: the fighters' markings. (The dark is its primary: the
  *  team's own `dark` is near black, lost on black chitin.) */
 const DARK: Mat = { team: 'primary', tex: 'none', rough: 0.4 }, LIGHT: Mat = { team: 'light', tex: 'none', rough: 0.4 };
+/** The side's colour lighter but as strong (a red stays red): the dragon fly's wing patches and the vimmer's rings. */
+const BRIGHT: Mat = { team: 'bright', tex: 'none', rough: 0.4 };
+/** TEMPORARY, for the user to choose: the vimmer's torso in its own dark (A, false) or its side's dark (B, true).
+ *  The sprites page's teams sheet sets it (&vimmer=natural). Delete once chosen. */
+export const VIMMER_LOOK = { teamTorso: true };
 
 /**
  * Each look's drawn scale for a mass (a body's length grows with ∛ of its mass), and its footprint: the metres across
@@ -78,27 +83,31 @@ function drawVimmer(b: ModelBuilder, p: Pose, mass: number): void {
   const along = (a: V, d: V, len: number): V => [a[0] + d[0] * len, a[1] + d[1] * len, a[2] + d[2] * len];
   // one wing bone from a to b: a spined spar along its leading edge, the membrane trailing behind it toward `aft` (its
   // body's tail, however the body is turned), ribbed, its edge scalloped, `chord` wide at a and `chord2` at b
-  const bone = (c: ModelBuilder, a: V, bb: V, chord: number, chord2: number, aft: V = [-1, 0, 0], spar: Mat = chitin) => {
+  const bone = (c: ModelBuilder, a: V, bb: V, chord: number, chord2: number, aft: V = [-1, 0, 0]) => {
     const d: V = [bb[0] - a[0], bb[1] - a[1], bb[2] - a[2]], len = Math.hypot(...d);
     if (len < 1e-3) return;
+    // which way the bone's own y (aim's: its z toward `aft`, y = z × x) faces: its membrane's underside is the other way
+    const X = norm(d), dz = aft[0] * X[0] + aft[1] * X[1] + aft[2] * X[2], Z = norm([aft[0] - dz * X[0], aft[1] - dz * X[1], aft[2] - dz * X[2]]);
+    const under = Z[2] * X[0] - Z[0] * X[2] >= 0 ? -1 : 1; // (y's upward part, from y = z × x)
     c.joint(a, aim(d, aft), (w) => {
-      shapedLimb(w, [0, 0, 0], [len, 0, 0], 0.03, [1.15, 1.0, 0.9, 0.8, 0.72], spar, { flat: 0.3 }); // (the spar, tapering out)
-      for (let x = 0.08; x < len - 0.04; x += 0.13) w.cone(0.012, 0.06, [x, 0.03, 0], spar === chitin ? sheen : LIGHT, [0, 0, -0.5], 4); // spines (light on a dark team spar)
+      shapedLimb(w, [0, 0, 0], [len, 0, 0], 0.03, [1.15, 1.0, 0.9, 0.8, 0.72], chitin, { flat: 0.3 }); // (the spar, tapering out)
+      for (let x = 0.08; x < len - 0.04; x += 0.13) w.cone(0.012, 0.06, [x, 0.03, 0], sheen, [0, 0, -0.5], 4); // spines
       if (chord > 0.01 || chord2 > 0.01) {
         const steps = 6;
         w.loft(Array.from({ length: steps + 1 }, (_, i) => {
           const k = i / steps, cw = (chord + (chord2 - chord) * k) * (i % 2 ? 0.72 : 1); // ribs at the full width: scalloped between
           return { at: [k * len, 0, cw * 0.9] as V, w: Math.max(0.01, cw), up: 0.008, down: 0.008 };
         }), membrane);
-        w.loft(Array.from({ length: steps + 1 }, (_, i) => { // (its underside, in its side's colour)
+        w.loft(Array.from({ length: steps + 1 }, (_, i) => { // its underside (only), in its side's colour
           const k = i / steps, cw = (chord + (chord2 - chord) * k) * (i % 2 ? 0.72 : 1);
-          return { at: [k * len, -0.006, cw * 0.9] as V, w: Math.max(0.01, cw * 0.97), up: 0.002, down: 0.008 };
+          return { at: [k * len, under * 0.006, cw * 0.9] as V, w: Math.max(0.01, cw * 0.97), up: under > 0 ? 0.008 : 0.002, down: under > 0 ? 0.002 : 0.008 };
         }), DARK);
         for (let i = 0; i <= steps; i += 2) { const k = i / steps, cw = chord + (chord2 - chord) * k; if (cw > 0.03) w.limb([k * len, 0, 0], [k * len - 0.03, 0, cw * 1.8], 0.009, rib, 0.005); }
       }
     });
   };
-  const body = (c: ModelBuilder) => spikeBody(c, p.armed, '#2a9aa6', 1, { saddle: false, body: { ...DARK, tex: 'leather', metal: 0.35 }, rims: [LIGHT, { color: '#2a9aa6', tex: 'leather', rough: 0.3, metal: 0.4 }] }); // (its torso in its side's dark, ringed light and teal)
+  // its torso: its own dark (A) or its side's dark (B), ringed bright in its side's colour either way
+  const body = (c: ModelBuilder) => spikeBody(c, p.armed, '#2a9aa6', 1, { saddle: false, body: VIMMER_LOOK.teamTorso ? { team: 'dark', tex: 'leather', rough: 0.3, metal: 0.35 } : undefined, rims: [BRIGHT, BRIGHT] });
   b.joint([0, 0, 0], [0, 0, 0], (o) => {
     // the V, `open` from folded tight back along its body (0) to spread (1), beating by `flap`. During a leap its
     // joints unfold in turn from the ones it stood on: `legs` (1 → 0) is how much the inner and outer joints still
@@ -109,7 +118,7 @@ function drawVimmer(b: ModelBuilder, p: Pose, mass: number): void {
         const { sh, wrist, knuckle, tip } = veePoints(S, open, flap);
         const f = 0.35 + 0.65 * open;
         bone(c, sh, wrist, 0.18 * f, 0.22 * f);
-        bone(c, wrist, knuckle, 0.22 * f, 0.18 * f, undefined, DARK); // (its middle spar in its side's dark, spined in its light)
+        bone(c, wrist, knuckle, 0.22 * f, 0.18 * f);
         bone(c, knuckle, tip, 0.18 * f, 0.02);
         c.cone(0.02, 0.08, tip, chitin, [0, 0, -Math.PI / 2], 4);
       }
@@ -150,7 +159,7 @@ function drawVimmer(b: ModelBuilder, p: Pose, mass: number): void {
           const knuckle = mixV(jointBetween(wrist, tip, bl[1], bl[2], [0.02, 1, S * 0.05]), toGround(fly.knuckle), up2);
           const f = 0.35 + 0.65 * open, aft = sub(toGround([-1, 0, 0]), at); // (its tail's way, as it turns)
           bone(g, sh, wrist, 0.05 + 0.13 * f * up1, 0.03 + 0.19 * f * up1, aft);
-          bone(g, wrist, knuckle, 0.06 + 0.16 * f * up2, 0.1 + 0.08 * f * up2, aft, DARK);
+          bone(g, wrist, knuckle, 0.06 + 0.16 * f * up2, 0.1 + 0.08 * f * up2, aft);
           bone(g, knuckle, tip, 0.1 + 0.08 * f * up2, 0.01, aft);
         }
       });
@@ -189,7 +198,7 @@ function drawVimmer(b: ModelBuilder, p: Pose, mass: number): void {
       const step = (rest: V): V => (p.anim === 'walk' ? footAt(rest, p.phase + leg++ * 0.25 + (S > 0 ? 0 : 0.5), 0.1, 0.08) : rest);
       const { sh, wrist, knuckle, tip } = standing(S, y0, step);
       bone(o, sh, wrist, 0.05, 0.03);
-      bone(o, wrist, knuckle, 0.06, 0.1, undefined, DARK);
+      bone(o, wrist, knuckle, 0.06, 0.1);
       bone(o, knuckle, tip, 0.1, 0.01);
       for (const foot of [wrist, tip]) for (const dz of [-0.025, 0.025]) o.cone(0.012, 0.06, [foot[0] + 0.03, foot[1] + 0.01 - (foot === wrist ? 0.06 : 0.012), foot[2] + dz], rib, [0, 0, -Math.PI / 2], 4); // claws
     }
@@ -582,10 +591,7 @@ function caterpillar(b: ModelBuilder, p: Pose, color: string, mass: number): voi
         if (!(seg === 0 && k === 0 && rise)) for (const z of [1, -1]) c.limb([x, 0.06 + up, z * r * 0.7], [x, 0.0, z * r * 1.0], 0.016, skin); // stubby legs
         else for (const z of [1, -1]) c.limb([x, 0.08 + up, z * r * 0.7], [x + 0.06, 0.04 + up, z * r * 1.0], 0.016, skin); // (raised: its front legs held up, curled)
       }
-      // a dot of the side's colour on top of each segment, ringed pale
-      const r = 0.1 - seg * 0.006, x = at(seg) + 0.065 - (seg === 0 ? 0.03 * rise : 0), y = 2 * r + lift + (seg === 0 ? rise * 0.11 : 0);
-      c.sphere([0.048, 0.016, 0.048], [x, y - 0.008, 0], RIM);
-      c.sphere([0.036, 0.018, 0.036], [x, y - 0.004, 0], TEAM);
+      larvaMarks(c, seg, at(seg), lift, rise);
     }
     if (!segs.includes(0)) return;
     // giving: it rears its head up and over, takes the food off its back in its mouth, and dips to set it down in front
@@ -598,6 +604,51 @@ function caterpillar(b: ModelBuilder, p: Pose, color: string, mass: number): voi
     if (give >= 0) { if (give < 0.92) { const k = Math.min(1, give / 0.45), mouth: V3 = [hx + 0.12, hy - 0.02, 0]; c.sphere([0.07, 0.055, 0.07], give < 0.45 ? [mouth[0] * k, 0.24 + (mouth[1] - 0.24) * k, 0] : mouth, food); } }
     else if (p.cargo) c.sphere([0.08, 0.06, 0.08], [0, 0.24, 0], { color: p.cargo === 'food' ? '#a83a4a' : p.cargo === 'wood' ? '#7a5634' : '#8fe6ff' });
   }, LOOK.caterpillar.scale(mass));
+}
+
+/** TEMPORARY, for the user to choose: how a larva wears its side's colour. 'dots' (on top of each segment), 'stripe'
+ *  (A: one down the middle of its back, head to tail), 'stripes' (B: a pair along its upper sides), 'spots' (C: a spot
+ *  on each side of each segment, like a caterpillar's breathing holes), 'saddle' (D: a patch over its middle segment),
+ *  'tufts' (E: tufts of bristles standing up on its back). The sprites page's teams sheet sets it (&larva=…). */
+export const LARVA_LOOK: { marks: 'dots' | 'stripe' | 'stripes' | 'spots' | 'saddle' | 'tufts' } = { marks: 'dots' };
+
+/** A larva segment's markings in its side's colour (LARVA_LOOK): `x0` is where the segment is centred, `lift` its heave,
+ *  `rise` how far its front is reared (gathering). */
+function larvaMarks(c: ModelBuilder, seg: number, x0: number, lift: number, rise: number): void {
+  // the segment's two balls, as caterpillar() draws them: centre x, y and radius
+  const balls = [0, 1].map((k) => {
+    const r = 0.1 - seg * 0.006 - k * 0.004;
+    return { x: x0 + 0.065 - k * 0.13 - (seg === 0 && k === 0 ? 0.03 * rise : 0), y: r + lift + (seg === 0 ? rise * (k === 0 ? 0.11 : 0.035) : 0), r };
+  });
+  if (seg === 0) balls.push({ x: 0.22 - 0.04 * rise, y: 0.12 + 0.2 * rise, r: 0.11 / 1.05 }); // (its head, at rest: the stripe runs onto it)
+  // how high its skin is over (x, z): the highest of its balls there
+  const skin = (x: number, z: number) => Math.max(0, ...balls.map((b) => b.y + b.r * Math.sqrt(Math.max(0, 1 - ((x - b.x) / (1.05 * b.r)) ** 2 - (z / b.r) ** 2))));
+  const [front] = balls, look = LARVA_LOOK.marks;
+  if (look === 'dots') { // a dot on top of each segment, ringed pale
+    const y = front.y + front.r;
+    c.sphere([0.048, 0.016, 0.048], [front.x, y - 0.008, 0], RIM);
+    c.sphere([0.036, 0.018, 0.036], [front.x, y - 0.004, 0], TEAM);
+  } else if (look === 'stripe' || look === 'stripes') { // a stripe along its length, each segment's piece meeting the next's
+    const rad = look === 'stripe' ? 0.026 : 0.02, end = seg === 0 ? 0.27 : 0.15;
+    for (const z of look === 'stripe' ? [0] : [0.055, -0.055]) {
+      const pts: V3[] = [];
+      for (let x = -0.15; x <= end + 1e-6; x += 0.05) pts.push([x0 + x, skin(x0 + x, z) - rad * 0.4, z]);
+      for (let i = 1; i < pts.length; i++) c.limb(pts[i - 1], pts[i], rad, TEAM);
+    }
+  } else if (look === 'spots') { // a spot on each side of the segment, ringed pale
+    for (const z of [1, -1]) {
+      c.sphere([0.046, 0.046, 0.01], [front.x, front.y, z * front.r * 0.96], RIM);
+      c.sphere([0.034, 0.034, 0.014], [front.x, front.y, z * front.r * 0.98], TEAM);
+    }
+  } else if (look === 'saddle') { // a wide patch over its middle segment, wrapping over its back
+    if (seg === 1) c.sphere([0.16, front.r * 0.72, front.r * 1.03], [x0, front.r * 1.35 + lift, 0], TEAM);
+  } else { // tufts of bristles standing up on its back, one on each segment
+    const base: V3 = [front.x, front.y + front.r - 0.012, 0];
+    for (let j = 0; j < 7; j++) {
+      const a = (j / 7) * TAU, s = j === 0 ? 0 : 0.035;
+      c.limb(base, [base[0] + Math.cos(a) * s, base[1] + 0.1 - s * 0.6, Math.sin(a) * s], 0.012, BRIGHT, 0.004);
+    }
+  }
 }
 
 /**
@@ -751,16 +802,16 @@ function drawDragonFly(b: ModelBuilder, p: Pose, mass: number): void {
       c.joint([0.04, y0 + 0.17, z * 0.1], [up, 0, lean + 0.42], (wg) => wg.joint([0, 0, 0], [0, 0, 0], (wg) => {
         wg.sphere([0.4, 0.006, 0.74], [0.06, 0, z * 0.66], margin); // the black margin, under it all
         wg.sphere([0.34, 0.01, 0.6], [0.05, 0, z * 0.58], wing); // the wing
-        wg.sphere([0.22, 0.012, 0.3], [0.12, 0, z * 0.92], LIGHT); // toward the tip, its side's light
-        wg.sphere([0.12, 0.013, 0.18], [0.02, 0, z * 0.18], LIGHT); // by the body, its side's light
+        wg.sphere([0.22, 0.012, 0.3], [0.12, 0, z * 0.92], BRIGHT); // toward the tip, its side's colour, bright
+        wg.sphere([0.12, 0.013, 0.18], [0.02, 0, z * 0.18], BRIGHT); // by the body, the same
         for (let k = 0; k < 6; k++) { const a = -0.9 + k * 0.36; wg.limb([0, 0, z * 0.08], [Math.sin(a) * 0.3, 0, z * (0.1 + Math.cos(a) * 0.8)], 0.015, margin, 0.014); } // veins
         for (let k = 0; k < 9; k++) { const a = -1.0 + k * 0.25; wg.sphere([0.022, 0.017, 0.022], [0.06 + Math.sin(a) * 0.37, 0, z * (0.66 + Math.cos(a) * 0.7)], dot); } // white spots in the margin
-        for (const [r, m, th] of [[0.11, eyeOut, 0.016], [0.075, LIGHT, 0.018], [0.035, eyeIn, 0.02]] as const) wg.sphere([r, th, r], [-0.05, 0, z * 0.72], m); // eyespot, its ring in its side's light
+        for (const [r, m, th] of [[0.11, eyeOut, 0.016], [0.075, BRIGHT, 0.018], [0.035, eyeIn, 0.02]] as const) wg.sphere([r, th, r], [-0.05, 0, z * 0.72], m); // eyespot, its ring the same
       }, 0.7));
       c.joint([-0.1, y0 + 0.08, z * 0.1], [flying ? -z * beat * 0.85 : -z * 1.4, 0, (flying ? -0.1 : -0.35) + 0.42], (wg) => wg.joint([0, 0, 0], [0, 0, 0], (wg) => {
         wg.sphere([0.34, 0.006, 0.54], [-0.14, 0, z * 0.46], margin);
         wg.sphere([0.29, 0.01, 0.46], [-0.13, 0, z * 0.42], wing);
-        wg.sphere([0.2, 0.012, 0.26], [-0.12, 0, z * 0.4], LIGHT); // its middle, its side's light
+        wg.sphere([0.2, 0.012, 0.26], [-0.12, 0, z * 0.4], BRIGHT); // its middle, the same
         for (let k = 0; k < 4; k++) { const a = -0.5 - k * 0.35; wg.limb([0, 0, z * 0.06], [Math.sin(a) * 0.34, 0, z * (0.06 + Math.cos(a) * 0.5)], 0.015, margin, 0.014); }
         for (let k = 0; k < 6; k++) { const a = -0.6 - k * 0.3; wg.sphere([0.02, 0.017, 0.02], [-0.14 + Math.sin(a) * 0.34, 0, z * (0.46 + Math.cos(a) * 0.52)], dot); }
         for (const [r, m, th] of [[0.08, eyeOut, 0.016], [0.05, DARK, 0.018], [0.025, eyeIn, 0.02]] as const) wg.sphere([r, th, r], [-0.24, 0, z * 0.6], m); // eyespot, its ring in its side's dark

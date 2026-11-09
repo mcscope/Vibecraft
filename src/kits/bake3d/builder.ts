@@ -38,8 +38,20 @@ function tiled(t: THREE.Texture, ru: number, rv: number, key: string): THREE.Tex
 /** A team's light tone: its primary colour, a third of the way to white (mixed as the hex colours read, not in linear light). */
 const lightOf = (primary: string) => '#' + [1, 3, 5].map((i) => { const v = parseInt(primary.slice(i, i + 2), 16); return Math.round(v + (255 - v) * 0.38).toString(16).padStart(2, '0'); }).join('');
 
+/** A team's bright tone: its primary colour made lighter in hue-saturation-lightness terms, its saturation kept (a
+ *  little raised), so a red stays a strong red rather than going pink. */
+function brightOf(primary: string): string {
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(primary.slice(i, i + 2), 16) / 255);
+  const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2, d = max - min;
+  const s = d === 0 ? 0 : d / (1 - Math.abs(2 * l - 1));
+  const h = d === 0 ? 0 : max === r ? ((g - b) / d + 6) % 6 : max === g ? (b - r) / d + 2 : (r - g) / d + 4; // (in sixths of the wheel)
+  const L = l + (1 - l) * 0.22, S = Math.min(1, s * 1.15), c = (1 - Math.abs(2 * L - 1)) * S, x = c * (1 - Math.abs((h % 2) - 1)), m = L - c / 2;
+  const [r1, g1, b1] = h < 1 ? [c, x, 0] : h < 2 ? [x, c, 0] : h < 3 ? [0, c, x] : h < 4 ? [0, x, c] : h < 5 ? [x, 0, c] : [c, 0, x];
+  return '#' + [r1, g1, b1].map((v) => Math.round((v + m) * 255).toString(16).padStart(2, '0')).join('');
+}
+
 function material(m: Mat, team: TeamColors, rep: [number, number], o: BuildOpts): THREE.Material {
-  const color = m.team === 'light' ? lightOf(team.primary) : m.team ? team[m.team] : (m.color ?? '#888888');
+  const color = m.team === 'light' ? lightOf(team.primary) : m.team === 'bright' ? brightOf(team.primary) : m.team ? team[m.team] : (m.color ?? '#888888');
   const tex = m.tex ?? 'none';
   const q = (v: number) => Math.max(0.25, Math.round(v * 4) / 4);
   const ru = q(rep[0] * TEX_PER_UNIT), rv = q(rep[1] * TEX_PER_UNIT);

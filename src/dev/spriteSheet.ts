@@ -250,6 +250,9 @@ async function teamsPage(params: URLSearchParams): Promise<void> {
   if (!faction) return;
   const facings = (params.get('facings') ?? params.get('facing') ?? '1').split(',').map(Number), CELL = +(params.get('cell') ?? 170), LABEL = 170, HEAD = 30;
   const only = params.get('only')?.split(','), wanted = (id: string) => !only || only.includes(id);
+  if (params.get('vimmer') === 'natural') (await import('../factions/wildwelds')).VIMMER_LOOK.teamTorso = false; // (TEMPORARY: the vimmer's torso, A)
+  const larva = params.get('larva'); // (TEMPORARY: the larvae's markings, &larva=dots|stripe|stripes|spots|saddle|tufts)
+  if (larva) (await import('../factions/wildwelds')).LARVA_LOOK.marks = larva as never;
   const { Baker } = await import('../kits/bake3d/baker');
   const baker = new Baker();
   type Row = { name: string; sprites: import('../art/contract').Sprite[] };
