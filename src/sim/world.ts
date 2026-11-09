@@ -1442,7 +1442,7 @@ export class World {
         return u.x !== u.px || u.y !== u.py;
       }
       case 'attack': {
-        if (!this.attackTarget(u, o.target)) this.finish(u);
+        if (!this.canFight(u, o.target) || !this.attackTarget(u, o.target)) this.finish(u); // (one it can't get at: cut off by a cliff or water)
         return u.x !== u.px || u.y !== u.py;
       }
       case 'gather': return this.runGather(u, o);
