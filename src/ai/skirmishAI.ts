@@ -16,7 +16,7 @@ import { isWall } from '../sim/abilities/wall';
 import { isUnderfoot } from '../sim/abilities/underfoot';
 import { capacity } from '../sim/garrison';
 import { bodyBuilt } from '../sim/abilities/layDown';
-import { useBearers, useBelts, useBrood, useHerds, useLayDown, type AiTurn } from './abilities';
+import { useBearers, useBelts, useBrood, useDigest, useHerds, useLayDown, type AiTurn } from './abilities';
 
 export type Difficulty = 'easy' | 'hard';
 export const DIFFICULTIES: Difficulty[] = ['easy', 'hard'];
@@ -258,7 +258,7 @@ export class SkirmishAI {
       const want = minutes < 1.5 ? 0 : Math.min(8, 1 + Math.floor(workers.length / 7));
       const cost = w.buildingStatsOf(this.player, farm.id)!.totalCost;
       if (farms.length < want && farms.every((b) => b.complete) && stock.wood >= cost * 0.6) {
-        const spot = this.farmSpot(w, farm.size, farm.sow!.radius, home, buildings.filter((b) => b.specId === farm.id));
+        const spot = this.farmSpot(w, farm.size, farm.sow!.radius, home, buildings.filter((b) => b.specId === farm.id), buildings.filter((b) => b.complete && !!b.spec.trains?.length));
         const pick = spot ? this.closestFree(workers, builders, spot[0], spot[1], 2) : [];
         if (spot && pick.length) out.push({ type: 'build', units: pick, specId: farm.id, ox: spot[0], oy: spot[1] });
       }
@@ -323,6 +323,7 @@ export class SkirmishAI {
     useHerds(turn);
     useBrood(turn, minutes);
     useLayDown(turn, minutes);
+    useDigest(turn);
     this.lastBelt = useBelts(turn, this.lastBelt);
 
     // ── Hauling without carts: a building whose order waits on supplies gets a worker
@@ -434,7 +435,8 @@ export class SkirmishAI {
     };
     const isSoldier = (id: string) => id !== faction.workerId && id !== faction.carterId && !!w.specOf(this.player, id)?.stats.canAttack;
     let bestValue = 0;
-    for (const b of buildings) if (b.complete) for (const id of b.spec.trains ?? []) if (isSoldier(id)) bestValue = Math.max(bestValue, value(id));
+    // (among buildings free to train: one held up by a technology waiting on its wood doesn't count)
+    for (const b of buildings) if (b.complete && !b.queue.some((q) => q.kind === 'tech' && !q.paid)) for (const id of b.spec.trains ?? []) if (isSoldier(id)) bestValue = Math.max(bestValue, value(id));
 
     // ── More production (hard): when food piles up and every building that trains our best
     //    soldier is busy, raise another of them.
@@ -458,10 +460,14 @@ export class SkirmishAI {
     const unpaid = (worker: boolean) => buildings.reduce((n, b) => n + b.queue.filter((q) => q.kind === 'unit' && !q.paid && (q.specId === faction.workerId) === worker).length, 0);
     // (food piling up: every producer may wait on some, as hauling brings it)
     const waitBudget = { worker: 1 - unpaid(true), soldier: (P.tight ? 2 : 3) + (stock.food > 500 ? 3 : 0) - unpaid(false) };
-    // a farm without seed comes before soldiers (a planting gives back four times its seed): no soldier orders wait on
-    // food meanwhile, and the ones waiting let go of what they'd claimed
-    const seedless = buildings.some((b) => b.complete && b.specId === farm?.id && w.sowNext(b) === 'food' && w.logistics.shortfall(b).food >= 1);
-    if (seedless) {
+    // a farm without seed comes before soldiers (a planting gives back four times its seed): while no other building has
+    // food to spare for it, no soldier orders wait on food, and the ones waiting let go of what they'd claimed
+    let seedWanted = 0, foodSpare = 0;
+    for (const b of buildings) {
+      if (b.complete && b.specId === farm?.id && w.sowNext(b) === 'food') seedWanted += w.logistics.shortfall(b).food;
+      foodSpare += w.logistics.spare(b).food;
+    }
+    if (seedWanted >= 1 && foodSpare < seedWanted) {
       waitBudget.soldier = 0;
       for (const b of buildings) {
         const at = b.queue.findIndex((q) => q.kind === 'unit' && !q.paid && q.specId !== faction.workerId);
@@ -733,25 +739,31 @@ export class SkirmishAI {
   }
 
   /**
-   * Where the next farm goes: ground around home on the side away from the enemy (then any side), its sowing ring clear
-   * of the other farms', nearest home first.
+   * Where the next farm goes: beside a building that trains (home first), the one with the fewest farms around it, so
+   * what's harvested is dropped off where it's spent; on the side away from the enemy where there's room, its sowing
+   * ring clear of the other farms'.
    */
-  private farmSpot(w: World, size: number, radius: number, home: [number, number], farms: Building[]): [number, number] | null {
+  private farmSpot(w: World, size: number, radius: number, home: [number, number], farms: Building[], trainers: Building[]): [number, number] | null {
     const foe = this.enemyTarget(w);
-    const away = foe ? Math.atan2(home[1] - foe[1], home[0] - foe[0]) : 0;
-    const tcR = (w.baseOf(this.player)?.size ?? 0) / 2;
-    let best: [number, number] | null = null, bestScore = Infinity;
-    for (const ring of [radius + tcR + 1, radius + tcR + 5, 2 * radius + tcR + 4]) {
-      for (let k = 0; k < 12; k++) {
-        const a = away + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 6);
-        const cx = home[0] + Math.cos(a) * ring, cy = home[1] + Math.sin(a) * ring;
-        if (farms.some((f) => Math.hypot(f.ox + f.size / 2 - cx, f.oy + f.size / 2 - cy) < radius * 1.6)) continue;
-        const spot = w.findBuildSpot(size, cx, cy, 2);
-        if (!spot) continue;
-        const score = ring + Math.ceil(k / 2) * 2; // (near home, away from the enemy)
-        if (score < bestScore) { bestScore = score; best = spot; }
+    const tc = w.baseOf(this.player);
+    const centres = [{ x: home[0], y: home[1], r: (tc?.size ?? 0) / 2 }, ...trainers.filter((b) => b !== tc).map((b) => ({ x: b.ox + b.size / 2, y: b.oy + b.size / 2, r: b.size / 2 }))];
+    const around = (c: { x: number; y: number }) => farms.filter((f) => Math.hypot(f.ox + f.size / 2 - c.x, f.oy + f.size / 2 - c.y) < 2 * radius + 4).length;
+    centres.sort((a, b) => around(a) - around(b)); // (stable: home first among equals)
+    for (const c of centres) {
+      const away = foe ? Math.atan2(c.y - foe[1], c.x - foe[0]) : 0;
+      for (const ring of [radius + c.r + 1, radius + c.r + 4]) {
+        let best: [number, number] | null = null, bestScore = Infinity;
+        for (let k = 0; k < 12; k++) {
+          const a = away + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 6);
+          const cx = c.x + Math.cos(a) * ring, cy = c.y + Math.sin(a) * ring;
+          if (farms.some((f) => Math.hypot(f.ox + f.size / 2 - cx, f.oy + f.size / 2 - cy) < radius * 1.6)) continue;
+          const spot = w.findBuildSpot(size, cx, cy, 2);
+          if (!spot) continue;
+          const score = Math.ceil(k / 2); // (away from the enemy first)
+          if (score < bestScore) { bestScore = score; best = spot; }
+        }
+        if (best) return best;
       }
-      if (best) return best;
     }
     return null;
   }

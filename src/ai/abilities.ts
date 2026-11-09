@@ -246,3 +246,27 @@ export function useLayDown(t: AiTurn, minutes: number): void {
     }
   }
 }
+
+/**
+ * Tree digestion (UnitSpec.digestsTrees): when the food we can see near home runs low, one body that digests trees, of
+ * several, turns the nearest tree into food (a tree's wood is worth more food than the small body it costs). One at a
+ * time. A no-op for a faction without it.
+ */
+export function useDigest(t: AiTurn): void {
+  const { w, player, home } = t;
+  if (!home) return;
+  const mine = w.unitsOf(player);
+  const eaters = mine.filter((u) => w.specOf(player, u.specId)?.spec.digestsTrees && u.order.kind !== 'metamorph' && !u.engage);
+  if (eaters.length < 3 || mine.some((u) => u.order.kind === 'digest')) return;
+  let food = 0, tree: { id: number; d: number } | null = null;
+  for (const n of w.nodes.values()) {
+    if (n.shard || n.amount <= 0 || w.vision(player, n.x, n.y) === 0) continue;
+    const d = Math.hypot(n.x - home[0], n.y - home[1]);
+    if (n.type === 'food' && d < 20) food += n.amount;
+    if (n.type === 'wood' && n.tree !== false && d < 25 && (!tree || d < tree.d)) tree = { id: n.id, d };
+  }
+  if (food >= 150 * Math.max(1, eaters.length / 4) || !tree) return;
+  const n = w.nodes.get(tree.id)!;
+  const eater = eaters.sort((a, b) => ((a.x - n.x) ** 2 + (a.y - n.y) ** 2) - ((b.x - n.x) ** 2 + (b.y - n.y) ** 2) || a.id - b.id)[0];
+  t.out.push({ type: 'digest', units: [eater.id], node: tree.id, one: true });
+}

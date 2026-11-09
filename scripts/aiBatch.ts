@@ -116,7 +116,7 @@ export function playGame(fa: string, fb: string, map: string, seed: number, minu
 
 function line(g: Game): string {
   const res = g.winner < 0 ? 'undecided' : `${g.factions[g.winner]} wins`;
-  const side = (s: Side) => `${s.faction.slice(0, 4)} army≤${s.peakArmy} econ≤${s.peakEcon} (${s.econAt.join('/')}) idle ${(s.idleShare * 100).toFixed(0)}% got f${s.gathered.food}/w${s.gathered.wood}/c${s.gathered.crystal} left f${s.unused.food}/w${s.unused.wood}/c${s.unused.crystal}${s.towerSamples ? ` towers dry ${((s.towerDry / s.towerSamples) * 100).toFixed(0)}% avg ${s.towerCrystal.toFixed(0)}c` : ''} bld ${s.buildings}`;
+  const side = (s: Side) => `${s.faction.slice(0, 4)} army≤${s.peakArmy} econ≤${s.peakEcon} (${s.econAt.join('/')}) idle ${(s.idleShare * 100).toFixed(0)}% got f${s.gathered.food}/w${s.gathered.wood}/c${s.gathered.crystal} left f${s.unused.food}/w${s.unused.wood}/c${s.unused.crystal}${s.towerSamples ? ` towers dry ${((s.towerDry / s.towerSamples) * 100).toFixed(0)}% avg ${s.towerCrystal.toFixed(0)}c` : ''} bld ${s.buildings} trained ${s.trained} lost ${s.lost}`;
   return `${g.map.padEnd(13)} ${String(g.seed).padEnd(5)} ${g.factions.join(' v ').padEnd(22)} ${res.padEnd(16)} ${g.minutes.toFixed(1).padStart(4)}m fight@${g.firstFight < 0 ? '-' : g.firstFight.toFixed(1)}  | ${side(g.sides[0])} | ${side(g.sides[1])}`;
 }
 
