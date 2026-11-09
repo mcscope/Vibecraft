@@ -2876,12 +2876,7 @@ export class World {
     // changes into another form (its mothers and larvae, and the eggs and cocoons on their way to being larvae)
     for (const p of this.players) {
       if (p.defeated || p.neutral) continue;
-      const trainsFromBuildings = (this.factionOf(p.id).buildings ?? []).some((b) => b.trains?.length);
-      // (a battle with no production, the arena or a pitched battle: the army on the field is all there is)
-      const left = this.scenario.noProduction ? this.unitsOf(p.id).some((u) => u.stats.canAttack && !u.dummy)
-        : trainsFromBuildings
-        ? this.buildingsOf(p.id).some((b) => !b.spec.wall)
-        : this.unitsOf(p.id).some((u) => { const s = this.specOf(u.owner, u.specId)?.spec; return u.order.kind === 'metamorph' || !!s?.spawns?.length || !!s?.becomes?.length; });
+      const left = this.lifeline(p.id) === 'buildings' ? this.buildingsOf(p.id).some((b) => this.buildingKeepsInGame(b)) : this.unitsOf(p.id).some((u) => this.keepsInGame(u));
       if (!left) p.defeated = true;
     }
     const alive = this.players.filter((p) => !p.defeated && !p.neutral);
@@ -2889,6 +2884,27 @@ export class World {
       this.winner = alive[0]?.id ?? 0;
       this.events.push({ type: 'gameOver', winner: this.winner });
     }
+  }
+
+  /**
+   * What keeps a side in the game (the victory rule): its army, in a battle with no production (the arena, a pitched
+   * battle); its buildings, for a side that trains from buildings; otherwise its brood (what lays or changes form).
+   */
+  lifeline(player: number): 'army' | 'buildings' | 'brood' {
+    if (this.scenario.noProduction) return 'army';
+    return (this.factionOf(player).buildings ?? []).some((b) => b.trains?.length) ? 'buildings' : 'brood';
+  }
+
+  /** Does this building keep its side in the game (a side that trains from buildings: any but a wall)? */
+  buildingKeepsInGame(b: Building): boolean { return this.lifeline(b.owner) === 'buildings' && !b.spec.wall; }
+
+  /** Does this unit keep its side in the game: a fighter (no production), or one that lays or changes into another form (a brood: mothers, larvae, eggs and cocoons)? */
+  keepsInGame(u: Unit): boolean {
+    const line = this.lifeline(u.owner);
+    if (line === 'army') return u.stats.canAttack && !u.dummy;
+    if (line === 'buildings') return false;
+    const s = this.specOf(u.owner, u.specId)?.spec;
+    return u.order.kind === 'metamorph' || !!s?.spawns?.length || !!s?.becomes?.length;
   }
 
   /** Cheap checksum of simulation state, for desync detection between peers. */

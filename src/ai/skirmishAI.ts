@@ -70,19 +70,27 @@ export const PROFILES: Record<Difficulty, Profile> = {
 };
 
 /** What we remember of an enemy soldier from when we last saw it. */
-interface Sighting { x: number; y: number; tick: number; kg: number; power: number; flier: boolean; charger: boolean; melee: boolean }
-/** What we remember of an enemy building. */
-/** What we remember of an enemy building (`trains`: it raises units, so the enemy isn't beaten while it stands). */
-interface KnownBuilding { x: number; y: number; tower: boolean; trains: boolean }
-/** Where we last saw an enemy unit that keeps them in the game (a fighter, a gatherer, or one that will become one). */
-interface Trace { x: number; y: number; tick: number }
+interface Sighting { x: number; y: number; tick: number; kg: number; hp: number; dps: number; flier: boolean; charger: boolean; melee: boolean; worker: boolean }
+/** What we remember of an enemy building (`trains`: it raises units; `needed`: the enemy isn't beaten while it stands, by the victory rule). */
+interface KnownBuilding { x: number; y: number; tower: boolean; trains: boolean; needed: boolean }
+/** Where we last saw an enemy unit that keeps them going (a fighter, a gatherer, or one that will become one; `needed`: the enemy isn't beaten while it lives). */
+interface Trace { x: number; y: number; tick: number; needed: boolean }
 /** What we remember of a wild animal that attacks whoever comes close (it keeps near its lair). */
 interface Danger { x: number; y: number; hp: number; dps: number }
 /** How close to a dangerous animal a worker can safely gather (its leash plus its reach for prey). */
 const DANGER_R = 9;
 
-/** A soldier's fighting strength: health × damage per second. */
-const power = (u: Unit) => u.hp * (u.stats.damage / u.stats.cooldown);
+/**
+ * A group's fighting strength (Lanchester's square law: its total health × its total damage a second, square-rooted
+ * so it adds up like a head count): ten small fighters count for far more than one ten times as strong.
+ */
+const strength = (xs: Iterable<{ hp: number; dps: number }>): number => {
+  let hp = 0, dps = 0;
+  for (const x of xs) { hp += x.hp; dps += x.dps; }
+  return Math.sqrt(hp * dps);
+};
+const dps = (u: Unit) => u.stats.damage / u.stats.cooldown;
+const strengthOf = (us: Unit[]) => strength(us.map((u) => ({ hp: u.hp, dps: dps(u) })));
 /** How long we trust a sighting of a soldier we can't see any more. */
 const FORGET = TICK_RATE * 150;
 
@@ -112,6 +120,11 @@ export class SkirmishAI {
   private nextRetreatCheck = 0;
   /** When enemy fighters were last near home. */
   private lastRaid = -Infinity;
+  /** Well ahead of what we've seen of the enemy: committed to finishing them. */
+  private ahead = false;
+  /** The most soldiers we've had fit at home since the last wave went, and when. */
+  private mostFit = 0;
+  private mostFitAt = 0;
 
   constructor(readonly player: number, readonly difficulty: Difficulty = DEFAULT_DIFFICULTY, thinkEvery?: number) {
     this.profile = PROFILES[difficulty];
@@ -155,20 +168,24 @@ export class SkirmishAI {
   /** Update what we know of the enemy from what we can see right now. */
   private look(w: World, hostiles: Unit[]): void {
     for (const e of hostiles) {
-      if (!this.foe(w, e.owner) || !e.stats.canAttack || e.specId === w.factionOf(e.owner).workerId) continue;
-      this.seenFoes.set(e.id, { x: e.x, y: e.y, tick: w.tick, kg: e.stats.mass, power: power(e), flier: !!e.stats.flight, charger: !e.throws && !e.stats.flight && e.stats.mass >= 120, melee: !e.throws && !e.stats.flight });
+      // (armed workers too: they fight, from shelter where they can)
+      if (!this.foe(w, e.owner) || !e.stats.canAttack) continue;
+      this.seenFoes.set(e.id, {
+        x: e.x, y: e.y, tick: w.tick, kg: e.stats.mass, hp: e.hp, dps: dps(e), worker: w.gathers(e),
+        flier: !!e.stats.flight, charger: !e.throws && !e.stats.flight && e.stats.mass >= 120, melee: !e.throws && !e.stats.flight,
+      });
     }
     for (const [id, s] of this.seenFoes) {
-      // forget it once it's stale, or when we look where it was and it's gone
-      if (w.tick - s.tick > FORGET || (s.tick < w.tick && this.sees(w, s.x, s.y) && !(w.units.get(id) && this.sees(w, w.units.get(id)!.x, w.units.get(id)!.y)))) this.seenFoes.delete(id);
+      // forget it once it's stale, or when we look where it was and it's gone (a worker may only have taken shelter)
+      if (w.tick - s.tick > FORGET || (!s.worker && s.tick < w.tick && this.sees(w, s.x, s.y) && !(w.units.get(id) && this.sees(w, w.units.get(id)!.x, w.units.get(id)!.y)))) this.seenFoes.delete(id);
     }
     for (const b of w.buildings.values()) {
       if (!this.foe(w, b.owner)) continue;
       const x = b.ox + b.size / 2, y = b.oy + b.size / 2;
-      if (this.sees(w, x, y)) this.knownBuildings.set(b.id, { x, y, tower: !!b.spec.attack, trains: !!b.spec.trains?.length });
+      if (this.sees(w, x, y)) this.knownBuildings.set(b.id, { x, y, tower: !!b.spec.attack, trains: !!b.spec.trains?.length, needed: w.buildingKeepsInGame(b) });
     }
     for (const [id, k] of this.knownBuildings) if (this.sees(w, k.x, k.y) && !w.buildings.has(id)) this.knownBuildings.delete(id);
-    for (const e of hostiles) if (this.foe(w, e.owner) && this.vital(w, e)) this.traces.set(e.id, { x: e.x, y: e.y, tick: w.tick });
+    for (const e of hostiles) if (this.foe(w, e.owner) && this.vital(w, e)) this.traces.set(e.id, { x: e.x, y: e.y, tick: w.tick, needed: w.keepsInGame(e) });
     for (const [id, t] of this.traces) {
       const e = w.units.get(id);
       if (w.tick - t.tick > FORGET || (t.tick < w.tick && this.sees(w, t.x, t.y) && !(e && this.sees(w, e.x, e.y)))) this.traces.delete(id);
@@ -344,13 +361,16 @@ export class SkirmishAI {
         const short = L.shortfall(b), mine = spare.get(b.id)!;
         let n = 0;
         for (const r of RESOURCES) n += Math.min(short[r], total[r] - mine[r]) >= Math.min(5, short[r]) ? Math.min(short[r], total[r] - mine[r]) : 0;
-        return n * (L.waiting(b) ? 2 : 1);
+        // (a tower with no shot left comes first: it can't defend us)
+        const dry = !!b.spec.attack && b.stock.crystal < b.spec.attack.crystalMass;
+        return n * (L.waiting(b) ? 2 : 1) * (dry ? 4 : 1);
       };
       const needs = new Map(buildings.map((b) => [b.id, need(b)]));
       const homeOf = (u: Unit) => (u.order.kind === 'cart' ? u.order.home : 0);
       const haulers = workers.filter((u) => u.order.kind === 'cart');
       // (one carrying a load finishes the trip)
-      const busy = haulers.filter((u) => (needs.get(homeOf(u)) ?? 0) >= 1 || u.food + u.wood + u.crystal > 0.05).slice(0, most);
+      // (one with a trip under way, fetching or carrying, finishes it: its own trip takes what it counted as spare)
+      const busy = haulers.filter((u) => (needs.get(homeOf(u)) ?? 0) >= 1 || (u.order.kind === 'cart' && !!u.order.from) || u.food + u.wood + u.crystal > 0.05).slice(0, most);
       const free = haulers.filter((u) => !busy.includes(u));
       if (free.length) out.push({ type: 'stop', units: free.map((u) => u.id) });
       for (const u of busy) builders.add(u.id);
@@ -414,6 +434,7 @@ export class SkirmishAI {
     {
       let total = 0;
       for (const f of this.seenFoes.values()) {
+        if (f.worker) continue; // (what the army is made of)
         total += f.kg;
         if (f.flier) threat.fliers += f.kg;
         else if (f.charger) threat.chargers += f.kg;
@@ -433,6 +454,10 @@ export class SkirmishAI {
       if (st.canAttack && spec.attack?.style === 'throw') v *= 1 + 3 * threat.fliers;
       return v;
     };
+    // siege: damage a second for the money (a building doesn't strike back, so health counts for less there)
+    const siege = (id: string) => { const st = w.specOf(this.player, id)!.stats; return st.damage / st.cooldown / Math.max(1, st.foodCost + st.crystalCost); };
+    // committed to razing buildings (ahead, against a side beaten when its buildings are gone): every other order is siege
+    const razing = this.ahead && w.players.some((p) => this.foe(w, p.id) && !p.defeated && w.lifeline(p.id) === 'buildings');
     const isSoldier = (id: string) => id !== faction.workerId && id !== faction.carterId && !!w.specOf(this.player, id)?.stats.canAttack;
     let bestValue = 0;
     // (among buildings free to train: one held up by a technology waiting on its wood doesn't count)
@@ -504,6 +529,7 @@ export class SkirmishAI {
       if (P.counters) {
         const ranked = [...soldiers].sort((p, q) => value(q) - value(p));
         pick = ranked.length > 1 && i % 4 === 3 ? ranked[1] : ranked[0];
+        if (razing && i % 2 === 1) pick = [...soldiers].sort((p, q) => siege(q) - siege(p))[0];
         // the money goes to the best soldiers we can make: a building whose best is far worse waits, unless food piles up
         if (value(ranked[0]) < bestValue * 0.4 && stock.food < 400) continue;
       } else pick = soldiers[i % soldiers.length]; // whatever comes next on the list
@@ -583,8 +609,8 @@ export class SkirmishAI {
         // hard: outnumbered, the defenders hold together at home under the towers and garrison instead of chasing
         let [tx, ty] = [intruder.x, intruder.y];
         if (P.guard) {
-          const theirs = hostiles.filter((e) => this.foe(w, e.owner) && w.armed(e) && (e.x - intruder.x) ** 2 + (e.y - intruder.y) ** 2 < 100).reduce((n, e) => n + power(e), 0);
-          if (pool.reduce((n, u) => n + power(u), 0) < theirs) [tx, ty] = home;
+          const theirs = strengthOf(hostiles.filter((e) => this.foe(w, e.owner) && w.armed(e) && (e.x - intruder.x) ** 2 + (e.y - intruder.y) ** 2 < 100));
+          if (strengthOf(pool) < theirs) [tx, ty] = home;
         }
         const defenders = pool.filter((u) => !(u.order.kind === 'attackMove' && Math.hypot(u.order.x - tx, u.order.y - ty) < 4)).map((u) => u.id);
         if (defenders.length) out.push({ type: 'attackMove', units: defenders, x: tx, y: ty });
@@ -631,21 +657,43 @@ export class SkirmishAI {
     const target = this.enemyTarget(w);
     const wave = army.filter((u) => this.attacking.has(u.id));
     if (target) {
-      const ours = fit.reduce((n, u) => n + power(u), 0) + wave.reduce((n, u) => n + power(u), 0);
-      let theirs = 0;
-      for (const f of this.seenFoes.values()) theirs += f.power;
+      const ours = strengthOf([...fit, ...wave]), theirs = strength(this.seenFoes.values());
       const strong = P.edge <= 0 || ours >= theirs * P.edge;
-      // the enemy's army is (as far as we've seen) beaten: finish the buildings rather than wait for a full wave
-      const finish = minutes >= 10 && fit.length >= 3 && ours >= theirs * 3;
-      if ((fit.length >= this.waveSize && strong) || fit.length >= P.maxWave || finish) {
+      // ahead (hard): what we field is well over what we've seen of theirs, so we commit: no waiting for a full wave,
+      // and everyone fit joins the attack that's out, till what keeps the enemy in the game is gone
+      this.ahead = P.edge > 0 && minutes >= 8 && fit.length + wave.length >= 4 && ours >= theirs * 2;
+      // an army that's stopped growing (as big as our production keeps it) does no good at home: it goes, wave or not
+      if (fit.length > this.mostFit) { this.mostFit = fit.length; this.mostFitAt = w.tick; }
+      const stuck = P.edge > 0 && minutes >= 10 && !wave.length && fit.length >= P.firstWave && w.tick - this.mostFitAt > TICK_RATE * 120;
+      if ((fit.length >= this.waveSize && strong) || fit.length >= P.maxWave || (this.ahead && !wave.length && fit.length >= 3) || stuck) {
+        this.mostFit = 0; this.mostFitAt = w.tick;
         out.push({ type: 'attackMove', units: fit.map((u) => u.id), x: target[0], y: target[1] });
         for (const u of fit) this.attacking.add(u.id);
         this.waveSize = Math.min(P.maxWave, this.waveSize + P.waveStep);
-      } else if (P.micro && wave.length >= 4 && fit.length >= 3) {
+      } else if (P.micro && wave.length && fit.length && (this.ahead || (wave.length >= 4 && fit.length >= 3))) {
         // reinforce the attack that's out rather than wait for a whole new wave
         const gx = wave.reduce((n, u) => n + u.x, 0) / wave.length, gy = wave.reduce((n, u) => n + u.y, 0) / wave.length;
         out.push({ type: 'attackMove', units: fit.map((u) => u.id), x: gx, y: gy });
         for (const u of fit) this.attacking.add(u.id);
+      }
+    }
+
+    // ── A forward post (hard, committed): with an attack out far from home, the cheapest building that trains soldiers
+    //    goes up near the front, out of reach of the enemy towers we know of, so soldiers are raised there and the
+    //    hungry eat there (a building that trains keeps a stash of food) instead of walking home and back.
+    if (P.expand && this.ahead && tc && home && target && wave.length && !siteOpen) {
+      const post = (faction.buildings ?? []).filter((b) => !b.unbuildable && !w.buildBlocker(this.player, b.id) && b.trains?.some(isSoldier))
+        .sort((a, b) => a.materials - b.materials)[0];
+      const far = Math.hypot(target[0] - home[0], target[1] - home[1]);
+      const near = (b: Building) => Math.hypot(b.ox + b.size / 2 - target[0], b.oy + b.size / 2 - target[1]) < 30;
+      if (post && far > 40 && !buildings.some(near) && stock.wood >= w.buildingStatsOf(this.player, post.id)!.totalCost) {
+        // 20 tiles back toward home, further while a tower we know of could reach it
+        let r = 20, px = 0, py = 0;
+        const clear = () => [...this.knownBuildings.values()].every((k) => !k.tower || Math.hypot(k.x - px, k.y - py) > 14);
+        do { px = target[0] + ((home[0] - target[0]) / far) * r; py = target[1] + ((home[1] - target[1]) / far) * r; r += 4; } while (!clear() && r < far - 10);
+        const spot = w.findBuildSpot(post.size, px, py, 6);
+        const pick = spot ? this.closestFree(workers, builders, spot[0], spot[1], 3) : [];
+        if (spot && pick.length) out.push({ type: 'build', units: pick, specId: post.id, ox: spot[0], oy: spot[1] });
       }
     }
 
@@ -698,9 +746,8 @@ export class SkirmishAI {
     if (P.retreat && wave.length && home && w.tick >= this.nextRetreatCheck) {
       this.nextRetreatCheck = w.tick + TICK_RATE * 2;
       const gx = wave.reduce((n, u) => n + u.x, 0) / wave.length, gy = wave.reduce((n, u) => n + u.y, 0) / wave.length;
-      const ours = wave.reduce((n, u) => n + power(u), 0);
-      let theirs = 0;
-      for (const e of hostiles) if (this.foe(w, e.owner) && w.armed(e) && (e.x - gx) ** 2 + (e.y - gy) ** 2 < 12 * 12) theirs += power(e);
+      const ours = strengthOf(wave);
+      const theirs = strengthOf(hostiles.filter((e) => this.foe(w, e.owner) && w.armed(e) && (e.x - gx) ** 2 + (e.y - gy) ** 2 < 12 * 12));
       const homeDist = Math.hypot(gx - home[0], gy - home[1]);
       if (theirs > ours * 1.8 && homeDist > 18) {
         out.push({ type: 'move', units: wave.map((u) => u.id), x: home[0], y: home[1] + homeOff });
@@ -712,10 +759,13 @@ export class SkirmishAI {
     //    nearest enemy fighter or worker in sight, a building of theirs that raises units, where we last saw one of
     //    their units, or failing all of those, ground we haven't looked at.
     const stalled = army.filter((u) => this.attacking.has(u.id) && u.order.kind === 'idle' && u.engage === 0);
-    if (stalled.length) {
-      const gx = stalled.reduce((n, u) => n + u.x, 0) / stalled.length, gy = stalled.reduce((n, u) => n + u.y, 0) / stalled.length;
-      const prey = this.prey(w, gx, gy, hostiles);
-      const ids = stalled.map((u) => u.id);
+    // (by the ground they stand on: what one can walk to, the rest of its group can; a flier gets anywhere)
+    const groups = new Map<number, Unit[]>();
+    for (const u of stalled) { const r = u.stats.flight ? -2 : w.grid.regionNear(u.x, u.y); groups.set(r, [...(groups.get(r) ?? []), u]); }
+    for (const group of groups.values()) {
+      const gx = group.reduce((n, u) => n + u.x, 0) / group.length, gy = group.reduce((n, u) => n + u.y, 0) / group.length;
+      const prey = this.prey(w, gx, gy, hostiles, group[0]);
+      const ids = group.map((u) => u.id);
       if (prey?.building !== undefined) out.push({ type: 'attack', units: ids, target: prey.building });
       else if (prey) out.push({ type: 'attackMove', units: ids, x: prey.x, y: prey.y });
     }
@@ -729,20 +779,32 @@ export class SkirmishAI {
   }
 
   /**
-   * What an army at (x, y) with no one to fight should go after: the nearest enemy fighter or worker in sight, else the
-   * nearest building of theirs we know that raises units, else where we last saw one of their units, else the nearest
-   * ground we haven't looked at (never seen first).
+   * What an army at (x, y) with no one to fight should go after, by what beats the enemy (the victory rule): enemy
+   * fighters in sight close by (they'd strike us from behind), else the nearest of what keeps the enemy in the game
+   * (a unit of theirs in sight, then a building we know: for a side that trains from buildings, any but a wall), else
+   * the nearest other fighter or worker in sight, else where we last saw one of theirs (what keeps them in the game
+   * first), else the nearest ground we haven't looked at (never seen first). Only what `by` can get to.
    */
-  private prey(w: World, x: number, y: number, hostiles: Unit[]): { x: number; y: number; building?: number } | null {
+  private prey(w: World, x: number, y: number, hostiles: Unit[], by: Unit): { x: number; y: number; building?: number } | null {
     const d2 = (px: number, py: number) => (px - x) ** 2 + (py - y) ** 2;
     let best: { x: number; y: number; building?: number } | null = null, bestD = Infinity;
-    for (const e of hostiles) if (this.foe(w, e.owner) && this.vital(w, e) && d2(e.x, e.y) < bestD) { bestD = d2(e.x, e.y); best = { x: e.x, y: e.y }; }
-    if (best) return best;
-    for (const [id, k] of this.knownBuildings) if (k.trains && d2(k.x, k.y) < bestD) { bestD = d2(k.x, k.y); best = { x: k.x, y: k.y, building: id }; }
-    if (best) return best;
-    for (const t of this.traces.values()) if (d2(t.x, t.y) < bestD) { bestD = d2(t.x, t.y); best = { x: t.x, y: t.y }; }
-    if (best) return best;
-    const p = this.unexplored(w, x, y, Infinity);
+    const foes = hostiles.filter((e) => this.foe(w, e.owner) && this.vital(w, e) && w.canGetTo(by, e.x, e.y));
+    const nearest = (list: Unit[], within = Infinity) => {
+      for (const e of list) if (d2(e.x, e.y) < Math.min(bestD, within * within)) { bestD = d2(e.x, e.y); best = { x: e.x, y: e.y }; }
+      return best;
+    };
+    if (nearest(foes.filter((e) => w.armed(e) && e.stats.canAttack && !w.gathers(e)), 12)) return best;
+    nearest(foes.filter((e) => w.keepsInGame(e)));
+    for (const [id, k] of this.knownBuildings) {
+      const b = w.buildings.get(id);
+      if (k.needed && b && d2(k.x, k.y) < bestD && w.canGetToBuilding(by, b)) { bestD = d2(k.x, k.y); best = { x: k.x, y: k.y, building: id }; }
+    }
+    if (best || nearest(foes)) return best;
+    for (const needed of [true, false]) {
+      for (const t of this.traces.values()) if (t.needed === needed && d2(t.x, t.y) < bestD && w.canGetTo(by, t.x, t.y)) { bestD = d2(t.x, t.y); best = { x: t.x, y: t.y }; }
+      if (best) return best;
+    }
+    const p = this.unexplored(w, x, y, Infinity, by);
     return p ? { x: p[0], y: p[1] } : null;
   }
 
@@ -812,7 +874,8 @@ export class SkirmishAI {
     const hx = home ? home.ox + home.size / 2 : w.grid.width / 2, hy = home ? home.oy + home.size / 2 : w.grid.height / 2;
     let best: [number, number] | null = null, bestD = Infinity;
     for (const k of this.knownBuildings.values()) {
-      const d = (k.x - hx) ** 2 + (k.y - hy) ** 2 + (k.trains ? 0 : 1e6); // (one that raises units first: the enemy is beaten when they're gone)
+      // (one that raises units first, then any the enemy isn't beaten while it stands; a wall last)
+      const d = (k.x - hx) ** 2 + (k.y - hy) ** 2 + (k.trains ? 0 : k.needed ? 1e6 : 2e6);
       if (d < bestD) { bestD = d; best = [k.x, k.y]; }
     }
     if (best) return best;
@@ -822,12 +885,12 @@ export class SkirmishAI {
     return this.unexplored(w, mirror[0], mirror[1], Infinity);
   }
 
-  /** The nearest spot to (x, y), within r, that we can't see right now (never seen first). */
-  private unexplored(w: World, x: number, y: number, r: number): [number, number] | null {
+  /** The nearest spot to (x, y), within r, that we can't see right now (never seen first); `by`: one it can get to. */
+  private unexplored(w: World, x: number, y: number, r: number, by?: Unit): [number, number] | null {
     let best: [number, number] | null = null, bestScore = Infinity;
     for (let ty = 4; ty < w.grid.height; ty += 8) for (let tx = 4; tx < w.grid.width; tx += 8) {
       const v = w.vision(this.player, tx, ty);
-      if (v === 2 || !w.grid.nearestOpen(tx, ty, 3)) continue;
+      if (v === 2 || !w.grid.nearestOpen(tx, ty, 3) || (by && !w.canGetTo(by, tx, ty))) continue;
       const d = Math.hypot(tx - x, ty - y);
       if (d > r) continue;
       const score = d + (v === 1 ? 1000 : 0);
