@@ -15,6 +15,7 @@
     "relay": "node scripts/relay.mjs",
     "arena": "vite-node scripts/arena.ts",
     "aimatch": "vite-node scripts/aiMatch.ts",
+    "aibatch": "vite-node scripts/aiBatch.ts",
     "ktx2": "node scripts/ktx2.mjs dist/baked"
   },
   "devDependencies": {

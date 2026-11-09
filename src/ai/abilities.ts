@@ -4,6 +4,8 @@
 import type { FactionSpec } from '../factions/types';
 import type { Command } from '../sim/commands';
 import { isUnderfoot } from '../sim/abilities/underfoot';
+import { isWall } from '../sim/abilities/wall';
+import { piecesFrom } from '../sim/abilities/layDown';
 import { foodOwed } from '../sim/abilities/metamorph';
 import type { Building, Unit, World } from '../sim/world';
 
@@ -21,6 +23,11 @@ export interface AiTurn {
   /** Queue a unit at a building, one unpaid order at a time. */
   train(b: Building, specId: string): boolean;
   out: Command[];
+  /** Home (the town center, or where a side in the field keeps its parents), and where the enemy is, as far as we know. */
+  home?: [number, number] | null;
+  toward?: [number, number] | null;
+  /** Enemy fighters have come near home lately. */
+  raided?: boolean;
 }
 
 const centre = (b: Building): [number, number] => [b.ox + b.size / 2, b.oy + b.size / 2];
@@ -159,7 +166,7 @@ export function useBrood(t: AiTurn, minutes: number): void {
   const parents = mine.filter((u) => spec(u.specId)?.spec.spawns?.length);
   const changers = mine.filter((u) => spec(u.specId)?.spec.becomes?.length && !u.shellOf && spec(u.specId)!.spec.tends);
   const changing = mine.filter((u) => u.order.kind === 'metamorph').length;
-  const want = Math.min(10, 3 + Math.floor(minutes * 0.75)); // gatherers it keeps
+  const want = Math.min(18, 3 + Math.floor(minutes)); // gatherers it keeps (food is what a brood grows on)
   // the parents lay: the cheapest while the economy's small, the best they can once it's going; not while more young
   // wait on food than there are hands to bring it. With too few young to tend them, the parents tend them themselves
   const waiting = mine.filter((u) => u.order.kind === 'metamorph' && foodOwed(w, u) > 0.05).length;
@@ -188,4 +195,78 @@ export function useBrood(t: AiTurn, minutes: number): void {
     t.out.push({ type: 'metamorph', units: [u.id], into });
     free--; spare--;
   }
+}
+
+/**
+ * Bodies that lay themselves down as buildings (UnitSpec.laysDown): a body that becomes a tower (a building with an
+ * attack) lays it a few tiles out from home toward the enemy, about one per four minutes from minute six, a few at most;
+ * one that becomes a wall, once enemy fighters have come near home, lays a strand across their way in, a few strands at
+ * most. Each takes a body we have more than one of, so the work goes on. A no-op for a faction without them.
+ */
+export function useLayDown(t: AiTurn, minutes: number): void {
+  const { w, player, home, toward } = t;
+  if (!home || !toward) return;
+  const mine = w.unitsOf(player);
+  const d = Math.hypot(toward[0] - home[0], toward[1] - home[1]) || 1;
+  const ux = (toward[0] - home[0]) / d, uy = (toward[1] - home[1]) / d; // toward the enemy
+  // (one lay-down at a time: nothing new while a body is on its way to lay itself down)
+  if (mine.some((u) => u.order.kind === 'layDown')) return;
+  for (const spec of t.faction.units ?? []) {
+    for (const id of spec.laysDown ?? []) {
+      const b = w.buildingSpecOf(player, id);
+      if (!b || w.buildBlocker(player, id)) continue;
+      const layers = mine.filter((u) => u.specId === spec.id && u.order.kind !== 'metamorph' && !u.engage);
+      if (layers.length < 2) continue;
+      const have = t.buildings.filter((x) => x.specId === id);
+      const layer = layers.sort((a, c) => ((a.x - home[0]) ** 2 + (a.y - home[1]) ** 2) - ((c.x - home[0]) ** 2 + (c.y - home[1]) ** 2) || a.id - c.id)[0];
+      if (b.attack) {
+        if (minutes < 6 || have.length >= Math.min(4, Math.floor((minutes - 2) / 4))) continue;
+        // out toward the enemy, fanned to either side of the line, clear of the others
+        for (let k = 0; k < 6; k++) {
+          const a = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.5, r = 6 + b.size;
+          const cx = home[0] + (ux * Math.cos(a) - uy * Math.sin(a)) * r, cy = home[1] + (uy * Math.cos(a) + ux * Math.sin(a)) * r;
+          if (have.some((x) => Math.hypot(x.ox + x.size / 2 - cx, x.oy + x.size / 2 - cy) < 4)) continue;
+          const spot = w.findBuildSpot(b.size, cx, cy, 3);
+          if (spot) { t.out.push({ type: 'build', units: [layer.id], specId: id, ox: spot[0], oy: spot[1] }); return; }
+        }
+      } else if (isWall(b) && t.raided) {
+        const n = piecesFrom(layer.stats.mass, b);
+        if (have.length >= 3 * n) continue;
+        // a strand across the way in, the next one further out
+        const r = 8 + 3 * Math.floor(have.length / n), cx = home[0] + ux * r, cy = home[1] + uy * r;
+        const tiles: Array<[number, number]> = [];
+        for (let k = 0; k < n; k++) {
+          const off = k - (n - 1) / 2, x = Math.floor(cx - uy * off), y = Math.floor(cy + ux * off);
+          if (w.placeable(x, y, 1) && !tiles.some(([p, q]) => p === x && q === y)) tiles.push([x, y]);
+        }
+        if (tiles.length < Math.ceil(n / 2)) continue;
+        tiles.forEach(([x, y], k) => t.out.push({ type: 'build', units: [layer.id], specId: id, ox: x, oy: y, ...(k ? { queue: true } : {}) }));
+        return;
+      }
+    }
+  }
+}
+
+/**
+ * Tree digestion (UnitSpec.digestsTrees): when the food we can see near home runs low, one body that digests trees, of
+ * several, turns the nearest tree into food (a tree's wood is worth more food than the small body it costs). One at a
+ * time. A no-op for a faction without it.
+ */
+export function useDigest(t: AiTurn): void {
+  const { w, player, home } = t;
+  if (!home) return;
+  const mine = w.unitsOf(player);
+  const eaters = mine.filter((u) => w.specOf(player, u.specId)?.spec.digestsTrees && u.order.kind !== 'metamorph' && !u.engage);
+  if (eaters.length < 3 || mine.some((u) => u.order.kind === 'digest')) return;
+  let food = 0, tree: { id: number; d: number } | null = null;
+  for (const n of w.nodes.values()) {
+    if (n.shard || n.amount <= 0 || w.vision(player, n.x, n.y) === 0) continue;
+    const d = Math.hypot(n.x - home[0], n.y - home[1]);
+    if (n.type === 'food' && d < 20) food += n.amount;
+    if (n.type === 'wood' && n.tree !== false && d < 25 && (!tree || d < tree.d)) tree = { id: n.id, d };
+  }
+  if (food >= 150 * Math.max(1, eaters.length / 4) || !tree) return;
+  const n = w.nodes.get(tree.id)!;
+  const eater = eaters.sort((a, b) => ((a.x - n.x) ** 2 + (a.y - n.y) ** 2) - ((b.x - n.x) ** 2 + (b.y - n.y) ** 2) || a.id - b.id)[0];
+  t.out.push({ type: 'digest', units: [eater.id], node: tree.id, one: true });
 }

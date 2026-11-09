@@ -11,11 +11,12 @@
 import type { FactionSpec, ResourceKind } from '../factions/types';
 import { prerequisites } from '../sim/physics';
 import type { Command } from '../sim/commands';
-import { TICK_RATE, type Building, type Unit, type World } from '../sim/world';
+import { RESOURCES, TICK_RATE, type Building, type Unit, type World } from '../sim/world';
 import { isWall } from '../sim/abilities/wall';
 import { isUnderfoot } from '../sim/abilities/underfoot';
 import { capacity } from '../sim/garrison';
-import { useBearers, useBelts, useBrood, useHerds, type AiTurn } from './abilities';
+import { bodyBuilt } from '../sim/abilities/layDown';
+import { useBearers, useBelts, useBrood, useDigest, useHerds, useLayDown, type AiTurn } from './abilities';
 
 export type Difficulty = 'easy' | 'hard';
 export const DIFFICULTIES: Difficulty[] = ['easy', 'hard'];
@@ -71,7 +72,10 @@ export const PROFILES: Record<Difficulty, Profile> = {
 /** What we remember of an enemy soldier from when we last saw it. */
 interface Sighting { x: number; y: number; tick: number; kg: number; power: number; flier: boolean; charger: boolean; melee: boolean }
 /** What we remember of an enemy building. */
-interface KnownBuilding { x: number; y: number; tower: boolean }
+/** What we remember of an enemy building (`trains`: it raises units, so the enemy isn't beaten while it stands). */
+interface KnownBuilding { x: number; y: number; tower: boolean; trains: boolean }
+/** Where we last saw an enemy unit that keeps them in the game (a fighter, a gatherer, or one that will become one). */
+interface Trace { x: number; y: number; tick: number }
 /** What we remember of a wild animal that attacks whoever comes close (it keeps near its lair). */
 interface Danger { x: number; y: number; hp: number; dps: number }
 /** How close to a dangerous animal a worker can safely gather (its leash plus its reach for prey). */
@@ -97,6 +101,7 @@ export class SkirmishAI {
   private seenFoes = new Map<number, Sighting>();
   /** Enemy buildings we've found. */
   private knownBuildings = new Map<number, KnownBuilding>();
+  private traces = new Map<number, Trace>();
   /** Dangerous wildlife we've seen, and the soldiers sent to clear it (until when). */
   private dangers = new Map<number, Danger>();
   private hunters = new Set<number>();
@@ -105,6 +110,8 @@ export class SkirmishAI {
   private threatSince = -1;
   private calmSince = -1;
   private nextRetreatCheck = 0;
+  /** When enemy fighters were last near home. */
+  private lastRaid = -Infinity;
 
   constructor(readonly player: number, readonly difficulty: Difficulty = DEFAULT_DIFFICULTY, thinkEvery?: number) {
     this.profile = PROFILES[difficulty];
@@ -158,9 +165,14 @@ export class SkirmishAI {
     for (const b of w.buildings.values()) {
       if (!this.foe(w, b.owner)) continue;
       const x = b.ox + b.size / 2, y = b.oy + b.size / 2;
-      if (this.sees(w, x, y)) this.knownBuildings.set(b.id, { x, y, tower: !!b.spec.attack });
+      if (this.sees(w, x, y)) this.knownBuildings.set(b.id, { x, y, tower: !!b.spec.attack, trains: !!b.spec.trains?.length });
     }
     for (const [id, k] of this.knownBuildings) if (this.sees(w, k.x, k.y) && !w.buildings.has(id)) this.knownBuildings.delete(id);
+    for (const e of hostiles) if (this.foe(w, e.owner) && this.vital(w, e)) this.traces.set(e.id, { x: e.x, y: e.y, tick: w.tick });
+    for (const [id, t] of this.traces) {
+      const e = w.units.get(id);
+      if (w.tick - t.tick > FORGET || (t.tick < w.tick && this.sees(w, t.x, t.y) && !(e && this.sees(w, e.x, e.y)))) this.traces.delete(id);
+    }
     for (const e of hostiles) if (e.wild === 'aggressive') this.dangers.set(e.id, { x: e.x, y: e.y, hp: e.hp, dps: e.stats.damage / e.stats.cooldown });
     // forget one once we look where it prowls and it isn't there
     for (const [id, d] of this.dangers) {
@@ -191,9 +203,12 @@ export class SkirmishAI {
     const homeOff = (tc?.size ?? 0) / 2 + 2; // (just off home, beside the town center)
 
     // ── Construction: a build order derived from the faction, gated on worker count.
-    const plan = (this.plan ??= SkirmishAI.buildOrder(faction, P.buildGap));
+    // (a farm: the cheapest building that sows food; see Farms below)
+    const farm = (faction.buildings ?? []).filter((b) => !b.unbuildable && !isWall(b) && b.sow?.resources.includes('food') && !bodyBuilt(w, this.player, b.id))
+      .sort((a, b) => a.materials - b.materials)[0];
+    const plan = (this.plan ??= SkirmishAI.buildOrder(faction, P.buildGap).filter(([id]) => id !== farm?.id));
     const builders = new Set(workers.filter((u) => u.order.kind === 'build').map((u) => u.id));
-    const siteOpen = buildings.some((b) => !b.complete && !isUnderfoot(b.spec));
+    const siteOpen = buildings.some((b) => !b.complete && !isUnderfoot(b.spec) && b.specId !== farm?.id);
     const placeNear = (size: number): [number, number] | null => {
       // build out from the town center, a little toward the enemy
       const foe = this.enemyTarget(w);
@@ -226,6 +241,26 @@ export class SkirmishAI {
         const spot = site && w.findBuildSpot(tcSpec.size, site[0], site[1]);
         const pick = spot ? this.closestFree(workers, builders, spot[0], spot[1], 4) : [];
         if (spot && pick.length) out.push({ type: 'build', units: pick, specId: tcSpec.id, ox: spot[0], oy: spot[1] });
+      }
+    }
+    // ── Farms: wild food near home runs out by about minute five, so a building that sows food goes up early, and
+    //    another for every few more workers, around home on the side away from the enemy. They sow food only (wood
+    //    grows wild in plenty), and their planting is the food the economy grows on.
+    if (tc && farm && home && !w.buildBlocker(this.player, farm.id)) {
+      const farms = buildings.filter((b) => b.specId === farm.id);
+      for (const b of farms) {
+        if (b.complete && b.sowing.includes('wood')) out.push({ type: 'setSowing', building: b.id, resources: ['food'] });
+        if (b.complete) continue;
+        const helping = workers.filter((u) => u.order.kind === 'build' && u.order.site === b.id).length;
+        const pick = helping < 2 ? this.closestFree(workers, builders, b.ox, b.oy, 2 - helping) : [];
+        if (pick.length) out.push({ type: 'construct', units: pick, site: b.id });
+      }
+      const want = minutes < 1.5 ? 0 : Math.min(8, 1 + Math.floor(workers.length / 7));
+      const cost = w.buildingStatsOf(this.player, farm.id)!.totalCost;
+      if (farms.length < want && farms.every((b) => b.complete) && stock.wood >= cost * 0.6) {
+        const spot = this.farmSpot(w, farm.size, farm.sow!.radius, home, buildings.filter((b) => b.specId === farm.id), buildings.filter((b) => b.complete && !!b.spec.trains?.length));
+        const pick = spot ? this.closestFree(workers, builders, spot[0], spot[1], 2) : [];
+        if (spot && pick.length) out.push({ type: 'build', units: pick, specId: farm.id, ox: spot[0], oy: spot[1] });
       }
     }
     for (const [step, [id, atWorkers]] of plan.entries()) {
@@ -282,26 +317,49 @@ export class SkirmishAI {
       w, player: this.player, faction, workers, army, buildings, attacking: this.attacking, out,
       closestFree: (x, y, n) => this.closestFree(workers, builders, x, y, n),
       train: (b, id) => this.tryTrain(w, b, id, out),
+      home, toward: this.enemyTarget(w), raided: w.tick - this.lastRaid < TICK_RATE * 180,
     };
     useBearers(turn);
     useHerds(turn);
     useBrood(turn, minutes);
+    useLayDown(turn, minutes);
+    useDigest(turn);
     this.lastBelt = useBelts(turn, this.lastBelt);
 
     // ── Hauling without carts: a building whose order waits on supplies gets a worker
     //    to fetch them from wherever they piled up; it goes back to gathering after.
     //    (Once we have carts, they do it and the workers go back to work.)
+    //    Whatever a building is short of counts (a waiting order, a tower's crystal, a farm's seed), but only while
+    //    another building has it to spare: a hauler with nothing to fetch goes back to work.
     {
-      const most = units.some((u) => u.carter) ? 0 : Math.max(1, Math.floor(workers.length / 6));
-      const waiting = (b: Building) => b.complete && b.queue.some((q) => !q.paid);
+      const L = w.logistics;
+      const spare = new Map(buildings.map((b) => [b.id, L.spare(b)]));
+      const total: Record<ResourceKind, number> = { food: 0, wood: 0, crystal: 0 };
+      for (const s of spare.values()) for (const r of RESOURCES) total[r] += s[r];
+      // (more hands while food piles up where it isn't wanted)
+      const most = units.some((u) => u.carter) ? 0 : Math.max(1, Math.floor(workers.length / (total.food > 400 ? 3 : 5)));
+      // how much a building is short of that others could bring it (waiting orders count double)
+      const need = (b: Building): number => {
+        if (!b.complete) return 0;
+        const short = L.shortfall(b), mine = spare.get(b.id)!;
+        let n = 0;
+        for (const r of RESOURCES) n += Math.min(short[r], total[r] - mine[r]) >= Math.min(5, short[r]) ? Math.min(short[r], total[r] - mine[r]) : 0;
+        return n * (L.waiting(b) ? 2 : 1);
+      };
+      const needs = new Map(buildings.map((b) => [b.id, need(b)]));
+      const homeOf = (u: Unit) => (u.order.kind === 'cart' ? u.order.home : 0);
       const haulers = workers.filter((u) => u.order.kind === 'cart');
-      const busy = haulers.filter((u) => { const h = u.order.kind === 'cart' ? w.buildings.get(u.order.home) : undefined; return !!h && waiting(h); }).slice(0, most);
+      // (one carrying a load finishes the trip)
+      const busy = haulers.filter((u) => (needs.get(homeOf(u)) ?? 0) >= 1 || u.food + u.wood + u.crystal > 0.05).slice(0, most);
       const free = haulers.filter((u) => !busy.includes(u));
       if (free.length) out.push({ type: 'stop', units: free.map((u) => u.id) });
+      for (const u of busy) builders.add(u.id);
       let n = busy.length;
-      for (const b of buildings) {
-        if (n >= most) break;
-        if (!waiting(b) || busy.some((u) => u.order.kind === 'cart' && u.order.home === b.id)) continue;
+      for (const b of [...buildings].sort((p, q) => needs.get(q.id)! - needs.get(p.id)! || p.id - q.id)) {
+        if (n >= most || needs.get(b.id)! < 1) break;
+        // (about one hauler per 40 kg short, a few at most)
+        const serving = busy.filter((u) => homeOf(u) === b.id).length;
+        if (serving >= Math.min(3, Math.ceil(needs.get(b.id)! / 40))) continue;
         const pick = this.closestFree(workers, builders, b.ox, b.oy, 1);
         if (pick.length) { out.push({ type: 'haul', units: pick, building: b.id }); n++; }
       }
@@ -315,8 +373,9 @@ export class SkirmishAI {
     }
     // Shift gatherers toward whatever isn't piling up.
     const share: Record<ResourceKind, number> = { food: 0.6, wood: 0.25, crystal: 0.15 };
-    if (stock.crystal > 250) { share.food += share.crystal - 0.04; share.crystal = 0.04; }
+    if (stock.crystal > 150) { share.food += share.crystal - 0.03; share.crystal = 0.03; } // (few units cost much crystal: a pile is wasted work)
     if (stock.wood > 700) { share.food += share.wood - 0.1; share.wood = 0.1; }
+    else if (stock.food > 800) { share.wood = 0.4; share.food = 1 - share.wood - share.crystal; } // food piling up: wood for more buildings to spend it
     else if (P.tight && stock.wood < this.woodWanted(w, plan, buildings)) { share.wood = 0.4; share.food = 0.45; } // hard: saving for the next building
     // rebalance a few busy gatherers too, not just idle ones
     for (const r of ['wood', 'crystal'] as ResourceKind[]) {
@@ -376,7 +435,8 @@ export class SkirmishAI {
     };
     const isSoldier = (id: string) => id !== faction.workerId && id !== faction.carterId && !!w.specOf(this.player, id)?.stats.canAttack;
     let bestValue = 0;
-    for (const b of buildings) if (b.complete) for (const id of b.spec.trains ?? []) if (isSoldier(id)) bestValue = Math.max(bestValue, value(id));
+    // (among buildings free to train: one held up by a technology waiting on its wood doesn't count)
+    for (const b of buildings) if (b.complete && !b.queue.some((q) => q.kind === 'tech' && !q.paid)) for (const id of b.spec.trains ?? []) if (isSoldier(id)) bestValue = Math.max(bestValue, value(id));
 
     // ── More production (hard): when food piles up and every building that trains our best
     //    soldier is busy, raise another of them.
@@ -387,7 +447,10 @@ export class SkirmishAI {
       const mine = spec ? buildings.filter((b) => b.specId === spec!.id) : [];
       const unit = spec && w.specOf(this.player, spec.trains!.filter(isSoldier).sort((p, q) => value(q) - value(p))[0])!.stats;
       if (spec && unit && mine.length < 4 && mine.every((b) => b.complete && b.queue.length > 0) && stock.food > unit.foodCost * 2 + 200 && stock.wood >= w.buildingStatsOf(this.player, spec.id)!.totalCost) {
-        const spot = placeNear(spec.size);
+        // beside the building where food piles up most (a farm), so what's gathered there is spent there
+        let pile: Building | null = null, most = 200;
+        for (const b of buildings) { const f = w.logistics.spare(b).food; if (f > most) { most = f; pile = b; } }
+        const spot = (pile && w.findBuildSpot(spec.size, pile.ox + pile.size / 2, pile.oy + pile.size / 2, 8)) || placeNear(spec.size);
         const pick = spot ? this.closestFree(workers, builders, spot[0], spot[1], 3) : [];
         if (spot && pick.length) out.push({ type: 'build', units: pick, specId: spec.id, ox: spot[0], oy: spot[1] });
       }
@@ -398,7 +461,25 @@ export class SkirmishAI {
     // queue where the supplies already are, and let only one worker order and a few soldier
     // orders wait on hauling (orders waiting everywhere strand the stock in scattered piles)
     const unpaid = (worker: boolean) => buildings.reduce((n, b) => n + b.queue.filter((q) => q.kind === 'unit' && !q.paid && (q.specId === faction.workerId) === worker).length, 0);
-    const waitBudget = { worker: 1 - unpaid(true), soldier: (P.tight ? 2 : 3) - unpaid(false) };
+    // (food piling up: every producer may wait on some, as hauling brings it)
+    const waitBudget = { worker: 1 - unpaid(true), soldier: (P.tight ? 2 : 3) + (stock.food > 500 ? 3 : 0) - unpaid(false) };
+    // a farm with nothing growing and no seed comes before soldiers (a planting gives back four times its seed, and a farm
+    // with plants keeps its own seed): while no other building can spare the seed, no soldier orders wait on food, and the
+    // ones waiting let go of what they'd claimed
+    let seedWanted = 0, foodSpare = 0;
+    const growing = new Set<number>();
+    for (const n of w.nodes.values()) if (n.sownBy) growing.add(n.sownBy);
+    for (const b of buildings) {
+      if (b.complete && b.specId === farm?.id && !growing.has(b.id) && w.sowNext(b) === 'food') seedWanted += w.logistics.shortfall(b).food;
+      foodSpare += w.logistics.spare(b).food;
+    }
+    if (seedWanted >= 1 && foodSpare < seedWanted) {
+      waitBudget.soldier = 0;
+      for (const b of buildings) {
+        const at = b.queue.findIndex((q) => q.kind === 'unit' && !q.paid && q.specId !== faction.workerId);
+        if (at >= 0 && b.stock.food >= 10) out.push({ type: 'cancelTrain', building: b.id, index: at });
+      }
+    }
     const train = (b: Building, id: string): boolean => {
       const st = w.specOf(this.player, id)?.stats;
       const kind = id === faction.workerId ? 'worker' : 'soldier';
@@ -412,7 +493,9 @@ export class SkirmishAI {
       if (!b.complete || b.queue.length >= 2) continue;
       const trains = (b.spec.trains ?? []).filter((id) => w.specOf(this.player, id));
       if (!trains.length) continue;
-      if (trains.includes(faction.workerId) && workers.length < workerTarget) { train(b, faction.workerId); continue; }
+      // (a building that raises both, away from home, trains soldiers instead while food piles up and the army is small)
+      const soldiersHere = b !== tc && stock.food > 500 && army.length < workers.length / 2 && trains.some(isSoldier);
+      if (trains.includes(faction.workerId) && workers.length < workerTarget && !soldiersHere) { train(b, faction.workerId); continue; }
       // soldiers (a building that also raises workers trains soldiers once there are enough workers)
       const soldiers = trains.filter(isSoldier);
       if (!soldiers.length || workerFirst) continue;
@@ -422,9 +505,21 @@ export class SkirmishAI {
         const ranked = [...soldiers].sort((p, q) => value(q) - value(p));
         pick = ranked.length > 1 && i % 4 === 3 ? ranked[1] : ranked[0];
         // the money goes to the best soldiers we can make: a building whose best is far worse waits, unless food piles up
-        if (value(ranked[0]) < bestValue * 0.4 && stock.food < 800) continue;
+        if (value(ranked[0]) < bestValue * 0.4 && stock.food < 400) continue;
       } else pick = soldiers[i % soldiers.length]; // whatever comes next on the list
       if (train(b, pick)) this.trainIndex.set(b.id, i + 1);
+    }
+
+    // ── More carts: while stock piles up at outlying buildings (farms, camps), the producers that keep carts get more.
+    if (faction.carterId && w.specOf(this.player, faction.carterId)) {
+      const carts = units.filter((u) => u.carter).length;
+      let piled = 0;
+      for (const b of buildings) if (b !== tc) { const sp = w.logistics.spare(b); piled += sp.food + sp.crystal; }
+      const pools = buildings.filter((b) => b.complete && (b.spec.carters ?? 0) > 0 && b.spec.trains?.includes(faction.carterId!));
+      if (piled > 500 && pools.length && carts < pools.length * 3 + Math.floor(workers.length / 5)) {
+        const b = pools.find((x) => x.queue.length < 2);
+        if (b) this.tryTrain(w, b, faction.carterId, out);
+      }
     }
 
     // ── Research: queue the next available tech when the building is idle (it waits for its wood).
@@ -433,7 +528,9 @@ export class SkirmishAI {
       for (const id of b.spec.researches ?? []) {
         const st = w.techStatus(this.player, id, b);
         // (hard only queues what it can pay for now, so a tech never holds up the workers behind it)
-        if (!st.blocker && (!P.tight || stock.wood >= st.cost)) { out.push({ type: 'research', building: b.id, techId: id }); break; }
+        // (and where it would hold up soldiers behind it, only with wood to spare, so it's soon brought)
+        const spare = b.spec.trains?.some(isSoldier) ? 300 : 0;
+        if (!st.blocker && (!P.tight || stock.wood >= st.cost + spare)) { out.push({ type: 'research', building: b.id, techId: id }); break; }
       }
     }
 
@@ -478,6 +575,7 @@ export class SkirmishAI {
         return buildings.some((b) => (b.ox + b.size / 2 - e.x) ** 2 + (b.oy + b.size / 2 - e.y) ** 2 < 9 * 9) || workers.some((u) => (u.x - e.x) ** 2 + (u.y - e.y) ** 2 < 7 * 7);
       };
       const intruder = hostiles.find((e) => (this.foe(w, e.owner) || w.armed(e)) && close(e));
+      if (intruder && this.foe(w, intruder.owner) && w.armed(intruder)) this.lastRaid = w.tick;
       if (!intruder) this.threatSince = -1;
       else if (this.threatSince < 0) this.threatSince = w.tick;
       if (intruder && w.tick - this.threatSince >= P.react) {
@@ -610,19 +708,72 @@ export class SkirmishAI {
         this.waveSize = Math.min(P.maxWave, Math.max(this.waveSize, wave.length + 4)); // come back bigger
       }
     }
-    if (target) {
-      // an attack that's arrived and found no one to fight goes for the nearest enemy building it knows (an attack-move
-      // fights what it meets, and stops there); one with none near goes on to where the enemy is
-      const stalled = army.filter((u) => this.attacking.has(u.id) && u.order.kind === 'idle' && u.engage === 0);
-      const onward: number[] = [];
-      for (const u of stalled) {
-        let best: number | null = null, bestD = 10 * 10; // (within sight: one it's seen go is forgotten, see look())
-        for (const [id, k] of this.knownBuildings) { const d = (k.x - u.x) ** 2 + (k.y - u.y) ** 2; if (d < bestD) { bestD = d; best = id; } }
-        if (best !== null) out.push({ type: 'attack', units: [u.id], target: best }); else onward.push(u.id);
-      }
-      if (onward.length) out.push({ type: 'attackMove', units: onward, x: target[0], y: target[1] });
+    // ── Hunting: an attack that's arrived and found no one to fight goes after what keeps the enemy in the game: the
+    //    nearest enemy fighter or worker in sight, a building of theirs that raises units, where we last saw one of
+    //    their units, or failing all of those, ground we haven't looked at.
+    const stalled = army.filter((u) => this.attacking.has(u.id) && u.order.kind === 'idle' && u.engage === 0);
+    if (stalled.length) {
+      const gx = stalled.reduce((n, u) => n + u.x, 0) / stalled.length, gy = stalled.reduce((n, u) => n + u.y, 0) / stalled.length;
+      const prey = this.prey(w, gx, gy, hostiles);
+      const ids = stalled.map((u) => u.id);
+      if (prey?.building !== undefined) out.push({ type: 'attack', units: ids, target: prey.building });
+      else if (prey) out.push({ type: 'attackMove', units: ids, x: prey.x, y: prey.y });
     }
     return out;
+  }
+
+  /** Does this enemy unit keep its side in the game (it fights, gathers, or will become one that does)? */
+  private vital(w: World, e: Unit): boolean {
+    if (e.carter || e.tame === 'passive') return false;
+    return e.stats.canAttack || w.gathers(e) || !!w.specOf(e.owner, e.specId)?.spec.becomes?.length;
+  }
+
+  /**
+   * What an army at (x, y) with no one to fight should go after: the nearest enemy fighter or worker in sight, else the
+   * nearest building of theirs we know that raises units, else where we last saw one of their units, else the nearest
+   * ground we haven't looked at (never seen first).
+   */
+  private prey(w: World, x: number, y: number, hostiles: Unit[]): { x: number; y: number; building?: number } | null {
+    const d2 = (px: number, py: number) => (px - x) ** 2 + (py - y) ** 2;
+    let best: { x: number; y: number; building?: number } | null = null, bestD = Infinity;
+    for (const e of hostiles) if (this.foe(w, e.owner) && this.vital(w, e) && d2(e.x, e.y) < bestD) { bestD = d2(e.x, e.y); best = { x: e.x, y: e.y }; }
+    if (best) return best;
+    for (const [id, k] of this.knownBuildings) if (k.trains && d2(k.x, k.y) < bestD) { bestD = d2(k.x, k.y); best = { x: k.x, y: k.y, building: id }; }
+    if (best) return best;
+    for (const t of this.traces.values()) if (d2(t.x, t.y) < bestD) { bestD = d2(t.x, t.y); best = { x: t.x, y: t.y }; }
+    if (best) return best;
+    const p = this.unexplored(w, x, y, Infinity);
+    return p ? { x: p[0], y: p[1] } : null;
+  }
+
+  /**
+   * Where the next farm goes: beside a building that trains (home first), the one with the fewest farms around it, so
+   * what's harvested is dropped off where it's spent; on the side away from the enemy where there's room, its sowing
+   * ring clear of the other farms'.
+   */
+  private farmSpot(w: World, size: number, radius: number, home: [number, number], farms: Building[], trainers: Building[]): [number, number] | null {
+    const foe = this.enemyTarget(w);
+    const tc = w.baseOf(this.player);
+    const centres = [{ x: home[0], y: home[1], r: (tc?.size ?? 0) / 2 }, ...trainers.filter((b) => b !== tc).map((b) => ({ x: b.ox + b.size / 2, y: b.oy + b.size / 2, r: b.size / 2 }))];
+    const around = (c: { x: number; y: number }) => farms.filter((f) => Math.hypot(f.ox + f.size / 2 - c.x, f.oy + f.size / 2 - c.y) < 2 * radius + 4).length;
+    centres.sort((a, b) => around(a) - around(b)); // (stable: home first among equals)
+    for (const c of centres) {
+      const away = foe ? Math.atan2(c.y - foe[1], c.x - foe[0]) : 0;
+      for (const ring of [radius + c.r + 1, radius + c.r + 4]) {
+        let best: [number, number] | null = null, bestScore = Infinity;
+        for (let k = 0; k < 12; k++) {
+          const a = away + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 6);
+          const cx = c.x + Math.cos(a) * ring, cy = c.y + Math.sin(a) * ring;
+          if (farms.some((f) => Math.hypot(f.ox + f.size / 2 - cx, f.oy + f.size / 2 - cy) < radius * 1.6)) continue;
+          const spot = w.findBuildSpot(size, cx, cy, 2);
+          if (!spot) continue;
+          const score = Math.ceil(k / 2); // (away from the enemy first)
+          if (score < bestScore) { bestScore = score; best = spot; }
+        }
+        if (best) return best;
+      }
+    }
+    return null;
   }
 
   /** Wood the next building in the build order costs (0 when it's all built). */
@@ -661,7 +812,7 @@ export class SkirmishAI {
     const hx = home ? home.ox + home.size / 2 : w.grid.width / 2, hy = home ? home.oy + home.size / 2 : w.grid.height / 2;
     let best: [number, number] | null = null, bestD = Infinity;
     for (const k of this.knownBuildings.values()) {
-      const d = (k.x - hx) ** 2 + (k.y - hy) ** 2;
+      const d = (k.x - hx) ** 2 + (k.y - hy) ** 2 + (k.trains ? 0 : 1e6); // (one that raises units first: the enemy is beaten when they're gone)
       if (d < bestD) { bestD = d; best = [k.x, k.y]; }
     }
     if (best) return best;
