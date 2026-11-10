@@ -232,48 +232,61 @@ async function building(params: URLSearchParams): Promise<void> {
 }
 
 /** A full-window box that scrolls, over the game, to lay a sheet out in whole however big it is. */
-/** ?mode=sprites&joins=<wall id>: a wall as the game draws it (BuildingArt.joined). First each of its looks joined
- *  every way it can be (its neighbours shown as pale tiles), then some layouts, each piece joined to the like pieces
- *  beside it and taking the looks in turn by its tile, exactly as the renderer does. */
+/** ?mode=sprites&joins=<wall id>[&beside=<building id>,…]: a wall as the game draws it (BuildingArt.joined). First each
+ *  of its looks joined every way it can be (its neighbours shown as pale tiles), then some layouts, each piece joined to
+ *  the like pieces beside it and taking the looks in turn by its tile, exactly as the renderer does. &beside: last, the
+ *  wall run past those buildings (of its faction), with a gap, for scale. &only=layouts: skip the every-piece sheets. */
 async function joinsPage(id: string): Promise<void> {
-  const spec = PLAYABLE.flatMap((f) => f.buildings ?? []).find((b) => b.id === id) as unknown as { name: string; model: import('../kits/bake3d/types').BuildingModel; size: number; looks?: number } | undefined;
+  type Spec = { id: string; name: string; model: import('../kits/bake3d/types').BuildingModel; size: number; looks?: number };
+  const params = new URLSearchParams(location.search), team = teamOf(params);
+  const faction = PLAYABLE.find((f) => f.buildings?.some((b) => b.id === id));
+  const spec = faction?.buildings?.find((b) => b.id === id) as unknown as Spec | undefined;
   if (!spec) return;
   const { Baker } = await import('../kits/bake3d/baker');
-  const art = new Baker().bakeBuilding(spec.model, spec.size, teamOf(new URLSearchParams(location.search)), false, spec.looks ?? 1), joined = art.joined!;
+  const baker = new Baker(), art = baker.bakeBuilding(spec.model, spec.size, team, false, spec.looks ?? 1), joined = art.joined!;
+  const beside = (params.get('beside')?.split(',') ?? []).map((b) => faction!.buildings!.find((x) => x.id === b) as unknown as Spec | undefined).filter((b) => !!b)
+    .map((b) => ({ spec: b, sprite: baker.bakeBuilding(b.model, b.size, team).complete }));
+  baker.dispose();
   const box = scroller();
   box.style.cssText += ';padding:16px;color:#f3e7c4;font:600 14px Georgia, serif';
   const heading = (text: string, sub = '') => { const h = document.createElement('div'); h.innerHTML = `<div style="font-size:20px;margin:14px 0 2px">${text}</div><div style="font-weight:400;opacity:.8;margin-bottom:8px">${sub}</div>`; box.appendChild(h); };
   const row = () => { const r = document.createElement('div'); r.style.cssText = 'display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end'; box.appendChild(r); return r; };
   const n = spec.size;
   /** Draw `tiles` (tile corners) on a canvas, the game's way; `ghosts`: pale tiles to show where neighbours are. */
-  const draw = (tiles: Array<[number, number]>, scale: number, ghosts: Array<[number, number]> = [], fixed?: (x: number, y: number) => { look: number; joins: number }) => {
-    const all = [...tiles, ...ghosts], xs = all.map((t) => t[0]), ys = all.map((t) => t[1]);
+  type Placed = { x: number; y: number; size: number; sprite: import('../art/contract').Sprite };
+  const draw = (tiles: Array<[number, number]>, scale: number, ghosts: Array<[number, number]> = [], fixed?: (x: number, y: number) => { look: number; joins: number }, others: Placed[] = []) => {
+    const all = [...tiles, ...ghosts, ...others.flatMap((o) => [[o.x, o.y], [o.x + o.size - n, o.y + o.size - n]] as Array<[number, number]>)], xs = all.map((t) => t[0]), ys = all.map((t) => t[1]);
     const x0 = Math.min(...xs), y0 = Math.min(...ys), w = Math.max(...xs) - x0 + n, h = Math.max(...ys) - y0 + n;
     const iso = (x: number, y: number): [number, number] => [(x - x0 - (y - y0)) * 32 * scale, (x - x0 + y - y0) * 16 * scale];
-    const tall = 110 * scale, c = document.createElement('canvas');
+    const tall = Math.max(110, ...others.map((o) => o.sprite.ay / o.sprite.q + 10)) * scale, c = document.createElement('canvas');
     c.width = Math.ceil((w + h) * 32 * scale + 40); c.height = Math.ceil((w + h) * 16 * scale + tall + 20);
     const g = c.getContext('2d')!, ox = h * 32 * scale + 20, oy = tall;
-    const diamond = (x: number, y: number, fill: string) => {
-      g.beginPath(); for (const [a, b] of [[x, y], [x + n, y], [x + n, y + n], [x, y + n]]) { const [px, py] = iso(a, b); g.lineTo(ox + px, oy + py); }
+    const diamondOf = (x: number, y: number, s: number, fill: string) => {
+      g.beginPath(); for (const [a, b] of [[x, y], [x + s, y], [x + s, y + s], [x, y + s]]) { const [px, py] = iso(a, b); g.lineTo(ox + px, oy + py); }
       g.closePath(); g.fillStyle = fill; g.fill();
     };
+    const diamond = (x: number, y: number, fill: string) => diamondOf(x, y, n, fill);
     for (const [x, y] of tiles) diamond(x, y, 'rgba(0,0,0,0.12)');
     for (const [x, y] of ghosts) diamond(x, y, 'rgba(255,255,255,0.28)');
+    for (const o of others) diamondOf(o.x, o.y, o.size, 'rgba(0,0,0,0.12)');
     const has = (x: number, y: number) => tiles.some(([a, b]) => a === x && b === y);
-    for (const [x, y] of [...tiles].sort((p, q) => p[0] + p[1] - (q[0] + q[1]))) {
+    const items: Placed[] = [...tiles.map(([x, y]) => {
       const j = (has(x + n, y) ? 1 : 0) | (has(x - n, y) ? 2 : 0) | (has(x, y + n) ? 4 : 0) | (has(x, y - n) ? 8 : 0);
       const { look, joins } = fixed?.(x, y) ?? { look: (x + y) % joined.length, joins: j }; // (the renderer's rule)
-      const sp = joined[look][joins], k = scale / sp.q, [px, py] = iso(x + n / 2, y + n / 2);
+      return { x, y, size: n, sprite: joined[look][joins] };
+    }), ...others];
+    for (const { x, y, size, sprite: sp } of items.sort((p, q) => p.x + p.y + p.size - (q.x + q.y + q.size))) { // (back to front)
+      const k = scale / sp.q, [px, py] = iso(x + size / 2, y + size / 2);
       g.drawImage(sp.img, sp.sx, sp.sy, sp.sw, sp.sh, ox + px - sp.ax * k, oy + py - sp.ay * k, sp.sw * k, sp.sh * k);
     }
     return c;
   };
   const cell = (r: HTMLElement, c: HTMLCanvasElement, label: string) => { const d = document.createElement('div'); d.style.cssText = 'display:flex;flex-direction:column;align-items:center;gap:4px'; d.append(c, label); r.appendChild(d); };
   // 1. every piece
-  const NAMES = ['hedge', 'sprawl', 'billow'], dirs: Array<[number, number, number, string]> = [[1, n, 0, 'SE'], [2, -n, 0, 'NW'], [4, 0, n, 'SW'], [8, 0, -n, 'NE']];
-  heading(`${spec.name}: every piece`, 'One piece (dark tile), joined toward the neighbours it has (pale tiles). Its web reaches to the edge on a joined side and stops short on an open one. 16 ways for each of its looks: these are the extra bakes.');
-  joined.forEach((_, look) => {
-    heading(`Look ${look + 1}: ${NAMES[look] ?? look}`);
+  const NAMES = spec.id === 'web-wall' ? ['hedge', 'sprawl', 'billow'] : [], dirs: Array<[number, number, number, string]> = [[1, n, 0, 'SE'], [2, -n, 0, 'NW'], [4, 0, n, 'SW'], [8, 0, -n, 'NE']];
+  if (params.get('only') !== 'layouts') heading(`${spec.name}: every piece`, 'One piece (dark tile), joined toward the neighbours it has (pale tiles). It reaches to the edge on a joined side and stops short on an open one. 16 ways for each of its looks: these are the extra bakes.');
+  if (params.get('only') !== 'layouts') joined.forEach((_, look) => {
+    heading(`Look ${look + 1}${NAMES[look] ? `: ${NAMES[look]}` : ''}`);
     const r = row();
     for (let m = 0; m < 16; m++) {
       const ghosts = dirs.filter(([bit]) => m & bit).map(([, dx, dy]) => [dx, dy] as [number, number]);
@@ -281,10 +294,11 @@ async function joinsPage(id: string): Promise<void> {
     }
   });
   // 2. layouts, as the game draws them
-  heading('Laid out in the game', 'Each piece joined to the like pieces beside it; along a line they take the looks in turn (hedge, sprawl, billow), by tile.');
+  heading('Laid out in the game', `Each piece joined to the like pieces beside it; along a line they take the looks in turn${NAMES.length ? ` (${NAMES.join(', ')})` : ''}, by tile.`);
   const line = (len: number, dx: number, dy: number, x = 0, y = 0) => Array.from({ length: len }, (_, i) => [x + i * dx * n, y + i * dy * n] as [number, number]);
   const uniq = (t: Array<[number, number]>) => t.filter(([a, b], i) => t.findIndex(([c, d]) => c === a && d === b) === i);
   const layouts: Array<[string, Array<[number, number]>]> = [
+    ['one piece', [[0, 0]]],
     ['a line (along the map’s x)', line(8, 1, 0)],
     ['a line (along y)', line(8, 0, 1)],
     ['a corner', uniq([...line(5, 1, 0), ...line(5, 0, 1)])],
@@ -296,6 +310,16 @@ async function joinsPage(id: string): Promise<void> {
   ];
   const r = row();
   for (const [name, tiles] of layouts) cell(r, draw(tiles, 0.9), name);
+  // 3. beside other buildings: a run along the front of them, a gap to walk through, turning a corner up the side
+  if (beside.length) {
+    heading(`Beside the ${beside.map((b) => b.spec.name).join(' and the ')}`, 'For scale: a run along the front with a one-tile gap, turning a corner up the side.');
+    let at = 0;
+    const others = beside.map((b) => { const o = { x: at, y: 0, size: b.spec.size, sprite: b.sprite }; at += b.spec.size + n; return o; });
+    const deep = Math.max(...beside.map((b) => b.spec.size)) + n, end = at;
+    const front = line(end / n + 1, 1, 0, -n, deep).filter(([x]) => x !== others[0].x + others[0].size), side = line(deep / n + 1, 0, 1, end, -n);
+    cell(row(), draw(uniq([...front, ...side]), 1.1, [], undefined, others), `${spec.name} beside the ${beside.map((b) => b.spec.name).join(' and the ')}`);
+  }
+  document.title = 'sprites ready';
 }
 
 /** ?mode=sprites&teams=<faction>[&facing=1|&facings=1,3,6][&only=<id>,<id>][&cell=170]: every unit (standing, one

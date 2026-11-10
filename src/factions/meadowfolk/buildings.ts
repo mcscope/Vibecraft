@@ -1,6 +1,6 @@
 // Meadowfolk building models. 1 tile = 2 model units; origin = footprint centre,
 // so a building of `size` tiles spans ±size units on x and z.
-import type { Mat, ModelBuilder } from '../../kits/bake3d/types';
+import type { BuildingState, Mat, ModelBuilder } from '../../kits/bake3d/types';
 import { roundStoneWall, shingledCone, stoneWall, tiledRoof, timberFrame, vary } from '../../kits/bake3d/detail';
 
 const WOOD: Mat = { color: '#5e4128', tex: 'wood' };
@@ -183,6 +183,74 @@ export function watchtower(b: ModelBuilder): void {
   b.cylinder(0.12, 0.08, 0.07, [1.3, h + 1.12, 0], { color: '#5a3f28', tex: 'leather' });
   b.crystal(0.18, [1.3, h + 1.16, 0]);
   b.box([0.04, 0.5, 0.3], [0.8, h - 0.35, 0], BANNER);
+}
+
+const LOG: Mat = { color: '#94693f', tex: 'wood' };
+const CUT: Mat = { color: '#a8814f', tex: 'wood' }; // (fresh-cut wood at the sharpened tips)
+/** A steady wobble from a few numbers (the same every bake): 0 … 1. */
+const wob = (...n: number[]) => { let h = 2166136261; for (const x of n) h = Math.imul(h ^ Math.round(x * 997 + 13), 16777619); return ((h >>> 0) % 1001) / 1000; };
+
+/** The palisade's looks, in turn along a line (Building art `looks`): a knight's shield hung on it, a banner hung on it. */
+export const PALISADE_LOOKS = 2;
+/**
+ * A piece of palisade (1 tile): sharpened logs set in a stone footing, bound by two rails on the inside, a team-coloured
+ * shield or banner hung on the outside. It runs out to the tile's edge toward each neighbour it joins (`state.joins`:
+ * 1 +x, 2 −x, 4 +z, 8 −z), so a line reads as one wall; an open end stops with a heavier post.
+ */
+export function palisade(b: ModelBuilder, state?: BuildingState): void {
+  const j = state?.joins ?? (state ? 0 : 3); // (no state: a straight run)
+  const look = (state?.look ?? 0) % PALISADE_LOOKS;
+  const onX = !!(j & 3) || !(j & 12), onZ = !!(j & 12);
+  // each arm out from the middle: [direction x, z, how far] (an open end of a run stops short, at a post)
+  const arms = ([[1, 1, 0], [2, -1, 0], [4, 0, 1], [8, 0, -1]] as const).map(([bit, dx, dz]) => {
+    const along = dx ? onX && !onZ : onZ && !onX; // (the run this piece is on, when it's on one only)
+    return { dx, dz, reach: j & bit ? 1 : along ? 0.7 : 0, open: !(j & bit) && along };
+  }).filter((a) => a.reach > 0);
+  const stake = (x: number, z: number, r: number, h: number, k: number) => {
+    const lean = (wob(k, 3) - 0.5) * 0.06;
+    b.cylinder(r * 0.92, r, h, [x, h / 2, z], vary(LOG, wob(k, 1), 0.18), [lean, 0, -lean], 7);
+    b.cone(r * 0.95, 0.32, [x + lean * h * 0.5, h + 0.15, z], vary(CUT, wob(k, 2), 0.15), undefined, 7);
+  };
+  for (const [i, a] of arms.entries()) {
+    // (to the edge where it meets a neighbour's; past the end post at an open end; from behind the post at a corner)
+    const start = onX && onZ ? -0.16 : 0, end = a.open ? a.reach + 0.2 : a.reach, len = end - start, mx = a.dx * (start + end) / 2, mz = a.dz * (start + end) / 2;
+    // the stone footing the logs are set in
+    // (only as wide as the logs, so they cover its top: a piece is lit alone, and a lit top would show where pieces meet)
+    b.box(a.dx ? [len, 0.38, 0.3] : [0.3, 0.38, len], [mx, 0.19, mz], vary(STONE, 0.2, 0.3)); // (the mortar behind)
+    for (let k = 0; k < 2; k++) { // two courses of stones on its outside face (only there: at its ends it meets the next piece's)
+      for (let t = start + (k ? 0.14 : 0), n = 0; t < end - 0.04; n++) {
+        const l = Math.min(end - t, 0.26 + wob(k, n, i, j) * 0.22), m = t + l / 2, proud = 0.03 + wob(n, k) * 0.025, y = 0.095 + k * 0.19;
+        b.box(a.dx ? [l - 0.035, 0.17, proud + 0.02] : [proud + 0.02, 0.17, l - 0.035], a.dx ? [a.dx * m, y, 0.15 + proud / 2] : [0.15 + proud / 2, y, a.dz * m], vary(STONE, wob(n, k, 5), 0.16));
+        t += l;
+      }
+    }
+    // the logs, a quarter-metre apart all along the line (so they keep the spacing across pieces)
+    for (let t = 0.125; t < a.reach; t += 0.25) stake(a.dx * t, a.dz * t, 0.115, 2.05 + wob(t, i, j) * 0.3, t * 10 + i * 3 + j);
+    if (a.open) stake(a.dx * a.reach, a.dz * a.reach, 0.16, 2.6, 99 + i); // (an end post)
+    // two rails binding them on the inside (−z for a run along x, −x for one along z)
+    for (const y of [0.95, 1.75]) {
+      const ix = a.dz ? -0.16 : 0, iz = a.dx ? -0.16 : 0, from = onX && onZ ? -0.16 : 0;
+      b.limb([a.dx * from + ix, y, a.dz * from + iz], [a.dx * a.reach + ix, y, a.dz * a.reach + iz], 0.05, DARKWOOD);
+    }
+  }
+  if (onX && onZ) stake(0, 0, 0.16, 2.6, 77); // (a corner post)
+  else if (!onX && !onZ) return;
+  // a team-coloured shield or banner hung on the outside face, on the middle of the piece (a corner: on its x arm)
+  const x = arms.find((a) => a.dx), fx = x ? (onZ ? x.dx * 0.5 : 0) : 0.17, fz = x ? 0.17 : 0;
+  b.joint([fx, 0, fz], [0, x ? 0 : Math.PI / 2, 0], (s) => {
+    if (look === 0) { // a heater shield: a square top over a point, a cross on it, a boss in the middle
+      s.box([0.62, 0.4, 0.05], [0, 1.55, 0], BANNER);
+      s.box([0.44, 0.44, 0.05], [0, 1.36, 0], BANNER, [0, 0, Math.PI / 4]);
+      s.box([0.1, 0.68, 0.056], [0, 1.38, 0], TRIM);
+      s.box([0.62, 0.1, 0.056], [0, 1.52, 0], TRIM);
+      s.sphere([0.07, 0.07, 0.05], [0, 1.52, 0.03], IRON);
+    } else { // a banner hung from the top rail on a crossbar
+      s.limb([-0.3, 2.0, 0.02], [0.3, 2.0, 0.02], 0.03, DARKWOOD);
+      s.box([0.5, 1.0, 0.03], [0, 1.48, 0], BANNER);
+      s.box([0.5, 0.1, 0.035], [0, 1.85, 0], TRIM);
+      s.box([0.25, 0.25, 0.03], [0, 0.98, 0], BANNER, [0, 0, Math.PI / 4]); // (its pointed foot)
+    }
+  });
 }
 
 /** Rally-point marker in team colours. */

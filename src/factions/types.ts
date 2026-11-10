@@ -197,7 +197,7 @@ export interface BuildingSpec {
   };
   /** Players can't place it (e.g. a starting-only building). */
   unbuildable?: boolean;
-  /** A wall piece: blocks the way, laid in lines by hand (shift-click to keep placing). The AI doesn't build these. */
+  /** A wall piece: blocks the way, laid in lines by hand (right-drag lays a line). The AI doesn't build these. */
   wall?: boolean;
   /**
    * A living building: planted with `seed` (0–1) of its materials, then it grows by

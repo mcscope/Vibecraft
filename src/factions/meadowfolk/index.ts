@@ -15,7 +15,7 @@ import type { BuildingModel, Mat, ModelBuilder, UnitModel } from '../../kits/bak
 
 /** Meadowfolk specs carry their 3D models; the engine ignores the extra field. */
 export type MeadowUnit = UnitSpec & { model: UnitModel };
-export type MeadowBuilding = BuildingSpec & { model: BuildingModel };
+export type MeadowBuilding = BuildingSpec & { model: BuildingModel; looks?: number };
 import { armAngle, cargoPack, human, quadLegs, swing, torsoLean, type HumanLook } from './body';
 import * as models from './buildings';
 
@@ -396,6 +396,10 @@ export const buildings: MeadowBuilding[] = [
   {
     id: 'watchtower', name: 'Watchtower', description: 'A throwing arm on stilts. Height adds energy and range; it throws crystals from its own stock.',
     size: 1, materials: 90, attack: { mechanism: 20, crystalMass: 0.5, height: 4 }, model: models.watchtower,
+  },
+  {
+    id: 'palisade', name: 'Palisade', description: 'Right-drag to lay a line of wall. It blocks every army, yours too: leave a gap for your troops, or select a piece and press Delete to open one.',
+    size: 1, materials: 60, wall: true, model: models.palisade, looks: models.PALISADE_LOOKS, // (stone-footed logs: built from the start, like a canal)
   },
 ];
 
