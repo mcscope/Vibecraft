@@ -30,7 +30,7 @@
       <h1>Make Your Army</h1>
       <p class="sub">VibeCraft ships with ready-made factions, but you can also bring an army of your own. You describe your people in code, usually by talking to a coding AI. The engine works out what their bodies can do.</p>
 
-      <div class="box"><b>How it stays fair:</b> you never set HP, damage, speed or cost. You shape bodies: how heavy a unit is, how much of it is muscle, frame (bone, shell, plate) or reserve, and what crystal weapon it carries. The physics prices the rest. A giant hits hard, but it's also slow, hungry and expensive, so nobody can vibecode an army that's simply better.</div>
+      <div class="box"><b>How it stays fair:</b> the game works out HP, damage, speed and cost for you. You shape bodies: how heavy a unit is, how much of it is muscle, frame (bone, shell, plate) or reserve, and what crystal weapon it carries. The physics prices the rest. A giant hits hard, but it's also slow, hungry and expensive, so nobody can vibecode an army that's simply better.</div>
 
       <h2>1. Get the game running</h2>
       <p>You need <a href="https://nodejs.org">Node.js</a> and git. Then:</p>
@@ -55,7 +55,7 @@ Register it in PLAYABLE and the Codex, and follow the rules in CLAUDE.md.</pre>
       <h2>4. What a faction is made of</h2>
       <ul>
         <li><b>Units:</b> a <code>mass</code>, a <code>physique</code> (muscle, frame, reserve) and an <code>attack</code>: strike or throw, how much crystal, and optionally a spear <code>shaft</code>, a <code>sling</code> or a <code>sidearm</code>. Long bodies have a <code>length</code> and wheel round.</li>
-        <li><b>Buildings</b> train units, research techs and store resources. Techs and buildings raise <em>refinement</em>, which makes units cheaper, never stronger.</li>
+        <li><b>Buildings</b> train units, research techs and store resources. Techs and buildings raise <em>refinement</em>, which makes units cheaper. Their stats stay the same.</li>
         <li><b>Art:</b> every unit and building has a small 3D model made from boxes, spheres and limbs. The game bakes it into lit sprites.</li>
         <li><b>Land:</b> your homeworld's ground, trees and deposits, plus the animals that roam it.</li>
         <li><b>New abilities</b> (flying, burrowing, healing...) are added to the engine as generic, data-driven abilities that any faction can switch on. The <a href="https://github.com/mcscope/Vibecraft/blob/master/DESIGN_SPACE.md">design space</a> lists ones nobody uses yet.</li>
@@ -70,7 +70,7 @@ Register it in PLAYABLE and the Codex, and follow the rules in CLAUDE.md.</pre>
       </ul>
 
       <h2>6. Bring it online</h2>
-      <p>Choose <b>Online game</b>, pick a relay and a room code, and share the code with a friend. When the match starts, your faction travels to them as data, and their game re-derives every stat with its own physics. You never need each other's code, and nobody can sneak in cheaper units.</p>
+      <p>Choose <b>Online game</b>, pick a relay and a room code, and share the code with a friend. When the match starts, your faction travels to them as data, and their game re-derives every stat with its own physics. Each of you needs only your own code, and every unit costs what its body is worth.</p>
 
       <p style="margin-top:40px">The full details are in the <a href="https://github.com/mcscope/Vibecraft#readme">README on GitHub</a>.</p>
     </main>
