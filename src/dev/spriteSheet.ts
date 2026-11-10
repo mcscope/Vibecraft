@@ -106,7 +106,8 @@ async function soloStaging(faction: FactionSpec, params: URLSearchParams): Promi
   g.traverse((o) => { if ((o as { isMesh?: boolean }).isMesh) parts.push(new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3())); });
   const span = (k: 'x' | 'y' | 'z') => { const v = parts.map((p) => p[k]).sort((a, b) => a - b); return [v[Math.floor(v.length * 0.1)], v[Math.ceil(v.length * 0.9) - 1]]; };
   const full = new THREE.Box3().setFromObject(g), [x0, x1] = span('x'), [z0, z1] = span('z');
-  const c = new THREE.Vector3((x0 + x1) / 2, (full.min.y + full.max.y) / 2, (z0 + z1) / 2), h = Math.max(0.3, full.max.y - full.min.y);
+  const mid = (k: 'x' | 'y' | 'z') => parts.map((p) => p[k]).sort((a, b) => a - b)[parts.length >> 1];
+  const c = new THREE.Vector3(mid('x'), Math.max(mid('y'), (full.min.y + full.max.y) / 2), mid('z')), h = Math.max(0.3, full.max.y - full.min.y);
   const r = Math.max(h, (x1 - x0) * 1.3, (z1 - z0) * 1.3), d = (r * 1.7 + 0.3) / +(params.get('zoom') ?? 1); // (&zoom=2: twice as close)
   return { sky: ['#8ea8c2', '#f7e8c8'], camera: { from: [c.x, Math.max(0.1, h * 0.18), c.z + d], to: [c.x, c.y, c.z], fov: 34 }, cast: [{ id, at: [0, 0], face, anim, phase }] };
 }

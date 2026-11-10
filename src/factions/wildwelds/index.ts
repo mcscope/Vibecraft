@@ -33,6 +33,14 @@ const DARK: Mat = { team: 'primary', tex: 'none', rough: 0.4 }, LIGHT: Mat = { t
 /** The side's colour lighter but as strong (a red stays red): the dragon fly's wing patches and the vimmer's rings. */
 const BRIGHT: Mat = { team: 'bright', tex: 'none', rough: 0.4 };
 
+/** A body's own tones, from its colour (`tint`): its shell (trunk, head, legs) a dark shade of it, its belly lighter
+ *  and plainer, as an animal's is, so it reads as the same creature from the side and below as from above. Black stays
+ *  for the small things: eyes, claws, spines, tips. */
+const shellOf = (tint: string): { plate: Mat; belly: Mat } => ({
+  plate: { color: mix('#2a2820', tint, 0.3), tex: 'leather', rough: 0.35, metal: 0.15 },
+  belly: { color: mix('#9a8f74', tint, 0.18), tex: 'skin', rough: 0.55 },
+});
+
 /**
  * Each look's drawn scale for a mass (a body's length grows with ∛ of its mass), and its footprint: the metres across
  * it's drawn (a long body: how wide), which is its collision size (UnitSpec.size).
@@ -62,6 +70,7 @@ function drawVimmer(b: ModelBuilder, p: Pose, mass: number): void {
   const sheen: Mat = { color: '#2a9aa6', tex: 'leather', rough: 0.3, metal: 0.4 };
   const membrane: Mat = { color: '#4f6e6c', tex: 'skin', rough: 0.7 };
   const rib: Mat = { color: '#121818', tex: 'none', rough: 0.6 };
+  const spar = shellOf('#2a9aa6').plate;
   const leaping = p.anim === 'leap';
   const flying = p.anim === 'fly' || p.anim === 'climb' || p.anim === 'soar' || p.anim === 'glide' || p.anim === 'land';
   const diving = p.anim === 'glide' || p.anim === 'land';
@@ -85,7 +94,7 @@ function drawVimmer(b: ModelBuilder, p: Pose, mass: number): void {
     const X = norm(d), dz = aft[0] * X[0] + aft[1] * X[1] + aft[2] * X[2], Z = norm([aft[0] - dz * X[0], aft[1] - dz * X[1], aft[2] - dz * X[2]]);
     const under = Z[2] * X[0] - Z[0] * X[2] >= 0 ? -1 : 1; // (y's upward part, from y = z × x)
     c.joint(a, aim(d, aft), (w) => {
-      shapedLimb(w, [0, 0, 0], [len, 0, 0], 0.03, [1.15, 1.0, 0.9, 0.8, 0.72], chitin, { flat: 0.3 }); // (the spar, tapering out)
+      shapedLimb(w, [0, 0, 0], [len, 0, 0], 0.03, [1.15, 1.0, 0.9, 0.8, 0.72], spar, { flat: 0.3 }); // (the spar, tapering out)
       for (let x = 0.08; x < len - 0.04; x += 0.13) w.cone(0.012, 0.06, [x, 0.03, 0], sheen, [0, 0, -0.5], 4); // spines
       if (chord > 0.01 || chord2 > 0.01) {
         const steps = 6;
@@ -215,10 +224,12 @@ function spikeBody(c: ModelBuilder, armed: boolean, tint: string, len = 1, look:
   const eye: Mat = { color: '#050608', tex: 'none', rough: 0.05, metal: 0.5 };
   const tooth: Mat = { color: '#d8d4c0', tex: 'none', rough: 0.5 };
   const maw: Mat = { color: '#3a0e10', tex: 'skin', rough: 0.8 };
+  const { plate, belly } = shellOf(tint);
   // (`len`: drawn that much longer, a pike of a body: its trunk stretched, head and point pushed forward with it, as thick)
   const X = (x: number) => x * len, dh = 0.25 * (len - 1);
-  c.loft([[-0.58, 0.02, 0.02, 0.02], [-0.44, 0.06, 0.05, 0.05], [-0.28, 0.08, 0.07, 0.08], [-0.12, 0.1, 0.085, 0.1], [0.02, 0.11, 0.1, 0.1], [0.14, 0.08, 0.075, 0.075], [0.2, 0.055, 0.055, 0.055]]
-    .map(([x, w, up, down]) => ({ at: [X(x), 0, 0] as V, w, up, down, keel: 0.4 })), look.body ?? chitin); // (its trunk: `look.body` recolours it)
+  const trunk = [[-0.58, 0.02, 0.02, 0.02], [-0.44, 0.06, 0.05, 0.05], [-0.28, 0.08, 0.07, 0.08], [-0.12, 0.1, 0.085, 0.1], [0.02, 0.11, 0.1, 0.1], [0.14, 0.08, 0.075, 0.075], [0.2, 0.055, 0.055, 0.055]];
+  c.loft(trunk.map(([x, w, up, down]) => ({ at: [X(x), 0, 0] as V, w, up, down, keel: 0.4 })), look.body ?? plate); // (its trunk: `look.body` recolours it)
+  c.loft(trunk.map(([x, w, up, down]) => ({ at: [X(x), -0.006, 0] as V, w: w * 0.8, up: up * 0.3, down: down * 1.03, keel: 0.4 })), belly); // its belly, lighter
   for (let x = -0.4, i = 0; x <= 0.03; x += 0.14 / len, i++) c.sphere([i % 2 ? 0.012 : 0.02, 0.095, 0.105], [X(x), 0, 0], (look.rims ?? [DARK, sheen])[i % 2]); // segment rims
   // a plate over its back in its side's light tone, rimmed in its dark
   const saddle = [[-0.3, 0.07, 0.078], [-0.16, 0.088, 0.1], [-0.02, 0.102, 0.112], [0.1, 0.082, 0.088]];
@@ -226,7 +237,8 @@ function spikeBody(c: ModelBuilder, armed: boolean, tint: string, len = 1, look:
   if (look.saddle !== false) c.loft(saddle.map(([x, w, up]) => ({ at: [X(x), 0.012, 0] as V, w: w * 1.08, up: up * 1.08, down: 0.02, flat: 0.2 })), LIGHT);
   for (let i = 0; i < Math.round(6 * len); i++) c.cone(0.015, 0.07, [X(0.08) - i * 0.12, 0.08 - i * 0.004, 0], chitin, [0, 0, 0.6], 4); // spines down its back
   c.cone(0.025, 0.1, [X(-0.62), 0, 0], sheen, [0, 0, Math.PI / 2], 4); // the tail barb
-  c.sphere([0.08, 0.07, 0.075], [0.25 + dh, 0, 0], chitin);
+  c.sphere([0.08, 0.07, 0.075], [0.25 + dh, 0, 0], plate); // its head
+  c.sphere([0.07, 0.04, 0.065], [0.255 + dh, -0.03, 0], belly); // its throat, lighter
   for (const [y, z] of [[0.045, 0.03], [0.045, -0.03], [0.06, 0], [0.025, 0.05], [0.025, -0.05], [0.07, 0.035], [0.07, -0.035]] as const) c.sphere(0.017, [0.29 + dh, y, z], eye);
   c.sphere([0.02, 0.04, 0.04], [0.325 + dh, -0.02, 0], maw);
   for (let k = 0; k < 8; k++) { const a = (k / 8) * TAU; c.cone(0.008, 0.035, [0.33 + dh, -0.02 + Math.cos(a) * 0.04, Math.sin(a) * 0.04], tooth, [a, 0, -Math.PI / 2 - 0.5], 4); }
@@ -341,7 +353,7 @@ function mpStab(q: number): MpPose {
  * the pike up through a wide arc as it lunges. Drawn with squash and stretch, anticipation, follow-through and arcs.
  */
 function drawMicropike(b: ModelBuilder, p: Pose): void {
-  const chitin: Mat = { color: '#1a2628', tex: 'leather', rough: 0.3, metal: 0.35 };
+  const chitin = shellOf(MP.tint).plate;
   const sheen: Mat = { color: MP.tint, tex: 'leather', rough: 0.3, metal: 0.4 };
   const muscle: Mat = { color: mix('#3a2a18', MP.tint, 0.35), tex: 'leather', rough: 0.4, metal: 0.2 };
   const claw: Mat = { color: '#0e1210', tex: 'none', rough: 0.4 };
@@ -396,7 +408,7 @@ function drawMicropike(b: ModelBuilder, p: Pose): void {
  */
 function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = CHARGER): void {
   type V = [number, number, number];
-  const chitin: Mat = { color: '#1a2628', tex: 'leather', rough: 0.3, metal: 0.35 };
+  const chitin = shellOf(k.tint).plate;
   const muscle: Mat = { color: mix('#2a3a20', k.tint, 0.25), tex: 'leather', rough: 0.4, metal: 0.2 };
   const claw: Mat = { color: '#0e1210', tex: 'none', rough: 0.4 };
   const walking = p.anim === 'walk', running = walking && p.style === 'charge';
@@ -464,7 +476,7 @@ function drawCharger(b: ModelBuilder, p: Pose, mass: number, k: ChargerBuild = C
  */
 function whipArms(c: ModelBuilder, p: Pose, len: number): void {
   type V = [number, number, number];
-  const chitin: Mat = { color: '#1a2628', tex: 'leather', rough: 0.3, metal: 0.35 };
+  const chitin = shellOf(LASHER.tint).plate;
   const ease = (x: number) => { const k = Math.max(0, Math.min(1, x)); return k * k * (3 - 2 * k); };
   const n = 14, seg = len / n, s = p.anim === 'attack' ? p.phase : 0, t = p.phase * TAU;
   // out and back: lashing out over the first half, drawn in over the rest; at full stretch the tip cracks over
@@ -680,6 +692,7 @@ function drawDragonFly(b: ModelBuilder, p: Pose, mass: number): void {
   const scale: Mat = { color: '#4a3aa0', tex: 'leather', rough: 0.25, metal: 0.55 };
   const belly: Mat = { color: '#8a70c8', tex: 'skin', rough: 0.35, metal: 0.3 };
   const horn: Mat = { color: '#1a1430', tex: 'none', rough: 0.4 };
+  const legMat: Mat = { color: mix('#1a1430', '#4a3aa0', 0.6), tex: 'leather', rough: 0.3, metal: 0.4 }; // (its legs its body's violet, darker)
   const eyeMat: Mat = { color: '#28d8c8', tex: 'none', rough: 0.15, metal: 0.6, emissive: '#0a3a38' };
   const wing: Mat = { color: '#f0a040', tex: 'none', rough: 0.6 };
   const eyeOut: Mat = { color: '#18101a', tex: 'none' }, eyeIn: Mat = { color: '#fbfbf4', tex: 'none' };
@@ -755,9 +768,9 @@ function drawDragonFly(b: ModelBuilder, p: Pose, mass: number): void {
       const hip: V3 = [x, y0 - 0.08 + x * 0.4, z * 0.08], kneeRest: V3 = [x + 0.05, 0.34, z * 0.22], rest: V3 = [x + 0.08, 0.01, z * 0.3];
       const foot: V3 = flying ? [x - 0.18, y0 - 0.16, z * 0.12] : p.anim === 'walk' ? footAt(rest, p.phase + ph + (z > 0 ? 0 : 0.5), 0.1, 0.06) : rest;
       const knee: V3 = flying ? [x - 0.08, y0 - 0.12, z * 0.14] : jointBetween(hip, foot, span(hip, kneeRest), span(kneeRest, rest), [0, 1, z]);
-      shapedLimb(c, hip, knee, 0.022, [1.15, 1.05, 0.9, 0.82], horn, { flat: 0.3 });
+      shapedLimb(c, hip, knee, 0.022, [1.15, 1.05, 0.9, 0.82], legMat, { flat: 0.3 });
       c.sphere(0.03, knee, DARK); // (its knees in its side's dark)
-      shapedLimb(c, knee, foot, 0.018, [0.95, 0.8, 0.65, 0.5], horn);
+      shapedLimb(c, knee, foot, 0.018, [0.95, 0.8, 0.65, 0.5], legMat);
     }
     // butterfly wings, a monarch's or a swallowtail's: a long swept forewing, bright at the base and deepening to a dark
     // tip, a black margin spotted white, black veins fanning from the body, a blue shimmer by the body; a rounded
@@ -1069,7 +1082,7 @@ function gHopper(b: ModelBuilder, p: Pose, gait = HOPPER_GAIT): void {
         bd.loft([0, 1].map((k) => ({ at: [x + 0.13 * L + k * 0.02, 0.01 + lag(x + 0.13 * L), 0] as V3, w: r * 1.02 * sz, up: r * 1.02 * sy, down: r * 0.9 * sy })), edge); // its lip
         bd.cone(0.022, 0.07, [x + 0.08, r * sy + 0.02 + lag(x + 0.08), 0], edge, [0, 0, -0.5], 4); // the spine ridge
       }
-      bd.loft([[0.54, 0.25, 0.25, 0.23], [0.62, 0.26, 0.26, 0.24], [0.68, 0.2, 0.2, 0.18]].map(([x, w, u, d]) => ({ at: [x * L, 0, 0] as V3, w: w * W * sz, up: u * W * sy, down: d * W * sy, flat: 0.5 })), edge); // the blunt boss
+      bd.loft([[0.54, 0.25, 0.25, 0.23], [0.62, 0.26, 0.26, 0.24], [0.68, 0.2, 0.2, 0.18]].map(([x, w, u, d]) => ({ at: [x * L, 0, 0] as V3, w: w * W * sz, up: u * W * sy, down: d * W * sy, flat: 0.5 })), plate); // the blunt boss, its face (in its shell's own red-brown)
       bd.crystal(0.24, [0.7 * L, 0, 0], [0, 0, -Math.PI / 2]); // its crystal, capping the boss, point forward
       for (const [y, z] of [[0.1, 0.1], [0.1, -0.1], [-0.08, 0.1], [-0.08, -0.1]] as const) bd.crystal(0.09, [0.66 * L, y * W * sy, z * W * sz], [z * 2.5, 0, -Math.PI / 2 + y * 1.5]); // and a ring of smaller ones round it
     });
