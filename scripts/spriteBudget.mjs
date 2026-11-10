@@ -4,7 +4,7 @@
 // Used by `npm run sprites` (scripts/sprites.mjs) and the pre-bake (scripts/prebake.mjs).
 
 /** Sprite pixels (each distinct frame's width × height, summed) an army may hold, and any one unit or building. */
-export const SPRITE_BUDGET = { army: 64e6, unit: 20e6 };
+export const SPRITE_BUDGET = { army: 64e6, unit: 40e6 };
 
 const isSprite = (o) => !!o && typeof o === 'object' && 'img' in o && 'sx' in o && 'sw' in o;
 

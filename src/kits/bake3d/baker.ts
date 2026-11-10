@@ -62,12 +62,8 @@ export interface UnitBakeOptions {
   shadowApart?: BakedAnim[];
   /** Animations it doesn't bake, because its model draws them as another: the game shows that one's frames instead (contract.ts anim(): gather, eat and tired fall back to idle). */
   without?: BakedAnim[];
-  /** Bake at this share of the usual resolution (a very big body: its details are big enough to read with fewer pixels). */
-  scale?: number;
 }
 
-/** A shadow baked apart is soft and dark: half the resolution looks the same and takes a quarter of the pixels. */
-const SHADOW_SCALE = 0.5;
 /** Two frames of one facing are the same picture (stored once) when under this share of their drawn pixels differ by more than DIFFER. */
 const SAME_SHARE = 0.001, DIFFER = 24;
 
@@ -579,7 +575,7 @@ export class Baker {
     let { r, h } = this.measure(model, team, samples);
     r = Math.max(r, h * 1.05); // room to fall over
     const ext = this.extent(r, h);
-    const q = this.q * (opts.scale ?? 1);
+    const q = this.q;
     const fw = Math.ceil((ext.left + ext.right) * q), fh = Math.ceil((ext.top + ext.bottom) * q);
     // Render each animation as a grid in one GL canvas (one readback per anim),
     // then crop every frame to its visible pixels and shelf-pack the crops into
@@ -662,7 +658,7 @@ export class Baker {
           }
         }
         if (x1 < 0) { x0 = 0; y0 = 0; x1 = 0; y1 = 0; }
-        const c: Crop = { src: grid, x: f * fw + x0, y: di * fh + y0, w: x1 - x0 + 1, h: y1 - y0 + 1, ax: ax0 - x0, ay: ay0 - y0, dx: 0, dy: 0, ox: x0, oy: y0, k: shadowPass ? SHADOW_SCALE : 1, cover: 0 };
+        const c: Crop = { src: grid, x: f * fw + x0, y: di * fh + y0, w: x1 - x0 + 1, h: y1 - y0 + 1, ax: ax0 - x0, ay: ay0 - y0, dx: 0, dy: 0, ox: x0, oy: y0, k: 1, cover: 0 };
         // the same picture as an earlier frame of this facing (a held pose, a loop's turn, an animation that doesn't
         // move this body): stored once
         const px = new Uint8ClampedArray(c.w * c.h * 4);

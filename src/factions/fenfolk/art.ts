@@ -14,7 +14,7 @@ export const bakeOpts = (u: (typeof units)[number]): UnitBakeOptions => ({ withC
  * shadows are baked apart (the tall bird and its long shadow in one frame would be mostly empty box); and, the biggest
  * body in the fen, it bakes at a little under the usual resolution.
  */
-const HERON: UnitBakeOptions = { ownLeap: true, without: ['gather', 'eat', 'tired'], shadowApart: ['walk', 'charge', 'attack', 'stagger'], scale: 0.8 };
+const HERON: UnitBakeOptions = { ownLeap: true, without: ['gather', 'eat', 'tired'], shadowApart: ['walk', 'charge', 'attack', 'stagger'] };
 
 export function bakeArt(team: TeamColors, onProgress?: (f: number, label: string) => void, only?: string[]): Promise<FactionArt> {
   return bakeFaction({
