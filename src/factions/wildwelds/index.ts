@@ -37,7 +37,7 @@ const BRIGHT: Mat = { team: 'bright', tex: 'none', rough: 0.4 };
  *  and plainer, as an animal's is, so it reads as the same creature from the side and below as from above. Black stays
  *  for the small things: eyes, claws, spines, tips. */
 const shellOf = (tint: string): { plate: Mat; belly: Mat } => ({
-  plate: { color: mix('#2a2820', tint, 0.3), tex: 'leather', rough: 0.35, metal: 0.15 },
+  plate: { color: mix('#4a4234', tint, 0.35), tex: 'leather', rough: 0.35, metal: 0.15 },
   belly: { color: mix('#9a8f74', tint, 0.18), tex: 'skin', rough: 0.55 },
 });
 
