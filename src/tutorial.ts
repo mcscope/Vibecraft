@@ -267,13 +267,19 @@ export const LESSONS: Lesson[] = [
     title: 'Calories',
     you: wildwelds, foe: meadowfolk, look: [16, 28],
     text: `${CALORIES}
-<p><b>Try:</b> select the whipwelds, press ${key('charge')} (Charge) and right-click a maceman. They sprint in: watch their bars drain. Charge again and again until they run low. An empty unit is <b>exhausted</b>: it's slow, and it can't fight.</p>
-<p>The Wildwelds have no hall to eat at. Select your tired whipwelds and right-click a <b>berry bush</b> (behind them): they eat straight from it until they're full. Or carry the food to them. The cyan larvae have full packs: select them, press ${key('give')} (Give) and right-click a whipweld. It keeps the food in its pack and eats it when it gets hungry.</p>`,
+<p>For the Wildwelds, food does everything else too: it hatches eggs and finishes cocoons. Two larvae here are changing into fighters, and their cocoons are waiting for food. Your green larvae <b>tend</b> by themselves: they gather berries and carry them to whoever is waiting, whether a cocoon, an egg, or a mother with an egg to lay. A larva you've given another order stops tending. Select it and press ${key('tend')} (Tend) to send it back. Keep most of your larvae tending.</p>
+<p>Watch the fighters come out. Each is born with <b>no crystal</b>, and walks off to pick up its own before it can fight. There's a pile beside the cocoons. Keep spare crystal near where your fighters hatch.</p>
+<p>Fighters get hungry too, and there's no hall to eat at. Select the tired whipwelds and right-click a berry bush: they eat straight from it until they're full.</p>`,
     setup(w) {
-      const yours = block(w, 0, 'whipweld', 3, 16, 26, 3);
+      const yours = block(w, 0, 'whipweld', 3, 18, 24, 3);
       for (const id of yours) { const u = w.units.get(id)!; u.cal = u.stats.maxCalories * 0.45; }
       wait(w, yours);
-      for (const id of block(w, 0, 'larva2', 2, 13, 24, 2)) { const u = w.units.get(id)!; u.food = u.stats.cargoCapacity; }
+      block(w, 0, 'larva1', 4, 14, 29, 2);
+      // two more larvae, changing: their cocoons wait for the tenders' food
+      const [a, b] = block(w, 0, 'larva1', 2, 15, 25, 2);
+      w.enqueue({ player: 0, cmd: { type: 'metamorph', units: [a], into: 'charger' } });
+      w.enqueue({ player: 0, cmd: { type: 'metamorph', units: [b], into: 'micropike' } });
+      w.addNode({ type: 'crystal', x: 13.5, y: 23.5, amount: 40, shard: true, tree: false });
       hold(w, block(w, FOE, 'maceman', 6, 36, 26, 3, 4));
     },
   },

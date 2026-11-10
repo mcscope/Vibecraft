@@ -95,34 +95,43 @@ async function pose(params: URLSearchParams): Promise<void> {
   const cast = faction.units.filter((u) => !skip.has(u.id) && u.role !== 'carter').sort((a, b) => b.mass - a.mass);
   const art = await faction.art(team, undefined, cast.map((u) => u.id));
   const units = cast.filter((u) => art.units[u.id]);
-  // three rows (two for a small cast): a quarter at the back, the lightest two fifths in front
+  // three rows (two for a small cast): a quarter at the back, the lightest two fifths in front; the light come in
+  // twos and threes, the heaviest in the middle of its row and the rest out to either side in turn
   const back = Math.ceil(units.length * 0.25), front = units.length > 5 ? Math.ceil(units.length * 0.4) : units.length - back;
-  const rows = [units.slice(0, back), units.slice(back, units.length - front), units.slice(units.length - front)].filter((r) => r.length);
-  const tallest = Math.max(...units.map((u) => { const s = art.units[u.id].anims.idle.frames[1][0]; return s.sh / s.q; }));
+  const rows = [units.slice(0, back), units.slice(back, units.length - front), units.slice(units.length - front)].filter((r) => r.length).map((row) => {
+    const order: typeof row = [];
+    row.forEach((u, i) => { for (let n = u.mass > 150 ? 1 : u.mass > 50 ? 2 : 3; n > 0; n--) (i % 2 ? order.unshift(u) : order.push(u)); });
+    return order;
+  });
+  const still = (id: string) => art.units[id].anims.idle.frames[1][0];
+  const wide = (id: string) => (still(id).sw / still(id).q) * 0.62, tall = (id: string) => still(id).sh / still(id).q; // (shoulder to shoulder, overlapping a little)
+  const near = (ri: number) => 1 + 0.25 * (rows.length > 1 ? ri / (rows.length - 1) : 1); // the front rows a little nearer the camera
+  // as big as fits: the widest row across the picture, the tallest at the back under its top edge
+  const scale = Math.min(...rows.map((row, ri) => (W * 0.94) / (row.reduce((a, u) => a + wide(u.id), 0) * near(ri))), (H * 0.5) / Math.max(...rows[0].map((u) => tall(u.id))));
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
   c.style.cssText = 'position:fixed;left:0;top:0;z-index:20';
   const g = c.getContext('2d')!;
+  // a dark stage: the team's colour glowing behind, a pool of light on the ground
   g.fillStyle = '#12100d'; g.fillRect(0, 0, W, H);
-  const glow = g.createRadialGradient(W / 2, H * 0.42, 0, W / 2, H * 0.42, W * 0.6);
+  const glow = g.createRadialGradient(W / 2, H * 0.3, 0, W / 2, H * 0.3, W * 0.55);
   glow.addColorStop(0, team.primary); glow.addColorStop(1, 'rgba(18,16,13,0)');
-  g.globalAlpha = 0.55; g.fillStyle = glow; g.fillRect(0, 0, W, H); g.globalAlpha = 1;
-  const floor = g.createLinearGradient(0, H * 0.5, 0, H);
-  floor.addColorStop(0, 'rgba(18,16,13,0)'); floor.addColorStop(1, 'rgba(18,16,13,0.85)');
-  g.fillStyle = floor; g.fillRect(0, 0, W, H);
+  g.globalAlpha = 0.7; g.fillStyle = glow; g.fillRect(0, 0, W, H); g.globalAlpha = 1;
+  g.save(); g.translate(W / 2, H * 0.74); g.scale(1, 0.36);
+  const pool = g.createRadialGradient(0, 0, 0, 0, 0, W * 0.62);
+  pool.addColorStop(0, '#7d8f52'); pool.addColorStop(0.55, '#4a5a30'); pool.addColorStop(1, 'rgba(18,16,13,0)');
+  g.fillStyle = pool; g.beginPath(); g.arc(0, 0, W * 0.62, 0, Math.PI * 2); g.fill(); g.restore();
   rows.forEach((row, ri) => {
-    const t = rows.length > 1 ? ri / (rows.length - 1) : 1; // 0 at the back, 1 in front
-    const feet = H * (0.64 + 0.3 * t), spread = W * (0.42 + 0.44 * t), scale = ((H * 0.5) / tallest) * (1 + 0.3 * t);
-    // the row's heaviest in the middle, the rest out to either side in turn
-    const order: typeof row = [];
-    row.forEach((u, i) => (i % 2 ? order.unshift(u) : order.push(u)));
-    order.forEach((u, i) => {
-      const x = W / 2 + (order.length > 1 ? (i / (order.length - 1) - 0.5) * spread : 0);
-      const facing = x < W * 0.42 ? 0 : x > W * 0.58 ? 2 : 1; // turned in toward the middle
+    const t = rows.length > 1 ? ri / (rows.length - 1) : 1, feet = H * (0.6 + 0.36 * t), k0 = scale * near(ri);
+    let x = W / 2 - (row.reduce((a, u) => a + wide(u.id), 0) * k0) / 2;
+    row.forEach((u, i) => {
+      const cx = x + (wide(u.id) * k0) / 2;
+      x += wide(u.id) * k0;
+      const facing = cx < W * 0.4 ? 0 : cx > W * 0.6 ? 2 : 1; // turned in toward the middle
       const a = art.units[u.id].anims, blow = (ri + i) % 2 === 0 ? a.attack : undefined;
       const frames = (blow ?? a.idle).frames, f = frames[facing % frames.length], s = f[blow ? Math.floor(f.length * 0.45) : 0];
-      const k = scale / s.q;
-      g.drawImage(s.img, s.sx, s.sy, s.sw, s.sh, x - s.ax * k, feet - s.ay * k, s.sw * k, s.sh * k);
+      const k = k0 / s.q;
+      g.drawImage(s.img, s.sx, s.sy, s.sw, s.sh, cx - s.ax * k, feet - s.ay * k, s.sw * k, s.sh * k);
     });
   });
   document.body.appendChild(c);
