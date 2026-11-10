@@ -421,7 +421,7 @@ function collisionEnergy(u: Unit, t: Unit | null, tx: number, ty: number, shaft 
   const v = Math.hypot(u.vx, u.vy);
   const planted = v * M_PER_TILE < 0.5;
   const couched = v > u.stats.speed && (u.vx * dx + u.vy * dy) / (v * d) > 0.8;
-  const grounded = shaft && u.stats.minReach > 0 && planted && u.stats.canPlant; // the butt in the ground: no body behind it to share the crush
+  const grounded = shaft && u.stats.minReach > 0 && planted; // the butt in the ground: no body behind it to share the crush
   const set = grounded || (shaft && u.stats.minReach > 0 && couched);
   return { delivered: Math.min(energy, (set ? u.stats.shaftForce : u.stats.holdForce) * K.blowDepth), mu, grounded };
 }
@@ -482,6 +482,8 @@ export class World {
   /** Underfoot pieces by tile (sim/abilities/underfoot.ts), goods riding belts, and the belt routes (rebuilt when buildings change). */
   private underfootTiles = new Map<number, number>();
   parcels: Parcel[] = [];
+  /** Set pikes whose holders have just been killed: each stays planted till `until` (the tick its body is down). */
+  private fallen: Array<{ u: Unit; until: number }> = [];
   private parcelSeq = 1;
   private beltRoutes: BeltRoutes | null = null;
   underfootAt(x: number, y: number): Building | undefined {
@@ -1152,6 +1154,7 @@ export class World {
     // (a hopper's bound-blow lands only as it comes down: in the air it's over their heads)
     for (const u of this.units.values()) if (u.blow && (u.blow.dur ? (this.tick >= u.blow.at || (u.strideMul > 0 && this.reached(u, u.blow))) && boundLeft(u) < 0.08 : this.tick >= u.blow.at)) { const f = this.strike(u); if (f) landing.push(f); }
     for (const f of landing) f();
+    this.runFallen();
     this.separate();
     for (const p of this.projectiles.values()) this.tickProjectile(p);
     if (this.parcels.length) runBelts(this, DT);
@@ -1382,7 +1385,7 @@ export class World {
     else if (moved) anim = atEnemy || (Math.hypot(u.vx, u.vy) > st.speed * 1.15 && !u.breakFrom) ? 'charge' : 'walk'; // flat out: a sprint, a charge (running from one, a run)
     if (u.swing > 0) anim = u.cutting ? 'cut' : 'attack';
     // point set, waiting (between its jabs too: the point stays on the enemy)
-    else if (!moved && st.canPlant && (u.engage || u.order.kind === 'attack' || u.order.kind === 'attackMove' || u.stance === 'hold')) anim = 'brace';
+    else if (!moved && st.minReach > 0 && (u.engage || u.order.kind === 'attack' || u.order.kind === 'attackMove' || u.stance === 'hold')) anim = 'brace';
     if (reeling) anim = 'stagger';
     else if (((u.order.kind === 'gather' && u.order.phase === 'harvest') || (u.order.kind === 'build' && u.order.phase === 'chop')) && !moved && u.busy) anim = 'gather';
     else if ((u.order.kind === 'eatPack' || u.order.kind === 'resupply' || u.order.kind === 'graze') && !moved && u.busy) anim = 'eat';
@@ -1706,7 +1709,7 @@ export class World {
       if (u.airborne) { this.moveTo(u, tx, ty, 0.05); return true; }
       if (tu) {
         // a long shaft with something coming at it fast doesn't go to meet it: it plants and lets it come onto the point
-        if (u.stance !== 'hold' && !charging && u.stats.canPlant && !wpn.throws && edge < range + 3) {
+        if (u.stance !== 'hold' && !charging && u.stats.minReach > 0 && !wpn.throws && edge < range + 3) {
           const d = Math.hypot(u.x - tx, u.y - ty) || 1;
           const coming = (tu.vx * (u.x - tx) + tu.vy * (u.y - ty)) / d; // tiles/s toward us
           if (coming * M_PER_TILE > 1) { this.face(u, tx - u.x, ty - u.y); return true; }
@@ -1799,7 +1802,7 @@ export class World {
     // (a shaft's point is already out in front: couched at a run, it lands as the charge arrives, in the charging pose;
     // planted, standing, whatever comes on runs onto it. Any other blow is swung, at a run too, and lands at contact)
     const v = Math.hypot(u.vx, u.vy), point = shaft && u.stats.minReach > 0;
-    const couched = point && !u.airborne && v > u.stats.speed * 1.1, planted = point && u.stats.canPlant && v * M_PER_TILE < 0.5;
+    const couched = point && !u.airborne && v > u.stats.speed * 1.1, planted = point && v * M_PER_TILE < 0.5;
     if (couched || planted) u.swing = 0;
     // (a hopper in the air: its bound is the blow, landing as it comes down, or as it meets the target first, at the
     // speed it's going this instant)
@@ -2553,7 +2556,7 @@ export class World {
         const airborneBound = !!st.gait && u.strideMul > 0 && v > 0.3;
         const springing = !!st.gait && u.strideMul === 0;
         // and it can't swing round faster than its weapon comes round (leverage), far slower with a planted shaft
-        const weapon = st.turnRate * (st.canPlant && v < 0.5 && !u.breakFrom ? K.plantedTurnMul : 1); // (breaking off, it's lifted)
+        const weapon = st.turnRate * (st.minReach > 0 && v < 0.5 && !u.breakFrom ? K.plantedTurnMul : 1); // (breaking off, it's lifted)
         u.turnLeft = airborneBound ? 0 : springing ? DT * Math.min(spin, weapon) : DT * Math.min(spin, bend, weapon);
       }
       const step = Math.max(-u.turnLeft, Math.min(u.turnLeft, diff));
@@ -2850,10 +2853,36 @@ export class World {
     }
   }
 
+  /**
+   * A fallen holder's set shaft: the first enemy body on the ground that comes onto its point at speed takes the blow
+   * a living holder's would have landed (the collision on a grounded point), and the shaft is spent.
+   */
+  private runFallen(): void {
+    if (!this.fallen.length) return;
+    this.fallen = this.fallen.filter(({ u, until }) => {
+      if (this.tick > until) return false;
+      for (const e of this.units.values()) {
+        if (e.owner === u.owner || e.airborne || this.players[e.owner]?.neutral) continue;
+        const dx = e.x - u.x, dy = e.y - u.y, d = Math.hypot(dx, dy) || 1;
+        if (d - e.stats.radius > u.stats.range || !this.facingWithin(u, dx, dy, Math.PI * 0.2)) continue;
+        if ((-(e.vx * dx + e.vy * dy) / d) * M_PER_TILE <= 1) continue; // (walking up to it, a body just steps round the point)
+        this.land(u, e.id, e, e.x, e.y, u.stats.damage, true)();
+        return false;
+      }
+      return true;
+    });
+  }
+
   private reap(): void {
     for (const u of this.units.values()) {
       if (u.hp > 0) continue;
       this.units.delete(u.id);
+      // killed standing behind a set shaft: the shaft stays planted while the body falls (√(2h/g)), so whatever is
+      // charging onto it still runs onto the point (runFallen)
+      if (u.stats.minReach > 0 && !u.airborne && !u.exhausted && u.cooldown <= 0 && (Math.hypot(u.x - u.px, u.y - u.py) / DT) * M_PER_TILE < 0.5) {
+        u.vx = u.vy = 0;
+        this.fallen.push({ u, until: this.tick + Math.round(Math.sqrt((2 * u.stats.height) / K.gravity) / DT) });
+      }
       if (u.wild || u.tame) {
         const spec = this.specOf(u.owner, u.specId)?.spec as WildSpec | undefined;
         const spot = this.grid.nearestOpen(u.x, u.y, 3);

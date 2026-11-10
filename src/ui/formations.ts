@@ -17,8 +17,8 @@ export const FORMATIONS: Array<{ id: Formation; name: string; tip: string }> = [
 /** A unit to place: where it is now, its size, and its place in the order (0 shafts, 1 other strikers, 2 throwers and the unarmed). */
 export interface FormationUnit { id: number; x: number; y: number; radius: number; role: 0 | 1 | 2 }
 /** A unit as a formation sees it: shafts lead, then other strikers, then throwers and the unarmed. */
-export const formationUnit = (u: { id: number; x: number; y: number; throws: boolean; stats: { radius: number; canAttack: boolean; canPlant: boolean } }): FormationUnit =>
-  ({ id: u.id, x: u.x, y: u.y, radius: u.stats.radius, role: !u.stats.canAttack || u.throws ? 2 : u.stats.canPlant ? 0 : 1 });
+export const formationUnit = (u: { id: number; x: number; y: number; throws: boolean; stats: { radius: number; canAttack: boolean; minReach: number } }): FormationUnit =>
+  ({ id: u.id, x: u.x, y: u.y, radius: u.stats.radius, role: !u.stats.canAttack || u.throws ? 2 : u.stats.minReach > 0 ? 0 : 1 });
 
 /** Where a unit goes, and the way it faces there (radians, map space). */
 export interface Slot { id: number; x: number; y: number; face: number }
