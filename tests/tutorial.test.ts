@@ -42,7 +42,7 @@ describe('tutorial', () => {
   });
 
   test('Wildwelds: lay an egg, tend it till it hatches, digest a tree, change a larva, lay a web, set the rally points', () => {
-    const w = tutorialWorld(lesson('Wildwelds'), 1);
+    const w = tutorialWorld(lesson('The brood'), 1);
     const [mother] = mine(w, 'mother1'), larvae = mine(w, 'larva1'), [t2] = mine(w, 'larva2');
     // the egg: laid from her pack, then fed by the tenders till it hatches
     w.enqueue({ player: 0, cmd: { type: 'metamorph', units: [mother.id], into: 'egg1', spawn: true } });

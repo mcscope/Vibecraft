@@ -83,6 +83,7 @@ else {
   menu.addEventListener('click', (e) => {
     const href = (e.target as HTMLElement).closest<HTMLElement>('[data-href]')?.dataset.href;
     if (href) { location.href = href; return; }
+    if ((e.target as HTMLElement).closest('[data-tutorial]')) { location.href = `./?mode=tutorial&track=${pick('you').id}`; return; } // (the picked army's own lessons)
     if ((e.target as HTMLElement).closest('[data-online]')) {
       const lobby = document.getElementById('lobby')!;
       lobby.style.display = 'flex';
