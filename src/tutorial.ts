@@ -359,12 +359,12 @@ export const LESSONS: Lesson[] = [
     title: 'Groupings',
     you: wildwelds, foe: meadowfolk, look: [26, 26],
     text: `<p>How you <b>group</b> your units decides the fight. Enemy lancers will charge you in <b>30 seconds</b>.</p>
-<p>Your micropikes stand in a block in front, with three slingers behind. <b>Lances outreach micropikes</b>, so the micropikes will lose and most will die. Your slingers do the killing. <b>Watch</b> it play out.</p>
-<p>Then press Restart. This time, move the slingers well out in front before the charge. They start throwing sooner, the lancers fall on the way in, and nearly every micropike lives. The <b>Arena</b> has the numbers for every matchup.</p>`,
+<p><b>Micropikes counter chargers.</b> They're cheap and fragile, so bring about ten for each lancer. Yours stand in a loose grid: each lancer hits one or two of them, and the rest close in on it. <b>Watch</b> it play out.</p>
+<p>Then press Restart. This time, pack them into a tight clump before the charge: select them all and right-click one spot. You still win, but the lancers plough through the clump and you lose many more.</p>`,
     steps: groupingSteps,
     setup(w) {
-      block(w, 0, 'micropike', 24, 20, 26, 4);
-      block(w, 0, 'slinger', 3, 15, 26, 3);
+      // forty micropikes in a loose grid, two tiles apart, five ranks deep
+      for (let i = 0; i < 40; i++) w.spawnAt(0, 'micropike', 22 - Math.floor(i / 8) * 2, 26 + ((i % 8) - 3.5) * 2, 0);
       hold(w, block(w, FOE, 'lynx', 4, 44, 26, 2, 4));
     },
     tick: chargeAfter30,

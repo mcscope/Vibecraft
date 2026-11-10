@@ -38,6 +38,8 @@ const params = new URLSearchParams(location.search);
 const track = PLAYABLE.find((f) => f.id === params.get('track') && LESSONS.some((l) => l.you === f));
 const lessons = track ? LESSONS.filter((l) => l.you === track) : LESSONS;
 const lessonIx = Math.max(0, Math.min(lessons.length - 1, +(params.get('lesson') ?? 0) || 0)), lesson = lessons[lessonIx];
+/** The lesson's checklist steps already done (kept while the tab is open: Restart keeps your ticks). */
+const STEPS_KEY = `vibecraft.steps.${track?.id ?? 'all'}.${lessonIx}`, stepsDone = new Set<number>();
 // Seed choice happens outside the sim, so Math.random is fine here.
 const seed = Number(params.get('seed') ?? Math.floor(Math.random() * 1e9));
 
@@ -251,9 +253,10 @@ async function run(g: GameSetup): Promise<void> {
     // the lesson's caption, in the help panel: what to try, its checklist, and Back / Restart / Next
     const help = document.getElementById('help')!;
     const go = (i: number) => `?mode=tutorial${track ? `&track=${track.id}` : ''}&lesson=${i}`;
+    try { for (const i of JSON.parse(sessionStorage.getItem(STEPS_KEY) ?? '[]') as number[]) stepsDone.add(i); } catch { /* private mode */ }
     help.classList.add('lesson');
     help.innerHTML = `<b>${track ? `${track.name}, lesson` : 'Lesson'} ${ix + 1} of ${lessons.length}: ${lesson.title}</b>${lesson.text}
-      <ul class="lesson-steps">${(lesson.steps ?? []).map((st) => `<li>${st.text}</li>`).join('')}</ul>
+      <ul class="lesson-steps">${(lesson.steps ?? []).map((st, i) => `<li${stepsDone.has(i) ? ' class="done"' : ''}>${st.text}</li>`).join('')}</ul>
       <div class="lesson-nav">${ix > 0 ? `<a href="${go(ix - 1)}">◀ Back</a>` : '<span></span>'}<a href="${go(ix)}">Restart</a>${ix < lessons.length - 1 ? `<a href="${go(ix + 1)}">Next ▶</a>` : '<a href="./">Finish</a>'}</div>`;
   }
   else if (m === 'demo') {
@@ -322,7 +325,13 @@ async function run(g: GameSetup): Promise<void> {
     hud.update(dt, input.selected, fps);
     // a lesson's checklist: each step ticks itself off (and dims) once the world shows it done
     if (m === 'tutorial' && lesson.steps && world.tick % 5 === 0) {
-      document.querySelectorAll<HTMLElement>('#help .lesson-steps li:not(.done)').forEach((li) => { if (lesson.steps![[...li.parentElement!.children].indexOf(li)].done(world)) li.classList.add('done'); });
+      document.querySelectorAll<HTMLElement>('#help .lesson-steps li:not(.done)').forEach((li) => {
+        const i = [...li.parentElement!.children].indexOf(li);
+        if (!lesson.steps![i].done(world)) return;
+        li.classList.add('done');
+        stepsDone.add(i);
+        try { sessionStorage.setItem(STEPS_KEY, JSON.stringify([...stepsDone])); } catch { /* private mode */ }
+      });
     }
     cartDebug.update(input.alpha, dt);
     // ?debug: each slow frame's breakdown, for scripts/perf.mjs (the time since the last frame, and this frame's parts)
