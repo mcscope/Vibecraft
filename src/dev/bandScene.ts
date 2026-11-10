@@ -142,12 +142,38 @@ export function renderBand(sides: BandSide[], staging: BandStaging, W: number, H
     const a = h(1) * Math.PI * 2, d = Math.sqrt(h(2)) * sc.r, [lo, hi] = sc.scale ?? [1, 1];
     return { model: sc.models[Math.floor(h(3) * sc.models.length)], at: [sc.at[0] + Math.cos(a) * d, sc.at[1] + Math.sin(a) * d] as [number, number], face: h(4) * 360, scale: lo + (hi - lo) * h(5) };
   }));
+  // A flier or a thrown crystal stays whole in the picture: one staged so high that its top would cross the upper edge
+  // comes down until it sits just inside (things on the ground are left alone: up close they may fill the frame).
+  const keepInFrame = (o: THREE.Object3D): void => {
+    const span = Math.tan((staging.camera.fov * Math.PI) / 360), v = new THREE.Vector3();
+    for (let i = 0; i < 4; i++) {
+      o.updateMatrixWorld(true);
+      const box = new THREE.Box3().setFromObject(o);
+      if (box.isEmpty()) return;
+      let over = 0;
+      for (const x of [box.min.x, box.max.x]) for (const z of [box.min.z, box.max.z]) {
+        const depth = -v.set(x, box.max.y, z).applyMatrix4(camera.matrixWorldInverse).z;
+        if (depth > 0.3) over = Math.max(over, (v.y / (depth * span) - 0.88) * depth * span); // (its top above 6 % from the edge: by how many metres)
+      }
+      // (and its sides inside the left and right edges: it slides along the camera's right-hand axis)
+      let side = 0;
+      for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) {
+        const depth = -v.set(x, y, z).applyMatrix4(camera.matrixWorldInverse).z, half = depth * span * (W / H) * 0.97;
+        if (depth > 0.3 && Math.abs(v.x) > half && Math.abs(v.x) - half > Math.abs(side)) side = Math.sign(v.x) * (Math.abs(v.x) - half);
+      }
+      if (over <= 0.01 && Math.abs(side) <= 0.01) return;
+      const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+      o.position.x -= right.x * side; o.position.z -= right.z * side;
+      o.position.y = Math.max(height(o.position.x, o.position.z), o.position.y - Math.max(0, over));
+    }
+  };
   for (const p of [...(staging.props ?? []), ...strewn]) {
     const g = new THREE.Group();
     g.position.set(p.at[0], height(p.at[0], p.at[1]) + ((p as { lift?: number }).lift ?? 0), p.at[1]);
     g.rotation.y = ((p.face ?? 0) * Math.PI) / 180;
     g.scale.setScalar(p.scale ?? 1);
     p.model(new Builder(team, g));
+    if ((p as { lift?: number }).lift) keepInFrame(g);
     scene.add(g);
   }
   for (const c of staging.cast) {
@@ -169,6 +195,7 @@ export function renderBand(sides: BandSide[], staging: BandStaging, W: number, H
       });
     } else if (building?.model) building.model(new Builder(team, body));
     else continue;
+    if (c.lift) keepInFrame(body);
     scene.add(body);
   }
   renderer.render(scene, camera);
