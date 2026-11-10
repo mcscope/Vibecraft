@@ -35,15 +35,18 @@ export function renderBand(sides: BandSide[], staging: BandStaging, W: number, H
   const mid = new THREE.Vector3((Math.min(...xs) + Math.max(...xs)) / 2, 0, (Math.min(...zs) + Math.max(...zs)) / 2);
   const reach = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs)) / 2 + 14;
   scene.add(new THREE.HemisphereLight('#dfe6ff', '#8c7650', 1)); // (the lit ground bounces warm light up into undersides a low camera sees)
-  const sun = new THREE.DirectionalLight('#ffe6c4', 3.1);
-  sun.position.copy(place(-0.55, 0.8, -0.35).multiplyScalar(60).add(mid));
+  const low = staging.sun ? staging.sun.elevation < 30 : false, sun = new THREE.DirectionalLight(low ? '#ffcf96' : '#ffe6c4', low ? 3.6 : 3.1);
+  if (staging.sun) {
+    const az = (staging.sun.azimuth * Math.PI) / 180, el = (staging.sun.elevation * Math.PI) / 180;
+    sun.position.copy(place(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)).multiplyScalar(80).add(mid));
+  } else sun.position.copy(place(-0.55, 0.8, -0.35).multiplyScalar(60).add(mid));
   sun.target.position.copy(mid);
   sun.castShadow = true;
   sun.shadow.mapSize.set(4096, 4096);
   sun.shadow.bias = -0.0003;
   sun.shadow.normalBias = 0.02;
   sun.shadow.radius = 2;
-  Object.assign(sun.shadow.camera, { left: -reach, right: reach, top: reach, bottom: -reach, near: 1, far: 200 });
+  Object.assign(sun.shadow.camera, { left: -reach, right: reach, top: reach, bottom: -reach, near: 1, far: 260 });
   scene.add(sun, sun.target);
   const fill = new THREE.DirectionalLight('#a9c0ff', 0.7);
   fill.position.copy(place(0.8, 0.4, -0.5));
@@ -59,19 +62,13 @@ export function renderBand(sides: BandSide[], staging: BandStaging, W: number, H
   camera.updateMatrixWorld();
   // (where the horizon falls in the picture, so the sky meets the far ground there)
   const hz = Math.min(0.98, Math.max(0.05, (1 - new THREE.Vector3(cx + fwd.x * 1000, cy, cz + fwd.z * 1000).project(camera).y) / 2));
-  const sky = document.createElement('canvas');
-  sky.width = 256; sky.height = 256;
-  const sg = sky.getContext('2d')!, grad = sg.createLinearGradient(0, 0, 0, 256);
   const [top, horizon] = staging.sky ?? ['#33496a', '#efd6a2'];
-  grad.addColorStop(0, top); grad.addColorStop(hz * 0.65, new THREE.Color(top).lerp(new THREE.Color(horizon), 0.5).getStyle()); grad.addColorStop(hz, horizon); grad.addColorStop(1, horizon);
-  sg.fillStyle = grad; sg.fillRect(0, 0, 256, 256);
-  const glow = sg.createRadialGradient(128, hz * 256, 0, 128, hz * 256, 150);
-  glow.addColorStop(0, team.primary); glow.addColorStop(1, 'rgba(0,0,0,0)');
-  sg.globalAlpha = sides.length > 1 ? 0 : 0.22; sg.fillStyle = glow; // (a hint of the side's colour: more turns dark bodies blue) sg.fillRect(0, 0, 256, 256);
+  const sky = paintSky(staging, W / H, hz, top, horizon, sides.length > 1 ? null : team.primary);
   const bg = new THREE.CanvasTexture(sky);
   bg.colorSpace = THREE.SRGBColorSpace;
   scene.background = bg;
-  scene.fog = new THREE.Fog(horizon, 35, 160); // (the ground fades into the sky at the horizon)
+  const fogFrom = staging.fog?.[0] ?? Math.max(30, Math.hypot(cx - mid.x, cz - mid.z) * 1.3);
+  scene.fog = new THREE.Fog(staging.fogColor ?? horizon, fogFrom, staging.fog?.[1] ?? fogFrom + 130); // (the ground fades into the sky at the horizon)
   const grass = texture('leaf').map.clone();
   grass.repeat.set(160, 160);
   grass.needsUpdate = true;
@@ -86,27 +83,61 @@ export function renderBand(sides: BandSide[], staging: BandStaging, W: number, H
   far.position.y = -0.01;
   far.receiveShadow = true;
   scene.add(far);
-  if (staging.hills?.length) {
-    const near = new THREE.PlaneGeometry(120, 120, 240, 240);
+  // ridgelines on the horizon, one behind another, fading into the haze (flat colour, the fog greys them)
+  for (const [i, r] of (staging.ridges ?? []).entries()) {
+    const n = 200, width = r.distance * 4.2, g = new THREE.BufferGeometry(), pts: number[] = [], idx: number[] = [];
+    const side = new THREE.Vector3(-fwd.z, 0, fwd.x), base = new THREE.Vector3(cx, 0, cz).addScaledVector(fwd, r.distance);
+    for (let k = 0; k <= n; k++) {
+      const t = k / n - 0.5, u = t * 9 + i * 3.7, jag = r.jag ?? 0.5;
+      const y = r.height * (0.55 + 0.3 * Math.sin(u * 1.3) + 0.15 * Math.sin(u * 3.1 + 1) + jag * 0.18 * Math.sin(u * 11.7) + jag * 0.08 * Math.sin(u * 27.3)) * (r.peaks ? 1 + 0.9 * Math.max(0, Math.sin(u * 0.9 + i)) ** 6 : 1);
+      const p = base.clone().addScaledVector(side, t * width);
+      pts.push(p.x, -2, p.z, p.x, Math.max(0, y), p.z);
+      if (k < n) idx.push(2 * k, 2 * k + 2, 2 * k + 1, 2 * k + 1, 2 * k + 2, 2 * k + 3);
+    }
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+    g.setIndex(idx);
+    // (aerial perspective by hand: further, more of the horizon's colour; no fog, so the furthest still stand out)
+    scene.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: new THREE.Color(r.color).lerp(new THREE.Color(staging.fogColor ?? horizon), Math.min(0.5, r.distance / 300)), side: THREE.DoubleSide, fog: false })));
+  }
+  if (staging.hills?.length || staging.groundColors) {
+    const near = new THREE.PlaneGeometry(160, 160, 320, 320);
     near.rotateX(-Math.PI / 2);
     near.translate(mid.x, 0, mid.z);
-    const pos = near.attributes.position;
-    for (let i = 0; i < pos.count; i++) pos.setY(i, height(pos.getX(i), pos.getZ(i)));
+    const pos = near.attributes.position, cols = staging.groundColors?.map((c) => new THREE.Color(c));
+    const colour = new Float32Array(pos.count * 3), tint = new THREE.Color();
+    // (a smooth noise, from a few sine waves: patches of the palette's colours, the same every time)
+    const noise = (x: number, z: number, k: number) => 0.5 + 0.25 * Math.sin(x * 0.21 * k + z * 0.13 + k) * Math.sin(z * 0.17 * k - x * 0.07 + 2 * k) + 0.25 * Math.sin((x + z) * 0.43 * k + 3 * k);
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), z = pos.getZ(i);
+      pos.setY(i, height(x, z));
+      if (cols) {
+        const n = noise(x, z, 1) * (cols.length - 1), j = Math.min(cols.length - 2, Math.floor(n));
+        tint.copy(cols[j]).lerp(cols[j + 1], Math.min(1, n - j)).multiplyScalar(0.9 + 0.2 * noise(x, z, 3.1));
+      } else tint.set(staging.ground ?? '#62743a');
+      tint.toArray(colour, i * 3);
+    }
+    near.setAttribute('color', new THREE.BufferAttribute(colour, 3));
     near.computeVertexNormals();
-    const hill = new THREE.Mesh(near, groundMat);
+    const hill = new THREE.Mesh(near, new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, map: grass, roughness: 1 }));
     hill.receiveShadow = hill.castShadow = true;
     scene.add(hill);
   }
   for (const w of staging.water ?? []) {
-    const pool = new THREE.Mesh(new THREE.CircleGeometry(w.r, 48), new THREE.MeshStandardMaterial({ color: '#5d7c80', roughness: 0.08, metalness: 0.3, transparent: true, opacity: 0.88 }));
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(w.r, 48), new THREE.MeshStandardMaterial({ color: '#4d6a70', roughness: 0.12, metalness: 0.2, emissive: new THREE.Color(horizon).multiplyScalar(0.45), transparent: true, opacity: 0.92 })); // (no reflections: the sky's colour glows in it)
     pool.rotation.x = -Math.PI / 2;
     pool.position.set(w.at[0], height(w.at[0], w.at[1]) + 0.04, w.at[1]);
     pool.receiveShadow = true;
     scene.add(pool);
   }
-  for (const p of staging.props ?? []) {
+  // scattered scenery: spots at random in a disc (the same every time)
+  const strewn = (staging.scatter ?? []).flatMap((sc, k) => Array.from({ length: sc.n }, (_, i) => {
+    const h = (m: number) => { const v = Math.sin((i + 1) * 12.9898 * m + (k + 1) * 78.233) * 43758.5453; return v - Math.floor(v); };
+    const a = h(1) * Math.PI * 2, d = Math.sqrt(h(2)) * sc.r, [lo, hi] = sc.scale ?? [1, 1];
+    return { model: sc.models[Math.floor(h(3) * sc.models.length)], at: [sc.at[0] + Math.cos(a) * d, sc.at[1] + Math.sin(a) * d] as [number, number], face: h(4) * 360, scale: lo + (hi - lo) * h(5) };
+  }));
+  for (const p of [...(staging.props ?? []), ...strewn]) {
     const g = new THREE.Group();
-    g.position.set(p.at[0], height(p.at[0], p.at[1]), p.at[1]);
+    g.position.set(p.at[0], height(p.at[0], p.at[1]) + ((p as { lift?: number }).lift ?? 0), p.at[1]);
     g.rotation.y = ((p.face ?? 0) * Math.PI) / 180;
     g.scale.setScalar(p.scale ?? 1);
     p.model(new Builder(team, g));
@@ -118,7 +149,8 @@ export function renderBand(sides: BandSide[], staging: BandStaging, W: number, H
     const building = f.buildings?.find((b) => b.id === c.id) as { model?: BuildingModel } | undefined;
     const body = new THREE.Group();
     body.position.set(c.at[0], height(c.at[0], c.at[1]) + (c.lift ?? 0), c.at[1]);
-    body.rotation.y = ((c.face ?? 0) * Math.PI) / 180 - Math.PI / 2; // (models face +x)
+    body.rotation.order = 'YXZ'; // (turned to face its way, then rolled about its length, then pitched nose down)
+    body.rotation.set(((c.roll ?? 0) * Math.PI) / 180, ((c.face ?? 0) * Math.PI) / 180 - Math.PI / 2, (-(c.pitch ?? 0) * Math.PI) / 180); // (models face +x)
     if (unit?.model) {
       const pose = bakedPose((c.anim ?? 'idle') as BakedAnim, c.phase ?? 0, team), segments = opts?.(unit as never).segments;
       if (!segments?.length) unit.model(new Builder(team, body), pose);
@@ -147,4 +179,69 @@ export function renderBand(sides: BandSide[], staging: BandStaging, W: number, H
   renderer.dispose();
   renderer.forceContextLoss();
   return out;
+}
+
+/**
+ * The sky behind the picture, painted to its shape: a gradient from `top` to `horizon` (meeting the ground at `hz`, 0
+ * the top of the picture, 1 the bottom), with the staging's sun (its glow, a disc, rays), clouds lit from the sun's
+ * side, a storm front darkening one side, distant glows on the horizon, and a hint of `tint` (one side's colour).
+ */
+function paintSky(staging: BandStaging, aspect: number, hz: number, top: string, horizon: string, tint: string | null): HTMLCanvasElement {
+  const SW = 1024, SH = Math.round(SW / aspect), c = document.createElement('canvas');
+  c.width = SW; c.height = SH;
+  const g = c.getContext('2d')!, H = hz * SH, mix = (a: string, b: string, k: number) => new THREE.Color(a).lerp(new THREE.Color(b), k).getStyle();
+  // (a deterministic random, so every retake paints the same sky)
+  let seed = 7;
+  const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const grad = g.createLinearGradient(0, 0, 0, SH);
+  grad.addColorStop(0, top); grad.addColorStop(hz * 0.55, mix(top, horizon, 0.38)); grad.addColorStop(hz * 0.85, mix(top, horizon, 0.75)); grad.addColorStop(hz, horizon); grad.addColorStop(1, horizon);
+  g.fillStyle = grad; g.fillRect(0, 0, SW, SH);
+  const radial = (x: number, y: number, r: number, color: string, alpha: number) => {
+    const rg = g.createRadialGradient(x, y, 0, x, y, r), col = new THREE.Color(color);
+    const rgba = (a: number) => `rgba(${Math.round(col.r * 255)},${Math.round(col.g * 255)},${Math.round(col.b * 255)},${a})`;
+    rg.addColorStop(0, rgba(alpha)); rg.addColorStop(1, rgba(0));
+    g.fillStyle = rg; g.fillRect(x - r, y - r, r * 2, r * 2);
+  };
+  if (tint) radial(SW / 2, H, SW * 0.6, tint, 0.22);
+  const sun = staging.sun, sx = sun ? SW / 2 + (SW / 2) * Math.sin((sun.azimuth * Math.PI) / 180) * 0.9 : SW / 2, sy = H - SH * 0.05 - (sun ? (sun.elevation / 90) * SH * 0.6 : 0);
+  if (sun) radial(sx, H, SW * 0.55, '#ffbe78', 0.55);
+  for (const glow of staging.glows ?? []) radial(glow.x * SW, H, SW * (glow.r ?? 0.12), glow.color, 0.7); // (distant fires, crystal light)
+  if (staging.storm) { // a storm front: one side dark and heavy
+    const st = g.createLinearGradient(staging.storm < 0 ? 0 : SW, 0, SW / 2, 0);
+    st.addColorStop(0, 'rgba(24,26,38,0.82)'); st.addColorStop(1, 'rgba(24,26,38,0)');
+    g.fillStyle = st; g.fillRect(0, 0, SW, H);
+  }
+  if (staging.clouds) { // long banks of cloud in layers: each a soft streak in shade, its underside lit warm toward the sun
+    const n = staging.clouds === 'many' ? 46 : 24;
+    for (let i = 0; i < n; i++) {
+      const band = (0.12 + 0.8 * rnd()) * H * 0.95, x = rnd() * SW * 1.3 - SW * 0.15, rx = SW * (0.12 + rnd() * 0.3), ry = SH * (0.012 + rnd() * 0.03);
+      const storm = staging.storm && Math.sign(x - SW / 2) === staging.storm, near = 1 - band / H; // (higher up: bigger and darker)
+      const lit = Math.max(0, 1 - Math.abs(x - sx) / SW) * 0.6 + 0.2;
+      const body = storm ? `rgba(30,30,44,${0.55 + 0.25 * near})` : `rgba(${mix(top, '#6a6070', 0.55).slice(4, -1)},${0.28 + 0.25 * near})`;
+      const glow = storm ? 'rgba(150,100,80,0.25)' : `rgba(255,${Math.round(200 + 30 * lit)},${Math.round(150 + 40 * lit)},${0.25 + 0.35 * lit})`;
+      for (const [dy, col, k] of [[0, body, 1], [ry * 0.55, glow, 0.85]] as const) {
+        g.save(); g.translate(x, band + dy); g.scale(1, (ry * k) / (rx * k));
+        const rg = g.createRadialGradient(0, 0, 0, 0, 0, rx * k);
+        rg.addColorStop(0, col); rg.addColorStop(0.55, col.replace(/[\d.]+\)$/, (m) => `${parseFloat(m) * 0.5})`)); rg.addColorStop(1, 'rgba(0,0,0,0)');
+        g.fillStyle = rg; g.beginPath(); g.arc(0, 0, rx * k, 0, Math.PI * 2); g.fill(); g.restore();
+      }
+    }
+  }
+  if (sun?.disc) { // the low sun itself, and rays fanning from it through the haze
+    if (sun.rays) {
+      g.save(); g.globalCompositeOperation = 'lighter';
+      for (let i = 0; i < 16; i++) {
+        const a = Math.PI * (0.05 + 0.9 * (i / 15)) + (rnd() - 0.5) * 0.08, len = SW * (0.6 + rnd() * 0.5), w = 0.015 + rnd() * 0.03;
+        const rg = g.createLinearGradient(sx, sy, sx + Math.cos(a) * len, sy + Math.sin(a) * len);
+        rg.addColorStop(0, 'rgba(255,220,170,0.16)'); rg.addColorStop(1, 'rgba(255,220,170,0)');
+        g.fillStyle = rg; g.beginPath(); g.moveTo(sx, sy);
+        g.lineTo(sx + Math.cos(a - w) * len, sy + Math.sin(a - w) * len); g.lineTo(sx + Math.cos(a + w) * len, sy + Math.sin(a + w) * len); g.fill();
+      }
+      g.restore();
+    }
+    radial(sx, sy, SW * 0.16, '#ffd9a0', 0.75);
+    radial(sx, sy, SW * 0.035, '#fff4dc', 1);
+    g.fillStyle = '#fffaf0'; g.beginPath(); g.arc(sx, sy, SW * 0.018, 0, Math.PI * 2); g.fill();
+  }
+  return c;
 }

@@ -168,17 +168,22 @@ export function provingGrounds(): Scenario {
 }
 
 /**
- * Where a faceoff's armies stand. An army is one or more wings, its columns shared out among them in order; a wing is
- * the middle of its back rank, the way it faces (map +x is south-east on screen, +y south-west) and its right.
- * `depth`: how deep a column gets before the next starts beside it.
+ * Where a faceoff's armies stand, round an open middle: the middle of the back rank, the way it faces (map +x is
+ * south-east on screen, +y south-west), its right, and how deep a column gets before the next starts beside it.
  */
-const SE = { fwd: [1, 0], across: [0, 1], facing: 0 }, SW = { fwd: [0, 1], across: [1, 0], facing: 2 };
-const FACEOFF_SEATS: Array<{ depth: number; wings: Array<{ at: number[]; fwd: number[]; across: number[]; facing: number }> }> = [
-  { depth: 9, wings: [{ at: [13.25, 36.75], ...SE }] }, // left, facing south-east
-  { depth: 9, wings: [{ at: [36.75, 12.75], ...SW }] }, // right, facing south-west
-  { depth: 5, wings: [{ at: [10.25, 29.75], ...SE }, { at: [29.75, 10.25], ...SW }] }, // split in two, behind the other two
+const R = Math.SQRT1_2;
+const FACEOFF_SEATS = [
+  { at: [15, 37], fwd: [R, -R], across: [R, R], facing: 7, depth: 9 }, // left, facing east
+  { at: [38, 13.5], fwd: [-R, R], across: [-R, -R], facing: 3, depth: 10 }, // right, facing west
+  { at: [21.4, 21.4], fwd: [R, R], across: [R, -R], facing: 1, depth: 2.9 }, // behind the middle, facing us: wide and shallow
 ];
+/** About how many bodies a faceoff army brings: an army of many kinds brings fewer of each. */
+const FACEOFF_BODIES = 24;
 
+/**
+ * Faceoff (?mode=faceoff, a showcase): the Proving Grounds field with two or three armies in ranks, each everything
+ * it can field: player 0 on the left, player 1 on the right, a third at the back between them.
+ */
 export function faceoff(): Scenario {
   const pg = provingGrounds();
   return {
@@ -190,36 +195,29 @@ export function faceoff(): Scenario {
     setup(w) {
       FACEOFF_SEATS.forEach((seat, owner) => {
         if (!w.players[owner] || w.players[owner].neutral) return;
-        // ranks one behind another; an army deeper than its depth starts another column beside the first
+        // ranks one behind another; an army deeper than its seat starts another column beside the first
+        const f = w.factionOf(owner), kinds = lineup(f).filter((u) => w.specOf(owner, u.id));
+        const many = kinds.map((u) => (u.id === f.workerId ? 4 : u.mass > 100 ? 2 : u.mass > 50 ? 4 : 6));
+        const scale = Math.min(1, FACEOFF_BODIES / many.reduce((a, n) => a + n, 0));
         const cols: Array<{ w: number; ranks: Array<{ id: string; n: number; gap: number; d: number }> }> = [{ w: 0, ranks: [] }];
         let d = 0;
-        for (const u of lineup(w.factionOf(owner))) {
-          const s = w.specOf(owner, u.id);
-          if (!s) continue;
-          const n = u.id === w.factionOf(owner).workerId ? 4 : u.mass > 100 ? 2 : u.mass > 50 ? 4 : 6;
-          const gap = s.stats.radius * 2 + 0.5, step = Math.max(1.4, gap);
+        kinds.forEach((u, k) => {
+          const n = Math.max(1, Math.round(many[k] * scale)), gap = w.specOf(owner, u.id)!.stats.radius * 2 + 0.5, step = Math.max(1.4, gap);
           if (d > 0 && d + step > seat.depth) { cols.push({ w: 0, ranks: [] }); d = 0; }
           const col = cols[cols.length - 1];
           col.ranks.push({ id: u.id, n, gap, d });
           col.w = Math.max(col.w, n * gap);
           d += step;
-        }
-        // the columns shared out so each wing is about as wide as the others
-        const total = cols.reduce((a, c) => a + c.w, 0);
-        let run = 0;
-        const wingOf = cols.map((c) => { const k = Math.min(seat.wings.length - 1, Math.floor(((run + c.w / 2) / total) * seat.wings.length)); run += c.w; return k; });
-        seat.wings.forEach((wing, k) => {
-          const mine = cols.filter((_, i) => wingOf[i] === k);
-          let left = -(mine.reduce((a, c) => a + c.w, 0) + mine.length - 1) / 2;
-          for (const col of mine) {
-            for (const r of col.ranks) for (let i = 0; i < r.n; i++) {
-              const c = left + col.w / 2 + (i - (r.n - 1) / 2) * r.gap;
-              const u = w.spawnAt(owner, r.id, wing.at[0] + wing.fwd[0] * r.d + wing.across[0] * c, wing.at[1] + wing.fwd[1] * r.d + wing.across[1] * c, wing.facing);
-              if (u) u.dummy = true; // they only stand for the picture: nobody starts a fight, eats or wanders
-            }
-            left += col.w + 1;
-          }
         });
+        let left = -(cols.reduce((a, c) => a + c.w, 0) + cols.length - 1) / 2;
+        for (const col of cols) {
+          for (const r of col.ranks) for (let i = 0; i < r.n; i++) {
+            const c = left + col.w / 2 + (i - (r.n - 1) / 2) * r.gap;
+            const u = w.spawnAt(owner, r.id, seat.at[0] + seat.fwd[0] * r.d + seat.across[0] * c, seat.at[1] + seat.fwd[1] * r.d + seat.across[1] * c, seat.facing);
+            if (u) u.dummy = true; // they only stand for the picture: nobody starts a fight, eats or wanders
+          }
+          left += col.w + 1;
+        }
       });
     },
   };

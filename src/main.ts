@@ -244,7 +244,7 @@ async function run(g: GameSetup): Promise<void> {
 
   // a pitched battle opens on deployment: the world holds still until Ready
   const deploy = m === 'battle' ? new BattleDeploy(world, renderer, canvas, input.rs, (ids) => input.setSelection(ids), () => { if (battleAI) battleAI.started = true; }) : null;
-  if (m === 'faceoff') renderer.cam.centerOn(24, 24);
+  if (m === 'faceoff') renderer.cam.centerOn(26, 26);
   else if (m === 'battle') { /* (the deploy step framed the camera) */ }
   else if (m === 'tutorial') {
     const ix = lessonIx;

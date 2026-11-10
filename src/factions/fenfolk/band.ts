@@ -1,5 +1,5 @@
 // The Fenfolk's pictures for the front page (BandCandidate): five ways to show the fen's army, staged in 3D.
-import { bandRank as rank, type BandCandidate } from '../types';
+import { bandCrowd as crowd, bandRank as rank, type BandCandidate } from '../types';
 import { DOODADS, tree } from './homeworld';
 
 export const bands: BandCandidate[] = [
@@ -116,6 +116,38 @@ export const bands: BandCandidate[] = [
       ...rank('reedguard', 7, 1.5, 4.6, { anim: 'charge', turn: 1, phase: 0.2 }),
       ...rank('fenling', 9, 1.3, 2.6, { anim: 'charge', turn: 1, phase: 0.4 }),
       ...rank('fenling', 8, 1.35, 0.6, { x: -1, anim: 'charge', turn: 1 }),
+    ],
+  },
+  // 7. (maximal) the fen at sundown: the whole army mustering on the causeways of a misty marsh, pools catching the
+  //    sky, stilt huts and the Stilt Hall among reed beds and willows, the heron perch on the skyline, herons flying in
+  //    and the sun setting behind. RULES: the Great Siege Heron in front is the focal point; water and reeds fill the
+  //    foreground; layers of huts and haze behind.
+  {
+    name: 'new ★1: the fen at sundown',
+    sky: ['#2c3450', '#f6c084'], sun: { azimuth: 175, elevation: 6, disc: true, rays: true }, clouds: 'many',
+    groundColors: ['#41492a', '#4f5a2e', '#5a6232', '#4a4630', '#3e4a38'],
+    ridges: [{ distance: 70, height: 4, color: '#4a4c40', jag: 0.5 }, { distance: 110, height: 7, color: '#6e6c66', jag: 0.3 }],
+    camera: { from: [0, 1.4, 12], to: [0, 2.8, -4], fov: 58 },
+    hills: [[-8, 6], [7, 7], [-3, -6], [9, -4], [-13, -3], [2, -14], [-9, -16], [12, -16]].map(([x, z]) => ({ at: [x, z] as [number, number], r: 4.2, h: -0.45 })),
+    water: [[-8, 6], [7, 7], [-3, -6], [9, -4], [-13, -3], [2, -14], [-9, -16], [12, -16]].map(([x, z]) => ({ at: [x, z] as [number, number], r: 3.8 })),
+    props: [
+      ...[[-12, 2], [-5, 9], [11, 3], [5, -9], [-14, -10], [14, -8], [-4, -19], [8, -20]].map(([x, z], i) => ({ model: (b: Parameters<typeof tree>[0]) => tree(b, i * 3), at: [x, z] as [number, number], face: i * 40, scale: 1.1 })),
+      ...[[-17, -14], [17, -13], [0, -24], [-12, -24]].map(([x, z], i) => ({ model: (b: Parameters<typeof tree>[0]) => tree(b, i * 3 + 1 + (i % 2)), at: [x, z] as [number, number], face: i * 70, scale: 1.3 })),
+      ...DOODADS.flowers.flatMap((m, i) => [{ model: m, at: [-10 + i * 1.5, 9.5] as [number, number], scale: 2 }, { model: m, at: [5 + i * 1.6, 9.8] as [number, number], scale: 2 }]),
+    ],
+    cast: [
+      { id: 'stilt-hall', at: [-2, -22], face: 10 }, { id: 'heron-perch', at: [9, -25] }, { id: 'reed-hut', at: [-15, -18], face: 30 }, { id: 'reed-hut', at: [15, -19], face: -30 },
+      { id: 'reed-hut', at: [-8, -12], face: 20 }, { id: 'reed-hut', at: [6, -11], face: -15 }, { id: 'toad-wallow', at: [14, -2], face: -40 }, { id: 'elder-mound', at: [-18, -6], face: 40 },
+      { id: 'great-siege-heron', at: [0.5, 2.5], face: -20, anim: 'attack', phase: 0.45 },
+      { id: 'great-siege-heron', at: [-6, -7], lift: 5.5, face: 50, anim: 'fly', phase: 0.3 },
+      { id: 'great-siege-heron', at: [6, -15], lift: 8, face: -60, anim: 'fly', phase: 0.7 },
+      { id: 'bog-toad', at: [-4, 3.5], lift: 0.9, face: 30, anim: 'leap', phase: 0.45 },
+      { id: 'bog-toad', at: [4.5, 3], face: -30, anim: 'attack', phase: 0.5 },
+      { id: 'pack-tortoise', at: [-10, -1], face: 40, anim: 'walk', phase: 0.3 },
+      ...rank('reedguard', 10, 1.4, 0, { anim: 'brace', alt: 'idle' }),
+      ...crowd('fenling', 30, -6, -3, 4, 25, 'attack', 'idle'),
+      ...crowd('fenling', 30, 6, -3, 4, -25, 'idle', 'attack'),
+      ...crowd('fenling', 24, 0, -9, 4, 0, 'walk'),
     ],
   },
 ];

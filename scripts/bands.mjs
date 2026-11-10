@@ -18,7 +18,11 @@ const browser = await chromium.launchPersistentContext(process.env.PROFILE ?? 'p
  * One picture: the page's canvas drawn down to 720 wide and saved as WebP (and the full size as PNG), or with `wide`
  * kept at full size as JPEG; its label on the page (a candidate's name), or false if there's no such picture.
  */
-async function take(query, name, wide = false) {
+async function take(query, name, wide = false, tries = 3) {
+  // (the dev server can reload the page under us when a source file changes: try again)
+  try { return await takeOnce(query, name, wide); } catch (e) { if (tries <= 1) throw e; console.log(`${name}: ${e.message.split('\n')[0]}; again`); return take(query, name, wide, tries - 1); }
+}
+async function takeOnce(query, name, wide) {
   const page = await browser.newPage();
   page.on('pageerror', (e) => console.log(`${name}: page error: ${e.message}`));
   try {
@@ -63,6 +67,10 @@ if (!candidates) {
     }
     rows.push(row);
   }
+  // the best first in each row (marked ★1, ★2 …), then the other new ones, then the rest; a long row wraps at 8
+  const rank = ([name]) => { const m = /★(\d+)/.exec(name); return m ? +m[1] : /\bnew\b/.test(name) ? 100 : 200; };
+  const sorted = rows.flatMap((row) => { const r = [...row].sort((a, b) => rank(a) - rank(b)); return Array.from({ length: Math.ceil(r.length / 8) }, (_, i) => r.slice(i * 8, i * 8 + 8)); });
+  rows.splice(0, rows.length, ...sorted);
   const page = await browser.newPage();
   const shots = rows.map((row) => row.map(([name, file]) => [name, `data:image/webp;base64,${readFileSync(`${out}/${file}`).toString('base64')}`]));
   const sheet = await page.evaluate(async (rows) => {

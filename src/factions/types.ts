@@ -303,7 +303,24 @@ export interface BandStaging {
   /** Still water: flat pools at (x, z), `r` in radius, at the height of the ground at their middle (fill a hollow). */
   water?: Array<{ at: [number, number]; r: number }>;
   /** Scenery: any model (a homeworld's reeds, trees, stones), at (x, z), turned `face` degrees, `scale` times its size. */
-  props?: Array<{ model: (b: ModelBuilder) => void; at: [number, number]; face?: number; scale?: number }>;
+  props?: Array<{ model: (b: ModelBuilder) => void; at: [number, number]; face?: number; scale?: number; lift?: number }>;
+  /** Scenery strewn at random (the same every time): `n` of `models` within `r` of (x, z), sized `scale` (min, max). */
+  scatter?: Array<{ models: Array<(b: ModelBuilder) => void>; n: number; at: [number, number]; r: number; scale?: [number, number] }>;
+  /** The ground's colours, mottled over the near ground (grass shades, then dirt): the usual one colour if not given. */
+  groundColors?: string[];
+  /** The sun, if not the usual high one: from `azimuth` degrees round from behind the camera (90: from the right, 180: from behind the subjects), `elevation` degrees up; low is warm, with long shadows. */
+  sun?: { azimuth: number; elevation: number; disc?: boolean; rays?: boolean };
+  /** Clouds in the sky ('many': a sky full of them). */
+  clouds?: boolean | 'many';
+  /** A storm front darkening the sky on one side (−1 left, 1 right). */
+  storm?: -1 | 1;
+  /** Glows on the horizon (distant fires, crystal light): across the picture at `x` (0–1), `r` wide. */
+  glows?: Array<{ x: number; color: string; r?: number }>;
+  /** Ridgelines on the horizon, `distance` away and up to `height` high, one behind another, in flat colours the haze fades (`peaks`: mountains). */
+  ridges?: Array<{ distance: number; height: number; color: string; jag?: number; peaks?: boolean }>;
+  /** Where the haze starts and where it hides everything, and its colour (default: from the camera's distance, the horizon's colour). */
+  fog?: [number, number];
+  fogColor?: string;
   /** Where the camera stands and the point it looks at; its vertical field of view in degrees. */
   camera: { from: [number, number, number]; to: [number, number, number]; fov: number };
   /** Everyone in the picture (and a building or two): a unit's or a building's id. */
@@ -313,6 +330,9 @@ export interface BandStaging {
     at: [number, number];
     /** Height above the ground (a flier). */
     lift?: number;
+    /** A flier banking (degrees rolled, + to its right) or diving (degrees nose down). */
+    roll?: number;
+    pitch?: number;
     /** Which way it faces, in degrees: 0 toward the camera, 90 to the right, −90 to the left, 180 away. */
     face?: number;
     /** What it's doing (a unit's animation: 'idle', 'walk', 'attack', 'fly', 'hatch' …) and how far through (0–1). */
@@ -329,5 +349,13 @@ export function bandRank(id: string, n: number, gap: number, z: number, o: { x?:
   return Array.from({ length: n }, (_, i) => {
     const x = (i - (n - 1) / 2) * gap, wobble = (((i * 37) % 11) / 11 - 0.5) * gap * 0.35, anim = o.anim ?? 'idle';
     return { id, at: [(o.x ?? 0) + x + wobble, z + (((i * 53) % 7) / 7 - 0.5) * 0.5], face: (o.face ?? 0) - x * (o.turn ?? 2.5), anim: i % 2 ? (o.alt ?? anim) : anim, phase: (o.phase ?? 0.5) + (((i * 29) % 5) / 5) * 0.2 };
+  });
+}
+
+/** For staging a band: `n` of a unit in a loose crowd round (x, z), `r` across, facing `face` (± a little), every other one doing `alt`. */
+export function bandCrowd(id: string, n: number, x: number, z: number, r: number, face: number, anim = 'idle', alt = anim): BandStaging['cast'] {
+  return Array.from({ length: n }, (_, i) => {
+    const a = i * 2.39996, d = r * Math.sqrt((i + 0.5) / n); // (a sunflower's spiral: even, never on top of each other)
+    return { id, at: [x + Math.cos(a) * d, z + Math.sin(a) * d * 0.8], face: face + ((i * 37) % 21) - 10, anim: i % 2 ? alt : anim, phase: 0.2 + ((i * 3) % 7) / 10 };
   });
 }

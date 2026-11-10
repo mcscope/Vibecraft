@@ -1,6 +1,6 @@
 // The Wildwelds' pictures for the front page (BandCandidate): their life cycle and their swarm, staged in 3D. A bright
 // sky behind, so their strange bodies stand out against it.
-import { bandRank as rank, type BandCandidate, type BandStaging } from '../types';
+import { bandCrowd as crowd, bandRank as rank, type BandCandidate, type BandStaging } from '../types';
 import { fern, grassClump, stones, tree } from '../../biomes/meadow/models';
 import type { ModelBuilder } from '../../kits/bake3d/types';
 
@@ -199,6 +199,37 @@ export const bands: BandCandidate[] = [
       ...rank('charger', 7, 1.1, -6, { x: 1, face: 40, turn: 0, anim: 'charge' }),
       { id: 'whipweld', at: [6, -8.5], face: 30 },
       { id: 'web-tower', at: [10, -11], face: -20 },
+    ],
+  },
+  // 10. (maximal) the hive under the storm: the brood mothers among arcs of web walls and Mimic Mines, cocoons and
+  //     eggs hatching in drifts, a carpet of larvae and chargers spilling out at us, the sky full of dragon flies and
+  //     Vimmers against a storm lit gold underneath. RULES: the great mother on the left third is the focal point; the
+  //     swarm pouring out toward us is the leading line from her; fliers fill the sky's top band, silhouetted.
+  {
+    name: 'new ★1: the hive under the storm',
+    sky: ['#2e3346', '#f1c48a'], sun: { azimuth: -160, elevation: 7, disc: true, rays: true }, clouds: 'many', storm: 1,
+    groundColors: ['#4a522c', '#5a6432', '#686e3a', '#5a5636', '#6a5a3c'],
+    ridges: [{ distance: 70, height: 4.5, color: '#4a4a44', jag: 0.7 }, { distance: 110, height: 10, color: '#6a6870', jag: 0.8, peaks: true }],
+    camera: { from: [1, 1.6, 11], to: [0, 2.2, -3], fov: 58 },
+    props: [...trees([[-14, -16], [-8, -20], [12, -18], [17, -12], [3, -24]], 1.3), ...ground([[-6, 6], [6, 6.5], [-9, 2], [9, 1]])],
+    cast: [
+      { id: 'mother3', at: [-3.6, -1.5], face: 30, anim: 'lay', phase: 0.55 },
+      { id: 'mother3', at: [6, -9], face: -30, anim: 'lay', phase: 0.3 },
+      { id: 'mother2', at: [-9, -7], face: 30 },
+      { id: 'web-tower', at: [-7, -14], face: 20 }, { id: 'web-tower', at: [9, -16], face: -30 }, { id: 'web-tower', at: [0, -20] },
+      ...[0, 1, 2, 3, 4, 5, 6, 7].map((i) => ({ id: 'web-wall', at: [-8 + i * 2, -11 - Math.abs(i - 3.5) * 0.8] as [number, number], face: (i - 3.5) * 10 })),
+      ...crowd('cocoon', 8, 2, -5, 3, 0, 'grow'),
+      ...crowd('egg3', 10, -1, 1.5, 2.4, 0, 'hatch', 'grow'),
+      ...crowd('egg1', 8, 4, 2, 2, 0, 'grow', 'hungry'),
+      ...crowd('larva1', 20, 1, 4, 4.5, 10, 'walk'),
+      ...crowd('larva2', 8, -6, 3, 3, 30, 'walk'),
+      ...crowd('charger', 30, 5, -1, 5, -20, 'charge', 'attack'),
+      { id: 'ground-attacker3', at: [6, -3], face: -70, anim: 'walk', phase: 0.25, lift: 0.2 },
+      { id: 'whipweld', at: [8, -2], face: -80, anim: 'attack', phase: 0.45 },
+      { id: 'dragon-fly', at: [-1.5, -4], lift: 4.4, face: 40, anim: 'fly', phase: 0.3 },
+      { id: 'dragon-fly', at: [8, -12], lift: 8, face: -80, anim: 'fly', phase: 0.6 },
+      { id: 'dragon-fly', at: [-10, -16], lift: 10, face: 70, anim: 'glide', phase: 0.2 },
+      ...Array.from({ length: 9 }, (_, i) => ({ id: 'flier', at: [((i * 41) % 22) - 10, -6 - ((i * 23) % 14)] as [number, number], lift: 5 + ((i * 7) % 8), face: -60 - ((i * 47) % 120), pitch: (i * 13) % 30, anim: 'fly', phase: ((i * 3) % 7) / 7 })),
     ],
   },
 ];
