@@ -3,7 +3,8 @@ import { meadowfolk } from '../src/factions/meadowfolk';
 import { Grid } from '../src/sim/map';
 import { findPath } from '../src/sim/pathfinding';
 import { World } from '../src/sim/world';
-import { run } from './kit';
+import { arenaScenario } from '../src/sim/arena';
+import { run, withExtras } from './kit';
 
 const newWorld = () => new World({ seed: 7, players: [{ name: 'A', faction: meadowfolk }, { name: 'B', faction: meadowfolk }] });
 
@@ -66,5 +67,22 @@ describe('getting there', () => {
     run(w, 20 * 15, () => v.order.kind === 'idle');
     expect(v.order.kind).toBe('idle');
     expect(Math.hypot(v.x - cx - 0.5, v.y - cy - 0.5)).toBeLessThan(3.6);
+  });
+});
+
+describe('a set pike', () => {
+  test('stays planted while its fallen holder drops: a lancer that kills a braced short pike from further out still runs onto the point', () => {
+    // a pikeman with a pike half the lance's length: the lance lands first and kills him (1 hp), and the lancer rides on
+    const short = withExtras(meadowfolk, { patch: { pikeman: { attack: { style: 'strike', crystalMass: 2, shaft: 1.5 } } } });
+    const w = new World({ seed: 7, scenario: arenaScenario(2), players: [{ name: 'A', faction: short }, { name: 'B', faction: meadowfolk }] }); // (an empty field: no wildlife)
+    const pike = w.spawnAt(0, 'pikeman', 20, 26, 0)!, lancer = w.spawnAt(1, 'lynx', 34, 26, 4)!;
+    pike.hp = 1;
+    w.step([{ player: 0, cmd: { type: 'stance', units: [pike.id], stance: 'hold' } }, { player: 1, cmd: { type: 'attack', units: [lancer.id], target: pike.id, charge: true } }]);
+    const full = lancer.hp;
+    run(w, 20 * 8, () => !w.units.has(pike.id));
+    expect(w.units.has(pike.id)).toBe(false);
+    expect(lancer.hp).toBe(full); // (he never got his blow in)
+    run(w, 20); // (the second his body takes to fall)
+    expect(lancer.hp).toBeLessThan(full - 50);
   });
 });
