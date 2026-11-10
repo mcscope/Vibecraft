@@ -1078,19 +1078,23 @@ function gHopper(b: ModelBuilder, p: Pose, gait = HOPPER_GAIT): void {
       bd.crystal(0.24, [0.7 * L, 0, 0], [0, 0, -Math.PI / 2]); // its crystal, capping the boss, point forward
       for (const [y, z] of [[0.1, 0.1], [0.1, -0.1], [-0.08, 0.1], [-0.08, -0.1]] as const) bd.crystal(0.09, [0.66 * L, y * W * sy, z * W * sz], [z * 2.5, 0, -Math.PI / 2 + y * 1.5]); // and a ring of smaller ones round it
     });
-    // the one leg: a long lean thigh from its haunch, its knee forward, a long shin, the ankle back, a broad foot
+    // the one leg, a bird's (a spring folded in a Z): a short thick thigh held forward under the ram, its knee high by
+    // the body, a long shin running down and back to the ankle, then a long foot bone forward and down to the toes. The
+    // ankle is the joint you see bend, backward; crouching, the Z folds flat and the ankle sinks behind
     // (trailing, its leg sweeps back along its body from the hip, nearly straight, its foot pointed behind like a diver's)
     const back: V3 = [-Math.cos(pitch), -Math.sin(pitch), 0], mix = (a: V3, b: V3): V3 => [a[0] + (b[0] - a[0]) * trail, a[1] + (b[1] - a[1]) * trail, 0];
-    const foot = mix([footX, footY, 0], [hip[0] + back[0] * 1.7, hip[1] + back[1] * 1.7, 0]);
-    const ankle = mix([foot[0] - 0.16, foot[1] + 0.22, 0], [hip[0] + back[0] * 1.48, hip[1] + back[1] * 1.48, 0]);
+    const THIGH = 0.46, SHIN = 0.8, TARSUS = 0.58;
+    const planted: V3 = [footX, footY, 0], fold = sm((1.18 + 0.1 - (hip[1] - planted[1])) / 0.85), lean = 0.3 + 0.95 * fold; // (the foot bone's lean back from upright)
+    const foot = mix(planted, [hip[0] + back[0] * 1.7, hip[1] + back[1] * 1.7, 0]);
+    const ankle = mix([planted[0] - TARSUS * Math.sin(lean), planted[1] + TARSUS * Math.cos(lean), 0], [hip[0] + back[0] * 1.2, hip[1] + back[1] * 1.2, 0]);
     const toe = mix([0.95, 0, 0], [back[0] * 0.95, back[1] * 0.95, 0]); // (its toes' way, × their length)
-    const knee = jointBetween(hip, ankle, 0.76, 0.8, [1, 0.35, 0]); // (long legs: long bounds)
-    c.sphere([0.11, 0.09, 0.11], [hip[0], hip[1] + 0.03, 0], plate); // the haunch, under the ram
-    shapedLimb(c, hip, knee, 0.085, [1.2, 1.35, 1.2, 0.9, 0.7], leg, { flat: 0.2 });
-    c.sphere(0.06, knee, edge);
-    shapedLimb(c, knee, ankle, 0.055, [1.0, 0.85, 0.7, 0.6, 0.65], leg, { flat: 0.3, keel: 0.4 });
-    c.sphere(0.042, ankle, edge);
-    shapedLimb(c, ankle, foot, 0.04, [1.0, 0.9, 0.8, 0.9], leg, { flat: 0.4 });
+    const knee = jointBetween(hip, ankle, THIGH, SHIN, [1, 0.2, 0]);
+    c.sphere([0.13, 0.11, 0.12], [hip[0], hip[1] + 0.03, 0], plate); // the haunch, under the ram
+    shapedLimb(c, hip, knee, 0.1, [1.2, 1.45, 1.3, 0.95, 0.7], leg, { flat: 0.2 }); // the drumstick
+    c.sphere(0.065, knee, edge);
+    shapedLimb(c, knee, ankle, 0.06, [1.1, 0.95, 0.75, 0.6, 0.6], leg, { flat: 0.3, keel: 0.4 });
+    c.sphere(0.045, ankle, edge);
+    shapedLimb(c, ankle, foot, 0.04, [1.0, 0.85, 0.8, 0.95], leg, { flat: 0.4 });
     for (const [dz, l] of [[-0.11, 0.17], [0, 0.22], [0.11, 0.17]] as const) // three broad toes, splayed, to balance on
       shapedLimb(c, foot, [foot[0] + l * toe[0], Math.max(0.01, foot[1] - 0.02 + l * toe[1]), dz + dz * 0.6], 0.035, [1.0, 0.9, 0.6, 0.3], edge, { flat: 0.6 });
     c.cone(0.03, 0.12, [foot[0] - 0.08, foot[1] + 0.02, 0], edge, [0, 0, Math.PI / 2 + 0.3], 4); // a back spur

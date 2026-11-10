@@ -174,8 +174,10 @@ const bogToad: FenUnit = {
       b.limb([0.4 + hx + tx(0.4, 0.45), 0.45 + o.y - o.crouch * 0.5 + ty(0.4, 0.45), 0.3 * z], [0.55 + o.x * 0.5 + 0.3 * o.reach, foot + 0.1 * o.reach, 0.4 * z], 0.07, toadSkin, 0.06);
     }
     b.joint([o.x, o.y - o.crouch * 0.6, 0], [0, 0, o.pitch], (c) => {
-      c.sphere([0.75, 0.48, 0.62], [0, 0.6, 0], toadSkin);
-      c.sphere([0.6, 0.3, 0.5], [0.05, 0.4, 0], toadBelly);
+      // (as its mouth opens its body's front draws back behind the hinge of its jaws, leaving the mouth hollow)
+      const gp = Math.min(1, o.gape / 0.4);
+      c.sphere([0.75 - 0.2 * gp, 0.48, 0.62], [-0.2 * gp, 0.6, 0], toadSkin);
+      c.sphere([0.6 - 0.15 * gp, 0.3, 0.5], [0.05 - 0.15 * gp, 0.4, 0], toadBelly);
       for (const [x, z] of [[-0.2, 0.3], [0.1, -0.35], [-0.4, -0.1], [0.25, 0.15]]) c.sphere(0.07, [x, 0.98, z], { color: '#4a5a2e', tex: 'leather' }); // warts
       // its head: two great jaws hinged at the back of its mouth (a toad's mouth is as wide as its body). Biting, the top
       // of its head swings up and its jaw drops, opening a pink maw, a red throat and tongue, the crystal set in its jaw
@@ -189,13 +191,13 @@ const bogToad: FenUnit = {
         lo.sphere([0.42, 0.14, 0.54], [0.28, -0.08, 0], toadSkin); // its jaw
         if (p.armed) lo.crystal(0.18, [0.62, 0.06, 0], [0, 0, -0.5]); // the crystal fang in its jaw
       });
-      // open, its mouth is a closed cavity: a pink inner face on each jaw, and between them its
-      // throat, a solid dark wall that hides the body behind it from every side (shut, all of it is inside its head)
+      // open, its mouth is hollow, as a toad's is: a pink inner face on each jaw, its tongue on the lower, and deep at
+      // the hinge a small dark gullet (shut, all of it is inside its head)
       if (g > 0.02) {
         c.joint(H, [0, 0, upA], (up) => up.sphere([0.36, 0.04, 0.48], [0.32, -0.05, 0], MAW));
         c.joint(H, [0, 0, loA], (lo) => { lo.sphere([0.36, 0.04, 0.46], [0.3, 0.02, 0], MAW); lo.sphere([0.24, 0.06, 0.18], [0.24, 0.06, 0], TONGUE); });
-        const half = (upA - loA) / 2; // (one smooth wall filling the wedge between its jaws, its edges buried in them)
-        c.joint(H, [0, 0, loA + half], (t) => t.sphere([0.34, 0.06 + 0.42 * Math.sin(half), 0.47], [0.2, 0, 0], THROAT));
+        const half = (upA - loA) / 2; // (the gullet: set back at the hinge, its edges buried in the jaws)
+        c.joint(H, [0, 0, loA + half], (t) => t.sphere([0.1, 0.05 + 0.3 * Math.sin(half), 0.44], [0.04, 0, 0], THROAT));
       }
       c.box([0.4, 0.05, 0.5], [-0.05, 1.08, 0], { team: 'primary', tex: 'cloth' });
       // the rider: in a slam it hauls back as the toad leaps, is thrown forward as it strikes, its switch raised and whipped down
