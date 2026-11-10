@@ -93,7 +93,7 @@ const reedguard: FenUnit = {
 
 const toadSkin: Mat = { color: '#5e6e3a', tex: 'leather' };
 const toadBelly: Mat = { color: '#c8b87a', tex: 'leather' };
-const MAW: Mat = { color: '#f2a0a4', rough: 0.35 }, TONGUE: Mat = { color: '#d84a5a', rough: 0.3 }, THROAT: Mat = { color: '#6a1018', rough: 0.6 }; // (its mouth: bright against its dark skin)
+const MAW: Mat = { color: '#f2a0a4', rough: 0.35 }, TONGUE: Mat = { color: '#d84a5a', rough: 0.3 }, THROAT: Mat = { color: '#7a1a26', rough: 0.7 }; // (its mouth: bright against its dark skin)
 const riderLook: FenLook = { skin: '#7aa05a', wrap: { color: '#5a4a30', tex: 'leather' }, hat: 'crest', mounted: true };
 /** The toad's bound (its UnitSpec.gait, shared with its art so the two always match): great lumbering leaps. */
 const TOAD_GAIT = { hop: 0.5, period: 1.1 }; // (airborne 1/3–5/6 of each stride)
@@ -118,7 +118,7 @@ type ToadPose = { y: number; x: number; pitch: number; gape: number; toss: numbe
  * Its slam is a bite (its bound is its blow; the art contract's SLAM parts). Crouched: it sinks and gathers, its mouth
  * parting, then springs nose up. In the air before the blow: its head thrown up and its mouth hinged wide open, a pink
  * maw as wide as its body, lunging forward; coming down, its head swings down and its jaws snap shut on the target, the
- * rider thrown forward. After a blow landed in the air: jaws clamped, head driven down, then recovering for the landing.
+ * rider thrown forward, and it lands. (A blow landing sooner, in the air, plays on the same way.)
  */
 function toadSlam(phase: number): ToadPose {
   const { part, k } = slamPart(phase);
@@ -126,16 +126,14 @@ function toadSlam(phase: number): ToadPose {
     const c = smooth(k / 0.7), u = smooth((k - 0.7) / 0.3); // (sinking and gathering, then the push)
     return { y: 0.04 * u, x: -0.08 * c * (1 - u), pitch: 0.2 * c + 0.1 * u, gape: 0.25 * c + 0.45 * u, toss: 0.25 * u, crouch: 0.3 * c * (1 - u), tuck: 0, reach: 0, kick: 0.5 * u, lean: -0.2 * c + 0.25 * u, arm: 0.35 + 1.6 * c };
   }
-  if (part === 'air') {
+  {
     const a = k, shut = smooth((a - 0.74) / 0.12); // (snapping shut on the target as it comes down: fast and hard)
     return {
-      y: arc(a), x: 0.4 * smooth((a - 0.05) / 0.6), pitch: 0.2 - 0.65 * smooth(a), gape: (0.7 + 0.3 * smooth(a / 0.2)) * (1 - shut),
-      toss: 0.35 * (1 - smooth((a - 0.35) / 0.4)) - 0.4 * shut, crouch: 0, tuck: 1,
+      y: arc(a), x: 0.4 * smooth((a - 0.05) / 0.6) * (1 - 0.5 * smooth((a - 0.88) / 0.12)), pitch: 0.2 - 0.5 * smooth(a), gape: (0.7 + 0.3 * smooth(a / 0.2)) * (1 - shut),
+      toss: 0.35 * (1 - smooth((a - 0.35) / 0.4)) - 0.15 * shut, crouch: 0, tuck: 1 - smooth((a - 0.85) / 0.15),
       reach: smooth(a / 0.45), kick: 1 - 0.7 * smooth((a - 0.3) / 0.7), lean: 0.25 - 0.6 * smooth((a - 0.55) / 0.45), arm: 1.95 - 1.3 * smooth((a - 0.6) / 0.4),
     };
   }
-  const a = k, r = smooth(a / 0.85); // (struck: clamped and driven down, then recovering for the landing)
-  return { y: arc(a), x: 0.4 * (1 - r), pitch: -0.4 * (1 - r), gape: 0, toss: -0.25 * (1 - r), crouch: 0, tuck: 1 - smooth((a - 0.8) / 0.2), reach: 1 - 0.8 * r, kick: 0.3 * (1 - r), lean: -0.15 * (1 - r), arm: 0.65 - 0.3 * r };
 }
 
 /** Its pose for any animation: the slam; walking (played by stride: its bound, the sim's arc); biting standing; at rest. */
@@ -182,19 +180,23 @@ const bogToad: FenUnit = {
       // its head: two great jaws hinged at the back of its mouth (a toad's mouth is as wide as its body). Biting, the top
       // of its head swings up and its jaw drops, opening a pink maw, a red throat and tongue, the crystal set in its jaw
       // as a fang; then they snap shut. `toss` throws the whole head up or down
-      const H: [number, number, number] = [0.32, 0.6, 0], g = o.gape;
-      c.sphere([0.16, 0.18, 0.38], [0.36, 0.6, 0], THROAT);
-      c.joint(H, [0, 0, o.toss + 0.8 * g], (up) => {
+      const H: [number, number, number] = [0.32, 0.6, 0], g = o.gape, upA = o.toss + 0.55 * g, loA = o.toss - 0.7 * g;
+      c.joint(H, [0, 0, upA], (up) => {
         up.sphere([0.42, 0.22, 0.56], [0.3, 0.13, 0], toadSkin); // its skull
-        up.sphere([0.4, 0.05, 0.52], [0.3, -0.05, 0], MAW); // the roof of its mouth
         for (const z of [1, -1]) up.sphere([0.11, 0.11, 0.11], [0.34, 0.3, 0.27 * z], { color: '#d8b84a', rough: 0.3 }); // eyes
       });
-      c.joint(H, [0, 0, o.toss - 1.0 * g], (lo) => {
+      c.joint(H, [0, 0, loA], (lo) => {
         lo.sphere([0.42, 0.14, 0.54], [0.28, -0.08, 0], toadSkin); // its jaw
-        lo.sphere([0.38, 0.05, 0.5], [0.28, 0.02, 0], MAW); // the floor of its mouth
-        lo.sphere([0.24, 0.06, 0.18], [0.22, 0.06, 0], TONGUE);
         if (p.armed) lo.crystal(0.18, [0.62, 0.06, 0], [0, 0, -0.5]); // the crystal fang in its jaw
       });
+      // open, its mouth is a closed cavity: a pink inner face on each jaw, and between them its
+      // throat, a solid dark wall that hides the body behind it from every side (shut, all of it is inside its head)
+      if (g > 0.02) {
+        c.joint(H, [0, 0, upA], (up) => up.sphere([0.36, 0.04, 0.48], [0.32, -0.05, 0], MAW));
+        c.joint(H, [0, 0, loA], (lo) => { lo.sphere([0.36, 0.04, 0.46], [0.3, 0.02, 0], MAW); lo.sphere([0.24, 0.06, 0.18], [0.24, 0.06, 0], TONGUE); });
+        const half = (upA - loA) / 2; // (one smooth wall filling the wedge between its jaws, its edges buried in them)
+        c.joint(H, [0, 0, loA + half], (t) => t.sphere([0.34, 0.06 + 0.42 * Math.sin(half), 0.47], [0.2, 0, 0], THROAT));
+      }
       c.box([0.4, 0.05, 0.5], [-0.05, 1.08, 0], { team: 'primary', tex: 'cloth' });
       // the rider: in a slam it hauls back as the toad leaps, is thrown forward as it strikes, its switch raised and whipped down
       c.joint([-0.05, 0.6, 0], [0, 0, o.lean], (r) => body(r, { ...p, anim: p.anim === 'walk' || p.anim === 'slam' ? 'idle' : p.anim }, riderLook, o.arm ?? fenArm(p, 'jab') * 0.6, (h) => {

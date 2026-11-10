@@ -1024,21 +1024,23 @@ function gHopper(b: ModelBuilder, p: Pose, gait = HOPPER_GAIT): void {
   // (it strikes the middle of an average body, half a 70 kg body's height up, where the sim has blows meet: at contact
   // it's crouched into the blow, nose down just so far as puts its crystal's tip there)
   const STRIKE_H = 0.85 / GOLIATH_G;
-  const strikePitch = (crouchC: number, sxC: number) => -Math.asin(Math.max(0, Math.min(0.95, (1.28 - 0.55 * crouchC - STRIKE_H) / (0.7 * 1.12 * sxC + 0.22))));
+  const strikePitch = (crouchC: number, sxC: number, up = 0) => -Math.asin(Math.max(0, Math.min(0.95, (1.28 - 0.55 * crouchC + up - STRIKE_H) / (0.7 * 1.12 * sxC + 0.22))));
   let o: Pose5 = { crouch: 0.65 + 0.03 * Math.sin(t), height: 0, pitch: 0, footX: 0, footY: 0, thrust: 0, sx: 1, sy: 1 + 0.02 * Math.sin(t) }, bend = 0;
   if (moving) { o = bound(ph); bend = Math.max(-0.3, Math.min(0.3, (o.pitch - bound(ph - 0.04).pitch) * 2)); }
   else if (p.anim === 'slam') { // its bound is the blow (the art contract's SLAM parts), and it commits to it: a short,
     // deep wind-up (squashed flat, nose dipped), then the bound (its arc the sim's) as one long spear, its leg swept straight
-    // back in line with its body, nose pitched down onto the target, crystal first, squashed by the impact at contact (the
-    // end); struck in the air, it flies on as a spear and unfolds its leg only for the landing
+    // back in line with its body. The sim lands the blow as the bound comes down (World.swingAt), or sooner if its reach
+    // meets the target in the air: so as it falls it dives, its nose pitched to put the crystal's tip at a standing body's
+    // middle (STRIKE_H) wherever it is, and it lands the blow coming down onto its target, its leg unfolding under it,
+    // crouched deep into the impact, ram driven forward (struck sooner, in the air, it plays on the same way). Its tip
+    // dips no steeper than 0.75 rad: a dive, not a dart
     const { part, k } = slamPart(p.phase), f = k;
     if (part === 'crouch') { const c = sm(k / 0.75), u = sm((k - 0.75) / 0.25); o = { ...o, crouch: 1.35 * c * (1 - u) + 0.2 * u, pitch: -0.22 * c * (1 - u) + 0.35 * u, sy: 1 - 0.32 * c * (1 - u), sx: 1 + 0.1 * c + 0.2 * u, trail: 0.4 * u }; }
-    else if (part === 'after') { const q = UP + AIR * Math.min(0.999, k); o = bound(q); o.thrust = 0.42 * (1 - sm(k / 0.5)); o.trail = 1 - sm((k - 0.6) / 0.3); bend = Math.max(-0.3, Math.min(0.3, (o.pitch - bound(q - 0.04).pitch) * 2)); }
     else {
-      const hitPitch = strikePitch(0.8, 0.87);
-      o = { ...o, crouch: 0.8 * sm((f - 0.8) / 0.2), height: 4 * f * (1 - f) * APEX, pitch: 0.38 * (1 - 2 * f) + (hitPitch - 0.38 * (1 - 2 * f)) * sm((f - 0.55) / 0.35), thrust: 0.42 * sm((f - 0.15) / 0.4), trail: 0.4 + 0.6 * sm(f / 0.2) };
-      o.sx = f < 0.85 ? 1.27 - 0.1 * sm(f / 0.4) + 0.12 * sm((f - 0.5) / 0.35) : 1.29 - 0.42 * sm((f - 0.85) / 0.15); // (stretched into it)
-      o.sy = f < 0.85 ? 1 : 1 - 0.2 * sm((f - 0.85) / 0.15); // (and squashed at contact)
+      const height = 4 * f * (1 - f) * APEX, dive = sm((f - 0.62) / 0.3), crouch = 1.2 * sm((f - 0.8) / 0.14);
+      const sx = 1.27 - 0.1 * sm(f / 0.4) + 0.12 * sm((f - 0.5) / 0.3) - 0.3 * sm((f - 0.8) / 0.12); // (stretched into it, squashed by it)
+      o = { ...o, crouch, height, sx, sy: 1 - 0.18 * sm((f - 0.8) / 0.12), thrust: 0.42 * sm((f - 0.15) / 0.4) + 0.13 * dive, footX: -0.1, footY: height * 0.4,
+        pitch: 0.38 * (1 - 2 * f) * (1 - dive) + Math.max(-0.75, strikePitch(crouch, sx, height)) * dive, trail: (0.4 + 0.6 * sm(f / 0.2)) * (1 - sm((f - 0.8) / 0.14)) };
     }
     if (part === 'air') bend = -0.2 * Math.sin(Math.PI * Math.min(1, f * 1.3)); // (its tail dragging after the lunge)
   } else if (p.anim === 'attack') { // standing, it strikes without leaving the ground: crouching (squashed), then lunging

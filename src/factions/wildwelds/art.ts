@@ -8,7 +8,7 @@ import { buildings, caterpillarSegments, units } from './index';
 const hopFrames = (u: (typeof units)[number]) => {
   if (!u.gait) return undefined;
   const n = Math.max(8, Math.round((u.gait.period ?? 1) * 12));
-  return { walk: n, charge: n, slam: Math.round(n * 1.6) }; // (its slam plays the bound twice over: before the blow and after)
+  return { walk: n, charge: n, slam: Math.max(8, Math.round((u.gait.period ?? 1) * 8)) }; // (its slam: a quick crouch, then its bound, mostly a held pose: few frames)
 };
 const carry = (id: string) => id.startsWith('larva') || id.startsWith('mother');
 /** The micropike's frames: its walk shifts its weight foot by foot and its stab winds up, lunges and swings back as a

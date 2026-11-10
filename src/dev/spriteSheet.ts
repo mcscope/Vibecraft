@@ -32,6 +32,7 @@ export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
   // &shadows=1: an animation in the air's shadow frames instead (baked alone, laid on the ground by the renderer)
   const a = params.get('shadows') ? { ...found, frames: found.shadows ?? [] } : found;
   if (!a.frames.length) { out.textContent = `${id} '${anim}' has no shadow frames`; return; }
+  const px = a.frames.flat().reduce((t, s) => t + s.sw * s.sh, 0); // (its sprite pixels, every facing: what it costs to hold)
   const facing = params.get('facing');
   if (facing !== null) a.frames.splice(0, a.frames.length, a.frames[+facing % a.frames.length]);
   // &frames=1: only that many frames of each facing (one: a still, for contact sheets)
@@ -50,7 +51,7 @@ export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
     g.strokeStyle = 'rgba(0,0,0,0.25)'; g.strokeRect(i * cell, fi * cell, cell, cell);
     g.drawImage(s.img, s.sx, s.sy, s.sw, s.sh, x - s.ax * k, y - s.ay * k, s.sw * k, s.sh * k);
   }));
-  out.textContent = `${id} · ${anim} · ${a.frames.length} facings × ${cols} frames${found.stride ? ` · stride ${found.stride.toFixed(2)} units a loop` : ''}`;
+  out.textContent = `${id} · ${anim} · ${a.frames.length} facings × ${cols} frames${found.stride ? ` · stride ${found.stride.toFixed(2)} units a loop` : ''} · ${(px / 1e6).toFixed(2)} M sprite px`;
   out.appendChild(document.createElement('br'));
   out.appendChild(c);
   document.title = 'sprites ready';

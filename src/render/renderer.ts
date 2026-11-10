@@ -71,15 +71,15 @@ export function unitFrame(u: Unit): { anim: ArtAnim } & FrameTime {
     case 'attack': {
       // (a hopper whose bound-blow has landed and that's back on the ground: it's bounding on)
       if (u.stats.gait && !u.blow && (u.swing <= 0 || u.strideMul <= 0)) return { anim: Math.hypot(u.vx, u.vy) > u.stats.speed * 1.15 ? 'charge' : 'walk', progress: u.stride };
-      // (a hopper's bound is its blow: its slam, in the art contract's three parts (SLAM), each played by the sim's own
+      // (a hopper's bound is its blow: its slam, in the art contract's two parts (SLAM), each played by the sim's own
       // numbers: crouched for its `wait`, then in the air by how far through its bound it really is, so the art's arc is the
-      // sim's; struck in the air, it follows through to the landing)
+      // sim's; struck in the air, it plays on to the landing)
       if (u.stats.gait && (u.blow?.dur || u.strideMul > 0)) {
         const g = u.stats.gait, up = (1 - g.hop) * (2 / 3), b = u.blow;
         const air = u.strideMul > 0 ? Math.min(1, Math.max(0, (u.stride - up) / g.hop)) : 1;
-        if (!b) return { anim: 'slam', progress: Math.min(0.999, SLAM.hit + (1 - SLAM.hit) * air) };
+        if (!b) return { anim: 'slam', progress: Math.min(0.999, SLAM.air + (1 - SLAM.air) * air) };
         const t = b.dur! - u.swing, w = b.wait ?? 0;
-        return { anim: 'slam', progress: Math.min(0.999, t < w && u.strideMul <= 0 ? SLAM.air * (t / Math.max(DT, w)) : SLAM.air + (SLAM.hit - SLAM.air) * air) };
+        return { anim: 'slam', progress: Math.min(0.999, t < w && u.strideMul <= 0 ? SLAM.air * (t / Math.max(DT, w)) : SLAM.air + (1 - SLAM.air) * air) };
       }
       const dur = Math.min(0.45, u.stats.cooldown * 0.8);
       return { anim: 'attack', progress: 1 - u.swing / dur };
