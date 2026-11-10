@@ -1,104 +1,143 @@
 <h1 align="center">VibeCraft</h1>
 
-<p align="center"><b>A real-time strategy game in your browser. Play one of three armies, or make your own with an AI. The game works out every unit's stats and cost from its body.</b></p>
+<p align="center"><b>A real-time strategy game in your browser.<br>Play one of three armies, or make your own with an AI.</b></p>
 
 <p align="center">
   <a href="http://mcscope.com/game/vibecraft/"><b>▶ Play it now</b></a> ·
   <a href="http://mcscope.com/game/vibecraft/make.html">Make your army</a> ·
-  <a href="#playing">Playing</a> ·
-  <a href="#playing-online">Online</a> ·
+  <a href="#game-modes">Game modes</a> ·
+  <a href="#play-online">Online</a> ·
   <a href="#development">Development</a>
 </p>
 
-![The Fenfolk and the Meadowfolk armies facing each other across the field](docs/screenshots/header.png)
+![The Fenfolk, Meadowfolk and Wildweld armies gathered round an open field](docs/screenshots/header.png)
+
+## Quick start
+
+**To play:** open **[mcscope.com/game/vibecraft](http://mcscope.com/game/vibecraft/)**. Pick the Meadowfolk and press **Tutorial**.
+
+**To run your own copy** (you need [Node.js](https://nodejs.org) and git):
+
+```sh
+git clone https://github.com/mcscope/Vibecraft.git
+cd Vibecraft
+npm install
+npm run dev
+```
+
+Then open the address it prints.
 
 ---
 
 ## What makes it different
 
-### Bring your own army
-Play one of the three shipped factions, or make your own. You describe your people in code, usually by chatting with an AI coding assistant. That covers their units, buildings, techs, art, homeworld and wildlife. Then take them online: your faction travels to your opponent as data, and their game checks it against the rules.
+### You can bring your own army
 
-### Physics sets the stats
-You design **bodies**, and the engine works out each unit's health, damage, speed and cost. A body is:
+Play a shipped army, or make one. You describe your people in code, usually by chatting with an AI coding assistant: their units, buildings, techs, art, homeworld and wildlife. Then take them online. Your army travels to your opponent as data, and their game checks it against the rules.
+
+### Physics sets every stat
+
+You design **bodies**. The game works out each unit's health, damage, speed and cost. A body is:
+
 - its mass;
 - how that mass splits between muscle, frame (bone, shell, plate) and reserve;
 - the crystal weapon it swings or throws.
 
-The same rules apply to every body:
-
 ![What physics decides: muscle drives speed and blows, frame health and plate, reserve calories, length stride and turns; a blow adds the bodies' collision, throws fly ballistic arcs, and cost follows the kilos](docs/diagrams/physics.svg)
 
-Counters come from the physics: pikes counter chargers, and chargers run down infantry. The **Arena** scores every matchup.
+Counters come from the same physics. Pikes counter chargers, and chargers run down infantry. The **Arena** scores every matchup.
 
 ![The arena: lynx lancers charge a block of macemen, with the matchup matrix alongside](docs/screenshots/arena.png)
 
-### Resources are physical: calories, crystals, carts
-- **Calories.** Every unit burns calories, and a bigger body carries more. Walking drains them slowly, sprinting and fighting fast. A unit on empty is slow and too weak to fight until it eats. Units eat at buildings, from packs, or from food bearers. So supply decides how far your army can reach, and every charge has a cost.
-- **Crystals.** Crystal is ammo. A striker keeps the crystal on its weapon. A thrower spends one each throw, and the spent stones lie where they land for anyone to pick up. Towers and garrisons throw from their building's stock, and ammo bearers act as mobile restock points in the field.
-- **Carts.** Each building has its own stock. Carts and haulers move resources to where they're needed, most urgent first. Build close together and keep supplies flowing to train faster.
+### Resources are physical
+
+| Resource | How it works |
+|---|---|
+| **Calories** | Every unit burns calories, and a bigger body carries more. Walking drains them slowly; sprinting and fighting drain them fast. A unit on empty is slow and too weak to fight until it eats. Supply decides how far your army can reach. |
+| **Crystals** | Crystal is ammo. A striker keeps the crystal on its weapon. A thrower spends one each throw, and spent stones lie where they land for anyone to pick up. Ammo bearers act as mobile restock points. |
+| **Carts** | Each building has its own stock. Carts and haulers move resources to where they're needed, most urgent first. Build close together to train faster. |
 
 ---
 
-## The factions
+## The armies
 
-Three factions ship with the game. Each roster below shows every unit to scale.
+| Army | Difficulty | Who they are | How they play |
+|---|---|---|---|
+| **The Meadowfolk** | Simple | The most traditional army: farmers and knights. | They fight with lance, mace, cavalry and siege. Automatic carts simplify resource management, so they play most like a traditional RTS. |
+| **The Fenfolk** | Medium | Frog-folk from deep in the marsh. | Large bog creatures, herons and toads, reinforce armies of little fenling worker-fighters. Expect heavy micro, and a tricky balance of economy and military. |
+| **The Wildwelds** | Complex | A living swarm of insectile larvae, who evolve and grow into ferocious beasts. | Units make units: mothers lay eggs, and larvae change in cocoons into fighters, walls and towers. It's a production system unique in an RTS, with a steep learning curve. |
 
-**The Meadowfolk** (simple): the most traditional army, farmers and knights. They fight with lance, mace, cavalry and siege. Automatic carts simplify resource management, so they play most like a traditional RTS.
+Each roster shows every unit to scale.
+
 ![The Meadowfolk: villager, slinger, crystal maceman, pikeman, lynx lancer, hurlhorn and mule cart](docs/screenshots/roster-meadowfolk.png)
 
-**The Fenfolk** (medium): frog-folk from deep in the marsh. Large bog creatures, herons and toads, reinforce the armies of little fenling worker-fighters. Expect heavy micro, and a tricky balance of economy and military.
 ![The Fenfolk: fenling, reedguard, bog toad, pack tortoise and great siege heron](docs/screenshots/roster-fenfolk.png)
-
-**The Wildwelds** (complex): a living swarm of insectile larvae, who evolve and grow into ferocious beasts. Units make units: mothers lay eggs, larvae tend the nest and change in cocoons into fighters, and big larvae lay their own bodies down as web walls and the Mimic Mine. It's a production system unique in an RTS, with a steep learning curve.
 
 ---
 
-## Playing
-
-Play the shipped factions in your browser at **[mcscope.com/game/vibecraft](http://mcscope.com/game/vibecraft/)**. To play an army you made, run your own copy (see [Development](#development)).
+## Game modes
 
 | Mode | What you do |
 |---|---|
-| **Tutorial** | A track of short lessons for each army: calories, crystals, supply, charges, groupings, and that army's own speciality. Each lesson has a checklist that ticks itself off as you play. |
+| **Tutorial** | Play a track of short lessons for your army: calories, crystals, supply, charges, groupings, and that army's speciality. Each lesson has a checklist that ticks itself off as you play. |
 | **Skirmish** | Build a base and fight the computer. |
-| **Pitched Battle** | Draft an army to a food budget, deploy it on a battlefield (river fords, a broken ridge, lake lanes, twin woods, open steppe or the Mesa), and fight with what you drafted. |
+| **Pitched Battle** | Draft an army to a food budget, place it on a battlefield, and fight with what you drafted. |
+| **Online** | Play against a friend, one on one. |
 | **Spectate** | Watch two computer players fight. |
 | **Arena** | Watch any two units fight on an equal budget, and see every matchup scored. Tick *You command blue* to fight it yourself. |
-| **Proving Grounds** | Command a full army against training dummies and a target fort. |
-| **Online game** | Play against a friend, one on one. |
-| **Codex** / **Unit Lab** | Browse every faction's tech tree, and see how each body turns into stats. |
+| **Proving Grounds** | Test a full army on training dummies and a target fort. |
+| **Codex** / **Unit Lab** | Look up every unit, building and tech, and see how each body turns into stats. |
 
-**Maps:** Woodlands, Steppe (after AoE2's Arabia), Water Donut, Cliff Maze, and Sunken Temple (after StarCraft's Lost Temple). Pick one in the menu. Online, the host picks.
+### Maps
 
-**High ground:** Cliff Maze and Sunken Temple have raised ground, ringed by cliffs and joined by ramps. Units up high see further, and the crystals they throw down hit harder.
+| Map | What it's like |
+|---|---|
+| **Woodlands** | Ponds and thick woods shape the lanes. |
+| **Steppe** | Open ground, so armies meet early. After Age of Empires II's Arabia. |
+| **Water Donut** | A ring of water around a rich island, crossed by two fords. |
+| **Cliff Maze** | Rooms on terraces, joined by ramps. |
+| **Sunken Temple** | High plateau bases with one ramp each. After StarCraft's Lost Temple. |
 
-**Computer players** come in **Easy** and **Hard** (the default). Both play fair: they see only what their own units see, and use the same rules and commands as you. Hard thinks faster, runs a tighter economy, scouts, and counters what it has seen. It attacks once its army is stronger, focuses fire and pulls back hurt units. Easy reacts slowly and attacks in small waves.
+Pick a map in the menu. Online, the host picks.
 
-**Shortcut:** start a game straight from a URL, for example `?mode=skirmish&you=fenfolk&foe=meadowfolk&map=cliff-maze&seed=5&ai=easy`.
+**High ground** matters on Cliff Maze and Sunken Temple. Units up high see further, and the crystals they throw down hit harder.
+
+### Computer players
+
+- **Easy** reacts slowly and attacks in small waves.
+- **Hard** (the default) thinks faster, runs a tighter economy, scouts, and counters what it has seen. It attacks once its army is stronger, focuses fire and pulls back hurt units.
+- **Both play fair.** They see only what their own units see, and use the same rules and commands as you.
+
+### Start from a link
+
+Put the setup in the address, for example:
+
+```
+?mode=skirmish&you=fenfolk&foe=meadowfolk&map=cliff-maze&seed=5&ai=easy
+```
 
 ---
 
-## Making your own army
+## Make your own army
 
-You make an army in your own copy of the game, so start with [Development](#development). The in-game guide, **[Make your army](http://mcscope.com/game/vibecraft/make.html)**, walks players through it. In short:
+You make an army in your own copy of the game (see [Quick start](#quick-start)). The in-game guide, **[Make your army](http://mcscope.com/game/vibecraft/make.html)**, walks you through it. In short:
 
-1. **Dream up your people.** Where do they live, what do they eat, and how do they fight? Pick a theme and one or two signature ideas. [DESIGN_SPACE.md](DESIGN_SPACE.md) lists abilities waiting for a first faction to use them.
+1. **Dream up your people.** Decide where they live, what they eat and how they fight. Pick a theme and one or two signature ideas. [DESIGN_SPACE.md](DESIGN_SPACE.md) lists abilities waiting for a first army to use them.
 2. **Copy a faction.** Copy `src/factions/fenfolk/` (or `meadowfolk/`) to `src/factions/<yours>/`. Give it a new `id` and `name`.
 3. **Register it.** Add it to `PLAYABLE` in `src/factions/index.ts`, and to the Codex in `src/codex.ts`.
 4. **Shape the bodies,** using the fields below. The Codex and Unit Lab update as you change them.
 5. **Draw them.** Each unit and building has a `model(builder, pose)` made of boxes, spheres, limbs and joints. The game bakes each model into lit sprites.
 6. **Bring your land.** `homeworld.ts` sets the look of your half of the map. `wildlife.ts` lists the animals that roam it.
-7. **Test it.** Try it in the Arena, Proving Grounds and Skirmish. The computer player reads your buildings, so it plays any faction. `npm test` checks your faction against the rules.
+7. **Test it.** Try it in the Arena, Proving Grounds and Skirmish. The computer player reads your buildings, so it can play any army. `npm test` checks your army against the rules.
 
 ### A unit's body
 
 | Field | What it sets |
 |---|---|
-| `mass` | Weight in kg. A bigger body is stronger, but hungrier, slower to turn and more expensive. |
+| `mass` | Weight in kg. A bigger body is stronger, hungrier, slower to turn and more expensive. |
 | `physique: { muscle, frame, reserve }` | How the mass splits. Muscle drives speed and blows, frame gives health and armour, and reserve stores calories. |
 | `attack: { style, crystalMass }` | `'strike'` or `'throw'`, and how many kg of crystal it swings or throws. Throwers also carry `ammo`. |
-| `attack.shaft` | Metres of spear, for strikers. It adds reach and impales chargers. |
+| `attack.shaft` | Metres of spear, for strikers. It adds reach and counters chargers. |
 | `attack.sidearm` | A hand weapon worn beside a spear, for close fighting and to the sides. |
 | `attack.sling` | Metres of sling cord, for throwers. It throws light stones faster. |
 | `length` | Metres from nose to tail. Long bodies gallop and turn in wide arcs. |
@@ -106,56 +145,68 @@ You make an army in your own copy of the game, so start with [Development](#deve
 
 `src/factions/types.ts` documents every field.
 
-### Rules of the road
+### Three rules
+
 - **Keep a faction self-contained.** It imports its own files, plus shared helpers from `src/kits/` and `src/biomes/`.
 - **Get strength from the body.** To make a unit stronger, give it a bigger body or more refinement. The physics sets the price.
 - **Add new behaviour as an engine ability.** Flying, burrowing or healing goes in `src/sim/abilities/` as a generic ability any faction can switch on. Give it a validation check and a Codex line.
 
 ---
 
-## Playing online
+## Play online
 
-Online games are one on one. Each player runs their own copy of the game with their own faction. When the match starts, your faction travels to your opponent as data, so each of you needs only your own code.
+Online games are one on one. Each player runs their own copy of the game with their own army. When the match starts, your army travels to your opponent as data, so each of you needs only your own code.
 
-1. **Pick a relay.** A relay passes moves between players. The hosted game uses `ws://mcscope.com:5190`. To run your own, use `npm run relay` (port 5190). For play over the internet, run it on a public machine. If your game is served over https, the relay needs `wss://`.
-2. **Join.** Each player opens **Online game**. Enter the relay address, the same room code, a name and a faction. On a local network, `npm run dev -- --host` lets others open your copy.
+1. **Pick a relay.** A relay passes moves between players. The hosted game uses `ws://mcscope.com:5190`. To run your own, use `npm run relay` (port 5190). For play over the internet, run it on a public machine. A game served over https needs a `wss://` relay.
+2. **Join.** Each player opens **Online**. Enter the relay address, the same room code, a name and an army. On a local network, `npm run dev -- --host` lets others open your copy.
 3. **Start.** The first player in the room hosts and presses **Start**.
 
-Both players need the same version of the engine, since both games must follow identical rules.
+Both players need the same version of the game, so both follow identical rules.
 
-**Fairness.** Your opponent's game works out every stat and cost from your faction itself. So every unit costs what its body is worth. Both players start from the same pool of resources (`START_POOL`), and your starting base and workers come out of it. A grand base means a lean start. A few things sit outside physics, like how much wildlife roams your half, and the game limits those too. The rules live in `src/sim/fairness.ts`.
+### How it stays fair
 
-**Determinism.** Only commands travel between players. Each game then simulates the same world in step ("lockstep"). So the simulation must give identical results everywhere: take all randomness from `world.rng`, and keep `Math.random` and the clock out of `src/sim/`. `tests/factions.test.ts` checks this: it plays the same AI game twice and compares the worlds throughout.
+- **Your opponent's game works out your stats.** Every unit costs what its body is worth.
+- **Both players start from the same pool of resources** (`START_POOL`). Your starting base and workers come out of it, so a grand base means a lean start.
+- **The game limits the few things outside physics,** like how much wildlife roams your half.
+
+The rules live in `src/sim/fairness.ts`.
 
 ---
 
 ## Development
 
-You need [Node.js](https://nodejs.org) and git.
+### Commands
 
-```sh
-git clone https://github.com/mcscope/Vibecraft.git
-cd Vibecraft
-npm install
-npm run dev          # play at http://localhost:5173
-npm test             # run the simulation tests
-npm run typecheck
-npm run arena        # print the unit matchup table (add 'flat' to compare bodies at refinement 1)
-npm run aimatch      # play the computer players against each other
-npm run aibatch      # a batch of computer games: win rates, armies, idle workers, unused stock, towers' crystal
-npm run build        # production build, art pre-baked
-npm run build:fast   # production build, art baked in the browser
-```
+| Command | What it does |
+|---|---|
+| `npm run dev` | Runs the game locally, with live reload. |
+| `npm test` | Runs the simulation tests. |
+| `npm run typecheck` | Checks the types. |
+| `npm run arena` | Prints the unit matchup table. Add `flat` to compare bodies at refinement 1. |
+| `npm run aimatch` | Plays the computer players against each other. |
+| `npm run aibatch` | Plays a batch of computer games and reports win rates, armies, idle workers and unused stock. |
+| `npm run relay` | Runs a relay for online play. |
+| `npm run build` | Makes a production build with the art pre-baked. |
+| `npm run build:fast` | Makes a production build that bakes art in the browser. |
 
-**Pre-baked art.** The game turns its 3D models into sprites in your browser, and that takes time. So `npm run build` bakes the shipped factions ahead of time, in every team colour, into `dist/baked/`. The hosted game then loads those files instead. The step takes several minutes and needs Chrome. Your own factions bake in the browser, and `npm run dev` always bakes live, so model changes show up at once.
+### Pre-baked art
 
-**Dev pages.**
-- `?mode=sprites&unit=lynx&anim=attack&facing=3` shows every frame of one animation.
-- `?mode=sprites&faction=fenfolk` shows a faction's roster.
-- `?mode=faceoff&you=fenfolk&foe=meadowfolk&third=wildwelds` lines up two or three armies, as in the header image.
-- `?mode=tutorial&track=wildwelds&lesson=1` opens one lesson of an army's track.
-- `&sounddebug=1` (any mode) lists the last sounds played, with ✕ to strike a bad clip.
-- `/voicelab/index.html` sorts recorded clips into unit voices and combat sounds. `npm run voices` imports its newest saved labels into `public/voices/`.
+The game turns its 3D models into sprites in your browser, and that takes time. `npm run build` bakes the shipped armies ahead of time, in every team colour, into `dist/baked/`. The hosted game loads those files. The step takes several minutes and needs Chrome. Your own armies bake in the browser, and `npm run dev` always bakes live, so model changes show up at once.
+
+### Lockstep
+
+Only commands travel between players. Each game then simulates the same world in step. So the simulation must give identical results everywhere: take all randomness from `world.rng`, and keep `Math.random` and the clock out of `src/sim/`. `tests/factions.test.ts` checks this by playing the same AI game twice and comparing the worlds throughout.
+
+### Dev pages
+
+| Address | What it shows |
+|---|---|
+| `?mode=sprites&unit=lynx&anim=attack&facing=3` | Every frame of one animation. |
+| `?mode=sprites&faction=fenfolk` | A faction's roster. |
+| `?mode=faceoff&you=fenfolk&foe=meadowfolk&third=wildwelds` | Two or three armies lined up, as in the header image. |
+| `?mode=tutorial&track=wildwelds&lesson=1` | One lesson of an army's track. |
+| `&sounddebug=1` (any mode) | The last sounds played, with ✕ to strike a bad clip. |
+| `/voicelab/index.html` | Sorts recorded clips into unit voices and combat sounds. `npm run voices` imports the newest saved labels into `public/voices/`. |
 
 ### Layout
 
