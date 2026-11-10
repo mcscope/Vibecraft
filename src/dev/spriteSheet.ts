@@ -15,6 +15,7 @@ const teamOf = (params: URLSearchParams) => TEAM_COLORS[+(params.get('team') ?? 
 export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
   if (params.get('teams')) return teamsPage(params);
   if (params.get('game')) return (await import('./gameBand')).runGameBand(params); // (the whole game's band pictures)
+  if (params.get('banner')) return (await import('./gameBand')).runBanner(params); // (the front page's banner, staged)
   if (params.get('faction') && params.get('pose')) return pose(params);
   if (params.get('faction')) return roster(params);
   if (params.get('tunnels')) return tunnels(params.get('tunnels')!, Number(params.get('frames') ?? 30));

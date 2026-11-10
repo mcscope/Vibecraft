@@ -309,7 +309,15 @@ export interface BandStaging {
   /** The ground's colours, mottled over the near ground (grass shades, then dirt): the usual one colour if not given. */
   groundColors?: string[];
   /** The sun, if not the usual high one: from `azimuth` degrees round from behind the camera (90: from the right, 180: from behind the subjects), `elevation` degrees up; low is warm, with long shadows. */
-  sun?: { azimuth: number; elevation: number; disc?: boolean; rays?: boolean };
+  sun?: { azimuth: number; elevation: number; disc?: boolean; rays?: boolean; moon?: boolean };
+  /** Brighter or darker overall (default 1.2; a night wants less). */
+  exposure?: number;
+  /** Lamps in the scene (crystal light, fires): coloured point lights at (x, z), `y` up. */
+  lights?: Array<{ at: [number, number]; y?: number; color: string; intensity?: number; reach?: number }>;
+  /** Stars in the sky (how many). */
+  stars?: number;
+  /** Lightning bolts in the sky, across the picture at x (0–1). */
+  lightning?: number[];
   /** Clouds in the sky ('many': a sky full of them). */
   clouds?: boolean | 'many';
   /** A storm front darkening the sky on one side (−1 left, 1 right). */

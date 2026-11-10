@@ -23,7 +23,7 @@ export function renderBand(sides: BandSide[], staging: BandStaging, W: number, H
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.2;
+  renderer.toneMappingExposure = staging.exposure ?? 1.2;
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   const scene = new THREE.Scene();
   const [cx, cy, cz] = staging.camera.from, [tx, ty, tz] = staging.camera.to;
@@ -34,8 +34,9 @@ export function renderBand(sides: BandSide[], staging: BandStaging, W: number, H
   const xs = staging.cast.map((c) => c.at[0]), zs = staging.cast.map((c) => c.at[1]);
   const mid = new THREE.Vector3((Math.min(...xs) + Math.max(...xs)) / 2, 0, (Math.min(...zs) + Math.max(...zs)) / 2);
   const reach = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs)) / 2 + 14;
-  scene.add(new THREE.HemisphereLight('#dfe6ff', '#8c7650', 1)); // (the lit ground bounces warm light up into undersides a low camera sees)
-  const low = staging.sun ? staging.sun.elevation < 30 : false, sun = new THREE.DirectionalLight(low ? '#ffcf96' : '#ffe6c4', low ? 3.6 : 3.1);
+  const moon = !!staging.sun?.moon; // (by moonlight: everything cooler and dimmer)
+  scene.add(new THREE.HemisphereLight(moon ? '#7f93c8' : '#dfe6ff', moon ? '#3a3a4a' : '#8c7650', moon ? 0.55 : 1)); // (the lit ground bounces warm light up into undersides a low camera sees)
+  const low = staging.sun ? staging.sun.elevation < 30 : false, sun = new THREE.DirectionalLight(moon ? '#b8c8ff' : low ? '#ffcf96' : '#ffe6c4', moon ? 1.6 : low ? 3.6 : 3.1);
   if (staging.sun) {
     const az = (staging.sun.azimuth * Math.PI) / 180, el = (staging.sun.elevation * Math.PI) / 180;
     sun.position.copy(place(Math.sin(az) * Math.cos(el), Math.sin(el), -Math.cos(az) * Math.cos(el)).multiplyScalar(80).add(mid));
@@ -48,13 +49,19 @@ export function renderBand(sides: BandSide[], staging: BandStaging, W: number, H
   sun.shadow.radius = 2;
   Object.assign(sun.shadow.camera, { left: -reach, right: reach, top: reach, bottom: -reach, near: 1, far: 260 });
   scene.add(sun, sun.target);
-  const fill = new THREE.DirectionalLight('#a9c0ff', 0.7);
+  const fill = new THREE.DirectionalLight('#a9c0ff', moon ? 0.35 : 0.7);
   fill.position.copy(place(0.8, 0.4, -0.5));
   // (two rims, from behind on either side: a dark glossy body against the sky needs its edges picked out)
   const rim = new THREE.DirectionalLight('#fff3dc', 2.2), rim2 = new THREE.DirectionalLight('#fff3dc', 1.6);
   rim.position.copy(place(-0.5, 0.5, 1));
   rim2.position.copy(place(0.6, 0.45, 1));
   scene.add(fill, rim, rim2);
+  // lamps in the scene (crystal light, fires): each lights what's near it
+  for (const l of staging.lights ?? []) {
+    const p = new THREE.PointLight(l.color, l.intensity ?? 30, l.reach ?? 12, 1.6);
+    p.position.set(l.at[0], l.y ?? 1.5, l.at[1]);
+    scene.add(p);
+  }
   // a dusk sky with the side's colour glowing low behind the band; grass running off into haze
   const camera = new THREE.PerspectiveCamera(staging.camera.fov, W / H, 0.3, 400);
   camera.position.set(cx, cy, cz);
@@ -204,8 +211,12 @@ function paintSky(staging: BandStaging, aspect: number, hz: number, top: string,
   };
   if (tint) radial(SW / 2, H, SW * 0.6, tint, 0.22);
   const sun = staging.sun, sx = sun ? SW / 2 + (SW / 2) * Math.sin((sun.azimuth * Math.PI) / 180) * 0.9 : SW / 2, sy = H - SH * 0.05 - (sun ? (sun.elevation / 90) * SH * 0.6 : 0);
-  if (sun) radial(sx, H, SW * 0.55, '#ffbe78', 0.55);
+  if (sun) radial(sx, H, SW * 0.55, sun.moon ? '#9fb4e8' : '#ffbe78', sun.moon ? 0.25 : 0.55);
   for (const glow of staging.glows ?? []) radial(glow.x * SW, H, SW * (glow.r ?? 0.12), glow.color, 0.7); // (distant fires, crystal light)
+  for (let i = 0; i < (staging.stars ?? 0); i++) { // stars, thinning toward the horizon
+    const x = rnd() * SW, y = rnd() ** 1.6 * H * 0.85, r = 0.4 + rnd() * 1.1;
+    g.fillStyle = `rgba(235,240,255,${0.35 + 0.6 * rnd() * (1 - y / H)})`; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+  }
   if (staging.storm) { // a storm front: one side dark and heavy
     const st = g.createLinearGradient(staging.storm < 0 ? 0 : SW, 0, SW / 2, 0);
     st.addColorStop(0, 'rgba(24,26,38,0.82)'); st.addColorStop(1, 'rgba(24,26,38,0)');
@@ -227,6 +238,14 @@ function paintSky(staging: BandStaging, aspect: number, hz: number, top: string,
       }
     }
   }
+  for (const bolt of staging.lightning ?? []) { // a forked bolt from the cloud base, glowing
+    let x = bolt * SW, y = H * 0.08;
+    g.save(); g.globalCompositeOperation = 'lighter'; g.strokeStyle = 'rgba(220,230,255,0.9)'; g.shadowColor = '#b8c8ff'; g.shadowBlur = 18; g.lineWidth = 2.5;
+    g.beginPath(); g.moveTo(x, y);
+    while (y < H * 0.85) { x += (rnd() - 0.5) * SW * 0.03; y += H * (0.04 + rnd() * 0.05); g.lineTo(x, y); }
+    g.stroke(); g.restore();
+    radial(bolt * SW, H * 0.3, SW * 0.12, '#c8d4ff', 0.25);
+  }
   if (sun?.disc) { // the low sun itself, and rays fanning from it through the haze
     if (sun.rays) {
       g.save(); g.globalCompositeOperation = 'lighter';
@@ -239,9 +258,9 @@ function paintSky(staging: BandStaging, aspect: number, hz: number, top: string,
       }
       g.restore();
     }
-    radial(sx, sy, SW * 0.16, '#ffd9a0', 0.75);
-    radial(sx, sy, SW * 0.035, '#fff4dc', 1);
-    g.fillStyle = '#fffaf0'; g.beginPath(); g.arc(sx, sy, SW * 0.018, 0, Math.PI * 2); g.fill();
+    radial(sx, sy, SW * 0.16, sun.moon ? '#b8c8f0' : '#ffd9a0', sun.moon ? 0.35 : 0.75);
+    radial(sx, sy, SW * 0.035, sun.moon ? '#e8eeff' : '#fff4dc', sun.moon ? 0.6 : 1);
+    g.fillStyle = sun.moon ? '#eef2ff' : '#fffaf0'; g.beginPath(); g.arc(sx, sy, SW * 0.018, 0, Math.PI * 2); g.fill();
   }
   return c;
 }

@@ -808,21 +808,327 @@ export const GAME_BANDS: GameBand[] = [
   },
 ];
 
-/** ?mode=sprites&game=<n>[&wide=1]: draw picture n (from 1). */
-export function runGameBand(params: URLSearchParams): void {
-  const band = GAME_BANDS[+(params.get('game') ?? 1) - 1];
-  if (!band) { document.title = 'sprites ready: none'; return; }
+/** The three armies, each in its side's colours. */
+function gameSides(): BandSide[] {
   const find = (id: string) => PLAYABLE.find((f) => f.id === id)!;
-  const sides: BandSide[] = [
+  return [
     { f: find('meadowfolk'), team: TEAM_COLORS[1], opts: meadowOpts as BandSide['opts'] },
     { f: find('fenfolk'), team: TEAM_COLORS[0], opts: fenOpts as BandSide['opts'] },
     { f: find('wildwelds'), team: TEAM_COLORS[2], opts: wildOpts as BandSide['opts'] },
   ];
+}
+
+/** ?mode=sprites&game=<n>[&wide=1]: draw picture n (from 1). */
+export function runGameBand(params: URLSearchParams): void {
+  const band = GAME_BANDS[+(params.get('game') ?? 1) - 1];
+  if (!band) { document.title = 'sprites ready: none'; return; }
+  const sides = gameSides();
   const wide = !!params.get('wide');
   const w = band.wide, staging = !wide ? band.staging : w && 'cast' in w ? w : { ...band.staging, camera: w ?? band.staging.camera };
   const c = renderBand(sides, staging, wide ? 2480 : 960, 720);
   c.style.cssText = 'position:fixed;left:0;top:0;z-index:20';
   document.body.appendChild(c);
   document.body.dataset.label = `new${band.top ? ` ★${band.top}` : ''}: ${band.name}`; // (for the review sheet)
+  document.title = 'sprites ready';
+}
+
+// ── the front page's banner, staged (2480×720, drawn under the gold title: src/style.css .menu-hero) ──
+// The title sits in the middle: x 28–72 %, y 30–75 % stays calm. The bottom fades to black from 35 % down, so the
+// armies stand high (feet above about 60 %); a phone shows only the middle 60 % of the width, so something to see
+// sits just above the title (a sun, fliers, a far castle). ?mode=sprites&banner=<n>; scripts/bands.mjs BANNERS=1.
+
+/** Across the picture: `frac` of the way from the middle to the edge (−1 left, 1 right), `d` from the camera, at fov `fov`. */
+const X = (frac: number, d: number, fov = 30) => frac * d * Math.tan(((fov / 2) * Math.PI) / 180) * (2480 / 720);
+/** A camera at height `y`, `z` back, looking level-ish down −z: the horizon `hz` of the way down the picture. */
+const BANNER_CAM = (y: number, z: number, hz = 0.62, fov = 30): BandStaging['camera'] => ({ from: [0, y, z], to: [0, y + 100 * (hz - 0.5) * 2 * Math.tan(((fov / 2) * Math.PI) / 180), z - 100], fov });
+
+interface Banner { name: string; top?: number; staging: Staging }
+export const BANNERS: Banner[] = [
+  // 1. the sunset valley: the sun going down in the dip between two hills, a soft gold glow behind the title; the
+  //    Fenfolk and Meadowfolk on the left hill, the Wildwelds on the right, a heron and a Dragon Fly above them
+  {
+    name: 'sunset valley',
+    top: 3,
+    staging: join({
+      ...DUSK(180, 1.5), sky: ['#2a2c48', '#ffb46a'], ridges: RIDGES('#3e3a40', '#5e5658', true),
+      camera: BANNER_CAM(1.2, 16, 0.5),
+      hills: [{ at: [X(-0.75, 18), -2], r: 11, h: 1.6 }, { at: [X(0.75, 18), -2], r: 11, h: 1.6 }],
+      scatter: [TUFTS(X(-0.7, 16), 2, 8, 70), TUFTS(X(0.7, 16), 2, 8, 70)],
+      props: LIFT([[X(-0.36, 20), -4, 5.5], [X(0.32, 22), -6, 6]]),
+      cast: [
+        { side: FEN_, id: 'great-siege-heron', at: [X(-0.86, 26), -10], face: 70, anim: 'attack', phase: 0.45 },
+        { side: FEN_, id: 'bog-toad', at: [X(-0.58, 14), 2.5], lift: 1, face: 80, anim: 'leap', phase: 0.5 },
+        ...cluster(FEN_, 'fenling', 30, X(-0.8, 16), 0, 4.5, 75, 'charge', 'attack'),
+        { side: MEADOW, id: 'hurlhorn', at: [X(-0.62, 18), -2.5], face: 70, anim: 'attack', phase: 0.55 },
+        { side: MEADOW, id: 'lynx', at: [X(-0.52, 16), 0.5], face: 75, anim: 'charge', phase: 0.3 },
+        ...cluster(MEADOW, 'pikeman', 14, X(-0.65, 18), -3, 3, 75, 'charge'),
+        { side: WILD, id: 'whipweld', at: [X(0.58, 15), 1.5], face: -80, anim: 'attack', phase: 0.45 },
+        { side: WILD, id: 'flier', at: [X(0.7, 16), 1], face: -80 },
+        ...cluster(WILD, 'charger', 30, X(0.8, 16), -0.5, 4.5, -80, 'charge', 'attack'),
+        ...cluster(WILD, 'larva1', 12, X(0.72, 14), 2.5, 3, -80, 'walk'),
+        { side: FEN_, id: 'great-siege-heron', at: [X(-0.42, 28), -12], lift: 5.5, face: 60, roll: 22, anim: 'fly', phase: 0.3 },
+        { side: WILD, id: 'dragon-fly', at: [X(0.42, 28), -12], lift: 5.5, face: -70, anim: 'fly', phase: 0.5 },
+      ],
+    }),
+  },
+  // 2. dawn in the mist: a pale pink sunrise behind haze, the three armies drawn up on low rises as dark shapes,
+  //    a line of herons and Vimmers crossing the top
+  {
+    name: 'dawn mist',
+    staging: join({
+      sun: { azimuth: 180, elevation: 3, disc: true, rays: true }, clouds: true, sky: ['#5d73a6', '#ffd4b4'], fogColor: '#e8c8b8', fog: [14, 70], exposure: 1.25,
+      groundColors: ['#4a5638', '#56603e', '#5e6648'], ridges: RIDGES('#7a7088', '#9c90a0'),
+      camera: BANNER_CAM(1, 15, 0.5),
+      hills: [{ at: [X(-0.7, 15), 0], r: 9, h: 1.6 }, { at: [X(0.7, 15), 0], r: 9, h: 1.6 }, { at: [0, -14], r: 10, h: 1.4 }],
+      cast: [
+        { side: FEN_, id: 'great-siege-heron', at: [X(-0.72, 26), -11], face: 30 },
+        ...cluster(FEN_, 'fenling', 24, X(-0.85, 15), 0, 4, 30, 'idle', 'attack'),
+        { side: FEN_, id: 'bog-toad', at: [X(-0.55, 13), 2], face: 30 },
+        ...cluster(MEADOW, 'pikeman', 18, X(-0.52, 20), -5, 3.5, 30, 'brace', 'idle'),
+        { side: MEADOW, id: 'hurlhorn', at: [X(-0.5, 24), -9], face: 30 },
+        { side: MEADOW, id: 'lynx', at: [X(0.5, 16), -1], face: -40 },
+        { side: WILD, id: 'whipweld', at: [X(0.6, 14), 1.5], face: -40 },
+        ...cluster(WILD, 'charger', 24, X(0.82, 15), 0, 4, -30, 'idle', 'attack'),
+        ...cluster(WILD, 'larva2', 8, X(0.7, 13), 2.5, 2.5, -30, 'walk'),
+        ...Array.from({ length: 7 }, (_, i) => ({ side: i % 2 ? WILD : FEN_, id: i % 2 ? 'flier' : 'great-siege-heron', at: [X(-0.6 + i * 0.2, 26), -10] as [number, number], lift: 5 + (i % 3) * 0.6, face: 90, anim: 'fly', phase: i * 0.13 })),
+      ],
+    }),
+  },
+  // 3. the storm breaks: black storm over the middle and right with lightning, gold light breaking in from the left
+  //    on the Fenfolk and Meadowfolk; the Wildwelds swarm on the right under the storm, lit by the bolts
+  {
+    name: 'the storm breaks',
+    top: 2,
+    staging: join({
+      sun: { azimuth: -100, elevation: 10 }, clouds: 'many', storm: 1, sky: ['#1f2433', '#d89a62'], lightning: [0.78, 0.6], ridges: RIDGES('#2c2c34', '#44444e', true),
+      groundColors: ['#3c4628', '#4a5430', '#545c34'],
+      camera: BANNER_CAM(1.1, 15, 0.5),
+      lights: [{ at: [X(0.75, 15), -2], y: 6, color: '#b8c8ff', intensity: 160, reach: 22 }],
+      props: LIFT([[X(-0.36, 18), -3, 5]]),
+      scatter: [TUFTS(X(-0.75, 15), 1, 8, 60), TUFTS(X(0.75, 15), 1, 8, 60)],
+      cast: [
+        { side: FEN_, id: 'great-siege-heron', at: [X(-0.84, 26), -10], face: 75, anim: 'attack', phase: 0.45 },
+        { side: FEN_, id: 'bog-toad', at: [X(-0.55, 13), 2], lift: 1.1, face: 80, anim: 'leap', phase: 0.45 },
+        ...cluster(FEN_, 'fenling', 30, X(-0.85, 16), -1, 4.5, 80, 'charge', 'attack'),
+        { side: MEADOW, id: 'hurlhorn', at: [X(-0.6, 18), -3.5], face: 75, anim: 'attack', phase: 0.55 },
+        { side: MEADOW, id: 'lynx', at: [X(-0.5, 15), 0], face: 80, anim: 'charge', phase: 0.3 },
+        ...cluster(MEADOW, 'pikeman', 12, X(-0.62, 18), -4.5, 3, 75, 'charge'),
+        { side: WILD, id: 'whipweld', at: [X(0.56, 14), 1.5], face: -80, anim: 'attack', phase: 0.45 },
+        ...cluster(WILD, 'charger', 36, X(0.8, 15), -0.5, 5, -85, 'charge', 'attack'),
+        ...Array.from({ length: 5 }, (_, i) => ({ side: WILD, id: 'flier', at: [X(0.45 + i * 0.12, 18), -3 - i] as [number, number], lift: 3.6 + i * 0.5, face: -100, pitch: 20 + i * 3, anim: 'fly', phase: i * 0.17 })),
+      ],
+    }),
+  },
+  // 4. crystal night: a moon over the middle, stars, the title over dark sky; the armies gathered at two glowing
+  //    crystal deposits left and right, lit cyan from below
+  {
+    name: 'crystal night',
+    top: 1,
+    staging: join({
+      sun: { azimuth: 178, elevation: 42, disc: true, moon: true }, clouds: true, stars: 260, sky: ['#070b1c', '#2a3658'], exposure: 0.95,
+      groundColors: ['#1e2620', '#242c24', '#2a3028'], ridges: RIDGES('#121624', '#1c2236', true), glows: [{ x: 0.2, color: '#5fd0ff', r: 0.1 }, { x: 0.8, color: '#5fd0ff', r: 0.1 }],
+      camera: BANNER_CAM(1.3, 15, 0.5),
+      props: [prop((b) => mine(b, 1), [X(-0.62, 13), 1.5], 1.5), prop((b) => mine(b, 1), [X(0.62, 13), 1.5], 1.5)],
+      lights: [{ at: [X(-0.62, 13), 1.5], y: 1.5, color: '#6fdcff', intensity: 90, reach: 14 }, { at: [X(0.62, 13), 1.5], y: 1.5, color: '#6fdcff', intensity: 90, reach: 14 }],
+      cast: [
+        { side: FEN_, id: 'great-siege-heron', at: [X(-0.82, 24), -9], face: 60 },
+        ...cluster(FEN_, 'fenling', 22, X(-0.82, 14), 1, 4, 60, 'idle', 'attack'),
+        { side: FEN_, id: 'bog-toad', at: [X(-0.5, 12), 2.5], face: 50, anim: 'attack', phase: 0.5 },
+        { side: MEADOW, id: 'hurlhorn', at: [X(-0.66, 17), -2.5], face: 50 },
+        ...cluster(MEADOW, 'pikeman', 10, X(-0.5, 15), -1, 2.4, 50, 'brace'),
+        { side: MEADOW, id: 'lynx', at: [X(-0.45, 13), 1.5], face: 40 },
+        { side: WILD, id: 'whipweld', at: [X(0.5, 13), 2], face: -60, anim: 'attack', phase: 0.45 },
+        ...cluster(WILD, 'charger', 24, X(0.8, 14), 0.5, 4, -60, 'idle', 'attack'),
+        { side: WILD, id: 'flier', at: [X(0.7, 14), -1], lift: 3.5, face: -70, anim: 'fly', phase: 0.3 },
+        { side: WILD, id: 'dragon-fly', at: [X(0.4, 26), -10], lift: 5.2, face: -100, anim: 'glide', phase: 0.2 },
+      ],
+    }),
+  },
+  // 5. the three homelands: one panorama in thirds, the fen left, the Great Hall far off at the top of the middle,
+  //    the hive right, each army before its home; the title over the open field between
+  {
+    name: 'three homelands',
+    staging: join({
+      ...DUSK(-150, 12), ridges: RIDGES('#4c4c44', '#6c6a66', true),
+      camera: { from: [0, 9, 26], to: [0, -14.4, -110], fov: 32 }, // (looking down: the horizon high, the Great Hall far off above the title)
+      cast: [
+        ...cluster(FEN_, 'fenling', 30, X(-0.62, 18, 32), 3, 4, 40, 'charge', 'attack'),
+        { side: FEN_, id: 'great-siege-heron', at: [X(-0.5, 18, 32), 4], face: 50, anim: 'attack', phase: 0.45 },
+        { side: FEN_, id: 'bog-toad', at: [X(-0.42, 16, 32), 6], lift: 0.9, face: 60, anim: 'leap', phase: 0.5 },
+        ...cluster(MEADOW, 'pikeman', 24, 0, -18, 4, 0, 'charge', 'walk'),
+        { side: MEADOW, id: 'hurlhorn', at: [-3, -19], face: 0, anim: 'attack', phase: 0.5 },
+        { side: MEADOW, id: 'lynx', at: [3, -16], face: 0, anim: 'charge', phase: 0.3 },
+        ...cluster(WILD, 'charger', 30, X(0.62, 18, 32), 3, 4, -40, 'charge', 'attack'),
+        { side: WILD, id: 'whipweld', at: [X(0.45, 16, 32), 6], face: -60, anim: 'attack', phase: 0.45 },
+        { side: WILD, id: 'flier', at: [X(0.5, 18, 32), 2], lift: 4, face: -50, anim: 'fly', phase: 0.3 },
+      ],
+    }, FEN_HOME(X(-0.78, 30, 32), -8, 1.2), MEADOW_HOME(0, -30), WILD_HOME(X(0.78, 30, 32), -8, 1.2)),
+  },
+  // 6. a sky of wings: a huge evening sky full of herons, Dragon Flies and Vimmers; the three armies a black frieze
+  //    along a ridge, the sun's glow low behind them
+  {
+    name: 'a sky of wings',
+    staging: join({
+      ...DUSK(180, 2), sky: ['#232a48', '#ffb878'],
+      camera: BANNER_CAM(0.4, 14, 0.56),
+      hills: [{ at: [0, -6], r: 40, h: 2.2 }],
+      cast: [
+        ...cluster(FEN_, 'fenling', 30, X(-0.7, 20), -6, 6, 60, 'charge', 'attack'),
+        { side: FEN_, id: 'bog-toad', at: [X(-0.5, 20), -5], lift: 1, face: 70, anim: 'leap', phase: 0.5 },
+        ...cluster(MEADOW, 'pikeman', 22, X(-0.2, 20), -6, 5, 30, 'charge'),
+        { side: MEADOW, id: 'hurlhorn', at: [X(-0.3, 20), -7], face: 40, anim: 'attack', phase: 0.55 },
+        { side: MEADOW, id: 'lynx', at: [X(0.05, 20), -5.5], face: 60, anim: 'charge', phase: 0.3 },
+        ...cluster(WILD, 'charger', 34, X(0.6, 20), -6, 6, -60, 'charge', 'attack'),
+        { side: WILD, id: 'whipweld', at: [X(0.4, 20), -5], face: -80, anim: 'attack', phase: 0.45 },
+        { side: FEN_, id: 'great-siege-heron', at: [X(-0.6, 22), -8], lift: 4.6, face: 60, roll: 26, anim: 'fly', phase: 0.3 },
+        { side: FEN_, id: 'great-siege-heron', at: [X(-0.88, 30), -16], lift: 6.5, face: 75, roll: -15, anim: 'fly', phase: 0.6 },
+        { side: WILD, id: 'dragon-fly', at: [X(0.6, 22), -8], lift: 4.6, face: -60, anim: 'fly', phase: 0.3 },
+        { side: WILD, id: 'dragon-fly', at: [X(0.88, 30), -16], lift: 6.5, face: -80, anim: 'glide', phase: 0.2 },
+        ...Array.from({ length: 9 }, (_, i) => ({ side: WILD, id: 'flier', at: [X(-0.5 + i * 0.12, 30), -16 - (i % 3) * 2] as [number, number], lift: 6.5 + ((i * 7) % 5) * 0.6, face: -90 - ((i * 29) % 40), pitch: (i * 11) % 25, anim: 'fly', phase: ((i * 3) % 7) / 7 })),
+      ],
+    }),
+  },
+  // 7. the heroes: a low line-up along the bottom third under a big sky, the Fenfolk's and Meadowfolk's stars on
+  //    the left, the Wildwelds' on the right, all turned in; the sky between them open for the title
+  {
+    name: 'the heroes',
+    staging: join({
+      ...DUSK(-160, 9), ridges: RIDGES('#4a4a48', '#6c6a6a', true),
+      camera: BANNER_CAM(0.9, 13, 0.52),
+      scatter: [TUFTS(X(-0.7, 10), 2, 6, 60), TUFTS(X(0.7, 10), 2, 6, 60)],
+      cast: [
+        { side: FEN_, id: 'great-siege-heron', at: [X(-0.86, 22), -9], face: 60, anim: 'attack', phase: 0.45 },
+        { side: FEN_, id: 'bog-toad', at: [X(-0.66, 10), 1.5], face: 70, anim: 'attack', phase: 0.5 },
+        ...cluster(FEN_, 'fenling', 8, X(-0.75, 9), 2.5, 1.8, 60, 'attack', 'idle'),
+        { side: MEADOW, id: 'hurlhorn', at: [X(-0.58, 17), -4], face: 60, anim: 'attack', phase: 0.55 },
+        { side: MEADOW, id: 'lynx', at: [X(-0.48, 10), 1.2], face: 75, anim: 'attack', phase: 0.35 },
+        ...cluster(MEADOW, 'pikeman', 6, X(-0.5, 12), -0.5, 1.6, 60, 'brace'),
+        { side: WILD, id: 'whipweld', at: [X(0.55, 10), 1], face: -80, anim: 'attack', phase: 0.45 },
+        { side: WILD, id: 'flier', at: [X(0.72, 11), 0], lift: 2.6, face: -70, anim: 'fly', phase: 0.3 },
+        ...cluster(WILD, 'larva1', 6, X(0.66, 9), 2.5, 1.6, -60, 'walk'),
+        ...cluster(WILD, 'larva3', 3, X(0.84, 11), 1, 1.4, -60, 'walk'),
+        { side: WILD, id: 'dragon-fly', at: [X(0.86, 20), -7], face: -70, anim: 'idle' },
+      ],
+    }),
+  },
+  // 8. the map: a high oblique view like the game's, a far ridge and the Great Hall across the top, the three
+  //    armies converging from the sides on a crystal deposit; the open field below for the title
+  {
+    name: 'the battle map',
+    staging: join({
+      ...DUSK(-120, 22), ridges: RIDGES('#4c5044', '#6e7068', true),
+      camera: { from: [0, 14, 26], to: [0, 0, -8], fov: 30 },
+      props: [],
+      cast: [
+        ...cluster(FEN_, 'fenling', 40, X(-0.6, 30), -4, 5, 80, 'charge', 'attack'),
+        { side: FEN_, id: 'great-siege-heron', at: [X(-0.5, 30), -6], face: 80, anim: 'walk', phase: 0.3 },
+        { side: FEN_, id: 'bog-toad', at: [X(-0.42, 30), -2], lift: 0.7, face: 80, anim: 'leap', phase: 0.5 },
+        ...cluster(MEADOW, 'pikeman', 30, 0, -20, 4.5, 0, 'charge', 'walk'),
+        { side: MEADOW, id: 'hurlhorn', at: [-3, -21], face: 0, anim: 'attack', phase: 0.5 },
+        { side: MEADOW, id: 'lynx', at: [2.5, -17], face: 0, anim: 'charge', phase: 0.3 },
+        ...cluster(WILD, 'charger', 40, X(0.6, 30), -4, 5, -80, 'charge', 'attack'),
+        { side: WILD, id: 'whipweld', at: [X(0.44, 30), -3], face: -80, anim: 'attack', phase: 0.45 },
+        { side: WILD, id: 'flier', at: [X(0.5, 30), -8], lift: 4, face: -80, anim: 'fly', phase: 0.3 },
+      ],
+    }, FEN_HOME(X(-0.8, 34), -10, 1.2), MEADOW_HOME(0, -46), WILD_HOME(X(0.8, 34), -10, 1.2)),
+  },
+  // 9. the glow: the sun just set behind the far ridge in the middle, the whole middle of the sky glowing gold
+  //    behind the title; the armies dark against it on near rises, rimmed with light
+  {
+    name: 'the glow',
+    top: 4,
+    staging: join({
+      sun: { azimuth: 180, elevation: 0.5 }, clouds: true, sky: ['#2a2848', '#ffc070'], ridges: [{ distance: 60, height: 6, color: '#2a2630', jag: 0.5 }, { distance: 95, height: 9, color: '#3e3640', jag: 0.4 }],
+      groundColors: ['#2e3020', '#363a24', '#3a3c28'],
+      camera: BANNER_CAM(0.8, 14, 0.52),
+      hills: [{ at: [X(-0.72, 16), -2], r: 10, h: 1.4 }, { at: [X(0.72, 16), -2], r: 10, h: 1.4 }],
+      cast: [
+        { side: FEN_, id: 'great-siege-heron', at: [X(-0.8, 24), -9], face: 70 },
+        ...cluster(FEN_, 'fenling', 22, X(-0.85, 14), 1, 4, 70, 'idle', 'attack'),
+        { side: MEADOW, id: 'lynx', at: [X(-0.52, 13), 1], face: 75 },
+        { side: MEADOW, id: 'hurlhorn', at: [X(-0.62, 16), -2], face: 70, anim: 'attack', phase: 0.55 },
+        ...cluster(MEADOW, 'pikeman', 10, X(-0.6, 15), -1, 2.6, 75, 'brace'),
+        { side: WILD, id: 'whipweld', at: [X(0.55, 13), 1], face: -80 },
+        ...cluster(WILD, 'charger', 24, X(0.8, 14), 0, 4, -80, 'idle', 'attack'),
+        { side: WILD, id: 'flier', at: [X(0.62, 14), -1], lift: 3.4, face: -80, anim: 'fly', phase: 0.3 },
+        { side: FEN_, id: 'great-siege-heron', at: [X(-0.3, 30), -15], lift: 6.4, face: 80, anim: 'glide', phase: 0.2 },
+        { side: WILD, id: 'dragon-fly', at: [X(0.3, 30), -15], lift: 6.6, face: -80, anim: 'glide', phase: 0.2 },
+      ],
+    }),
+  },
+  // 10. the dark heart: a low sun from the far left lighting the armies gold on the left and right edges, the middle
+  //     a deep shadowed valley under heavy cloud, so the gold title pops against dark
+  {
+    name: 'the dark heart',
+    staging: join({
+      sun: { azimuth: -115, elevation: 7 }, clouds: 'many', sky: ['#14182a', '#6a4a40'], exposure: 1.1,
+      groundColors: ['#2a3020', '#323a24', '#3a3e28'], ridges: [{ distance: 55, height: 7, color: '#141620', jag: 0.6 }, { distance: 90, height: 12, color: '#1e2230', jag: 0.7, peaks: true }],
+      camera: BANNER_CAM(1.4, 14, 0.5),
+      props: [prop((b) => meadowTree(b, 1), [X(-0.62, 30), -16], 1.6), prop((b) => meadowTree(b, 4), [X(0.62, 32), -18], 1.6)],
+      cast: [
+        { side: FEN_, id: 'great-siege-heron', at: [X(-0.84, 24), -9], face: 70, anim: 'attack', phase: 0.45 },
+        { side: FEN_, id: 'bog-toad', at: [X(-0.62, 12), 2], lift: 1, face: 75, anim: 'leap', phase: 0.5 },
+        ...cluster(FEN_, 'fenling', 24, X(-0.85, 14), 1, 4, 75, 'charge', 'attack'),
+        { side: MEADOW, id: 'lynx', at: [X(-0.5, 13), 0.5], face: 75, anim: 'charge', phase: 0.3 },
+        { side: MEADOW, id: 'hurlhorn', at: [X(-0.66, 17), -3], face: 70, anim: 'attack', phase: 0.55 },
+        { side: WILD, id: 'whipweld', at: [X(0.55, 13), 1], face: -80, anim: 'attack', phase: 0.45 },
+        ...cluster(WILD, 'charger', 30, X(0.8, 14), 0, 4.5, -80, 'charge', 'attack'),
+        { side: WILD, id: 'flier', at: [X(0.66, 14), -1], lift: 3.6, face: -100, pitch: 24, anim: 'fly', phase: 0.3 },
+      ],
+    }),
+  },
+  // 11. the V at sundown, as a banner: the arms of the V coming toward us down both sides, its point (the
+  //     Meadowfolk before the Great Hall) far off under the setting sun above the title
+  {
+    name: 'the V at sundown',
+    staging: join({
+      ...DUSK(180, 5), ridges: RIDGES('#4a4640', '#6e6862', true),
+      camera: BANNER_CAM(2, 16, 0.48),
+      cast: [
+        ...cluster(MEADOW, 'pikeman', 22, 0, -44, 5, 0, 'charge', 'walk'),
+        { side: MEADOW, id: 'hurlhorn', at: [-4, -46], face: 0, anim: 'attack', phase: 0.55 },
+        { side: MEADOW, id: 'lynx', at: [X(-0.42, 14), 1], face: 40, anim: 'charge', phase: 0.3 },
+        { side: FEN_, id: 'great-siege-heron', at: [X(-0.78, 24), -9], face: 25, anim: 'attack', phase: 0.45 },
+        { side: FEN_, id: 'bog-toad', at: [X(-0.55, 12), 2], lift: 1, face: 30, anim: 'leap', phase: 0.45 },
+        ...cluster(FEN_, 'fenling', 30, X(-0.62, 18), -4, 4.5, 25, 'charge', 'attack'),
+        { side: WILD, id: 'whipweld', at: [X(0.58, 12), 2], face: -40, anim: 'attack', phase: 0.45 },
+        { side: WILD, id: 'flier', at: [X(0.72, 14), 0], lift: 3.6, face: -110, pitch: 24, anim: 'fly', phase: 0.3 },
+        ...cluster(WILD, 'charger', 30, X(0.62, 18), -4, 4.5, -25, 'charge', 'attack'),
+      ],
+    }, FEN_HOME(X(-0.85, 30), -14), MEADOW_HOME(0, -60, 1.3), WILD_HOME(X(0.85, 30), -14)),
+  },
+  // 12. the clash in the air: crystals and fliers meeting over the middle, high above the title; on the ground the
+  //     Fenfolk and Meadowfolk charge in from the left, the Wildwelds from the right
+  {
+    name: 'the clash in the air',
+    staging: join({
+      ...DUSK(-170, 6), ridges: RIDGES('#46423e', '#66605c', true),
+      camera: BANNER_CAM(0.9, 14, 0.52),
+      props: LIFT([[-2, -6, 5.2], [1, -8, 6], [-4, -10, 6.6], [3.5, -7, 5]]),
+      scatter: [TUFTS(X(-0.72, 14), 1, 8, 60), TUFTS(X(0.72, 14), 1, 8, 60)],
+      cast: [
+        { side: FEN_, id: 'great-siege-heron', at: [X(-0.3, 26), -12], lift: 6.6, face: 75, roll: 25, anim: 'fly', phase: 0.3 },
+        { side: WILD, id: 'dragon-fly', at: [X(0.3, 26), -12], lift: 6.6, face: -75, anim: 'fly', phase: 0.4 },
+        { side: WILD, id: 'flier', at: [X(0.05, 30), -16], lift: 8, face: -110, pitch: 30, anim: 'fly', phase: 0.2 },
+        { side: FEN_, id: 'bog-toad', at: [X(-0.55, 12), 2], lift: 1.1, face: 80, anim: 'leap', phase: 0.5 },
+        ...cluster(FEN_, 'fenling', 30, X(-0.82, 15), 0, 4.5, 80, 'charge', 'attack'),
+        { side: MEADOW, id: 'lynx', at: [X(-0.5, 14), 0], face: 80, anim: 'charge', phase: 0.3 },
+        { side: MEADOW, id: 'hurlhorn', at: [X(-0.66, 18), -3], face: 75, anim: 'attack', phase: 0.55 },
+        ...cluster(MEADOW, 'pikeman', 12, X(-0.62, 18), -4, 3, 75, 'charge'),
+        { side: WILD, id: 'whipweld', at: [X(0.55, 13), 1], face: -80, anim: 'attack', phase: 0.45 },
+        ...cluster(WILD, 'charger', 34, X(0.8, 15), 0, 4.5, -80, 'charge', 'attack'),
+      ],
+    }),
+  },
+];
+
+/** ?mode=sprites&banner=<n>: draw banner n (from 1), 2480×720. */
+export function runBanner(params: URLSearchParams): void {
+  const banner = BANNERS[+(params.get('banner') ?? 1) - 1];
+  if (!banner) { document.title = 'sprites ready: none'; return; }
+  const c = renderBand(gameSides(), banner.staging, 2480, 720);
+  c.style.cssText = 'position:fixed;left:0;top:0;z-index:20';
+  document.body.appendChild(c);
+  document.body.dataset.label = `${banner.top ? `★${banner.top} ` : ''}${banner.name}`;
   document.title = 'sprites ready';
 }
