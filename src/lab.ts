@@ -3,8 +3,7 @@
 import './style.css';
 import type { FactionSpec } from './factions/types';
 import type { ArtAnim, FactionArt, Sprite, UnitArt } from './art/contract';
-import { unitSprite } from './art/contract';
-import { blit, fitCanvas } from './art/draw';
+import { blitUnit, fitCanvas } from './art/draw';
 import { meadowfolk } from './factions/meadowfolk';
 import { training } from './factions/training';
 import { deriveBuilding, validate, validateFaction } from './sim/physics';
@@ -102,9 +101,8 @@ function frame(now: number): void {
     const { ctx, w, h } = fit;
     const dir = cell.dir ?? (cell.anim === 'idle' ? Math.floor(t / 2.5) % 8 : 1);
     const oneShot = cell.anim === 'attack' || cell.anim === 'die';
-    const sprite = unitSprite(art, cell.anim, dir, oneShot ? { progress: (t % 1.6) / 1.2 } : { time: t });
     const zoom = Math.min(1.6, (h * 0.75) / art.height);
-    blit(ctx, sprite, w / 2, h * 0.86, zoom);
+    blitUnit(ctx, art, cell.anim, dir, oneShot ? { progress: (t % 1.6) / 1.2 } : { time: t }, w / 2, h * 0.86, zoom);
   }
   requestAnimationFrame(frame);
 }

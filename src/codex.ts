@@ -4,7 +4,7 @@ import './style.css';
 import type { BuildingSpec, FactionSpec, ResourceKind, TechSpec, UnitSpec } from './factions/types';
 import type { ArtAnim, FactionArt, Sprite } from './art/contract';
 import { unitSprite } from './art/contract';
-import { blit, fitCanvas, spriteIcon } from './art/draw';
+import { blitUnit, fitCanvas, spriteIcon } from './art/draw';
 import { meadowfolk } from './factions/meadowfolk';
 import { wildwelds } from './factions/wildwelds';
 import { fenfolk } from './factions/fenfolk';
@@ -379,8 +379,7 @@ function frame(now: number): void {
     const t = (now - view.t0) / 1000;
     const dir = view.facing ?? Math.floor(t / 1.6) % 8;
     const oneShot = view.anim === 'attack' || view.anim === 'die';
-    const s = unitSprite(ua, view.anim, dir, oneShot ? { progress: Math.min(1, (t % 1.8) / 1.2) } : { time: t });
-    blit(ctx, s, w / 2, h * 0.84, Math.min(2.4, (h * 0.7) / ua.height));
+    blitUnit(ctx, ua, view.anim, dir, oneShot ? { progress: Math.min(1, (t % 1.8) / 1.2) } : { time: t }, w / 2, h * 0.84, Math.min(2.4, (h * 0.7) / ua.height));
     ctx.fillStyle = 'rgba(233,223,196,0.55)';
     ctx.font = '12px "Alegreya Sans", sans-serif';
     ctx.fillText(FACING[dir], 10, h - 10);

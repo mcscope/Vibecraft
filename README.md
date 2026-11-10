@@ -188,10 +188,31 @@ The rules live in `src/sim/fairness.ts`.
 | `npm run relay` | Runs a relay for online play. |
 | `npm run build` | Makes a production build with the art pre-baked. |
 | `npm run build:fast` | Makes a production build that bakes art in the browser. |
+| `npm run sprites` | Checks the pre-baked armies against the [sprite budget](#sprite-budget). |
 
 ### Pre-baked art
 
 The game turns its 3D models into sprites in your browser, and that takes time. `npm run build` bakes the shipped armies ahead of time, in every team colour, into `dist/baked/`. The hosted game loads those files. The step takes several minutes and needs Chrome. Your own armies bake in the browser, and `npm run dev` always bakes live, so model changes show up at once.
+
+### Sprite budget
+
+Every baked pixel is packed and sent to the graphics card before a game starts. So each army has a budget.
+
+| What | Budget (sprite pixels, one team's colours) |
+|---|---|
+| An army | 64 million |
+| One unit or building | 20 million |
+
+`npm run sprites` prints each pre-baked army's table, unit by unit, and flags anything over. `npm run build` prints it too. The numbers live in `scripts/spriteBudget.mjs`.
+
+The baker already stores a repeated frame once, and bakes a flier's shadows apart at half resolution. To bring a big unit inside the budget, set these in its faction's `art.ts` (`UnitBakeOptions` in `src/kits/bake3d/baker.ts`):
+
+| Option | When to use it |
+|---|---|
+| `without: ['gather', 'eat']` | Its model draws those as another animation. The game shows the fallback (usually idle). |
+| `shadowApart: ['walk', 'attack']` | A tall or bounding body: frames holding the body and its long shadow are mostly empty. |
+| `frames: { walk: 6 }` | A slow body that needs fewer frames. |
+| `scale: 0.8` | The very biggest bodies only: bake a little under full resolution. |
 
 ### Lockstep
 

@@ -6,5 +6,6 @@ Read README.md first. This is a browser RTS: TypeScript, Vite, vitest; PixiJS re
 - **Stats come from physics.** Never hardcode HP, damage, speed or cost. Change the body (mass, physique, crystal) or refinement. Refinement makes units cheaper (cost ÷ r); it never adds stats.
 - **Don't write one faction's design into engine rules.** New behaviour is a generic, data-defined ability in `src/sim/abilities/`, with a validation check and a Codex line. See DESIGN_SPACE.md.
 - **The sim must be deterministic** (lockstep multiplayer): use `world.rng`, never `Math.random` or time in `src/sim/`.
+- **Keep each army under the sprite budget:** 64 million sprite pixels an army, 20 million a unit (`npm run sprites`; README "Sprite budget").
 - **Keep it simple.** If an area keeps breaking, redesign it simpler rather than adding special cases.
 - **Before finishing:** run `npx tsc --noEmit -p .` and `npx vitest run`.
