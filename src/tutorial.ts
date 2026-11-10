@@ -117,7 +117,7 @@ export const LESSONS: Lesson[] = [
     you: meadowfolk, foe: fenfolk, look: [16, 26],
     text: `${CALORIES}
 <p><b>Try:</b> select the lancers, press ${key('charge')} (Charge) and right-click a fenling. They sprint in to charge: watch their bars drain. Charge again and again until they run low.</p>
-<p>An empty unit is <b>exhausted</b>: it's slow, and it can't fight. Select your units and press ${key('resupply')} (Resupply). They walk home to the Town Center to eat.</p>`,
+<p>An empty unit is <b>exhausted</b>: it's slow and too weak to fight. Select your units and press ${key('resupply')} (Resupply). They walk home to the Town Center to eat.</p>`,
     steps: calorieSteps('lancers', eatAtHome),
     setup(w) {
       base(w, 0, 'town-center', 6, 24, { food: 3000, crystal: 200 });
@@ -160,7 +160,7 @@ export const LESSONS: Lesson[] = [
     you: meadowfolk, foe: fenfolk, look: [24, 26],
     text: `<p>${CHARGE} A lance held level takes the whole impact, so a charging lancer hits many times harder than a standing one.</p>
 <p><b>Try:</b> select the lancers, press ${key('charge')} and right-click the fenlings (top). The lancers sprint in, strike, and ride on through. Standing in a fight, they only swing, so pull them out: right-click open ground. They run clear, sprinting while enemies are close. Then charge again.</p>
-<p>Now try the <b>reedguards</b> (bottom). Their spears are planted, so your charge runs onto their points, and the impact comes back into your lynx. Up close, your lancers cut with their swords instead.</p>`,
+<p>Now try the <b>reedguards</b> (bottom). <b>Spears counter chargers</b>: your charge runs onto their planted points, and the impact comes back into your lynx. Up close, your lancers cut with their swords instead.</p>`,
     steps: chargeSteps('fenling', 'reedguard', 'lynx', 4),
     setup(w) {
       wait(w, block(w, 0, 'lynx', 4, 14, 26, 2));
@@ -171,7 +171,7 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Groupings',
     you: meadowfolk, foe: meadowfolk, look: [26, 26],
-    text: `<p>Who wins depends on <b>how bodies meet</b>, not on a bonus table. Enemy lancers will charge you in <b>30 seconds</b>.</p>
+    text: `<p>Who wins depends on <b>how bodies meet</b>. Enemy lancers will charge you in <b>30 seconds</b>.</p>
 <p>Your pikemen stand in a tight block in front, with the slingers behind. Pikemen plant their pikes by themselves when they see a charge coming. So the lancers run onto set points and take the whole collision. <b>Watch</b> it play out.</p>
 <p><b>Then try:</b> press Restart. In those 30 seconds, scatter the pikemen across the field, or move the slingers out in front. Same units, different grouping, and now the same lancers win. The <b>Arena</b> scores every matchup if you want the numbers.</p>`,
     steps: groupingSteps,
@@ -200,7 +200,7 @@ export const LESSONS: Lesson[] = [
     you: fenfolk, foe: meadowfolk, look: [16, 26],
     text: `${CALORIES}
 <p><b>Try:</b> select the bog toads, press ${key('charge')} (Charge) and right-click a maceman. They sprint in and slam: watch their bars drain. Charge again and again until they run low.</p>
-<p>An empty unit is <b>exhausted</b>: it's slow, and it can't fight. Select your toads and press ${key('resupply')} (Resupply). They go to eat at the nearest building with food in it. In the fen that can be any reed hut, so a stocked hut near the fight keeps your toads fighting.</p>`,
+<p>An empty unit is <b>exhausted</b>: it's slow and too weak to fight. Select your toads and press ${key('resupply')} (Resupply). They go to eat at the nearest building with food in it. In the fen that can be any reed hut, so a stocked hut near the fight keeps your toads fighting.</p>`,
     steps: calorieSteps('bog toads', eatAtHome),
     setup(w) {
       base(w, 0, 'stilt-hall', 6, 24, { food: 3000, crystal: 200 });
@@ -245,7 +245,7 @@ export const LESSONS: Lesson[] = [
     you: fenfolk, foe: meadowfolk, look: [24, 26],
     text: `<p>${CHARGE} A bog toad weighs 200 kg, so a toad at full tilt hits far harder than one standing and biting.</p>
 <p><b>Try:</b> select the toads, press ${key('charge')} and right-click the slingers (top). The toads sprint in, slam, and carry on through. Standing in a fight, they only bite, so pull them out: right-click open ground. Then charge again.</p>
-<p>Now try the <b>pikemen</b> (bottom). Their pikes are planted, so your charge runs onto the points, and the toad's own weight drives them in. Send your fenlings to sling at the pikemen instead.</p>`,
+<p>Now try the <b>pikemen</b> (bottom). <b>Pikes counter chargers</b>: your charge runs onto the planted points, and the toad's own weight drives them in. Send your fenlings to sling at the pikemen.</p>`,
     steps: chargeSteps('slinger', 'pikeman', 'bog-toad', 4),
     setup(w) {
       wait(w, [...block(w, 0, 'bog-toad', 4, 14, 26, 2), ...block(w, 0, 'fenling', 6, 11, 26, 3)]);
@@ -256,7 +256,7 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Groupings',
     you: fenfolk, foe: meadowfolk, look: [26, 26],
-    text: `<p>Who wins depends on <b>how bodies meet</b>, not on a bonus table. Enemy lancers will charge you in <b>30 seconds</b>.</p>
+    text: `<p>Who wins depends on <b>how bodies meet</b>. Enemy lancers will charge you in <b>30 seconds</b>.</p>
 <p>Your reedguards stand in a tight block in front, with the fenlings behind. Reedguards plant their spears by themselves when they see a charge coming. So the lancers run onto set points and take the whole collision, while the fenlings sling over the top. <b>Watch</b> it play out.</p>
 <p><b>Then try:</b> press Restart. In those 30 seconds, scatter the reedguards across the field, or move the fenlings out in front. Same units, different grouping, and now the lancers do far better. The <b>Arena</b> scores every matchup if you want the numbers.</p>`,
     steps: groupingSteps,
@@ -309,8 +309,8 @@ export const LESSONS: Lesson[] = [
     you: wildwelds, foe: meadowfolk, look: [16, 28],
     text: `${CALORIES}
 <p>For the Wildwelds, food does everything else too: it hatches eggs and finishes cocoons. Two larvae here are changing into fighters, and their cocoons are waiting for food. Your green larvae <b>tend</b> by themselves: they gather berries and carry them to whoever is waiting, whether a cocoon, an egg, or a mother with an egg to lay. A larva you've given another order stops tending. Select it and press ${key('tend')} (Tend) to send it back. Keep most of your larvae tending.</p>
-<p>Watch the fighters come out. Each is born with <b>no crystal</b>, and walks off to pick up its own before it can fight. There are some shards lying beside the cocoons.</p>
-<p>Fighters get hungry too, and there's no hall to eat at. Select the tired whipwelds and right-click a berry bush: they eat straight from it until they're full.</p>`,
+<p>Watch the fighters come out. Each is born <b>unarmed</b>, and walks off to pick up its own crystal before it fights. There are some shards lying beside the cocoons.</p>
+<p>Fighters get hungry too, and Wildwelds eat in the field. Select the tired whipwelds and right-click a berry bush: they eat straight from it until they're full.</p>`,
     steps: [{ text: 'A fighter comes out of its cocoon', done: (w) => yours(w, 'charger', 'micropike').length > 0 }, { text: 'It picks up its own crystal', done: (w) => yours(w, 'charger', 'micropike').some((u) => u.ammo > 0) }, { text: 'Feed a tired whipweld at a berry bush', done: (w) => yours(w, 'whipweld').some((u) => u.order.kind === 'graze') }],
     setup(w) {
       const yours = block(w, 0, 'whipweld', 3, 18, 24, 3);
@@ -330,7 +330,7 @@ export const LESSONS: Lesson[] = [
     you: wildwelds, foe: meadowfolk, look: [20, 26],
     text: `<p>Every weapon's tip is <b>crystal</b>. A whipweld keeps the crystal on its whip, but a thrower spends one with every throw. Each slinger carries 14.</p>
 <p><b>Try:</b> select your slingers and right-click a maceman. Count the throws. Spent stones lie on the ground as <b>shards</b>, and anyone can pick them up.</p>
-<p>The Wildwelds have no hall to restock at. A slinger that runs dry picks crystal up off the ground: its own spent stones, or any shards lying nearby. There are some just behind your slingers.</p>`,
+<p>Wildwelds restock in the field. A slinger that runs dry picks crystal up off the ground: its own spent stones, or any shards lying nearby. There are some just behind your slingers.</p>`,
     steps: [{ text: 'Throw at a maceman', done: (w) => thrown(w, 'slinger') }, { text: 'A slinger picks crystal up off the ground', done: (w) => yours(w, 'slinger').some((u) => u.order.kind === 'gather' && u.order.nodeType === 'crystal') }],
     setup(w) {
       wait(w, block(w, 0, 'slinger', 2, 14, 26, 2));
@@ -345,9 +345,9 @@ export const LESSONS: Lesson[] = [
 <ol>
 <li>Select the Goliaths. Press ${key('charge')} (Charge), then right-click the <b>slingers</b> at the top.</li>
 <li>After they hit, right-click open ground to pull them back. Then charge again. A Goliath standing still hits far less hard.</li>
-<li>Now charge the <b>pikemen</b> at the bottom. This goes badly. Their pikes are set, and a Goliath that runs onto a pike is hurt by its own weight.</li>
+<li>Now charge the <b>pikemen</b> at the bottom. <b>Pikes counter chargers</b>: a Goliath that runs onto a set pike is hurt by its own weight.</li>
 </ol>
-<p>So charge throwers and workers. Keep away from anything holding a spear.</p>`,
+<p>So charge throwers and workers, and send your slingers at the pikes.</p>`,
     steps: chargeSteps('slinger', 'pikeman', 'ground-attacker3', 2),
     setup(w) {
       wait(w, block(w, 0, 'ground-attacker3', 2, 14, 26, 2));
@@ -358,8 +358,8 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Groupings',
     you: wildwelds, foe: meadowfolk, look: [26, 26],
-    text: `<p>Who wins depends on <b>how bodies meet</b>, not on a bonus table. Enemy lancers will charge you in <b>30 seconds</b>.</p>
-<p>Your micropikes stand in a block in front, with three slingers behind. The micropikes won't win this: a lance reaches twice as far as their pikes, and most of them will die. The slingers do the killing. <b>Watch</b> it play out.</p>
+    text: `<p>Who wins depends on <b>how bodies meet</b>. Enemy lancers will charge you in <b>30 seconds</b>.</p>
+<p>Your micropikes stand in a block in front, with three slingers behind. The micropikes will lose this: a lance reaches twice as far as their pikes, and most of them will die. The slingers do the killing. <b>Watch</b> it play out.</p>
 <p><b>Then try:</b> press Restart. In those 30 seconds, move the slingers well out in front of the micropikes. Same units, different grouping: now they start throwing sooner, the lancers fall before they arrive, and nearly every micropike lives. The <b>Arena</b> scores every matchup if you want the numbers.</p>`,
     steps: groupingSteps,
     setup(w) {
