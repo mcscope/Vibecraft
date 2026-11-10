@@ -286,10 +286,10 @@ export const LESSONS: Lesson[] = [
     you: wildwelds, foe: meadowfolk, look: [16, 25],
     text: `<p>The <b>Wildwelds</b> are their own production: mothers lay eggs, eggs hatch into larvae, and larvae change into every other unit. It all runs on food.</p>
 <ol>
-<li>Select the mother and click <b>T1 Egg</b>. She lays an egg beside her. Hold the click and she keeps laying.</li>
+<li>Select the mother and click <b>T1 Egg</b>. She lays an egg beside her. To make her lay eggs over and over, press and hold the mouse button on <b>T1 Egg</b> until the tile lights up. Press and hold it again to stop.</li>
 <li>Feed an egg to hatch it. Select the green larvae and press ${key('tend')} (Tend): they carry food to whoever is waiting for it.</li>
 <li>For a quick pile of food, select a green larva and right-click a tree. The larva turns the whole tree into food and is used up.</li>
-<li>Select a larva and click a tile marked → to change it. It becomes a cocoon, and your tenders feed it.</li>
+<li>Select a larva and click a tile marked → to change it. It will begin morphing into that unit, and form a cocoon to change. It may need more food brought to it to complete the transformation.</li>
 <li>Select the cyan T2 larva and click <b>↓ Web Wall</b>, then right-drag a line. Its body becomes the wall, which grows on food. A T3 larva lays a <b>Mimic Mine</b>: a tower that throws crystal.</li>
 <li>Set your rally points on the minimap. Click the basket (top-left), then right-click a spot: tenders gather food near it. The sword (top-right) sets where new fighters gather.</li>
 </ol>`,
