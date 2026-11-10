@@ -3,7 +3,11 @@
 // every animation at once, stacked, looping at its game speed ([&facing=<0-7>|all]).
 import { PLAYABLE } from '../factions';
 import { TEAM_COLORS } from '../render/artbank';
-import type { ArtAnim, UnitArt } from '../art/contract';
+import type { ArtAnim, Sprite, TeamColors, UnitArt } from '../art/contract';
+import type { BandCandidate, FactionSpec, UnitSpec } from '../factions/types';
+import type { UnitBakeOptions } from '../kits/bake3d/baker';
+import type { UnitModel } from '../kits/bake3d/types';
+import { draftable } from '../sim/battle';
 
 /** &team=<0-3>: which side's colours to bake in (the first, blue, by default). */
 const teamOf = (params: URLSearchParams) => TEAM_COLORS[+(params.get('team') ?? 0) % TEAM_COLORS.length];
@@ -83,59 +87,135 @@ async function roster(params: URLSearchParams): Promise<void> {
 }
 
 /**
- * ?mode=sprites&faction=<id>&pose=1[&team=0]: the faction posed like a band on an album cover, for the front page.
- * The heaviest stand at the back, the lightest in front, turned in toward the middle, every other one mid-blow.
+ * ?mode=sprites&faction=<id>&pose=1[&team=0][&take=<n>]: its band.ts picture (BandCandidate, src/dev/bandScene.ts), or else the faction's fighters posed like a band on an album cover, for the
+ * front page's army cards (scripts/bands.mjs saves it). One scale for all, as in the game: the biggest stand at the
+ * back in the middle, the smaller in a crescent in front, in twos and threes when small, turned in toward the middle,
+ * every other one mid-blow; fliers in the air above, their shadows on the ground.
  */
 async function pose(params: URLSearchParams): Promise<void> {
   const faction = PLAYABLE.find((f) => f.id === params.get('faction'));
   if (!faction?.art) return;
-  const team = teamOf(params), W = 960, H = 540;
-  // everyone but carts, the young it lays (eggs) and the shells it changes in
-  const skip = new Set([faction.carterId, ...faction.units.flatMap((u) => [...(u.spawns ?? []), u.shell])]);
-  const cast = faction.units.filter((u) => !skip.has(u.id) && u.role !== 'carter').sort((a, b) => b.mass - a.mass);
-  const art = await faction.art(team, undefined, cast.map((u) => u.id));
-  const units = cast.filter((u) => art.units[u.id]);
-  // three rows (two for a small cast): a quarter at the back, the lightest two fifths in front; the light come in
-  // twos and threes, the heaviest in the middle of its row and the rest out to either side in turn
-  const back = Math.ceil(units.length * 0.25), front = units.length > 5 ? Math.ceil(units.length * 0.4) : units.length - back;
-  const rows = [units.slice(0, back), units.slice(back, units.length - front), units.slice(units.length - front)].filter((r) => r.length).map((row) => {
-    const order: typeof row = [];
-    row.forEach((u, i) => { for (let n = u.mass > 150 ? 1 : u.mass > 50 ? 2 : 3; n > 0; n--) (i % 2 ? order.unshift(u) : order.push(u)); });
+  const team = teamOf(params), W = 960, H = 720, HORIZON = H * 0.5;
+  // a faction that stages its own picture (its band.ts): that, shot in 3D
+  const m = await BAND_MODULES[`../factions/${faction.id}/band.ts`]?.(), take = +(params.get('take') ?? m?.pick ?? 1);
+  const staged = m?.bands?.[take - 1];
+  if (params.get('take') && !staged) { document.title = 'sprites ready: none'; return; } // (no such candidate)
+  if (staged && staged !== 'line-up') {
+    const { renderBand } = await import('./bandScene');
+    const c = renderBand(faction, staged, team, (await ART_MODULES[`../factions/${faction.id}/art.ts`]?.())?.bakeOpts, W, H);
+    c.style.cssText = 'position:fixed;left:0;top:0;z-index:20';
+    document.body.appendChild(c);
+    document.title = 'sprites ready';
+    return;
+  }
+  const art = await sharpArt(faction, team, draftable(faction), +(params.get('q') ?? 4.5));
+  const cast = draftable(faction).filter((u) => art.units[u.id]);
+  const still = (id: string) => art.units[id].still ?? art.units[id].anims.idle.frames[1 % art.units[id].anims.idle.frames.length][0];
+  const tall = (id: string) => still(id).ay / still(id).q, wide = (id: string) => Math.min(still(id).sw, 2 * still(id).ax) / still(id).q; // (its body's: a baked shadow falls off to one side)
+  // a flier no taller than the biggest of the rest takes to the air; a bigger one stands with them
+  const tallestWalker = Math.max(...cast.filter((u) => !u.flight).map((u) => tall(u.id)));
+  const fliers = cast.filter((u) => u.flight && art.units[u.id].anims.fly && tall(u.id) <= tallestWalker), walkers = cast.filter((u) => !fliers.includes(u)).sort((a, b) => tall(b.id) - tall(a.id));
+  if (!walkers.length) return;
+  const top = tall(walkers[0].id);
+  // the big at the back; the rest in front, in two ranks when there are many; a small one comes with friends
+  const back = walkers.filter((u) => tall(u.id) >= top * 0.6), rest = walkers.filter((u) => !back.includes(u));
+  const friends = (u: UnitSpec) => (wide(u.id) > top * 0.4 ? 1 : Math.max(1, Math.min(3, Math.round((top * 0.45) / tall(u.id)))));
+  const count = (us: UnitSpec[]) => us.reduce((n, u) => n + friends(u), 0), mid = rest.filter((u) => tall(u.id) >= top * 0.33), low = rest.filter((u) => !mid.includes(u));
+  const ranks = count(rest) > 5 && count(mid) > 1 && count(low) > 1 ? [mid, low] : [rest];
+  const rows = [back, ...ranks].filter((r) => r.length).map((tier, ri) => {
+    const order: UnitSpec[] = [];
+    tier.forEach((u, i) => {
+      for (let j = 0; j < (ri === 0 ? 1 : friends(u)); j++) ((i + j) % 2 ? order.unshift(u) : order.push(u)); // (the tallest in the middle, the rest out to either side in turn)
+    });
     return order;
   });
-  const still = (id: string) => art.units[id].anims.idle.frames[1][0];
-  const wide = (id: string) => (still(id).sw / still(id).q) * 0.62, tall = (id: string) => still(id).sh / still(id).q; // (shoulder to shoulder, overlapping a little)
-  const near = (ri: number) => 1 + 0.25 * (rows.length > 1 ? ri / (rows.length - 1) : 1); // the front rows a little nearer the camera
-  // as big as fits: the widest row across the picture, the tallest at the back under its top edge
-  const scale = Math.min(...rows.map((row, ri) => (W * 0.94) / (row.reduce((a, u) => a + wide(u.id), 0) * near(ri))), (H * 0.5) / Math.max(...rows[0].map((u) => tall(u.id))));
+  const depth = (ri: number) => (rows.length > 1 ? ri / (rows.length - 1) : 0); // 0 the back row, 1 the front
+  const near = (ri: number) => 1 + 0.15 * depth(ri); // the front a little nearer the camera
+  // a row spreads out across the picture, wider toward the front; never so tight they stand inside each other
+  const packed = (row: UnitSpec[]) => row.reduce((a, u) => a + wide(u.id) * 0.75, 0);
+  const span = (row: UnitSpec[], ri: number, k: number) => (row.length < 2 ? 0 : Math.max(packed(row) * k, Math.min(W * (0.5 + 0.4 * depth(ri)), packed(row) * k * 1.8)));
+  // as big as fits: the tallest half the picture's height, every row inside its width
+  const scale = Math.min((H * 0.5) / top, ...rows.map((row, ri) => (W * 0.92) / (packed(row) * near(ri))));
   const c = document.createElement('canvas');
   c.width = W; c.height = H;
   c.style.cssText = 'position:fixed;left:0;top:0;z-index:20';
   const g = c.getContext('2d')!;
-  // a dark stage: the team's colour glowing behind, a pool of light on the ground
-  g.fillStyle = '#12100d'; g.fillRect(0, 0, W, H);
-  const glow = g.createRadialGradient(W / 2, H * 0.3, 0, W / 2, H * 0.3, W * 0.55);
-  glow.addColorStop(0, team.primary); glow.addColorStop(1, 'rgba(18,16,13,0)');
-  g.globalAlpha = 0.7; g.fillStyle = glow; g.fillRect(0, 0, W, H); g.globalAlpha = 1;
-  g.save(); g.translate(W / 2, H * 0.74); g.scale(1, 0.36);
-  const pool = g.createRadialGradient(0, 0, 0, 0, 0, W * 0.62);
-  pool.addColorStop(0, '#7d8f52'); pool.addColorStop(0.55, '#4a5a30'); pool.addColorStop(1, 'rgba(18,16,13,0)');
-  g.fillStyle = pool; g.beginPath(); g.arc(0, 0, W * 0.62, 0, Math.PI * 2); g.fill(); g.restore();
+  // a lit stage: a warm sky with the team's colour glowing behind the band, sunlit grass, a pool of light under them
+  const sky = g.createLinearGradient(0, 0, 0, HORIZON);
+  sky.addColorStop(0, '#26303d'); sky.addColorStop(0.6, '#6c6a63'); sky.addColorStop(1, '#e2c58c');
+  g.fillStyle = sky; g.fillRect(0, 0, W, HORIZON);
+  const glow = g.createRadialGradient(W / 2, HORIZON * 0.75, 0, W / 2, HORIZON * 0.75, W * 0.5);
+  glow.addColorStop(0, team.primary); glow.addColorStop(1, 'rgba(0,0,0,0)');
+  g.globalAlpha = 0.55; g.fillStyle = glow; g.fillRect(0, 0, W, HORIZON); g.globalAlpha = 1;
+  const grass = g.createLinearGradient(0, HORIZON, 0, H);
+  grass.addColorStop(0, '#9aa067'); grass.addColorStop(0.25, '#6f7d45'); grass.addColorStop(1, '#3b4627');
+  g.fillStyle = grass; g.fillRect(0, HORIZON, W, H - HORIZON);
+  const haze = g.createLinearGradient(0, HORIZON - H * 0.08, 0, HORIZON + H * 0.1); // (a soft horizon)
+  haze.addColorStop(0, 'rgba(226,197,140,0)'); haze.addColorStop(0.45, 'rgba(226,197,140,0.5)'); haze.addColorStop(1, 'rgba(226,197,140,0)');
+  g.fillStyle = haze; g.fillRect(0, HORIZON - H * 0.08, W, H * 0.18);
+  g.save(); g.translate(W / 2, H * 0.78); g.scale(1, 0.3);
+  const pool = g.createRadialGradient(0, 0, 0, 0, 0, W * 0.55);
+  pool.addColorStop(0, 'rgba(236,226,170,0.45)'); pool.addColorStop(1, 'rgba(236,226,170,0)');
+  g.fillStyle = pool; g.beginPath(); g.arc(0, 0, W * 0.55, 0, Math.PI * 2); g.fill(); g.restore();
+  // where everyone stands, back row first; a crescent: the ends of a row a little further back
+  const spots: Array<{ u: UnitSpec; x: number; y: number; k: number; blow: boolean }> = [];
   rows.forEach((row, ri) => {
-    const t = rows.length > 1 ? ri / (rows.length - 1) : 1, feet = H * (0.6 + 0.36 * t), k0 = scale * near(ri);
-    let x = W / 2 - (row.reduce((a, u) => a + wide(u.id), 0) * k0) / 2;
+    const k = scale * near(ri), sp = span(row, ri, k), feet = H * (0.62 + 0.29 * depth(ri));
     row.forEach((u, i) => {
-      const cx = x + (wide(u.id) * k0) / 2;
-      x += wide(u.id) * k0;
-      const facing = cx < W * 0.4 ? 0 : cx > W * 0.6 ? 2 : 1; // turned in toward the middle
-      const a = art.units[u.id].anims, blow = (ri + i) % 2 === 0 ? a.attack : undefined;
-      const frames = (blow ?? a.idle).frames, f = frames[facing % frames.length], s = f[blow ? Math.floor(f.length * 0.45) : 0];
-      const k = k0 / s.q;
-      g.drawImage(s.img, s.sx, s.sy, s.sw, s.sh, cx - s.ax * k, feet - s.ay * k, s.sw * k, s.sh * k);
+      const x = W / 2 + (row.length < 2 ? 0 : (i / (row.length - 1) - 0.5) * sp), off = (x - W / 2) / (W / 2);
+      spots.push({ u, x, y: feet - off * off * H * 0.06 + (i % 2 ? H * 0.012 : 0), k, blow: ri > 0 && (ri + i) % 2 === 1 }); // (the big at the back loom; those in front fight)
     });
   });
+  spots.sort((a, b) => a.y - b.y);
+  const facingAt = (x: number) => (x < W * 0.42 ? 0 : x > W * 0.58 ? 2 : 1); // (0 down-right, 1 toward us, 2 down-left)
+  const frameOf = (frames: Sprite[][], x: number, at: number) => { const f = frames[facingAt(x) % frames.length]; return f[Math.floor(f.length * at) % f.length]; };
+  const blit = (s: Sprite, x: number, y: number, k: number) => g.drawImage(s.img, s.sx, s.sy, s.sw, s.sh, x - s.ax * k, y - s.ay * k, s.sw * k, s.sh * k);
+  // fliers over the band's shoulders, their shadows on the ground below and right (the sun is up and to the left)
+  const flying = fliers.map((u, i) => {
+    const want = W * (i % 2 ? 0.8 : 0.2) + (i >> 1) * W * 0.1 * (i % 2 ? -1 : 1), y = H * (0.66 + 0.05 * (i >> 1)), s = frameOf(art.units[u.id].anims.fly!.frames, want, 0.3), k = scale / s.q;
+    // (all of it in the picture)
+    const x = Math.min(Math.max(want, W * 0.02 + s.ax * k), W * 0.98 - (s.sw - s.ax) * k);
+    return { u, x, y, lift: Math.min(H * (0.4 - 0.08 * (i >> 1)), y - H * 0.03 - s.ay * k) };
+  });
+  g.filter = 'brightness(1.12) saturate(1.08)';
+  for (const f of flying) {
+    const a = art.units[f.u.id].anims.fly!;
+    if (a.shadows) { const s = frameOf(a.shadows, f.x, 0.3); blit(s, f.x + f.lift * 0.436, f.y + f.lift * 0.417, scale / s.q); }
+  }
+  for (const p of spots) {
+    const a = art.units[p.u.id].anims, an = p.blow && a.attack ? a.attack : a.idle, s = frameOf(an.frames, p.x, an === a.idle ? 0 : 0.5);
+    blit(s, p.x, p.y, p.k / s.q);
+  }
+  for (const f of flying) { const s = frameOf(art.units[f.u.id].anims.fly!.frames, f.x, 0.3); blit(s, f.x, f.y - f.lift, scale / s.q); }
+  g.filter = 'none';
+  // the edges fall into shade, so the band stands out
+  const vignette = g.createRadialGradient(W / 2, H * 0.6, H * 0.35, W / 2, H * 0.6, W * 0.75);
+  vignette.addColorStop(0, 'rgba(10,9,7,0)'); vignette.addColorStop(1, 'rgba(10,9,7,0.6)');
+  g.fillStyle = vignette; g.fillRect(0, 0, W, H);
   document.body.appendChild(c);
   document.title = 'sprites ready';
+}
+
+/** Each faction's band pictures, if it stages its own (BandCandidate). */
+const BAND_MODULES = import.meta.glob('../factions/*/band.ts') as Record<string, () => Promise<{ bands?: BandCandidate[]; pick?: number }>>;
+/** Each faction's art module, for what its units bake (bakeOpts). */
+const ART_MODULES = import.meta.glob('../factions/*/art.ts') as Record<string, () => Promise<{ bakeOpts?: (u: never) => UnitBakeOptions }>>;
+
+/**
+ * Units baked sharper than the game's (`q` pixels a game pixel), for a big picture; only a few frames of each
+ * animation, as a picture needs one. A faction without a model per unit gets its usual art.
+ */
+async function sharpArt(faction: FactionSpec, team: TeamColors, units: UnitSpec[], q: number): Promise<{ units: Record<string, UnitArt> }> {
+  const opts = (await ART_MODULES[`../factions/${faction.id}/art.ts`]?.())?.bakeOpts, models = units.map((u) => (u as UnitSpec & { model?: UnitModel }).model);
+  if (!opts || models.some((m) => !m)) return faction.art!(team, undefined, units.map((u) => u.id));
+  const { Baker, animsFor } = await import('../kits/bake3d/baker');
+  const baker = new Baker(q), out: Record<string, UnitArt> = {};
+  for (const [i, u] of units.entries()) {
+    const o = opts(u as never);
+    out[u.id] = await baker.bakeUnit(models[i]!, team, { ...o, frames: Object.fromEntries(animsFor(o).map((a) => [a, a === 'attack' || a === 'fly' ? 4 : 2])) });
+  }
+  baker.dispose();
+  return { units: out };
 }
 
 /** Animations played once through (each blow, a death, a hatching): replayed after a pause. */

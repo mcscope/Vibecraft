@@ -281,3 +281,44 @@ export interface WildSpec extends UnitSpec {
   /** kg of food the carcass holds (default: half its body mass). */
   meat?: number;
 }
+
+/**
+ * A faction's picture for the front page's army card, staged in 3D like a band on an album cover. Its band.ts exports
+ * `bands` (candidate pictures: a BandStaging, or 'line-up' for its fighters lined up automatically) and `pick` (which
+ * one the card shows, from 1). ?mode=sprites&faction=<id>&pose=1[&take=<n>] draws one; scripts/bands.mjs saves them.
+ * A faction without a band.ts gets the line-up. Model units (2 a tile; a person about 1.7 tall), true sizes; y = 0 is
+ * the ground.
+ */
+export type BandCandidate = BandStaging | 'line-up';
+
+export interface BandStaging {
+  /** The sky (top, then at the horizon) and the ground's colour, if not the usual dusk over grass. */
+  sky?: [string, string];
+  ground?: string;
+  /** Where the camera stands and the point it looks at; its vertical field of view in degrees. */
+  camera: { from: [number, number, number]; to: [number, number, number]; fov: number };
+  /** Everyone in the picture (and a building or two): a unit's or a building's id. */
+  cast: Array<{
+    id: string;
+    /** Where on the ground: x (right of the picture's middle), z (toward the camera). */
+    at: [number, number];
+    /** Height above the ground (a flier). */
+    lift?: number;
+    /** Which way it faces, in degrees: 0 toward the camera, 90 to the right, −90 to the left, 180 away. */
+    face?: number;
+    /** What it's doing (a unit's animation: 'idle', 'walk', 'attack', 'fly', 'hatch' …) and how far through (0–1). */
+    anim?: string;
+    phase?: number;
+  }>;
+}
+
+/**
+ * For staging a band: `n` of a unit in a rank `gap` apart across x, at depth z, a little ragged (fixed offsets, the
+ * same every time), turned in toward the middle; every other one doing `alt` (by default the same as the rest).
+ */
+export function bandRank(id: string, n: number, gap: number, z: number, o: { x?: number; anim?: string; alt?: string; phase?: number; face?: number; turn?: number } = {}): BandStaging['cast'] {
+  return Array.from({ length: n }, (_, i) => {
+    const x = (i - (n - 1) / 2) * gap, wobble = (((i * 37) % 11) / 11 - 0.5) * gap * 0.35, anim = o.anim ?? 'idle';
+    return { id, at: [(o.x ?? 0) + x + wobble, z + (((i * 53) % 7) / 7 - 0.5) * 0.5], face: (o.face ?? 0) - x * (o.turn ?? 2.5), anim: i % 2 ? (o.alt ?? anim) : anim, phase: (o.phase ?? 0.5) + (((i * 29) % 5) / 5) * 0.2 };
+  });
+}

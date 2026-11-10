@@ -4,8 +4,7 @@ import type { BiomeArt, BiomeLoader, BuildingArt, FactionArt, Sprite, TeamColors
 import type { World } from '../sim/world';
 import type { FactionSpec } from '../factions/types';
 import { PLAYABLE } from '../factions';
-import { biomeKey, loadPrebaked, loadPrebakedStills, teamKey } from '../art/prebaked';
-import { unitSprite } from '../art/contract';
+import { biomeKey, loadPrebaked, teamKey } from '../art/prebaked';
 import { cacheArt, cachedArt } from '../art/devCache';
 import { loadGpuPage } from './gpuPages';
 
@@ -28,18 +27,6 @@ async function bakeInto(f: FactionSpec, team: TeamColors, have: Pick<FactionArt,
   const baked = await f.art(team, undefined, bake);
   Object.assign(have.units, baked.units); Object.assign(have.buildings, baked.buildings);
   for (const id of bake) cacheArt(f.id, key(id), { ...baked, units: baked.units[id] ? { [id]: baked.units[id] } : {}, buildings: baked.buildings[id] ? { [id]: baked.buildings[id] } : {} });
-}
-
-/**
- * Pictures of some of a faction's units in a team's colours, for menus. A build loads just the saved stills; dev
- * bakes the units asked for (and keeps them for the game).
- */
-export async function unitStills(f: FactionSpec, team: TeamColors, ids: string[]): Promise<Map<string, Sprite>> {
-  let art: Pick<FactionArt, 'units' | 'buildings'> | null = import.meta.env.PROD && PLAYABLE.includes(f) ? await loadPrebakedStills<FactionArt>(teamKey(f.id, team)) : null;
-  if (!art) { art = { units: {}, buildings: {} }; await bakeInto(f, team, art, ids); }
-  const out = new Map<string, Sprite>();
-  for (const id of ids) { const u = art.units[id]; if (u) out.set(id, u.still ?? unitSprite(u, 'idle', 1, { time: 0 })); }
-  return out;
 }
 
 /** The Wilds' colours (selection rings, minimap dots). */

@@ -53,9 +53,9 @@ for (const sel of menu.querySelectorAll<HTMLSelectElement>('[data-pick]')) {
   const which = sel.dataset.pick as 'you' | 'foe';
   sel.innerHTML = PLAYABLE.map((f) => `<option value="${f.id}">${f.name}</option>`).join('');
   sel.value = params.get(which) ?? picked[which] ?? (which === 'foe' && PLAYABLE[1] ? PLAYABLE[1].id : PLAYABLE[0].id);
-  // under each pick: who that army is, and its units in that side's colours
+  // under each pick: who that army is, and its fighters posed in that side's colours
   const card = menu.querySelector<HTMLElement>(`[data-army="${which}"]`)!;
-  const show = () => showArmy(card, PLAYABLE.find((f) => f.id === sel.value) ?? PLAYABLE[0], TEAM_COLORS[which === 'you' ? 0 : 1]);
+  const show = () => showArmy(card, PLAYABLE.find((f) => f.id === sel.value) ?? PLAYABLE[0], TEAM_COLORS[which === 'you' ? 0 : 1], which === 'you' ? 0 : 1);
   sel.addEventListener('change', () => { picked[which] = sel.value; try { localStorage.setItem(PICK_KEY, JSON.stringify(picked)); } catch { /* private mode */ } show(); });
   if (!params.get('mode')) show();
 }
@@ -244,7 +244,7 @@ async function run(g: GameSetup): Promise<void> {
 
   // a pitched battle opens on deployment: the world holds still until Ready
   const deploy = m === 'battle' ? new BattleDeploy(world, renderer, canvas, input.rs, (ids) => input.setSelection(ids), () => { if (battleAI) battleAI.started = true; }) : null;
-  if (m === 'faceoff') renderer.cam.centerOn(23.5, 23.5);
+  if (m === 'faceoff') renderer.cam.centerOn(24, 24);
   else if (m === 'battle') { /* (the deploy step framed the camera) */ }
   else if (m === 'tutorial') {
     const ix = lessonIx;

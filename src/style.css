@@ -57,8 +57,15 @@ kbd {
 #menu { flex-direction: column; justify-content: flex-start; overflow-y: auto; background: #0b0a08; }
 .menu-hero {
   flex: none; width: 100%; height: clamp(190px, 29vw, 42vh); padding: 0 16px 36px;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
-  background: linear-gradient(180deg, rgba(11, 10, 8, 0.1) 35%, #0b0a08 100%), url('./assets/menu-bg.jpg') center / cover;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-end; text-align: center;
+  background: linear-gradient(180deg, rgba(11, 10, 8, 0) 56%, rgba(11, 10, 8, 0.45) 84%, #0b0a08 100%), url('./assets/menu-bg.jpg') center / cover;
+}
+/* a phone: the scene shrinks to show more of its width, and the title sits under it */
+@media (max-width: 560px) {
+  .menu-hero {
+    height: auto; padding-top: 122px;
+    background: linear-gradient(180deg, rgba(11, 10, 8, 0) 50%, #0b0a08 100%) center top / 100% 160px no-repeat, url('./assets/menu-bg.jpg') center top / auto 160px no-repeat;
+  }
 }
 .menu-hero h1 { margin: 0; font-size: clamp(44px, 8vw, 96px); line-height: 1; color: #f0d48a; text-shadow: 0 2px 0 #3a2a10, 0 4px 18px #000, 0 0 40px rgba(0, 0, 0, 0.8); }
 .menu-hero .sub { margin: 10px 0 0; font-size: clamp(15px, 1.6vw, 20px); font-weight: 500; color: var(--text); text-shadow: 0 1px 4px #000, 0 0 14px #000; }
@@ -71,17 +78,16 @@ kbd {
 .matchup select { flex: 1; min-width: 0; font: inherit; font-size: 15px; color: var(--text); background: var(--inset); border: 1px solid #4a3d2c; border-radius: 3px; padding: 6px 8px; cursor: pointer; }
 .matchup select:hover, .matchup select:focus-visible { border-color: var(--gold); outline: none; }
 .matchup .vs { font-family: 'Cinzel', serif; color: var(--gold); }
-.armies { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px; }
-.army { display: flex; flex-direction: column; padding: 8px 10px; background: var(--inset); border: 1px solid #3a3025; border-top: 3px solid var(--team, var(--bronze)); border-radius: 3px; }
-.army p { margin: 0 0 8px; line-height: 1.3; }
+.armies { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 12px 0 4px; }
+/* (scoped to .armies: the in-game orders panel has its own .army) */
+.armies .army { display: flex; flex-direction: column; gap: 0; padding: 0 10px 10px; overflow: hidden; background: var(--inset); border: 1px solid #3a3025; border-top: 3px solid var(--team, var(--bronze)); border-radius: 3px; }
+.army-band { display: block; width: calc(100% + 20px); height: auto; aspect-ratio: 4 / 3; margin: 0 -10px 10px; object-fit: cover; background: #1c1a14; }
+.armies .army p { margin: 0 0 8px; line-height: 1.35; }
+.armies .army:not(:has(.army-band)) { padding-top: 10px; }
 .army-about { color: var(--text); font-size: 15px; }
-.army-units { display: flex; flex-wrap: wrap; gap: 4px; }
-.army-units span { width: 44px; height: 44px; border-radius: 3px; background: radial-gradient(ellipse at 50% 85%, #3b4a2a 0%, #222a18 60%, #171a12 100%); cursor: help; }
-.army-units img { display: block; width: 100%; height: 100%; }
-.army-note { display: block; min-height: 1.3em; margin: 5px 0; color: var(--text); font-size: 13px; }
-.army-level { min-height: 3.9em; color: var(--dim); font-size: 12.5px; }
+.army-level { color: var(--dim); font-size: 13px; }
 .army-level b { margin-right: 4px; padding: 0 6px; border: 1px solid var(--bronze); border-radius: 9px; font-weight: 500; color: var(--gold); }
-.army-learn { display: block; margin-top: auto; padding: 6px 8px; text-align: center; font-size: 14px; color: var(--gold); text-decoration: none; border: 1px solid var(--bronze); border-radius: 3px; }
+.army-learn { display: flex; align-items: center; justify-content: center; min-height: 40px; margin-top: auto; padding: 6px 8px; text-align: center; font-size: 14px; line-height: 1.25; color: var(--gold); text-decoration: none; border: 1px solid var(--bronze); border-radius: 3px; }
 .army-learn:hover { border-color: var(--gold); color: #fff; }
 .mode { display: block; width: 100%; margin: 8px 0 0; padding: 10px 14px; text-align: left; border-radius: 4px; transition: transform 0.12s, box-shadow 0.12s; }
 .mode b { display: block; font-family: 'Cinzel', serif; font-size: 17px; color: var(--gold); }
@@ -99,6 +105,13 @@ kbd {
 .menu-links a:hover { color: var(--gold); }
 @media (max-width: 720px) { .menu-main { grid-template-columns: 1fr; } }
 @media (max-width: 420px) { .mode-grid, .armies { grid-template-columns: 1fr; } }
+/* a phone: You and Foe a row each, and fingers get room to tap */
+@media (max-width: 560px) {
+  .matchup:has(.vs) label { flex-basis: 100%; }
+  .matchup .vs { display: none; }
+  .matchup select { min-height: 44px; }
+  .menu-links a { padding: 12px 6px; }
+}
 @media (prefers-reduced-motion: reduce) { .mode { transition: none; } }
 .menu-box { width: min(480px, calc(100vw - 32px)); padding: 28px 30px; border-radius: 6px; text-align: center; }
 .menu-box h1 { margin: 0; font-size: 44px; }

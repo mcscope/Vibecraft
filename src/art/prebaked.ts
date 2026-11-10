@@ -80,20 +80,6 @@ function reviveArt<T>(art: unknown, imgs: CanvasImageSource[]): T {
   return revive(art) as T;
 }
 
-/** Art saved by packArt with only its stills' pages loaded (a few images, for menus): its other sprites have no image. */
-export async function loadPrebakedStills<T>(key: string, base = 'baked'): Promise<T | null> {
-  try {
-    const res = await fetch(`${base}/${key}.json`);
-    if (!res.ok) return null;
-    const { art, cpu = [] } = (await res.json()) as { art: unknown; cpu?: number[] };
-    const imgs: CanvasImageSource[] = [];
-    await Promise.all(cpu.map(async (i) => { imgs[i] = await createImageBitmap(await (await fetch(`${base}/${key}.${i}.webp`)).blob()); }));
-    return reviveArt<T>(art, imgs);
-  } catch {
-    return null;
-  }
-}
-
 /**
  * Load art saved by packArt from `base/<key>.json` and `base/<key>.<page>.webp`; null if there's none. With
  * `gpuLoad` and the pages also saved compressed (`ktx2`, scripts/ktx2.mjs), the pages go straight to the GPU
