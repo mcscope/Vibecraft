@@ -15,8 +15,9 @@ const carry = (id: string) => id.startsWith('larva') || id.startsWith('mother');
  *  pendulum, too much for the usual 8. */
 const frames = (u: (typeof units)[number]) => hopFrames(u) ?? (u.id === 'micropike' ? { walk: 12, charge: 10, attack: 12 } : undefined);
 
-/** What each unit bakes (its extra animations). */
-export const bakeOpts = (u: (typeof units)[number]): UnitBakeOptions => ({ withCarry: carry(u.id), fly: !!u.flight, brace: !!u.attack?.shaft, ownLeap: u.id === 'flier', reload: u.id === 'slinger', lay: u.id.startsWith('mother'), gives: carry(u.id), slam: !!u.gait, grows: u.id.startsWith('egg') || u.id === 'cocoon', rises: u.id === 'charger' || u.id === 'whipweld' || u.id === 'slinger', segments: u.id.startsWith('larva') ? caterpillarSegments(u.mass) : undefined, frames: frames(u), ownStyles: u.id === 'micropike' });
+/** What each unit bakes (its extra animations; a hopper's bounding shadows apart: high in its bound, its body and its
+ *  shadow on the ground in one frame would be mostly empty box). */
+export const bakeOpts = (u: (typeof units)[number]): UnitBakeOptions => ({ withCarry: carry(u.id), fly: !!u.flight, brace: !!u.attack?.shaft, ownLeap: u.id === 'flier', reload: u.id === 'slinger', lay: u.id.startsWith('mother'), gives: carry(u.id), slam: !!u.gait, shadowApart: u.gait ? ['walk', 'charge', 'slam'] : undefined, grows: u.id.startsWith('egg') || u.id === 'cocoon', rises: u.id === 'charger' || u.id === 'whipweld' || u.id === 'slinger', segments: u.id.startsWith('larva') ? caterpillarSegments(u.mass) : undefined, frames: frames(u), ownStyles: u.id === 'micropike' });
 
 export function bakeArt(team: TeamColors, onProgress?: (f: number, label: string) => void, only?: string[]): Promise<FactionArt> {
   return bakeFaction({

@@ -189,6 +189,8 @@ export class Renderer {
    */
   private groundLag = new Map<number, number>();
   private flewOver = new Map<number, number>();
+  /** The frame each unit is showing (its animation and how far in), so its shadow baked apart matches it. */
+  private shown = new Map<number, { anim: ArtAnim } & FrameTime>();
   /** Pixels a flier is drawn above its ground spot (at zoom 1). */
   lift(id: number): number { return (this.alt.get(id) ?? 0) + (this.groundLag.get(id) ?? 0); }
   /** Screen height for an altitude in metres: 6 px per metre (108 px at 18 m). */
@@ -596,6 +598,7 @@ export class Renderer {
         if (art.anims.reload && f.anim === 'idle' && u.cooldown > 0.02) Object.assign(f, { anim: 'reload' as const, progress: Math.min(0.999, Math.max(0, 1 - u.cooldown / Math.max(0.1, u.stats.cooldown - 0.45))), time: undefined, walked: undefined });
         if (art.anims.rise) Object.assign(f, this.rising(u.id, f.anim, u.engage > 0 || u.order.kind === 'attack'));
         const frame = unitSprite(art, f.anim, u.heading, f);
+        this.shown.set(u.id, f);
         this.setFrame(sp, frame);
         if (Math.abs(sp.scale.x * frame.q - k) > 1e-3) sp.scale.set(k / frame.q);
       }
@@ -605,7 +608,7 @@ export class Renderer {
       sp.visible = this.seen(u.owner, u.x, u.y); // fog of war
       if (art?.segments) this.drawSegments(u, art, x, y, sp);
     }
-    for (const [id, sp] of this.unitSprites) if (!this.world.units.has(id)) { sp.destroy(); this.unitSprites.delete(id); this.alt.delete(id); this.groundLag.delete(id); this.flewOver.delete(id); }
+    for (const [id, sp] of this.unitSprites) if (!this.world.units.has(id)) { sp.destroy(); this.unitSprites.delete(id); this.alt.delete(id); this.groundLag.delete(id); this.flewOver.delete(id); this.shown.delete(id); }
     for (const [id, segs] of this.segSprites) if (!this.world.units.has(id)) { segs.forEach((s) => s.destroy()); this.segSprites.delete(id); this.trails.delete(id); }
     for (const id of this.posture.keys()) if (!this.world.units.has(id)) this.posture.delete(id);
   }
@@ -805,14 +808,16 @@ export class Renderer {
     });
     for (let i = line.length; i < this.ghostLine.length; i++) this.ghostLine[i].visible = false;
     // fliers' shadows: their own silhouette (baked with the art), on the ground, falling away from the sun the higher
-    // they fly: the bake's sun (upper left) puts a body h up h·(0.436, 0.417) of its screen lift right and down
+    // they fly: the bake's sun (upper left) puts a body h up h·(0.436, 0.417) of its screen lift right and down; and the
+    // shadow of any frame baked apart from it, on the ground under it
     for (const u of w.units.values()) {
       const lift = this.lift(u.id);
-      if (lift < 1 || !this.seen(u.owner, u.x, u.y)) continue;
+      if (!this.seen(u.owner, u.x, u.y)) continue;
       const x = u.px + (u.x - u.px) * alpha, y = u.py + (u.y - u.py) * alpha;
       const art = this.bank.unit(u.owner, u.specId);
-      const f = u.stats.flight && !u.airborne && lift > 6 ? { anim: 'fly' as const, time: this.time } : unitFrame(u);
+      const f = this.shown.get(u.id) ?? unitFrame(u);
       const sh = art && unitShadow(art, f.anim, u.heading, f);
+      if (lift < 1 && !sh) continue;
       const gx = isoX(x, y) + lift * SUN_SHADOW[0], gy = this.gy(x, y) + lift * SUN_SHADOW[1];
       if (!sh) { const r = u.stats.radius * 40; ellipse(this.discTex, gx, gy, r, r * 0.5, 0x000000, 0.3); continue; } // (art without baked shadows)
       const sp = P.get(this.texture(sh));

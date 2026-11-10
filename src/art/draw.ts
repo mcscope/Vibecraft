@@ -1,5 +1,5 @@
 // 2D-canvas helpers for drawing contract sprites (HUD portraits, icons, terrain clutter).
-import type { Sprite } from './contract';
+import { unitShadow, unitSprite, type ArtAnim, type FrameTime, type Sprite, type UnitArt } from './contract';
 import { gpuTexture } from './gpu';
 
 /** What a 2D canvas can draw for `s`: `s` itself, or (its page only on the GPU) the art's still. */
@@ -11,6 +11,13 @@ export function blit(ctx: CanvasRenderingContext2D, s: Sprite, x: number, y: num
   if (alpha !== 1) ctx.globalAlpha = alpha;
   ctx.drawImage(s.img, s.sx, s.sy, s.sw, s.sh, x - s.ax * k, y - s.ay * k, s.sw * k, s.sh * k);
   if (alpha !== 1) ctx.globalAlpha = 1;
+}
+
+/** Draw a unit's frame as blit does, its shadow first if that's baked apart (laid on the ground under it). */
+export function blitUnit(ctx: CanvasRenderingContext2D, art: UnitArt, a: ArtAnim, octant: number, t: FrameTime, x: number, y: number, zoom: number): void {
+  const sh = unitShadow(art, a, octant, t);
+  if (sh) blit(ctx, sh, x, y, zoom);
+  blit(ctx, unitSprite(art, a, octant, t), x, y, zoom);
 }
 
 /**

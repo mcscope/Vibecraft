@@ -54,7 +54,21 @@ export interface UnitBakeOptions {
   segments?: number[];
   /** (A trailing part: only standing, crawling and dying.) */
   part?: boolean;
+  /**
+   * Animations whose ground shadow is baked apart, as a flier's is: its frames then hold the body alone (a tall or
+   * bounding body's frames shrink to about half), and the renderer lays the shadow on the ground under it. Not idle or
+   * die: portraits and corpses show those frames on their own.
+   */
+  shadowApart?: BakedAnim[];
+  /** Animations it doesn't bake, because its model draws them as another: the game shows that one's frames instead (contract.ts anim(): gather, eat and tired fall back to idle). */
+  without?: BakedAnim[];
 }
+
+/** Two frames of one facing are the same picture (stored once) when under this share of their drawn pixels differ by more than DIFFER. */
+const SAME_SHARE = 0.001, DIFFER = 24;
+
+/** Whether an animation's shadow is baked apart from its body: always in the air; on the ground if the unit asks. */
+const shadowApart = (opts: UnitBakeOptions, a: BakedAnim): boolean => AIR_POSES.has(a) || (a !== 'idle' && a !== 'die' && !!opts.shadowApart?.includes(a));
 
 /**
  * Finish a baked image the way RTS sprites are: a touch more contrast and
@@ -122,6 +136,29 @@ function occlude(ctx: CanvasRenderingContext2D, depth: CanvasRenderingContext2D,
     d[i * 4] *= k; d[i * 4 + 1] *= k; d[i * 4 + 2] *= k;
   }
   ctx.putImageData(img, 0, 0);
+}
+
+/**
+ * Whether two cropped frames of one facing (`ox`, `oy`: where each sits in its cell, so both line up as drawn) are the
+ * same picture: under SAME_SHARE of their drawn pixels differ by more than DIFFER, in alpha or in colour.
+ */
+function samePicture(a: { ox: number; oy: number; w: number; h: number; cover: number }, pa: Uint8ClampedArray, b: { ox: number; oy: number; w: number; h: number; cover: number }, pb: Uint8ClampedArray): boolean {
+  if (Math.abs(a.ox - b.ox) > 3 || Math.abs(a.oy - b.oy) > 3 || Math.abs(a.w - b.w) > 6 || Math.abs(a.h - b.h) > 6) return false;
+  const limit = Math.floor(Math.max(a.cover, b.cover) * SAME_SHARE);
+  const x0 = Math.min(a.ox, b.ox), y0 = Math.min(a.oy, b.oy), x1 = Math.max(a.ox + a.w, b.ox + b.w), y1 = Math.max(a.oy + a.h, b.oy + b.h);
+  let differ = 0;
+  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+    const ax = x - a.ox, ay = y - a.oy, bx = x - b.ox, by = y - b.oy;
+    const i = ax >= 0 && ay >= 0 && ax < a.w && ay < a.h ? (ay * a.w + ax) * 4 : -1, j = bx >= 0 && by >= 0 && bx < b.w && by < b.h ? (by * b.w + bx) * 4 : -1;
+    const aa = i < 0 ? 0 : pa[i + 3], ba = j < 0 ? 0 : pb[j + 3];
+    let d = Math.abs(aa - ba);
+    if (d <= DIFFER && aa && ba) {
+      const k = Math.min(aa, ba) / 255;
+      d = Math.max(Math.abs(pa[i] - pb[j]), Math.abs(pa[i + 1] - pb[j + 1]), Math.abs(pa[i + 2] - pb[j + 2])) * k;
+    }
+    if (d > DIFFER && ++differ > limit) return false;
+  }
+  return true;
 }
 
 /** Game octants (0 = +x, counting toward +y), one sheet row each. */
@@ -224,7 +261,7 @@ export function animsFor(opts: UnitBakeOptions): BakedAnim[] {
   if (opts.sidearm) anims.push('cut');
   if (opts.withCarry) anims.push('carryFood', 'carryWood', 'carryCrystal');
   if (opts.fly) anims.push('fly', 'leap', 'climb', 'soar', 'glide', 'land', 'bankL', 'bankR', 'swoop'); // (a bank: one still frame a side)
-  return anims;
+  return opts.without ? anims.filter((a) => a === 'idle' || !opts.without!.includes(a)) : anims;
 }
 
 export class Baker {
@@ -564,23 +601,28 @@ export class Baker {
     let { r, h } = this.measure(model, team, samples);
     r = Math.max(r, h * 1.05); // room to fall over
     const ext = this.extent(r, h);
-    const fw = Math.ceil((ext.left + ext.right) * this.q), fh = Math.ceil((ext.top + ext.bottom) * this.q);
+    const q = this.q;
+    const fw = Math.ceil((ext.left + ext.right) * q), fh = Math.ceil((ext.top + ext.bottom) * q);
     // Render each animation as a grid in one GL canvas (one readback per anim),
     // then crop every frame to its visible pixels and shelf-pack the crops into
     // a single atlas per unit. Uncropped sheets are ~90% empty space and blow
     // through GPU memory.
     const cw = Math.ceil(fw * this.ss), chh = Math.ceil(fh * this.ss);
     const rows = BAKED_DIRS.length;
-    const ax0 = ext.left * this.q, ay0 = ext.top * this.q;
-    type Crop = { src: HTMLCanvasElement; x: number; y: number; w: number; h: number; ax: number; ay: number; dx: number; dy: number; page?: number };
+    const ax0 = ext.left * q, ay0 = ext.top * q;
+    // (`ox`, `oy`: where the crop sits in its cell; `k`: the scale it's stored at; `same`: an earlier frame of its facing
+    // that's the same picture, stored in its place; `px`, `cover`: its pixels and how many are drawn, to compare)
+    type Crop = { src: HTMLCanvasElement; x: number; y: number; w: number; h: number; ax: number; ay: number; dx: number; dy: number; ox: number; oy: number; k: number; page?: number; same?: Crop; px?: Uint8ClampedArray; cover: number };
     const crops = new Map<BakedAnim, Crop[]>();
     this.aim(ext, r, h);
     const shadowCrops = new Map<BakedAnim, Crop[]>();
-    for (const [anim, shadowPass] of anims.flatMap((a) => (AIR_POSES.has(a) ? [[a, false], [a, true]] : [[a, false]]) as Array<[BakedAnim, boolean]>)) {
+    const kept = new Map<string, Crop[]>(); // (the distinct frames so far, by pass and facing)
+    for (const [anim, shadowPass] of anims.flatMap((a) => (shadowApart(opts, a) ? [[a, false], [a, true]] : [[a, false]]) as Array<[BakedAnim, boolean]>)) {
       const n = opts.frames?.[anim] ?? FRAMES[anim];
       // in the air the body is baked without its shadow (it's drawn lifted to its height) and, in a second pass, its
-      // shadow alone: the renderer lays that on the ground, falling away from the sun as it climbs
-      this.ground.visible = !AIR_POSES.has(anim) || shadowPass;
+      // shadow alone: the renderer lays that on the ground, falling away from the sun as it climbs (and so for a
+      // ground animation whose shadow is baked apart)
+      this.ground.visible = !shadowApart(opts, anim) || shadowPass;
       const grid = document.createElement('canvas');
       grid.width = fw * n;
       grid.height = fh * rows;
@@ -642,7 +684,17 @@ export class Baker {
           }
         }
         if (x1 < 0) { x0 = 0; y0 = 0; x1 = 0; y1 = 0; }
-        list.push({ src: grid, x: f * fw + x0, y: di * fh + y0, w: x1 - x0 + 1, h: y1 - y0 + 1, ax: ax0 - x0, ay: ay0 - y0, dx: 0, dy: 0 });
+        const c: Crop = { src: grid, x: f * fw + x0, y: di * fh + y0, w: x1 - x0 + 1, h: y1 - y0 + 1, ax: ax0 - x0, ay: ay0 - y0, dx: 0, dy: 0, ox: x0, oy: y0, k: 1, cover: 0 };
+        // the same picture as an earlier frame of this facing (a held pose, a loop's turn, an animation that doesn't
+        // move this body): stored once
+        const px = new Uint8ClampedArray(c.w * c.h * 4);
+        for (let y = 0; y < c.h; y++) px.set(data.subarray(((c.y + y) * grid.width + c.x) * 4, ((c.y + y) * grid.width + c.x + c.w) * 4), y * c.w * 4);
+        for (let i = 3; i < px.length; i += 4) if (px[i] > 3) c.cover++;
+        const seen = kept.get(`${shadowPass}${di}`) ?? [];
+        kept.set(`${shadowPass}${di}`, seen);
+        c.same = seen.find((k) => samePicture(k, k.px!, c, px));
+        if (!c.same) { c.px = px; seen.push(c); }
+        list.push(c);
       }
       (shadowPass ? shadowCrops : crops).set(anim, list);
       await new Promise((res) => setTimeout(res, 0));
@@ -651,17 +703,21 @@ export class Baker {
 
     // shelf-pack all crops, tallest first, onto pages no bigger than a GPU texture
     // can hold (a huge body's frames overflow one page and would draw as a black box)
-    const all = [...crops.values(), ...shadowCrops.values()].flat();
+    // (each distinct picture once; a shadow baked apart at its smaller scale)
+    const all = [...crops.values(), ...shadowCrops.values()].flat().filter((c) => !c.same);
+    for (const c of all) c.px = undefined;
+    const size = (c: Crop) => [Math.max(1, Math.ceil(c.w * c.k)), Math.max(1, Math.ceil(c.h * c.k))];
     const MAXW = 2048, MAXH = 4096, PAD = 2;
     const pages: Array<{ w: number; h: number }> = [{ w: 0, h: 0 }];
     let cx = 0, cy = 0, shelf = 0;
-    for (const c of [...all].sort((a, b) => b.h - a.h)) {
-      if (cx + c.w > MAXW) { cx = 0; cy += shelf + PAD; shelf = 0; }
-      if (cy + c.h > MAXH && cy > 0) { pages.push({ w: 0, h: 0 }); cx = 0; cy = 0; shelf = 0; }
+    for (const c of [...all].sort((a, b) => size(b)[1] - size(a)[1])) {
+      const [w, h] = size(c);
+      if (cx + w > MAXW) { cx = 0; cy += shelf + PAD; shelf = 0; }
+      if (cy + h > MAXH && cy > 0) { pages.push({ w: 0, h: 0 }); cx = 0; cy = 0; shelf = 0; }
       const pg = pages.length - 1;
       c.dx = cx; c.dy = cy; c.page = pg;
-      cx += c.w + PAD;
-      shelf = Math.max(shelf, c.h);
+      cx += w + PAD;
+      shelf = Math.max(shelf, h);
       pages[pg].w = Math.max(pages[pg].w, cx);
       pages[pg].h = Math.max(pages[pg].h, cy + shelf);
     }
@@ -671,15 +727,16 @@ export class Baker {
       atlas.width = Math.max(1, pages[pg].w);
       atlas.height = Math.max(1, pages[pg].h);
       const actx = atlas.getContext('2d')!;
-      for (const c of all) if (c.page === pg) actx.drawImage(c.src, c.x, c.y, c.w, c.h, c.dx, c.dy, c.w, c.h);
+      actx.imageSmoothingQuality = 'high';
+      for (const c of all) if (c.page === pg) { const [w, h] = size(c); actx.drawImage(c.src, c.x, c.y, c.w, c.h, c.dx, c.dy, w, h); }
       // GPU-resident bitmap: plain canvases get re-uploaded on every draw
       imgs.push(await createImageBitmap(atlas));
     }
-    const q = this.q;
     const out: Partial<Record<BakedAnim, AnimArt>> = {};
     const sprites = (anim: BakedAnim, list: Crop[]): Sprite[][] => {
       const n = opts.frames?.[anim] ?? FRAMES[anim], frames: Sprite[][] = [];
-      for (let di = 0; di < rows; di++) frames.push(list.slice(di * n, di * n + n).map((c) => ({ img: imgs[c.page ?? 0], sx: c.dx, sy: c.dy, sw: c.w, sh: c.h, ax: c.ax, ay: c.ay, q })));
+      const sprite = (c: Crop): Sprite => { const [w, h] = size(c); return { img: imgs[c.page ?? 0], sx: c.dx, sy: c.dy, sw: w, sh: h, ax: c.ax * c.k, ay: c.ay * c.k, q: q * c.k }; };
+      for (let di = 0; di < rows; di++) frames.push(list.slice(di * n, di * n + n).map((c) => sprite(c.same ?? c)));
       return frames;
     };
     // the walk's stride (the charge and the loaded walks are the same legs): played by distance, feet stay planted
@@ -695,7 +752,7 @@ export class Baker {
 
   /** Frames a unit bake renders, for progress bars: each animation's (twice for one in the air: its shadow too), and its trailing parts'. */
   static frameCount(opts: UnitBakeOptions = {}): number {
-    const own = animsFor(opts).reduce((n, a) => n + (opts.frames?.[a] ?? FRAMES[a]) * (AIR_POSES.has(a) ? 2 : 1), 0) * BAKED_DIRS.length;
+    const own = animsFor(opts).reduce((n, a) => n + (opts.frames?.[a] ?? FRAMES[a]) * (shadowApart(opts, a) ? 2 : 1), 0) * BAKED_DIRS.length;
     return opts.segments?.length ? own + opts.segments.length * Baker.frameCount({ part: true }) : own;
   }
 }
