@@ -8,36 +8,37 @@ import { chromium } from 'playwright-core';
 import { execSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 
-// Each shot: the page to open, the camera zoom, and `go`, run in the page once it has loaded (window.B: helpers below).
+// Each shot: whether it leaves the title's middle clear (for the review sheet), the page to open, the camera zoom, and `go`, run in the page once it has loaded (window.B: helpers below).
 // `go` gives orders, lets the game run, and returns where to look: [x, y] in map tiles.
 export const SHOTS = [
-  { what: 'All three armies round an open middle: Fenfolk left, Wildwelds right, Meadowfolk at the back (the menu banner)', q: 'mode=faceoff&you=fenfolk&foe=wildwelds&third=meadowfolk', zoom: 0.75,
+  { clear: 'Title zone clear: yes', what: 'All three armies round an open middle: Fenfolk left, Wildwelds right, Meadowfolk at the back (the menu banner)', q: 'mode=faceoff&you=fenfolk&foe=wildwelds&third=meadowfolk', zoom: 0.75,
     go: async () => [26, 26] },
-  { what: 'Fenfolk and Meadowfolk charge into each other', q: 'mode=faceoff&you=fenfolk&foe=meadowfolk', zoom: 1.1,
-    go: async () => { await B.clash(1.5); return B.fight(); } },
-  { what: 'All three armies meet in one brawl', q: 'mode=faceoff&you=fenfolk&foe=wildwelds&third=meadowfolk', zoom: 0.9,
+  { clear: 'Title zone clear: no, the clash is in the middle', what: 'Fenfolk and Meadowfolk charge into each other', q: 'mode=faceoff&you=fenfolk&foe=meadowfolk', zoom: 1.1,
     go: async () => { await B.clash(3); return B.fight(); } },
-  { what: 'A Wildweld swarm hits the Meadowfolk line, close up', q: 'mode=faceoff&you=wildwelds&foe=meadowfolk', zoom: 1.4,
-    go: async () => { await B.clash(1); return B.fight(); } },
-  { what: 'A Meadowfolk town at work, five minutes in', q: 'mode=spectate&you=meadowfolk&foe=fenfolk&map=woodlands&ai=hard&skip=300', zoom: 0.9,
+  { clear: 'Title zone clear: no, the brawl spreads across the middle', what: 'All three armies meet in one brawl', q: 'mode=faceoff&you=fenfolk&foe=wildwelds&third=meadowfolk', zoom: 0.9,
+    go: async () => { await B.clash(3); return B.fight(); } },
+  { clear: 'Title zone clear: no, the fight fills the middle', what: 'A Wildweld swarm hits the Meadowfolk line, close up', q: 'mode=faceoff&you=wildwelds&foe=meadowfolk', zoom: 1.3,
+    go: async () => { await B.clash(4); return B.fight(); } },
+  { clear: 'Title zone clear: no, the town fills the strip', what: 'A Meadowfolk town at work, five minutes in', q: 'mode=spectate&you=meadowfolk&foe=fenfolk&map=woodlands&ai=hard&skip=300', zoom: 1.3, side: 0, // (a base sits in a corner of the map: it goes at the top, the field below)
     go: async () => { await B.play(4); return B.base(0); } },
-  { what: 'A Fenfolk marsh camp on the Water Donut', q: 'mode=spectate&you=fenfolk&foe=meadowfolk&map=water-donut&ai=hard&skip=300', zoom: 0.9,
+  { clear: 'Title zone clear: partly, a tower and huts stand in the middle', what: 'A Fenfolk marsh camp on the Water Donut', q: 'mode=spectate&you=fenfolk&foe=meadowfolk&map=water-donut&ai=hard&skip=300', zoom: 1.3, side: 0, // (a base sits in a corner of the map: it goes at the top, the field below)
     go: async () => { await B.play(4); return B.base(0); } },
-  { what: 'A Wildweld nest on the steppe', q: 'mode=spectate&you=wildwelds&foe=fenfolk&map=steppe&ai=hard&skip=300', zoom: 0.9,
-    go: async () => { await B.play(4); return B.base(0); } },
-  { what: 'Battle on The Mesa: Meadowfolk against Wildwelds', q: 'mode=battle&you=meadowfolk&foe=wildwelds&map=mesa&budget=4000', zoom: 0.85, battle: true,
-    go: async () => { const [x, y] = B.middle(1); B.charge(0, x, y); await B.play(22); return B.fight(); } },
-  { what: 'Fliers of all three armies in the air', q: 'mode=faceoff&you=fenfolk&foe=wildwelds&third=meadowfolk', zoom: 1.25,
+  { clear: 'Title zone clear: mostly, the mothers sit left and a few striders at the bottom', what: 'Wildweld mothers and their brood at home in the Proving Grounds', q: 'mode=demo&you=wildwelds', zoom: 1.1,
+    go: async () => { await B.play(2); const [x, y] = B.town(0), [u, v] = B.crowd(0); return [(x + u) / 2, (y + v) / 2]; } },
+  { clear: 'Title zone clear: partly, rock walls cross the middle', what: 'Battle on The Mesa: Meadowfolk against Wildwelds', q: 'mode=battle&you=meadowfolk&foe=wildwelds&map=mesa&budget=4000', zoom: 0.85, battle: true,
+    go: async () => { const [x, y] = B.middle(1); B.charge(0, x, y); for (let i = 0; i < 60 && !B.fighting(); i++) await B.play(0.5); await B.play(2); return B.fight(); } },
+  { clear: 'Title zone clear: partly, the herons reach into the middle', what: 'Fenfolk herons lifting off beside their army', q: 'mode=faceoff&you=fenfolk&foe=wildwelds&third=meadowfolk', zoom: 1.25,
     go: async () => { B.wake(B.fliers()); B.send(B.fliers(), 30, 30); await B.play(5); return B.middleOf(B.fliers().filter((id) => window.world.units.get(id)?.airborne)); } },
-  { what: 'Two champions meet: the biggest Fenfolk and Meadowfolk fighters, close up', q: 'mode=faceoff&you=fenfolk&foe=meadowfolk', zoom: 1.7,
+  { clear: 'Title zone clear: yes, the duel is on the left', what: 'Two champions meet: the biggest Fenfolk and Meadowfolk fighters, close up', q: 'mode=faceoff&you=fenfolk&foe=meadowfolk', zoom: 1.7,
     go: async () => { const a = B.biggest(0), b = B.biggest(1); B.wake([a, b]); B.attack(a, b); B.attack(b, a); for (let i = 0; i < 40 && B.apart(a, b) > 2.5; i++) await B.play(0.5); await B.play(0.6); return B.middleOf([a, b]); } },
-  { what: 'A big fight late in a game on Sunken Temple', q: 'mode=spectate&you=meadowfolk&foe=wildwelds&map=sunken-temple&ai=hard&skip=600', zoom: 0.85,
-    go: async () => { for (let i = 0; i < 12 && !B.fighting(); i++) await B.play(5); return B.fight(); } },
+  { clear: 'Title zone clear: partly, the swarm reaches the middle', what: 'The Wildwelds storm the Proving Grounds fort', q: 'mode=demo&you=wildwelds', zoom: 1,
+    go: async () => { B.charge(0, 45, 26); for (let i = 0; i < 40 && !B.fighting(); i++) await B.play(0.5); await B.play(2); return B.fight(); } },
 ];
 
 // in the page: ways to give orders to any side and to find where to look
 const helpers = () => {
   const w = window.world, units = () => [...w.units.values()];
+  if (window.renderer.opts) window.renderer.opts.damageNumbers = false; // (no floating numbers in a picture)
   const mid = (us) => (us.length ? [us.reduce((a, u) => a + u.x, 0) / us.length, us.reduce((a, u) => a + u.y, 0) / us.length] : [28, 28]);
   window.B = {
     play: (s) => new Promise((ok) => setTimeout(ok, s * 1000)),
@@ -52,6 +53,12 @@ const helpers = () => {
     middle: (p) => mid(w.unitsOf(p)),
     middleOf: (ids) => mid(units().filter((u) => ids.includes(u.id))),
     base: (p) => { const b = w.baseOf(p); return b ? [b.ox + b.spec.size / 2, b.oy + b.spec.size / 2] : mid(w.unitsOf(p)); },
+    town: (p) => { const bs = w.buildingsOf(p); return bs.length ? [bs.reduce((a, b) => a + b.ox + b.spec.size / 2, 0) / bs.length, bs.reduce((a, b) => a + b.oy + b.spec.size / 2, 0) / bs.length] : mid(w.unitsOf(p)); },
+    // where most of an army stands: its unit with the most of its own units near it, and those around it
+    crowd: (p) => {
+      const us = w.unitsOf(p), near = (a) => us.filter((b) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2 < 49);
+      return mid(near(us.reduce((a, b) => (near(b).length > near(a).length ? b : a))));
+    },
     fighting: () => units().filter((u) => u.engage).length >= 8,
     // every army charges the middle of the others; once the fight has started, `secs` more
     clash: async (secs) => {
@@ -95,22 +102,32 @@ const take = async (n) => {
       const ids = [...document.querySelectorAll('[data-add][data-d="1"]')].map((b) => b.dataset.add);
       for (let round = 0; round < 6; round++) for (const id of ids) document.querySelector(`[data-add="${id}"][data-d="1"]:not([disabled])`)?.click();
     });
-    await page.click('[data-go]');
+    await page.evaluate(() => document.querySelector('[data-go]').click());
   }
   await page.waitForFunction(() => document.getElementById('loading')?.style.display === 'none' && window.world, null, { timeout: 900000 });
-  if (shot.battle) { await page.waitForSelector('[data-ready]', { timeout: 60000 }); await page.click('[data-ready]'); }
+  if (shot.battle) { await page.waitForSelector('[data-ready]', { state: 'attached', timeout: 60000 }); await page.evaluate(() => document.querySelector('[data-ready]').click()); }
   await page.addStyleTag({ content: '#hud, #help, #score, #tooltip, #chat, #overlay, #settings, #arena { display: none !important; }' });
   await page.evaluate(helpers);
   await page.evaluate(() => { window.world.isBearer = () => false; }); // (no supply bars over the ammo bearers)
   const at = await page.evaluate(`(${shot.go.toString()})()`);
+  console.log(`  ${n}: looking at ${at.map((v) => v.toFixed(1))}; bodies left per side: ${await page.evaluate(() => window.world.players.map((p) => `${p.name} ${window.world.unitsOf(p.id).length}`).join(', '))}`);
   // hold the moment (speed 0), hide the health bars (full health shows none), then frame it
   // (a candidate's subject goes to one side, `side` of the width from the middle: the title sits in the middle)
   await page.evaluate(([x, y, z, side]) => {
     window.input.speed = 0;
     for (const u of window.world.units.values()) if (u.hp > 0) u.hp = u.stats.maxHp;
-    const cam = window.renderer.cam; cam.zoom = z; cam.centerOn(x, y);
+    window.input.setSelection([]); // (no selection bars)
+    const w = window.world, cam = window.renderer.cam; cam.zoom = z; cam.centerOn(x, y);
+    if (side === 'auto') side = x - y <= (w.grid.width - w.grid.height) / 2 ? -0.3 : 0.3; // (the side toward the middle of the map)
     cam.cx -= (side * cam.width) / z;
-  }, [...at, shot.zoom, n > 0 ? shot.side ?? -0.3 : 0]);
+    // keep the whole picture on the map: step toward its middle while a corner looks past the edge
+    const off = () => [[0, 0], [cam.width, 0], [0, cam.height], [cam.width, cam.height]].some(([sx, sy]) => {
+      const [wx, wy] = cam.toWorld(sx, sy);
+      return wx < 0 || wy < 0 || wx > w.grid.width || wy > w.grid.height;
+    });
+    const mx = (w.grid.width - w.grid.height) * 16, my = (w.grid.width + w.grid.height) * 8;
+    for (let i = 0; i < 40 && off(); i++) { cam.cx += (mx - cam.cx) * 0.08; cam.cy += (my - cam.cy) * 0.08; }
+  }, [...at, shot.zoom, n > 0 ? shot.side ?? 'auto' : 0]);
   await page.waitForTimeout(1500);
   const dir = process.env.OUT ?? (n ? 'docs/review/banners' : null);
   if (dir) mkdirSync(dir, { recursive: true });
@@ -127,12 +144,12 @@ for (const n of which) {
 }
 if (pick === 'sheet') {
   const img = (f) => (existsSync(f) ? `data:image/jpeg;base64,${readFileSync(f).toString('base64')}` : '');
-  const cells = SHOTS.map((s, n) => ({ n, what: s.what, src: img(n ? `docs/review/banners/banner-${String(n).padStart(2, '0')}.jpg` : 'src/assets/menu-bg.jpg') }));
+  const cells = SHOTS.map((s, n) => ({ n, what: s.what, clear: s.clear, src: img(n ? `docs/review/banners/banner-${String(n).padStart(2, '0')}.jpg` : 'src/assets/menu-bg.jpg') }));
   const page = await browser.newPage();
   await page.setViewportSize({ width: 1600, height: 900 });
   await page.setContent(`<body style="margin:0;padding:16px;background:#14120e;color:#eee;font:20px system-ui;display:grid;grid-template-columns:1fr 1fr;gap:18px 16px;width:1568px">
     ${cells.map((c) => `<figure style="margin:0"><img src="${c.src}" style="display:block;width:100%;aspect-ratio:2480/720;background:#333">
-      <figcaption style="padding:6px 2px"><b style="color:#f0d48a">${c.n ? c.n : 'Now'}</b> ${c.what}</figcaption></figure>`).join('')}</body>`);
+      <figcaption style="padding:6px 2px"><b style="color:#f0d48a">${c.n ? c.n : 'Now'}</b> ${c.what}. <i style="color:#b8ab90">${c.clear}.</i></figcaption></figure>`).join('')}</body>`);
   await page.waitForTimeout(500);
   mkdirSync('docs/review/banners', { recursive: true });
   await page.screenshot({ path: 'docs/review/banners/sheet.png', fullPage: true });
