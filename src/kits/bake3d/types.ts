@@ -84,8 +84,12 @@ export interface BuildingState {
   joins?: number;
   /** Which of a wall's looks (its art's `looks`: pieces in a line take them in turn). */
   look?: number;
-  /** A tower throwing (BuildingArt.attack): `t` 0 … 1 through its throw, toward `facing` (radians, map axes). */
-  attack?: { t: number; facing: number };
+  /**
+   * A tower throwing (BuildingArt.attack): `t` 0 … 1 through its throw, toward `facing` (radians, map axes). `still`:
+   * draw it as it stands at `t` without its moving part (an arm, a tentacle, what it holds). The baker draws only the
+   * moving part over that, so a model that leaves `still` out still looks right; it just costs more pixels.
+   */
+  attack?: { t: number; facing: number; still?: boolean };
 }
 
 /** A tower's throw to bake (BuildingArt.attack): how many frames, and where it's out (`from`), lets go and ends a shot (`to`), as `t` 0 … 1. */

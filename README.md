@@ -203,6 +203,7 @@ Only commands travel between players. Each game then simulates the same world in
 |---|---|
 | `?mode=sprites&unit=lynx&anim=attack&facing=3` | Every frame of one animation. |
 | `?mode=sprites&faction=fenfolk` | A faction's roster. |
+| `?mode=throwcheck&faction=wildwelds&building=web-tower` | A tower's throw baked whole beside it baked apart, with their difference and pixel totals. `node scripts/throwcheck.mjs` saves it to `docs/review/`. |
 | `?mode=faceoff&you=fenfolk&foe=meadowfolk&third=wildwelds` | Two or three armies lined up, as in the header image. |
 | `?mode=tutorial&track=wildwelds&lesson=1` | One lesson of an army's track. |
 | `&sounddebug=1` (any mode) | The last sounds played, with ✕ to strike a bad clip. |

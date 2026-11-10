@@ -164,6 +164,8 @@ export class Renderer {
   /** A unit that rests in a squat (its art has 'rise'): whether it's up, and when that last changed (render time). */
   private posture = new Map<number, { up: boolean; at: number; sat: boolean }>();
   private buildingSprites = new Map<number, PixiSprite>();
+  /** A throwing tower's moving part, baked apart from its still look (ThrowArt.under), by building. */
+  private buildingOvers = new Map<number, PixiSprite>();
   private projSprites = new Map<number, PixiSprite>();
   private flagSprite: PixiSprite | null = null;
   /** Your side's work and army rally points (PlayerState.rally), always shown. */
@@ -491,6 +493,7 @@ export class Renderer {
       }
       // the faction supplies the looks; we pick construction stage / damage level
       const art = this.bank.building(b.owner, b.specId);
+      let over: Sprite | undefined; // (a throw's moving part, baked apart: drawn over its still look)
       if (art) {
         // a living building (sim/abilities/living.ts) has no scaffolding: its site already looks like it, just low
         let look = b.spec.living ? buildingSprite(art, true, 1, b.hp, b.maxHp) : buildingSprite(art, b.complete, b.built / b.stats.totalCost, b.hp, b.maxHp);
@@ -504,7 +507,7 @@ export class Renderer {
         if (art.attack && b.complete && b.stats.tower) {
           const tw = b.stats.tower, windup = (b.spec.attack?.windup ?? 0) * tw.cooldown, tick = this.world.tick;
           const thrown = throwFrame(art.attack, b.aimDir, windup, tw.cooldown - windup, b.aim ? (tick - b.aim.tick) * DT : null, b.threwTick >= 0 ? (tick - b.threwTick) * DT : null);
-          if (thrown) look = thrown;
+          if (thrown) { look = thrown.look; over = thrown.over; }
         }
         this.setFrame(sp, look);
         // a living building grows taller (not narrower: a wall piece still meets the ones beside it); a site waiting
@@ -517,6 +520,16 @@ export class Renderer {
       }
       sp.tint = b.complete && b.spec.attack && b.stock.crystal < b.spec.attack.crystalMass ? 0x808080 : 0xffffff; // tower out of ammo
       sp.visible = b.owner === this.viewer || this.explored(b.ox + b.size / 2, b.oy + b.size / 2); // once found, a building stays on the map
+      let ov = this.buildingOvers.get(b.id);
+      if (over && !ov) { ov = new PixiSprite(); sp.parent!.addChild(ov); this.buildingOvers.set(b.id, ov); }
+      if (ov) {
+        ov.visible = !!over && sp.visible;
+        if (over) {
+          this.setFrame(ov, over);
+          ov.position.copyFrom(sp.position); ov.scale.copyFrom(sp.scale); // (anchored where the look is, grown alike)
+          ov.zIndex = sp.zIndex + 1e-3; ov.tint = sp.tint; ov.alpha = sp.alpha;
+        }
+      }
       // your building waiting on supplies plants its faction's "needs supplies" flag at its corner
       if (b.owner === 0 && b.complete && b.queue.length && !b.queue[0].paid) {
         const s = this.bank.wantFlag(b.owner);
@@ -530,6 +543,7 @@ export class Renderer {
     }
     this.wantPool.end();
     for (const [id, sp] of this.buildingSprites) if (!this.world.buildings.has(id)) { sp.destroy(); this.buildingSprites.delete(id); }
+    for (const [id, ov] of this.buildingOvers) if (!this.world.buildings.has(id)) { ov.destroy(); this.buildingOvers.delete(id); }
   }
 
   private syncUnits(alpha: number): void {

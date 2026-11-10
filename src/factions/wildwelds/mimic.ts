@@ -176,7 +176,7 @@ export function webTower(b: ModelBuilder, state?: BuildingState): void {
   // a ring of its side's colour deep among its crystals, low round their feet
   const ring = (i: number): Vec3 => { const a = (i / 24) * Math.PI * 2; return [Math.cos(a) * CRYSTAL_R, 0.3, Math.sin(a) * CRYSTAL_R]; };
   for (let i = 0; i < 24; i++) b.limb(ring(i), ring(i + 1), 0.08, TEAM);
-  if (t === undefined) return;
+  if (t === undefined || state?.attack?.still) return;
   // the tentacle, turned to face its target (its pose is drawn throwing toward +x)
   b.joint([0, 0, 0], [0, -face * (Math.PI / 4), 0], (m) => {
     const { pts, r, hold } = mimicPose(t);

@@ -36,6 +36,6 @@ export async function bakeFaction<U extends { id: string; name: string; model: U
     await new Promise((r) => setTimeout(r, 0));
   }
   baker.dispose();
-  await toBitmaps([art.flag, ...(art.wantFlag ? [art.wantFlag] : []), ...Object.values(art.buildings).flatMap((b) => [...b.construction, b.complete, ...b.damaged, ...(b.joined ?? []).flat(), ...(b.attack?.frames ?? []).flat()])]);
+  await toBitmaps([art.flag, ...(art.wantFlag ? [art.wantFlag] : []), ...Object.values(art.buildings).flatMap((b) => [...b.construction, b.complete, ...b.damaged, ...(b.joined ?? []).flat(), ...(b.attack?.frames ?? []).flat(), ...(b.attack?.under ?? []).flat()])]);
   return art;
 }
