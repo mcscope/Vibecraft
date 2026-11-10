@@ -248,11 +248,12 @@ async function run(g: GameSetup): Promise<void> {
     const ix = lessonIx;
     renderer.cam.centerOn(lesson.look[0], lesson.look[1]);
     input.setSelection(world.unitsOf(HUMAN).filter((u) => u.specId !== world.factionOf(HUMAN).carterId).map((u) => u.id));
-    // the lesson's caption, in the help panel: what to try, and Back / Restart / Next (nothing is checked)
+    // the lesson's caption, in the help panel: what to try, its checklist, and Back / Restart / Next
     const help = document.getElementById('help')!;
     const go = (i: number) => `?mode=tutorial${track ? `&track=${track.id}` : ''}&lesson=${i}`;
     help.classList.add('lesson');
     help.innerHTML = `<b>${track ? `${track.name}, lesson` : 'Lesson'} ${ix + 1} of ${lessons.length}: ${lesson.title}</b>${lesson.text}
+      <ul class="lesson-steps">${(lesson.steps ?? []).map((st) => `<li>${st.text}</li>`).join('')}</ul>
       <div class="lesson-nav">${ix > 0 ? `<a href="${go(ix - 1)}">◀ Back</a>` : '<span></span>'}<a href="${go(ix)}">Restart</a>${ix < lessons.length - 1 ? `<a href="${go(ix + 1)}">Next ▶</a>` : '<a href="./">Finish</a>'}</div>`;
   }
   else if (m === 'demo') {
@@ -319,6 +320,10 @@ async function run(g: GameSetup): Promise<void> {
     const t2 = performance.now();
     minimap.draw(renderer.cam);
     hud.update(dt, input.selected, fps);
+    // a lesson's checklist: each step ticks itself off (and dims) once the world shows it done
+    if (m === 'tutorial' && lesson.steps && world.tick % 5 === 0) {
+      document.querySelectorAll<HTMLElement>('#help .lesson-steps li:not(.done)').forEach((li) => { if (lesson.steps![[...li.parentElement!.children].indexOf(li)].done(world)) li.classList.add('done'); });
+    }
     cartDebug.update(input.alpha, dt);
     // ?debug: each slow frame's breakdown, for scripts/perf.mjs (the time since the last frame, and this frame's parts)
     if (debugPerf && real > 0.1) slowFrames.push({ at: Math.round(now), gap: Math.round(real * 1000), sim: Math.round(t1 - t0), draw: Math.round(t2 - t1), hud: Math.round(performance.now() - t2) });
