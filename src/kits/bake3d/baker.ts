@@ -180,7 +180,7 @@ export function bakedPose(anim: BakedAnim, phase: number, team: TeamColors): Pos
 }
 
 /** The baker's whole-body styles, on top of the model (unless its model draws them itself). */
-function styleBody(body: THREE.Object3D, anim: BakedAnim, phase: number, opts: UnitBakeOptions): void {
+export function styleBody(body: THREE.Object3D, anim: BakedAnim, phase: number, opts: UnitBakeOptions): void {
   // models face +x; a lean is a shear (x, and z, shifted in proportion to height), so its planted feet stay where they
   // are on the ground while the body above leans over them
   const lean = (forward: number, side = 0, squash = 1) => {

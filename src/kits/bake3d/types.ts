@@ -68,6 +68,8 @@ export interface ModelBuilder {
   rock(size: Vec3, at: Vec3, mat: Mat, seed?: number): void;
   /** A glowing faceted crystal of the given length. */
   crystal(length: number, at: Vec3, rot?: Vec3): void;
+  /** Names a point of the body (a hip, a knee): where a printed, poseable figure is jointed (src/kits/print3d). Drawing ignores it. */
+  mark?(name: string, at: Vec3): void;
 }
 
 /** One cross-section of a `loft`: its centre, its half-width (z), how far it rises above the centre and hangs below
