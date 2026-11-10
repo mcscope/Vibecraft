@@ -4,7 +4,8 @@ import type { BiomeArt, BiomeLoader, BuildingArt, FactionArt, Sprite, TeamColors
 import type { World } from '../sim/world';
 import type { FactionSpec } from '../factions/types';
 import { PLAYABLE } from '../factions';
-import { biomeKey, loadPrebaked, teamKey } from '../art/prebaked';
+import { biomeKey, loadPrebaked, loadPrebakedStills, teamKey } from '../art/prebaked';
+import { unitSprite } from '../art/contract';
 import { cacheArt, cachedArt } from '../art/devCache';
 import { loadGpuPage } from './gpuPages';
 
@@ -15,6 +16,31 @@ import { loadGpuPage } from './gpuPages';
  */
 const prebaked = <T>(f: FactionSpec | null, key: string, gpu = false): Promise<T | null> =>
   import.meta.env.PROD && (!f || PLAYABLE.includes(f)) ? loadPrebaked<T>(key, 'baked', gpu ? loadGpuPage : undefined) : Promise.resolve(null);
+
+/** Add these units and buildings to `have`: from the dev cache, or baked now and cached, each on its own. */
+async function bakeInto(f: FactionSpec, team: TeamColors, have: Pick<FactionArt, 'units' | 'buildings'>, ids: string[]): Promise<void> {
+  const key = (id: string) => `${teamKey(f.id, team)}.${id}`, bake: string[] = [];
+  for (const id of ids) {
+    const got = await cachedArt<FactionArt>(f.id, key(id));
+    if (got) { Object.assign(have.units, got.units); Object.assign(have.buildings, got.buildings); } else bake.push(id);
+  }
+  if (!bake.length || !f.art) return;
+  const baked = await f.art(team, undefined, bake);
+  Object.assign(have.units, baked.units); Object.assign(have.buildings, baked.buildings);
+  for (const id of bake) cacheArt(f.id, key(id), { ...baked, units: baked.units[id] ? { [id]: baked.units[id] } : {}, buildings: baked.buildings[id] ? { [id]: baked.buildings[id] } : {} });
+}
+
+/**
+ * Pictures of some of a faction's units in a team's colours, for menus. A build loads just the saved stills; dev
+ * bakes the units asked for (and keeps them for the game).
+ */
+export async function unitStills(f: FactionSpec, team: TeamColors, ids: string[]): Promise<Map<string, Sprite>> {
+  let art: Pick<FactionArt, 'units' | 'buildings'> | null = import.meta.env.PROD && PLAYABLE.includes(f) ? await loadPrebakedStills<FactionArt>(teamKey(f.id, team)) : null;
+  if (!art) { art = { units: {}, buildings: {} }; await bakeInto(f, team, art, ids); }
+  const out = new Map<string, Sprite>();
+  for (const id of ids) { const u = art.units[id]; if (u) out.set(id, u.still ?? unitSprite(u, 'idle', 1, { time: 0 })); }
+  return out;
+}
 
 /** The Wilds' colours (selection rings, minimap dots). */
 export const WILD_COLORS: TeamColors = { primary: '#8a6a3a', secondary: '#d8c08a', dark: '#4a3a20' };
@@ -55,17 +81,7 @@ export class ArtBank {
     const own = (id: string) => f.units.some((u) => u.id === id) || (f.buildings ?? []).some((b) => b.id === id);
     const missing = () => ids.filter((id) => own(id) && !have.units[id] && !have.buildings[id]);
     if (!art || !missing().length) return Promise.resolve();
-    const job = this.queue.then(async () => {
-      const team = this.teams[owner], key = (id: string) => `${teamKey(f.id, team)}.${id}`, bake: string[] = [];
-      for (const id of missing()) {
-        const got = await cachedArt<FactionArt>(f.id, key(id));
-        if (got) { Object.assign(have.units, got.units); Object.assign(have.buildings, got.buildings); } else bake.push(id);
-      }
-      if (!bake.length) return;
-      const baked = await art(team, undefined, bake);
-      Object.assign(have.units, baked.units); Object.assign(have.buildings, baked.buildings);
-      for (const id of bake) cacheArt(f.id, key(id), { ...baked, units: baked.units[id] ? { [id]: baked.units[id] } : {}, buildings: baked.buildings[id] ? { [id]: baked.buildings[id] } : {} });
-    });
+    const job = this.queue.then(() => bakeInto(f, this.teams[owner], have, missing()));
     this.queue = job.catch((e) => console.error('baking', ids, e));
     return job;
   }

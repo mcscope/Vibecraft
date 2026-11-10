@@ -241,6 +241,11 @@ export const carterName = (f: FactionSpec): string => (f.carterId && f.units.fin
 export interface FactionSpec {
   id: string;
   name: string;
+  /** A line or two on who they are and how they fight (the front page shows it). */
+  description?: string;
+  /** How hard they are to learn, and a line on why (the front page shows both, apart from the description). */
+  difficulty?: 'simple' | 'medium' | 'complex';
+  difficultyNote?: string;
   /** Unit that a town center starts with / AI uses as its economy unit. */
   workerId: string;
   /** Auto-produced supply hauler. */

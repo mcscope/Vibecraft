@@ -10,6 +10,7 @@ const teamOf = (params: URLSearchParams) => TEAM_COLORS[+(params.get('team') ?? 
 
 export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
   if (params.get('teams')) return teamsPage(params);
+  if (params.get('faction') && params.get('pose')) return pose(params);
   if (params.get('faction')) return roster(params);
   if (params.get('tunnels')) return tunnels(params.get('tunnels')!, Number(params.get('frames') ?? 30));
   if (params.get('concepts')) return gallery(params.get('concepts')!);
@@ -78,6 +79,53 @@ async function roster(params: URLSearchParams): Promise<void> {
     x += w[i];
   });
   scroller().appendChild(c); // (wider or taller than the window: it scrolls)
+  document.title = 'sprites ready';
+}
+
+/**
+ * ?mode=sprites&faction=<id>&pose=1[&team=0]: the faction posed like a band on an album cover, for the front page.
+ * The heaviest stand at the back, the lightest in front, turned in toward the middle, every other one mid-blow.
+ */
+async function pose(params: URLSearchParams): Promise<void> {
+  const faction = PLAYABLE.find((f) => f.id === params.get('faction'));
+  if (!faction?.art) return;
+  const team = teamOf(params), W = 960, H = 540;
+  // everyone but carts, the young it lays (eggs) and the shells it changes in
+  const skip = new Set([faction.carterId, ...faction.units.flatMap((u) => [...(u.spawns ?? []), u.shell])]);
+  const cast = faction.units.filter((u) => !skip.has(u.id) && u.role !== 'carter').sort((a, b) => b.mass - a.mass);
+  const art = await faction.art(team, undefined, cast.map((u) => u.id));
+  const units = cast.filter((u) => art.units[u.id]);
+  // three rows (two for a small cast): a quarter at the back, the lightest two fifths in front
+  const back = Math.ceil(units.length * 0.25), front = units.length > 5 ? Math.ceil(units.length * 0.4) : units.length - back;
+  const rows = [units.slice(0, back), units.slice(back, units.length - front), units.slice(units.length - front)].filter((r) => r.length);
+  const tallest = Math.max(...units.map((u) => { const s = art.units[u.id].anims.idle.frames[1][0]; return s.sh / s.q; }));
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  c.style.cssText = 'position:fixed;left:0;top:0;z-index:20';
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#12100d'; g.fillRect(0, 0, W, H);
+  const glow = g.createRadialGradient(W / 2, H * 0.42, 0, W / 2, H * 0.42, W * 0.6);
+  glow.addColorStop(0, team.primary); glow.addColorStop(1, 'rgba(18,16,13,0)');
+  g.globalAlpha = 0.55; g.fillStyle = glow; g.fillRect(0, 0, W, H); g.globalAlpha = 1;
+  const floor = g.createLinearGradient(0, H * 0.5, 0, H);
+  floor.addColorStop(0, 'rgba(18,16,13,0)'); floor.addColorStop(1, 'rgba(18,16,13,0.85)');
+  g.fillStyle = floor; g.fillRect(0, 0, W, H);
+  rows.forEach((row, ri) => {
+    const t = rows.length > 1 ? ri / (rows.length - 1) : 1; // 0 at the back, 1 in front
+    const feet = H * (0.64 + 0.3 * t), spread = W * (0.42 + 0.44 * t), scale = ((H * 0.5) / tallest) * (1 + 0.3 * t);
+    // the row's heaviest in the middle, the rest out to either side in turn
+    const order: typeof row = [];
+    row.forEach((u, i) => (i % 2 ? order.unshift(u) : order.push(u)));
+    order.forEach((u, i) => {
+      const x = W / 2 + (order.length > 1 ? (i / (order.length - 1) - 0.5) * spread : 0);
+      const facing = x < W * 0.42 ? 0 : x > W * 0.58 ? 2 : 1; // turned in toward the middle
+      const a = art.units[u.id].anims, blow = (ri + i) % 2 === 0 ? a.attack : undefined;
+      const frames = (blow ?? a.idle).frames, f = frames[facing % frames.length], s = f[blow ? Math.floor(f.length * 0.45) : 0];
+      const k = scale / s.q;
+      g.drawImage(s.img, s.sx, s.sy, s.sw, s.sh, x - s.ax * k, feet - s.ay * k, s.sw * k, s.sh * k);
+    });
+  });
+  document.body.appendChild(c);
   document.title = 'sprites ready';
 }
 

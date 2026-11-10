@@ -4,7 +4,7 @@ import { generateMap, mapSize, Grid, TERRAIN_SAND, TERRAIN_WATER, type Generated
 import { Rng } from './rng';
 import { startStock, startWorkers } from './fairness';
 import { TICK_RATE, type ResourceNode, type World } from './world';
-import type { FactionSpec } from '../factions/types';
+import type { FactionSpec, UnitSpec } from '../factions/types';
 
 export interface Scenario {
   id: string;
@@ -56,6 +56,17 @@ function startInTheField(w: World, owner: number, f: FactionSpec, x: number, y: 
   if (stock.wood > 0) put(0, 2.5, { type: 'wood', amount: stock.wood, shard: false, tree: true });
   if (stock.crystal > 0) put(-2.5, 0, { type: 'crystal', amount: stock.crystal, shard: true, tree: false });
 }
+
+/** Every unit a faction can get (trained at a building, laid or grown into, or its worker), but no carts. */
+export const fieldable = (f: FactionSpec): UnitSpec[] => {
+  const got = new Set([...(f.buildings ?? []).flatMap((b) => b.trains ?? []), ...f.units.flatMap((u) => [...(u.spawns ?? []), ...(u.becomes ?? [])]), f.workerId]);
+  return f.units.filter((u) => got.has(u.id) && u.id !== f.carterId);
+};
+/** The ranks a showcase lines up: everything it can get, grown (not the young it lays, like eggs). */
+const lineup = (f: FactionSpec): UnitSpec[] => {
+  const young = new Set(f.units.flatMap((u) => u.spawns ?? []));
+  return fieldable(f).filter((u) => !young.has(u.id));
+};
 
 /**
  * Proving Grounds: player 0 gets a full army and deep stockpiles; player 1 is a
@@ -116,10 +127,8 @@ export function provingGrounds(): Scenario {
         const built = spot && w.addBuilding(0, b.id, spot[0], spot[1]);
         if (built) built.stock = { food: 1500, wood: 600, crystal: 200 };
       }
-      const trained = new Set((f.buildings ?? []).flatMap((b) => b.trains ?? []));
       let x = 11;
-      for (const u of f.units) {
-        if (!trained.has(u.id) || u.id === f.carterId) continue;
+      for (const u of lineup(f)) {
         const s = w.specOf(0, u.id);
         if (!s) continue;
         const n = u.id === f.workerId ? 4 : u.mass > 100 ? 2 : u.mass > 50 ? 4 : 6;
@@ -158,39 +167,51 @@ export function provingGrounds(): Scenario {
   };
 }
 
+/** Where a faceoff's armies stand: the middle of the back rank, the way it faces (map +x is south-east on screen, +y south-west) and its right. */
+const FACEOFF_SEATS = [
+  { at: [16, 31], fwd: [1, 0], across: [0, 1], facing: 0 }, // left, facing south-east
+  { at: [31, 16], fwd: [0, 1], across: [1, 0], facing: 2 }, // right, facing south-west
+  { at: [18, 18], fwd: [Math.SQRT1_2, Math.SQRT1_2], across: [Math.SQRT1_2, -Math.SQRT1_2], facing: 1 }, // behind them, facing south
+];
+
 /**
- * Faceoff (?mode=faceoff, a showcase): the Proving Grounds field with two armies in its ranks, player 0 on the
- * left facing south-east and player 1 mirrored on the right facing south-west, each everything it can train.
+ * Faceoff (?mode=faceoff, a showcase): the Proving Grounds field with two or three armies in ranks, each everything
+ * it can field: player 0 on the left, player 1 on the right, a third behind and between them.
  */
 export function faceoff(): Scenario {
-  const pg = provingGrounds();
+  const pg = provingGrounds(), DEPTH = 9;
   return {
     id: 'faceoff',
     victory: false,
-    inertPlayers: [0, 1],
+    inertPlayers: [0, 1, 2],
     wildlife: false,
     map: (seed) => pg.map(seed),
     setup(w) {
-      for (const owner of [0, 1]) {
-        const f = w.factionOf(owner);
-        const trained = new Set((f.buildings ?? []).flatMap((b) => b.trains ?? []));
-        // ranks one behind another along the way it faces (map +x is south-east on screen, +y south-west);
-        // player 1 is the same layout mirrored across the diagonal
-        let along = 10;
-        for (const u of f.units) {
-          if (!trained.has(u.id) || u.id === f.carterId) continue;
+      FACEOFF_SEATS.forEach((seat, owner) => {
+        if (!w.players[owner] || w.players[owner].neutral) return;
+        // ranks one behind another; an army deeper than DEPTH tiles starts another column beside the first
+        const cols: Array<{ w: number; ranks: Array<{ id: string; n: number; gap: number; d: number }> }> = [{ w: 0, ranks: [] }];
+        let d = 0;
+        for (const u of lineup(w.factionOf(owner))) {
           const s = w.specOf(owner, u.id);
           if (!s) continue;
-          const n = u.id === f.workerId ? 4 : u.mass > 100 ? 2 : u.mass > 50 ? 4 : 6;
-          const gap = s.stats.radius * 2 + 0.5;
-          for (let i = 0; i < n; i++) {
-            const across = 25 + (i - (n - 1) / 2) * gap;
-            if (owner === 0) w.spawnAt(0, u.id, along, across, 0);
-            else w.spawnAt(1, u.id, across, along, 2);
-          }
-          along += Math.max(1.4, gap);
+          const n = u.id === w.factionOf(owner).workerId ? 4 : u.mass > 100 ? 2 : u.mass > 50 ? 4 : 6;
+          const gap = s.stats.radius * 2 + 0.5, step = Math.max(1.4, gap);
+          if (d > 0 && d + step > DEPTH) { cols.push({ w: 0, ranks: [] }); d = 0; }
+          const col = cols[cols.length - 1];
+          col.ranks.push({ id: u.id, n, gap, d });
+          col.w = Math.max(col.w, n * gap);
+          d += step;
         }
-      }
+        let left = -(cols.reduce((a, c) => a + c.w, 0) + cols.length - 1) / 2;
+        for (const col of cols) {
+          for (const r of col.ranks) for (let i = 0; i < r.n; i++) {
+            const c = left + col.w / 2 + (i - (r.n - 1) / 2) * r.gap;
+            w.spawnAt(owner, r.id, seat.at[0] + seat.fwd[0] * r.d + seat.across[0] * c, seat.at[1] + seat.fwd[1] * r.d + seat.across[1] * c, seat.facing);
+          }
+          left += col.w + 1;
+        }
+      });
     },
   };
 }

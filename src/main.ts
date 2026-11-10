@@ -18,6 +18,7 @@ import { Lockstep, LocalInput, LoopbackTransport, type CommandSource, type Trans
 import { NetTransport } from './net/relayClient';
 import type { OnlineGame } from './net/online';
 import { openLobby } from './ui/lobby';
+import { showArmy } from './ui/armyCard';
 import { showScore } from './ui/scoreScreen';
 import { mountChat } from './ui/chat';
 import { TEAM_COLORS } from './render/artbank';
@@ -33,8 +34,10 @@ import { mountSettingsDialog, onSettings, settings } from './ui/settings';
 
 type Mode = 'demo' | 'skirmish' | 'spectate' | 'online' | 'faceoff' | 'tutorial' | 'battle';
 const params = new URLSearchParams(location.search);
-/** ?mode=tutorial: which lesson (&lesson=N, from 0). */
-const lessonIx = Math.max(0, Math.min(LESSONS.length - 1, +(params.get('lesson') ?? 0) || 0)), lesson = LESSONS[lessonIx];
+/** ?mode=tutorial: every lesson, or one army's own track (&track=<faction>: the lessons that play it); and which one (&lesson=N, from 0). */
+const track = PLAYABLE.find((f) => f.id === params.get('track') && LESSONS.some((l) => l.you === f));
+const lessons = track ? LESSONS.filter((l) => l.you === track) : LESSONS;
+const lessonIx = Math.max(0, Math.min(lessons.length - 1, +(params.get('lesson') ?? 0) || 0)), lesson = lessons[lessonIx];
 // Seed choice happens outside the sim, so Math.random is fine here.
 const seed = Number(params.get('seed') ?? Math.floor(Math.random() * 1e9));
 
@@ -48,7 +51,11 @@ for (const sel of menu.querySelectorAll<HTMLSelectElement>('[data-pick]')) {
   const which = sel.dataset.pick as 'you' | 'foe';
   sel.innerHTML = PLAYABLE.map((f) => `<option value="${f.id}">${f.name}</option>`).join('');
   sel.value = params.get(which) ?? picked[which] ?? (which === 'foe' && PLAYABLE[1] ? PLAYABLE[1].id : PLAYABLE[0].id);
-  sel.addEventListener('change', () => { picked[which] = sel.value; try { localStorage.setItem(PICK_KEY, JSON.stringify(picked)); } catch { /* private mode */ } });
+  // under each pick: who that army is, and its units in that side's colours
+  const card = menu.querySelector<HTMLElement>(`[data-army="${which}"]`)!;
+  const show = () => showArmy(card, PLAYABLE.find((f) => f.id === sel.value) ?? PLAYABLE[0], TEAM_COLORS[which === 'you' ? 0 : 1]);
+  sel.addEventListener('change', () => { picked[which] = sel.value; try { localStorage.setItem(PICK_KEY, JSON.stringify(picked)); } catch { /* private mode */ } show(); });
+  if (!params.get('mode')) show();
 }
 const mapSel = menu.querySelector<HTMLSelectElement>('[data-map]')!;
 mapSel.innerHTML = MAPS.map((m) => `<option value="${m.id}" title="${m.description}">${m.name}</option>`).join('');
@@ -104,7 +111,7 @@ async function start(m: Mode): Promise<void> {
   const world = m === 'tutorial'
     ? tutorialWorld(lesson, seed)
     : m === 'faceoff'
-    ? new World({ seed, scenario: faceoff(), players: [{ name: pick('you').name, faction: pick('you') }, { name: pick('foe').name, faction: pick('foe') }] })
+    ? new World({ seed, scenario: faceoff(), players: [pick('you'), pick('foe'), ...PLAYABLE.filter((f) => f.id === params.get('third'))].map((faction) => ({ name: faction.name, faction })) }) // (&third=<faction>: a third army)
     : m === 'demo'
     ? new World({ seed, scenario: provingGrounds(), players: [{ name: 'You', faction: pick('you') }, { name: 'Training Grounds', faction: training }] })
     : new World({ seed, scenario: skirmish(mapSel.value), players: [{ name: m === 'spectate' ? pick('you').name : 'You', faction: pick('you') }, { name: pick('foe').name, faction: pick('foe') }] });
@@ -116,7 +123,7 @@ async function start(m: Mode): Promise<void> {
     mode: m, world, me: 0, transport: new LoopbackTransport(), delay: 2,
     sources: (local) => {
       const s: CommandSource[] = m === 'spectate' ? ais : m === 'skirmish' ? [local, ais[1]] : [local];
-      if (m === 'demo' || m === 'faceoff' || m === 'tutorial') s.push({ player: 1, poll: () => [] }); // the dummies never act (a faceoff just stands; a lesson's foes do only what it set up)
+      if (m === 'demo' || m === 'faceoff' || m === 'tutorial') for (let p = 1; p < world.players.length; p++) if (!world.players[p].neutral) s.push({ player: p, poll: () => [] }); // the dummies never act (a faceoff just stands; a lesson's foes do only what it set up)
       return s;
     },
   });
@@ -234,7 +241,7 @@ async function run(g: GameSetup): Promise<void> {
 
   // a pitched battle opens on deployment: the world holds still until Ready
   const deploy = m === 'battle' ? new BattleDeploy(world, renderer, canvas, input.rs, (ids) => input.setSelection(ids), () => { if (battleAI) battleAI.started = true; }) : null;
-  if (m === 'faceoff') renderer.cam.centerOn(25, 25);
+  if (m === 'faceoff') renderer.cam.centerOn(23.5, 23.5);
   else if (m === 'battle') { /* (the deploy step framed the camera) */ }
   else if (m === 'tutorial') {
     const ix = lessonIx;
@@ -242,10 +249,10 @@ async function run(g: GameSetup): Promise<void> {
     input.setSelection(world.unitsOf(HUMAN).filter((u) => u.specId !== world.factionOf(HUMAN).carterId).map((u) => u.id));
     // the lesson's caption, in the help panel: what to try, and Back / Restart / Next (nothing is checked)
     const help = document.getElementById('help')!;
-    const go = (i: number) => `?mode=tutorial&lesson=${i}`;
+    const go = (i: number) => `?mode=tutorial${track ? `&track=${track.id}` : ''}&lesson=${i}`;
     help.classList.add('lesson');
-    help.innerHTML = `<b>Lesson ${ix + 1} of ${LESSONS.length}: ${lesson.title}</b>${lesson.text}
-      <div class="lesson-nav">${ix > 0 ? `<a href="${go(ix - 1)}">◀ Back</a>` : '<span></span>'}<a href="${go(ix)}">Restart</a>${ix < LESSONS.length - 1 ? `<a href="${go(ix + 1)}">Next ▶</a>` : '<a href="./">Finish</a>'}</div>`;
+    help.innerHTML = `<b>${track ? `${track.name}, lesson` : 'Lesson'} ${ix + 1} of ${lessons.length}: ${lesson.title}</b>${lesson.text}
+      <div class="lesson-nav">${ix > 0 ? `<a href="${go(ix - 1)}">◀ Back</a>` : '<span></span>'}<a href="${go(ix)}">Restart</a>${ix < lessons.length - 1 ? `<a href="${go(ix + 1)}">Next ▶</a>` : '<a href="./">Finish</a>'}</div>`;
   }
   else if (m === 'demo') {
     renderer.cam.centerOn(22, 26);

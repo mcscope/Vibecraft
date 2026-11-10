@@ -1126,6 +1126,9 @@ export const buildings: Array<BuildingSpec & { model: BuildingModel; looks?: num
 export const wildwelds: FactionSpec = {
   id: 'wildwelds',
   name: 'Wildwelds',
+  description: 'A living swarm of insectile larvae, who evolve and grow into ferocious beasts.',
+  difficulty: 'complex',
+  difficultyNote: 'No buildings creates a unique production system in an RTS. Steep learning curve.',
   workerId: 'mother1', // it starts with one r1 mother, in the field (no buildings)
   startWorkers: 1,
   units,

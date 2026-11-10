@@ -6,7 +6,7 @@ import type { BuildingSpec, FactionSpec, UnitSpec } from '../factions/types';
 import { derive } from './physics';
 import { isUnderfoot } from './abilities/underfoot';
 import { battleMap, inZone, intoZone, zoneCenter } from './battleMaps';
-import type { Scenario } from './scenarios';
+import { fieldable, type Scenario } from './scenarios';
 import { TICK_RATE, type World } from './world';
 import type { Command } from './commands';
 
@@ -16,10 +16,7 @@ export type Army = Record<string, number>;
 export interface Block { specId: string; n: number; x: number; y: number }
 
 /** The units a side can draft: anything that fights (workers too) that it can get (trained, laid or grown into), but no carts or bearers. */
-export const draftable = (f: FactionSpec): UnitSpec[] => {
-  const trained = new Set([...(f.buildings ?? []).flatMap((b) => b.trains ?? []), ...f.units.flatMap((u) => [...(u.spawns ?? []), ...(u.becomes ?? [])]), f.workerId]);
-  return f.units.filter((u) => u.attack && trained.has(u.id) && u.id !== f.carterId && u.role !== 'carter' && !u.bearer);
-};
+export const draftable = (f: FactionSpec): UnitSpec[] => fieldable(f).filter((u) => u.attack && u.role !== 'carter' && !u.bearer);
 
 /** What a supply camp holds: food for the hungry and crystal for throwers to restock from. */
 export const CAMP_STOCK = { food: 100, crystal: 100 };

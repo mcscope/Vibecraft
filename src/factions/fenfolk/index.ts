@@ -480,6 +480,9 @@ const techs: TechSpec[] = [
 export const fenfolk: FactionSpec = {
   id: 'fenfolk',
   name: 'The Fenfolk',
+  description: 'Frog-folk from deep in the marsh. Large bog creatures, herons and toads, reinforce the armies of little fenling worker-fighters.',
+  difficulty: 'medium',
+  difficultyNote: 'Heavy micro, and a tricky balance of economy and military.',
   workerId: 'fenling',
   townCenterId: 'stilt-hall',
   units,

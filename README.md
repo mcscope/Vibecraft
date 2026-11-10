@@ -152,7 +152,7 @@ npm run build:fast   # production build, art baked in the browser
 **Dev pages.**
 - `?mode=sprites&unit=lynx&anim=attack&facing=3` shows every frame of one animation.
 - `?mode=sprites&faction=fenfolk` shows a faction's roster.
-- `?mode=faceoff&you=fenfolk&foe=meadowfolk` lines up two armies, as in the header image.
+- `?mode=faceoff&you=fenfolk&foe=meadowfolk&third=wildwelds` lines up two or three armies, as in the header image.
 - `&sounddebug=1` (any mode) lists the last sounds played, with ✕ to strike a bad clip.
 - `/voicelab/index.html` sorts recorded clips into unit voices and combat sounds. `npm run voices` imports its newest saved labels into `public/voices/`.
 

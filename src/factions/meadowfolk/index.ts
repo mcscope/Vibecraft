@@ -441,6 +441,9 @@ export const units: MeadowUnit[] = [villager, slinger, maceman, pikeman, lynx, h
 export const meadowfolk: FactionSpec = {
   id: 'meadowfolk',
   name: 'The Meadowfolk',
+  description: 'The most traditional army: farmers and knights. They fight with lance, mace, cavalry and siege.',
+  difficulty: 'simple',
+  difficultyNote: 'Automatic carts simplify resource management. Most like a traditional RTS.',
   workerId: 'villager',
   carterId: 'mule',
   townCenterId: 'town-center',
