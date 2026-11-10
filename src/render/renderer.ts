@@ -72,9 +72,10 @@ export function unitFrame(u: Unit): { anim: ArtAnim } & FrameTime {
       // (a hopper whose bound-blow has just landed is still 'attacking' for the rest of that tick: it's bounding on)
       if (u.stats.gait && u.swing <= 0 && !u.blow) return { anim: Math.hypot(u.vx, u.vy) > u.stats.speed * 1.15 ? 'charge' : 'walk', progress: u.stride };
       // (a hopper striking in the air: its bound is the blow, played over the bound, down at the landing)
-      if (u.blow?.dur && u.stats.gait) { // (its bound is the blow: crouched for its `wait`, the art's first 0.35, then the
-        // bound itself, played by how far through the air it really is, so the art's arc is the sim's)
-        const b = u.blow, g = u.stats.gait, t = b.dur! - u.swing, w = b.wait ?? 0, up = (1 - g.hop) * (2 / 3);
+      if (u.stats.gait && (u.blow?.dur || u.strideMul > 0)) { // (its bound is the blow: crouched for its `wait`, the art's
+        // first 0.35, then the bound itself, played by how far through the air it really is, so the art's arc is the sim's;
+        // struck in the air, it plays on to the landing)
+        const b = u.blow ?? { dur: u.swing, wait: 0 }, g = u.stats.gait, t = b.dur! - u.swing, w = b.wait ?? 0, up = (1 - g.hop) * (2 / 3);
         const air = u.strideMul > 0 ? Math.min(1, Math.max(0, (u.stride - up) / g.hop)) : t < w ? 0 : 1;
         return { anim: 'slam', progress: Math.min(0.999, t < w ? 0.35 * (t / Math.max(DT, w)) : 0.35 + 0.65 * air) };
       }
