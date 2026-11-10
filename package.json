@@ -16,7 +16,9 @@
     "arena": "vite-node scripts/arena.ts",
     "aimatch": "vite-node scripts/aiMatch.ts",
     "aibatch": "vite-node scripts/aiBatch.ts",
-    "ktx2": "node scripts/ktx2.mjs dist/baked"
+    "ktx2": "node scripts/ktx2.mjs dist/baked",
+    "stl": "vite-node scripts/stl.ts --",
+    "stl:sheet": "node scripts/stl-sheet.mjs"
   },
   "devDependencies": {
     "@types/three": "^0.169.0",

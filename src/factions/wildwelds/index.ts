@@ -836,6 +836,7 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
     c.loft([[-0.2, 0.09, 0.08, 0.08, 0.2], [-0.08, 0.17, 0.15, 0.13, 0.5], [0.06, 0.16, 0.15, 0.12, 0.5], [0.16, 0.1, 0.1, 0.08, 0.3], [0.22, 0.05, 0.05, 0.05, 0]]
       .map(([x, w, u, d, keel]) => ({ at: [x, y0, 0] as V3, w, up: u, down: d, keel })), under);
     const detail = o.detail ?? 1; // (lower tiers: simpler, fewer plates, spines and spurs)
+    c.mark?.('thoraxBack', [-0.2, y0, 0]); c.mark?.('thoraxFront', [0.22, y0, 0]); // (its spine, for a printed figure)
     // (the plate over her thorax: in her side's colour on the smallest; on the bigger ones a smaller plate of it over
     // the front of the thorax, up by her neck)
     c.loft([[-0.18, 0.1, 0.1], [-0.06, 0.18, 0.17], [0.08, 0.17, 0.16], [0.18, 0.08, 0.1]].map(([x, w, u]) => ({ at: [x, y0 + 0.01, 0] as V3, w: detail < 0.5 ? w * 1.4 : w, up: u, down: 0.03, flat: detail < 0.5 ? 0.6 : 0.3 })), detail < 0.5 ? { ...TEAM, tex: 'leather' } : plate); // (on the smallest a frill, wider than her thorax)
@@ -866,6 +867,7 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
     c.joint(abAt, [0, 0, pitch + layDip + (walking ? Math.sin(t * 2) * 0.03 : 0)], (abs) => abs.joint([0, 0, 0], [0, 0, 0], (ab) => {
       const g = 1 + (lay > 0.3 && lay < 0.85 ? Math.sin(lay * Math.PI * 8) * 0.035 : 0); // (laying, it pulses)
       ab.loft(shape.map(([x, w, up, down, keel]) => ({ at: centre(x, up), w: w * g, up: up * g, down: down * g, keel })), under);
+      for (const [name, x, up] of [['abdomen', 0, 0], ['abdomenMid', -0.45, 0.25], ['abdomenTip', -0.88, 0.06]] as const) ab.mark?.(name, centre(x, up));
       for (const [from, to] of (detail > 0.5 ? [[0, 3], [2, 5], [4, 6]] : [[0, 3], [3, 6]]) as Array<[number, number]>) {
         ab.loft(shape.slice(from, to + 1).map(([x, w, up, , keel], i, all) => {
           const end = i === 0 || i === all.length - 1 ? 0.6 : 1; // (each plate's ends tuck in)
@@ -896,7 +898,8 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
       const at: V3 = [from[0] + (to[0] - from[0]) * k, from[1] + (to[1] - from[1]) * k + 0.06, 0];
       c.cone(0.018, 0.06, at, plate, [0, 0, 0.5], 4);
     }
-    c.joint(head, [0, 0, -0.5 * jab], (h) => motherHead(h, o.crest ?? 1, headMat, under)); // (the snout tipped down into it)
+    c.joint(head, [0, 0, -0.5 * jab], (h) => { motherHead(h, o.crest ?? 1, headMat, under); h.mark?.('snout', [0.36, -0.035, 0]); h.mark?.('crest', [-0.5 * (o.crest ?? 1), 0.09 * (o.crest ?? 1), 0]); }); // (the snout tipped down into it)
+    for (const [name, at] of [['neck', [0.14, y0 + 0.05, 0]], ['neckMid', mid], ['head', head]] as const) c.mark?.(name, at as V3);
     if (give >= 0 && give < 0.92) c.sphere([0.06, 0.05, 0.06], [head[0] + 0.16, Math.max(0.05, head[1] - 0.06 - 0.25 * Math.max(0, give - 0.4)), 0], { color: '#a83a4a', tex: 'skin', rough: 0.5 }); // the food, set down
     // four legs, all off the central thorax: the great hind pair just behind its middle, under the arched abdomen's
     // weight, the forelegs just ahead; her weight balanced between them
@@ -908,6 +911,8 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
       const foot = walking ? footAt(rest, ph, 0.12, 0.06) : rest;
       const ankle: V3 = [foot[0] + ankleRest[0] - rest[0], foot[1] + ankleRest[1], foot[2] + ankleRest[2] - rest[2]];
       const knee = jointBetween(hip, ankle, span(hip, kneeRest), span(kneeRest, ankleRest), [0.3, 1, z]);
+      const sideName = z > 0 ? 'L' : 'R'; // (its joints, for a poseable printed figure: src/kits/print3d)
+      for (const [name, at] of [['hip', hip], ['knee', knee], ['ankle', ankle], ['foot', foot]] as const) c.mark?.(name + sideName, at);
       // shaped, not pipes: a thigh swelling with muscle and tapering to the knee, a long flattened shin with a ridge
       // and a spur, knobbed joints, a clawed foot
       shapedLimb(c, hip, knee, 0.1 * lk * lk, [0.6, 1 + 0.15 * lk, 1 + 0.35 * lk, 1 + 0.1 * lk, 0.7, 0.45], legMat, // (small legs: slim, without the great thigh's bulge)
@@ -922,6 +927,7 @@ function motherT3(b: ModelBuilder, p: Pose, mass: number, o: MotherForm = {}): v
       const fhip: V3 = [0.1, y0 - 0.06, z * 0.12], fkRest: V3 = [0.1 + 0.14 * fo, y0 + 0.02 + 0.3 * cr * (1 - (1 - fo) * 2.5), z * 0.34 * (1 + (sp - 1) * fo)], frest: V3 = [0.1 + 0.26 * fo, 0, z * 0.4 * (1 + (sp - 1) * fo)];
       const ffoot = walking ? footAt(frest, ph + 0.5, 0.12, 0.05) : frest;
       const fk = jointBetween(fhip, ffoot, span(fhip, fkRest), span(fkRest, frest), [0.5, 1, z]);
+      for (const [name, at] of [['fhip', fhip], ['fknee', fk], ['ffoot', ffoot]] as const) c.mark?.(name + sideName, at);
       shapedLimb(c, fhip, fk, 0.07 * lk, [0.6, 1.15, 1.25, 0.95, 0.55], legMat, { flat: 0.35, up: [0, 0, z] });
       c.sphere(0.04 * lk, fk, legMat);
       shapedLimb(c, fk, ffoot, 0.05 * lk, [0.7, 1.0, 0.85, 0.6, 0.4], legMat, { flat: 0.7, keel: 0.6, up: [1, 0, 0] });
@@ -1071,11 +1077,14 @@ function gHopper(b: ModelBuilder, p: Pose, gait = HOPPER_GAIT): void {
       }
       bd.loft([[0.54, 0.25, 0.25, 0.23], [0.62, 0.26, 0.26, 0.24], [0.68, 0.2, 0.2, 0.18]].map(([x, w, u, d]) => ({ at: [x * L, 0, 0] as V3, w: w * W * sz, up: u * W * sy, down: d * W * sy, flat: 0.5 })), edge); // the blunt boss
       bd.crystal(0.24, [0.7 * L, 0, 0], [0, 0, -Math.PI / 2]); // its crystal, capping the boss, point forward
+      bd.mark?.('tail', [-0.85 * L, lag(-0.85 * L), 0]); bd.mark?.('nose', [0.7 * L, 0, 0]); // (its spine, for a printed figure)
       for (const [y, z] of [[0.1, 0.1], [0.1, -0.1], [-0.08, 0.1], [-0.08, -0.1]] as const) bd.crystal(0.09, [0.66 * L, y * W * sy, z * W * sz], [z * 2.5, 0, -Math.PI / 2 + y * 1.5]); // and a ring of smaller ones round it
     });
     // the one leg: a long lean thigh from its haunch, its knee forward, a long shin, the ankle back, a broad foot
     const foot: V3 = [footX, footY, 0], ankle: V3 = [foot[0] - 0.16, foot[1] + 0.22, 0];
     const knee = jointBetween(hip, ankle, 0.76, 0.8, [1, 0.35, 0]); // (long legs: long bounds)
+    // (its joints, for a poseable printed figure: src/kits/print3d)
+    for (const [name, at] of [['hip', hip], ['knee', knee], ['ankle', ankle], ['foot', foot], ['toe', [foot[0] + 0.21, foot[1], 0]], ['toeL', [foot[0] + 0.16, foot[1], 0.18]], ['toeR', [foot[0] + 0.16, foot[1], -0.18]], ['heel', [foot[0] - 0.17, foot[1] + 0.05, 0]]] as const) c.mark?.(name, [...at]);
     c.sphere([0.11, 0.09, 0.11], [hip[0], hip[1] + 0.03, 0], plate); // the haunch, under the ram
     shapedLimb(c, hip, knee, 0.085, [1.2, 1.35, 1.2, 0.9, 0.7], leg, { flat: 0.2 });
     c.sphere(0.06, knee, edge);

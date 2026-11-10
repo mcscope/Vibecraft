@@ -115,12 +115,24 @@ async function exportArticulated(id: string, dir: string): Promise<void> {
   const plateOk = check.watertight && check.oriented && !check.degenerate && check.shells === fig.parts.length;
   console.log(`${lay}: ${fig.parts.length} parts laid out, ${fmt(check).replace(/solid OK|PROBLEM.*?\)/, plateOk ? 'plate OK' : 'PLATE PROBLEM')} [${((Date.now() - t0) / 1000).toFixed(1)} s]`);
   reports.push({ file: lay, unit: u.id, pose: 'articulated', anim: spec.pose.anim, phase: spec.pose.phase, armed: spec.pose.armed ?? true, air: false, base: !!spec.baseOn, mmPerUnit: spec.mmPerUnit, scale: 'given', label: `${u.name}: poseable figure, ${fig.parts.length} parts on one plate, ${check.size.map((x) => x.toFixed(0)).join('x')} mm at ${spec.mmPerUnit} mm/m, ${check.triangles} tris`, size: check.size, check, warnings: [...fig.notes, ...(plateOk ? [] : ['plate is not clean'])] });
+  // (all the parts in place, as posed: for looking at, not printing)
+  const together = w.Manifold.compose(fig.assembled), tb = together.boundingBox(), shown = `${u.id}-articulated-assembled.stl`;
+  let overlap = 0;
+  fig.assembled.forEach((a, i) => fig.assembled.slice(i + 1).forEach((b, k) => {
+    const v = a.intersect(b).volume();
+    overlap += v;
+    if (v > 0.05) console.log(`  (${fig.parts[i].name} and ${fig.parts[i + 1 + k].name} overlap by ${v.toFixed(2)} mm3)`);
+  }));
+  write(dir, shown, together.translate([-(tb.min[0] + tb.max[0]) / 2, -(tb.min[1] + tb.max[1]) / 2, -tb.min[2]]));
+  console.log(`  ${shown}: the parts in place (to look at); parts overlap by ${overlap.toFixed(2)} mm3`);
+  reports.push({ file: shown, unit: u.id, pose: 'articulated', part: 'assembled', anim: spec.pose.anim, phase: spec.pose.phase, armed: true, air: false, base: !!spec.baseOn, mmPerUnit: spec.mmPerUnit, scale: 'given', label: `${u.name}: the poseable figure put together (a preview, not for printing); parts overlap ${overlap.toFixed(1)} mm3`, size: [], check: checkMesh(readStl(toStl(together))), warnings: overlap > 0.5 ? ['parts overlap'] : [] });
   for (const p of fig.parts) {
     const file = `${u.id}-articulated-${p.name}.stl`, c = write(dir, file, p.solid);
     console.log(`  ${file}: ${fmt(c)}${p.note ? ' | ' + p.note : ''}`);
     reports.push({ file, unit: u.id, pose: 'articulated', part: p.name, anim: spec.pose.anim, phase: spec.pose.phase, armed: spec.pose.armed ?? true, air: false, base: p.name === spec.baseOn, mmPerUnit: spec.mmPerUnit, scale: 'given', label: `${u.name}: part '${p.name}'${p.note ? ` (${p.note})` : ''}, ${c.size.map((x) => x.toFixed(0)).join('x')} mm, ${c.triangles} tris`, size: c.size, check: c, warnings: ok(c) ? [] : ['not a clean solid'] });
   }
-  console.log(`  joints: ${fig.joints.map((j) => `${j.name} ball ${(2 * j.ball).toFixed(1)} mm, neck ${(2 * j.neck).toFixed(1)} mm, wall ${j.wall.toFixed(1)} mm`).join('; ')}`);
+  for (const note of fig.notes) console.log(`  note: ${note}`);
+  console.log(`  joints: ${fig.joints.map((j) => `${j.name} ball ${(2 * j.ball).toFixed(1)} mm, neck ${(2 * j.neck).toFixed(1)} mm, wall ${j.wall.toFixed(1)} mm, snap ${j.lip.toFixed(2)} mm`).join('; ')}`);
 }
 
 const [what, ...rest] = args;

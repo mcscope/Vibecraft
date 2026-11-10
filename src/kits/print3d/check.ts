@@ -41,11 +41,34 @@ export function collapseShortEdges(pos: Float64Array, tris: Uint32Array, eps = 1
   return { pos: Float64Array.from(P), tris: Uint32Array.from(T.filter((_, i) => alive[Math.floor(i / 3)])), collapsed };
 }
 
+/**
+ * Where two parts of a surface only touch (a pinch: two corners at one point, as a cut through a joint can leave),
+ * an STL can't tell them apart. Each such corner is drawn back into its own side by a fraction of a micron.
+ */
+export function separateTouching(pos: Float64Array, tris: Uint32Array, by = 3e-4): number {
+  const key = (i: number) => `${Math.fround(pos[i * 3])},${Math.fround(pos[i * 3 + 1])},${Math.fround(pos[i * 3 + 2])}`;
+  const seen = new Map<string, number[]>(), used = new Set(tris);
+  for (const i of used) (seen.get(key(i)) ?? seen.set(key(i), []).get(key(i))!).push(i);
+  const dup = [...seen.values()].filter((g) => g.length > 1).flat();
+  if (!dup.length) return 0;
+  const normal = new Map<number, number[]>(dup.map((i) => [i, [0, 0, 0]]));
+  for (let t = 0; t < tris.length; t += 3) {
+    const [a, b, c] = [tris[t], tris[t + 1], tris[t + 2]];
+    if (!normal.has(a) && !normal.has(b) && !normal.has(c)) continue;
+    const u = [0, 1, 2].map((k) => pos[b * 3 + k] - pos[a * 3 + k]), v = [0, 1, 2].map((k) => pos[c * 3 + k] - pos[a * 3 + k]);
+    const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    for (const i of [a, b, c]) { const m = normal.get(i); if (m) for (let k = 0; k < 3; k++) m[k] += n[k]; }
+  }
+  for (const [i, m] of normal) { const l = Math.hypot(...m) || 1; for (let k = 0; k < 3; k++) pos[i * 3 + k] -= (m[k] / l) * by; }
+  return dup.length;
+}
+
 /** A solid's triangles as binary STL (millimetres; Z up as the solid stands), its micro-edges collapsed. */
 export function toStl(m: Manifold, header = 'VibeCraft print'): Uint8Array {
   const mesh = m.getMesh(), n0 = mesh.numProp, raw = new Float64Array((mesh.vertProperties.length / n0) * 3);
   for (let i = 0; i < raw.length / 3; i++) for (let c = 0; c < 3; c++) raw[i * 3 + c] = mesh.vertProperties[i * n0 + c];
   const clean = collapseShortEdges(raw, mesh.triVerts);
+  separateTouching(clean.pos, clean.tris);
   const n = 3, P = clean.pos, T = clean.tris, count = T.length / 3;
   const buf = new ArrayBuffer(84 + count * 50), dv = new DataView(buf);
   const head = new TextEncoder().encode(header.slice(0, 79));

@@ -86,12 +86,12 @@ const mat = (m: THREE.Matrix4) => Array.from(m.elements) as unknown as import('m
 /**
  * Set a standing solid (Y up, ground at y = 0) flat on the ground: whatever reaches the ground (or its lowest point,
  * if nothing does) stands on a flat pad, its own outline `flat` mm up, run straight down. A foot keeps its height:
- * nothing is shaved off it. Anything below the ground is cut away.
+ * nothing is shaved off it. Anything below the ground is cut away. (`ground`: where the ground is, if not its lowest point or 0.)
  */
-export function flatten(w: ManifoldToplevel, m: Manifold, flat: number): Manifold {
+export function flatten(w: ManifoldToplevel, m: Manifold, flat: number, ground?: number): Manifold {
   const toZ = mat(Z_UP), back = mat(Z_UP.clone().invert());
-  const z = m.transform(toZ), lo = Math.max(0, z.boundingBox().min[2]), cut = lo + flat;
-  const pad = w.Manifold.extrude(z.slice(cut), flat + 0.05).translate([0, 0, lo]);
+  const z = m.transform(toZ), lo = ground ?? Math.max(0, z.boundingBox().min[2]), cut = lo + flat;
+  const pad = w.Manifold.extrude(z.slice(cut).offset(-0.03, 'Miter'), flat + 0.05).translate([0, 0, lo]); // (a hair inside the outline, so its walls and the foot's don't meet edge on edge)
   return w.Manifold.union([z.trimByPlane([0, 0, 1], cut), pad]).translate([0, 0, -lo]).transform(back);
 }
 
