@@ -210,7 +210,7 @@ export const bands: BandCandidate[] = [
     sky: ['#2e3346', '#f1c48a'], sun: { azimuth: -160, elevation: 7, disc: true, rays: true }, clouds: 'many', storm: 1,
     groundColors: ['#4a522c', '#5a6432', '#686e3a', '#5a5636', '#6a5a3c'],
     ridges: [{ distance: 70, height: 4.5, color: '#4a4a44', jag: 0.7 }, { distance: 110, height: 10, color: '#6a6870', jag: 0.8, peaks: true }],
-    camera: { from: [1, 1.6, 11], to: [0, 2.2, -3], fov: 58 },
+    camera: { from: [1, 1.6, 11], to: [0.4, 2.9, -3], fov: 48 },
     props: [...trees([[-14, -16], [-8, -20], [12, -18], [17, -12], [3, -24]], 1.3), ...ground([[-6, 6], [6, 6.5], [-9, 2], [9, 1]])],
     cast: [
       { id: 'mother3', at: [-3.6, -1.5], face: 30, anim: 'lay', phase: 0.55 },

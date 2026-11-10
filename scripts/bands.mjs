@@ -50,7 +50,11 @@ async function takeOnce(query, name, wide, dir) {
   }
 }
 
-if (process.env.BANNERS) {
+if (process.env.GAME) {
+  // GAME=10,4,15: those whole-game pictures at full-screen size (SIZE=1920x1080) into src/assets/art-<n>.jpg
+  const [w, h] = (process.env.SIZE ?? '1920x1080').split('x');
+  for (const n of process.env.GAME.split(',')) await take(`game=${n}&w=${w}&h=${h}`, `art-${n}`, true);
+} else if (process.env.BANNERS) {
   // the front page's banner, staged (src/dev/gameBand.ts BANNERS): each rendered, then put on the real front page
   // (the request for menu-bg.jpg answered with it) and photographed at desktop sizes and on a phone; one sheet of them
   const dir = process.env.OUT ?? 'docs/review/banners', shots = process.env.SHOTS ?? join(tmpdir(), 'vibecraft-banner-shots');

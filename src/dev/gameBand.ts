@@ -825,7 +825,8 @@ export function runGameBand(params: URLSearchParams): void {
   const sides = gameSides();
   const wide = !!params.get('wide');
   const w = band.wide, staging = !wide ? band.staging : w && 'cast' in w ? w : { ...band.staging, camera: w ?? band.staging.camera };
-  const c = renderBand(sides, staging, wide ? 2480 : 960, 720);
+  // (&w=&h=: another size, e.g. 1920×1080 for a full-screen picture; the camera keeps its height, so a wider picture shows more to the sides)
+  const c = renderBand(sides, staging, +(params.get('w') ?? (wide ? 2480 : 960)), +(params.get('h') ?? 720));
   c.style.cssText = 'position:fixed;left:0;top:0;z-index:20';
   document.body.appendChild(c);
   document.body.dataset.label = `new${band.top ? ` ★${band.top}` : ''}: ${band.name}`; // (for the review sheet)

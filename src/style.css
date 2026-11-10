@@ -52,7 +52,7 @@ kbd {
   background: radial-gradient(ellipse at center, #2a2a1c 0%, #0b0a08 70%);
   z-index: 10;
 }
-#loading { background: linear-gradient(rgba(11, 10, 8, 0.72), rgba(11, 10, 8, 0.9)), url('./assets/menu-bg.jpg') center / cover; }
+#loading { background: linear-gradient(rgba(11, 10, 8, 0.15), rgba(11, 10, 8, 0.5)), url('./assets/art-10.jpg') center / cover; }
 /* the front page: a battle scene across the top, then what to play */
 #menu { flex-direction: column; justify-content: flex-start; overflow-y: auto; background: #0b0a08; }
 .menu-hero {

@@ -81,7 +81,7 @@ export const bands: BandCandidate[] = [
     sky: ['#2e4266', '#f4cf96'], sun: { azimuth: 120, elevation: 10, disc: true, rays: true }, clouds: 'many',
     groundColors: ['#4f5f2c', '#62723a', '#74823e', '#6b6a3a', '#7a6640'],
     ridges: [{ distance: 75, height: 5, color: '#55604a', jag: 0.3 }, { distance: 115, height: 9, color: '#7a8088', jag: 0.5, peaks: true }],
-    camera: { from: [-2, 1.15, 13], to: [0, 2.6, -4], fov: 56 },
+    camera: { from: [-2, 1.15, 13], to: [-0.4, 4.1, -4], fov: 42 },
     hills: [{ at: [0, -24], r: 12, h: 3.5 }, { at: [-16, -10], r: 9, h: 1.6 }, { at: [16, -12], r: 10, h: 2 }, { at: [0, 16], r: 6, h: 0.6 }],
     props: [
       ...Array.from({ length: 48 }, (_, i) => ({ model: (b: ModelBuilder) => bush(b, 1), at: [-18 + (i % 12) * 1.4, -4 - Math.floor(i / 12) * 1.8] as [number, number], scale: 0.9 })),
@@ -92,8 +92,8 @@ export const bands: BandCandidate[] = [
     cast: [
       { id: 'great-hall', at: [0, -26] }, { id: 'watchtower', at: [-8, -21], face: 20 }, { id: 'watchtower', at: [8.5, -22], face: -20 },
       { id: 'town-center', at: [-16, -14], face: 30 }, { id: 'barracks', at: [16, -16], face: -30 }, { id: 'lynx-den', at: [-24, -18], face: 30 }, { id: 'forge', at: [23, -24], face: -30 },
-      { id: 'lynx', at: [1.6, 6.6], face: -80, anim: 'charge', phase: 0.35 },
-      { id: 'lynx', at: [-2.6, 4.4], face: -76, anim: 'charge', phase: 0.7 },
+      { id: 'lynx', at: [1.0, 6.2], face: -80, anim: 'charge', phase: 0.35 },
+      { id: 'lynx', at: [-2.6, 4.2], face: -76, anim: 'charge', phase: 0.7 },
       { id: 'hurlhorn', at: [-5, -3], face: -10, anim: 'attack', phase: 0.55 },
       { id: 'hurlhorn', at: [5.5, -5], face: 15, anim: 'attack', phase: 0.3 },
       ...crowd('pikeman', 40, -1, -4, 5, 0, 'walk'),
