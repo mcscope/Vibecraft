@@ -341,9 +341,13 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Charges',
     you: wildwelds, foe: meadowfolk, look: [24, 26],
-    text: `<p>${CHARGE} The <b>Goliath Charger</b> is 600 kg of battering ram, so at full tilt it hits many times harder than it does standing.</p>
-<p><b>Try:</b> select the Goliaths, press ${key('charge')} and right-click the slingers (top). They bound in, strike, and carry on through. Standing in a fight, they only swing, so pull them out: right-click open ground. Then charge again.</p>
-<p>Now try the <b>pikemen</b> (bottom). Their pikes are planted, so your charge runs onto the points, and the Goliath's own weight drives them in. Charge the soft targets: throwers, workers, anything that isn't holding a spear.</p>`,
+    text: `<p>A charge turns speed into damage. The faster and heavier the body, the harder it hits. Your <b>Goliath Chargers</b> weigh 600 kg each.</p>
+<ol>
+<li>Select the Goliaths. Press ${key('charge')} (Charge), then right-click the <b>slingers</b> at the top.</li>
+<li>After they hit, right-click open ground to pull them back. Then charge again. A Goliath standing still hits far less hard.</li>
+<li>Now charge the <b>pikemen</b> at the bottom. This goes badly. Their pikes are set, and a Goliath that runs onto a pike is hurt by its own weight.</li>
+</ol>
+<p>So charge throwers and workers. Keep away from anything holding a spear.</p>`,
     steps: chargeSteps('slinger', 'pikeman', 'ground-attacker3', 2),
     setup(w) {
       wait(w, block(w, 0, 'ground-attacker3', 2, 14, 26, 2));
