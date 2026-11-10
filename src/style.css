@@ -810,13 +810,17 @@ html.touch, .touch body {
   .touch #bottom:not(.expanded) .army .cmds.small button { height: 52px; }
   .touch #bottom:not(.expanded) .cmds { flex-wrap: nowrap; overflow-x: auto; margin-top: 6px; }
   .touch #bottom:not(.expanded) .cmds.small { margin-top: 4px; }
-  .touch #bottom:not(.expanded) :is(.unit-panel, .group-panel):has(.build) .cmds { display: none; }
+  .touch #bottom:not(.expanded) .cmds > * { flex: none; }
+  /* (a worker's short panel shows what it builds, and a unit that lays or changes shows that: their orders are under Show all) */
+  .touch #bottom:not(.expanded) :is(.unit-panel, .group-panel):has(.build, .trains) .cmds { display: none; }
   .touch #bottom:not(.expanded) .bar.cal, .touch #bottom:not(.expanded) .bar.pack, .touch #bottom:not(.expanded) .ammo { display: none; }
   .touch #bottom:not(.expanded) .build .label { display: none; }
   .touch #bottom:not(.expanded) .bld .art { width: 52px; height: 46px; }
-  .touch #bottom:not(.expanded) .building-panel { flex-wrap: nowrap; }
-  .touch #bottom:not(.expanded) .building-panel .info { flex: 0 0 132px; }
-  .touch #bottom:not(.expanded) .building-panel .actions { flex: 1 1 0; }
+  /* (a building, or a unit that lays or changes: its name and queue beside what it trains) */
+  .touch #bottom:not(.expanded) :is(.building-panel, .unit-panel:has(.trains)) { flex-wrap: nowrap; }
+  .touch #bottom:not(.expanded) :is(.building-panel, .unit-panel:has(.trains)) .info { flex: 0 0 132px; }
+  .touch #bottom:not(.expanded) :is(.building-panel, .unit-panel:has(.trains)) .actions { flex: 1 1 0; }
+  .touch #bottom:not(.expanded) .unit-panel:has(.trains) .portrait.big { display: none; }
   .touch #bottom:not(.expanded) .building-panel :is(.capital, .bar.stock, .techs, .garrison-btn, [data-carts], .sow, .hint) { display: none; }
   .touch #bottom:not(.expanded) .trains { flex-wrap: nowrap; overflow-x: auto; }
   .touch #bottom:not(.expanded) .trains > * { flex: none; }
