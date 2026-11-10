@@ -46,9 +46,17 @@ export class Camera {
     }
     return at(0);
   }
+  /** Screen px along each edge that the HUD covers (a phone's panels; none on a desktop): centerOn aims at the middle of the rest. */
+  inset = { top: 0, right: 0, bottom: 0, left: 0 };
   centerOn(x: number, y: number): void {
-    this.cx = isoX(x, y);
-    this.cy = isoY(x, y) - this.ground(x, y);
+    this.cx = isoX(x, y) - (this.inset.left - this.inset.right) / 2 / this.zoom;
+    this.cy = isoY(x, y) - this.ground(x, y) - (this.inset.top - this.inset.bottom) / 2 / this.zoom;
+  }
+  /** The HUD moved: keep what was in the middle of the open map there. */
+  setInset(n: Camera['inset']): void {
+    const o = this.inset;
+    this.pan(-((n.left - n.right) - (o.left - o.right)) / 2, -((n.top - n.bottom) - (o.top - o.bottom)) / 2);
+    this.inset = { ...n };
   }
   pan(dx: number, dy: number): void {
     this.cx += dx / this.zoom;

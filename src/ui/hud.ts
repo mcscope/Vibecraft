@@ -146,18 +146,29 @@ export class Hud {
     this.panel.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') this.showTip(e.target as HTMLElement); });
     this.panel.addEventListener('mouseleave', () => (this.tooltip.style.display = 'none'));
     if (TOUCH) {
-      // no hover on a touch screen: pressing a button shows what it does, for a moment after you let go
-      let hide = 0;
-      root.addEventListener('pointerdown', (e) => {
+      // no hover on a touch screen: press and hold a button to read what it does (letting go of that hold does nothing
+      // else); the next touch anywhere hides it
+      let timer = 0, from = { x: 0, y: 0 }, held = false;
+      const stop = () => clearTimeout(timer);
+      document.addEventListener('pointerdown', (e) => {
         if (e.pointerType !== 'touch') return;
-        clearTimeout(hide);
-        this.showTip(e.target as HTMLElement, true);
-      });
-      window.addEventListener('pointerup', (e) => {
-        if (e.pointerType !== 'touch') return;
-        clearTimeout(hide);
-        hide = window.setTimeout(() => (this.tooltip.style.display = 'none'), 2500);
-      });
+        stop();
+        held = false;
+        this.tooltip.style.display = 'none';
+        const target = e.target as HTMLElement;
+        if (!root.contains(target)) return;
+        from = { x: e.clientX, y: e.clientY };
+        timer = window.setTimeout(() => { this.showTip(target, true); held = this.tooltip.style.display === 'block'; }, 450);
+      }, true);
+      document.addEventListener('pointermove', (e) => { if (e.pointerType === 'touch' && Math.hypot(e.clientX - from.x, e.clientY - from.y) > 10) stop(); }, true);
+      for (const t of ['pointerup', 'pointercancel']) document.addEventListener(t, stop, true);
+      root.addEventListener('click', (e) => {
+        if (!held) return;
+        held = false;
+        this.suppressClick = false;
+        e.stopPropagation();
+        e.preventDefault();
+      }, true);
     }
     onSettings(() => { this.sig = ''; }); // rebuild panels so key hints update
   }
@@ -286,7 +297,7 @@ export class Hud {
       if (units.length === 1) this.panel.innerHTML = words(this.unitPanel(units[0]));
       else if (building) this.panel.innerHTML = words(this.buildingPanel(building));
       else if (units.length > 1) this.panel.innerHTML = words(this.groupPanel(units));
-      else if (TOUCH) this.panel.innerHTML = '<div class="empty">Tap to select · Long-press to command · Drag to move the map · Pinch to zoom · Settings (⚙) lists every touch control</div>';
+      else if (TOUCH) this.panel.innerHTML = '<div class="empty">Tap a unit to select it · Press and hold to give an order · Drag to move the map · Pinch to zoom · Menu (☰) lists every touch control</div>';
       else {
         const km = keymap();
         this.panel.innerHTML = `<div class="empty">Drag to select · Right-click to command · <kbd>${km.attackMove.toUpperCase()}</kbd> attack-move · <kbd>${km.stop.toUpperCase()}</kbd> stop · <kbd>${km.resupply.toUpperCase()}</kbd> resupply (hold + click: go there after) · <kbd>${km.give.toUpperCase()}</kbd> give · <kbd>${km.home.toUpperCase()}</kbd> ${baseName(this.world.factionOf(this.player)).toLowerCase()} · <kbd>F10</kbd> settings</div>`;

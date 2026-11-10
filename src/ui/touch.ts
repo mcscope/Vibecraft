@@ -22,11 +22,16 @@ const SLOP = 10;
 export function words(s: string): string {
   if (!TOUCH) return s;
   return s
-    .replace('Click: train · Hold: auto-train on/off · Right-click: cancel last', 'Tap: train · Hold: auto-train on/off · Tap it in the queue to cancel')
+    .replace('Click: train · Hold: auto-train on/off · Right-click: cancel last', 'Tap: train · Press and hold: auto-train on or off · Tap it in the queue to cancel')
     .replace(/Hold the key and click the ground to send them there afterwards\./g, 'Then tap the ground to send them there afterwards.')
-    .replace(/then right-click/g, 'then tap')
-    .replace(/Right-drag/g, 'Long-press and drag').replace(/right-drag/g, 'long-press and drag')
-    .replace(/Right-click/g, 'Long-press').replace(/right-click/g, 'long-press')
+    // (an order tile's tip: the tile arms it, and the next tap does it)
+    .replace(/Right-click (where|an enemy)/g, 'Then tap $1')
+    .replace(/then right-click/g, 'then tap').replace(/then right-drag/g, 'then drag')
+    // (an order tapped in the panel: "tap Charge and right-click a fenling" is a tap too)
+    .replace(/(tap <b>[^<]+<\/b>,? (?:and|then)) right-click/gi, '$1 tap')
+    .replace(/\bpress Restart\b/g, 'tap Restart')
+    .replace(/Right-drag/g, 'Press, hold and drag').replace(/right-drag/g, 'press, hold and drag')
+    .replace(/Right-click/g, 'Press and hold').replace(/right-click/g, 'press and hold')
     .replace(/Left-click/g, 'Tap').replace(/left-click/g, 'tap')
     .replace(/double-click/g, 'double-tap')
     .replace(/\bClick\b/g, 'Tap').replace(/\bclick\b/g, 'tap');
@@ -37,21 +42,30 @@ export const TOUCH_HELP = `
   <table class="keys">
     <tr><td>Tap</td><td>Select a unit or building. Tap empty ground to clear.</td></tr>
     <tr><td>Double-tap</td><td>Select every unit of that type on screen.</td></tr>
-    <tr><td>Long-press</td><td>Command: move, attack, gather, build or set a rally point, whatever fits the spot.</td></tr>
-    <tr><td>Long-press, drag</td><td>Draw the front line for the group to form up on.</td></tr>
+    <tr><td>Press and hold</td><td>Give the order that fits the spot: move, attack, gather, build or set a rally point.</td></tr>
+    <tr><td>Hold and drag</td><td>Draw the front line for the group to form up on.</td></tr>
     <tr><td>Drag</td><td>Move the map. Pinch to zoom.</td></tr>
+    <tr><td>Army</td><td>Select every fighting unit.</td></tr>
+    <tr><td>Idle</td><td>Select the next idle worker.</td></tr>
     <tr><td>Box</td><td>Turn on, then drag to select everything in a box.</td></tr>
     <tr><td>Add</td><td>Turn on to add to the selection and queue orders.</td></tr>
-    <tr><td>Order tiles</td><td>Attack, Move, Charge, a building: the next tap does it. Cancel in the banner.</td></tr>
-    <tr><td>Minimap</td><td>Tap or drag to look there. Long-press to send the selection there.</td></tr>
-    <tr><td>Groups 1–3</td><td>Hold to store the selection, tap to select it again.</td></tr>
-    <tr><td>Panel buttons</td><td>Press and hold to read what a button does.</td></tr>
+    <tr><td>Center</td><td>Look at the selection.</td></tr>
+    <tr><td>More</td><td>Your base, groups 1–3 (hold to store, tap to select), game speed, full screen, delete.</td></tr>
+    <tr><td>Order tiles</td><td>Attack, Move, Charge, a building: tap the tile, then tap the spot. Cancel in the banner.</td></tr>
+    <tr><td>✕ and Show all</td><td>Clear the selection, or open the whole panel.</td></tr>
+    <tr><td>Minimap</td><td>Tap or drag to look there. Press and hold to send the selection there.</td></tr>
+    <tr><td>Any button</td><td>Press and hold to read what it does.</td></tr>
   </table>`;
 
 /** Set up the page for touch: the touch layout, and no page zoom or bounce under the game. */
 export function initTouchPage(): void {
   if (!TOUCH) return;
   document.documentElement.classList.add('touch');
+  // the gear opens the game's menu: settings, the touch controls, and Resign
+  const gear = document.getElementById('gear');
+  if (gear) { gear.textContent = '☰'; gear.title = 'Menu: touch controls, sound, and Resign'; }
+  const h2 = document.querySelector('#settings h2');
+  if (h2) h2.textContent = 'Menu';
   // iOS Safari ignores user-scalable=no: stop its pinch-zoom of the page (the map has its own)
   for (const t of ['gesturestart', 'gesturechange']) document.addEventListener(t, (e) => e.preventDefault(), { passive: false });
   // a phone has no console to read: show the first errors on screen, so a player can report them
@@ -232,27 +246,39 @@ function two(ts: TouchList): { d: number; x: number; y: number } {
 }
 
 /**
- * The touch bar: on-screen buttons for what the keyboard does (box select, Shift, groups, pause, speed...). It sits
- * just above the bottom panel; on a desktop it's hidden.
+ * The touch bar: on-screen buttons for what the keyboard does. It stays in one place (along the bottom; down the left
+ * side of a phone held sideways), so a button is always where your thumb left it. More opens a second set.
  */
 export function mountTouchbar(bar: HTMLElement, input: Input, touch: TouchControls, opts: { chat: boolean }): void {
   if (!TOUCH) return;
   const fs = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
   const canFull = !!(fs.requestFullscreen || fs.webkitRequestFullscreen);
   const btn = (id: string, label: string, tip: string) => `<button type="button" data-tb="${id}" title="${tip}">${label}</button>`;
-  bar.innerHTML = [
-    btn('box', 'Box', 'Box select: drag to select everything in a box'),
-    btn('add', 'Add', 'Add: taps add to the selection, orders queue, and an armed command stays armed'),
-    btn('panel', 'Panel', 'Hide or show the bottom panel'),
-    btn('center', 'Center', 'Look at the selection'),
-    btn('home', 'Home', 'Select your base and look at it'),
-    ...['1', '2', '3'].map((k) => btn(`g${k}`, k, `Group ${k}: hold to store the selection, tap to select it`)),
-    btn('pause', 'Pause', 'Pause or resume'),
-    btn('speed', '1×', 'Game speed'),
+  bar.innerHTML = `<div class="tb-main">${[
+    btn('army', 'Army', 'Army: select every fighting unit you have'),
+    btn('idle', 'Idle <b>0</b>', 'Idle: select the next idle worker and look at it'),
+    btn('box', 'Box', 'Box: turn on, then drag to select everything in a box'),
+    btn('add', 'Add', 'Add: taps add to the selection, orders queue, and an armed order stays armed'),
+    btn('center', 'Center', 'Center: look at the selection'),
+    btn('pause', 'Pause', 'Pause or resume the game'),
+    btn('more', 'More', 'More buttons: your base, groups, game speed, full screen, delete'),
+  ].join('')}</div><div class="tb-more">${[
+    btn('home', 'Base', 'Base: select your main building and look at it'),
+    ...['1', '2', '3'].map((k) => btn(`g${k}`, k, `Group ${k}: press and hold to store the selection, tap to select it`)),
+    btn('speed', '1×', 'Game speed: tap to change'),
     opts.chat ? btn('chat', 'Chat', 'Talk to the other player') : '',
-    canFull ? btn('full', 'Full', 'Full screen') : '',
-    btn('delete', 'Delete', 'Kill the selected units or knock down the selected building'),
-  ].join('');
+    canFull ? btn('full', 'Full', 'Full screen on or off') : '',
+    btn('delete', 'Delete', 'Delete: kill the selected units or knock down the selected building'),
+  ].join('')}</div>`;
+  const idle = bar.querySelector<HTMLElement>('[data-tb="idle"]')!;
+  const more = (open: boolean) => { bar.classList.toggle('more', open); bar.querySelector('[data-tb="more"]')!.classList.toggle('on', open); };
+  const pause = bar.querySelector<HTMLElement>('[data-tb="pause"]')!;
+  window.setInterval(() => {
+    if (pause.classList.contains('on') !== input.paused) { pause.textContent = input.paused ? 'Play' : 'Pause'; pause.classList.toggle('on', input.paused); }
+    const n = input.idleWorkers();
+    idle.querySelector('b')!.textContent = `${n}`;
+    idle.classList.toggle('none', n === 0);
+  }, 400);
   // a group button: hold to store, tap to select (an empty one stores on a tap too)
   let hold = 0, held = false;
   bar.addEventListener('pointerdown', (e) => {
@@ -263,14 +289,19 @@ export function mountTouchbar(bar: HTMLElement, input: Input, touch: TouchContro
   });
   window.addEventListener('pointerup', () => clearTimeout(hold));
   bar.addEventListener('contextmenu', (e) => e.preventDefault());
+  // (a touch on the map closes More)
+  document.getElementById('game')!.addEventListener('touchstart', () => more(false), { passive: true });
   bar.addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest<HTMLElement>('[data-tb]');
     if (!b) return;
     const id = b.dataset.tb!;
     input.viaTouch = true;
-    if (id === 'box') { touch.boxMode = !touch.boxMode; b.classList.toggle('on', touch.boxMode); }
+    if (id === 'more') { more(!bar.classList.contains('more')); return; }
+    if (b.closest('.tb-more') && id !== 'speed' && id[0] !== 'g') more(false);
+    if (id === 'army') input.selectArmy();
+    else if (id === 'idle') input.nextIdleWorker();
+    else if (id === 'box') { touch.boxMode = !touch.boxMode; b.classList.toggle('on', touch.boxMode); }
     else if (id === 'add') { input.shiftLatch = !input.shiftLatch; b.classList.toggle('on', input.shiftLatch); }
-    else if (id === 'panel') b.classList.toggle('on', document.getElementById('bottom')!.classList.toggle('collapsed'));
     else if (id === 'center') input.centerOnSelection();
     else if (id === 'home') input.goHome();
     else if (id[0] === 'g') {
@@ -288,7 +319,75 @@ export function mountTouchbar(bar: HTMLElement, input: Input, touch: TouchContro
       else if (fs.requestFullscreen) void fs.requestFullscreen().catch(() => {});
       else fs.webkitRequestFullscreen?.();
     } else if (id === 'delete') {
-      if (input.selected.size && confirm('Kill the selected units, or knock down the selected building?')) input.destroySelected();
+      if (input.selected.size) void ask('Kill the selected units, or knock down the selected building?', 'Delete', 'Keep them').then((yes) => { if (yes) input.destroySelected(); });
     }
+  });
+}
+
+/**
+ * The panel's own buttons on a touch screen: ✕ clears the selection, and Show all / Show less opens the whole panel
+ * (a phone shows a short one: who is selected and their main orders).
+ */
+export function mountPanelControls(ctl: HTMLElement, bottom: HTMLElement, input: Input): void {
+  if (!TOUCH) return;
+  ctl.innerHTML = '<button type="button" data-pc="expand" title="Show the whole panel, or just its first rows">▲ Show all</button><button type="button" data-pc="clear" title="Clear the selection">✕</button>';
+  const expand = ctl.querySelector<HTMLElement>('[data-pc="expand"]')!, clear = ctl.querySelector<HTMLElement>('[data-pc="clear"]')!;
+  ctl.addEventListener('click', (e) => {
+    const b = (e.target as HTMLElement).closest<HTMLElement>('[data-pc]');
+    if (!b) return;
+    if (b.dataset.pc === 'clear') { input.mode = null; input.setSelection([]); return; }
+    const open = bottom.classList.toggle('expanded');
+    expand.textContent = open ? '▼ Show less' : '▲ Show all';
+  });
+  window.setInterval(() => { clear.style.visibility = input.selected.size ? '' : 'hidden'; }, 250);
+}
+
+/**
+ * Where the HUD covers the map on a touch screen (top bar, touch bar, panel): the camera centres things in what's left,
+ * so Center and the minimap put your units in the open, not behind the panel.
+ */
+export function trackOpenMap(cam: Camera): void {
+  if (!TOUCH) return;
+  const parts = ['topbar', 'touchbar', 'panel'].map((id) => document.getElementById(id)).filter((e): e is HTMLElement => !!e);
+  const measure = () => {
+    if (document.getElementById('bottom')?.classList.contains('expanded')) return; // (a look at the whole panel leaves the camera be)
+    const W = window.innerWidth, H = window.innerHeight, n = { top: 0, right: 0, bottom: 0, left: 0 };
+    // (stacked from each edge in: the panel sits on the touch bar)
+    const rects = parts.map((el) => el.getBoundingClientRect()).filter((r) => r.width && r.height);
+    for (let pass = 0; pass < 2; pass++) {
+      for (const r of rects) {
+        const wide = r.width > W * 0.6, tall = r.height > H * 0.5;
+        if (wide && r.top <= n.top + 1) n.top = Math.max(n.top, r.bottom);
+        else if (wide && r.bottom >= H - n.bottom - 1) n.bottom = Math.max(n.bottom, H - r.top);
+        else if (tall && r.left <= n.left + 1) n.left = Math.max(n.left, r.right);
+        else if (tall && r.right >= W - n.right - 1) n.right = Math.max(n.right, W - r.left);
+      }
+    }
+    const o = cam.inset;
+    if (n.top !== o.top || n.right !== o.right || n.bottom !== o.bottom || n.left !== o.left) cam.setInset(n);
+  };
+  measure();
+  window.addEventListener('resize', measure);
+  window.setInterval(measure, 300);
+}
+
+/** An in-game yes-or-no box (a browser's confirm() is one stray tap from yes): resolves true for yes. */
+export function ask(text: string, yes: string, no: string): Promise<boolean> {
+  document.getElementById('ask')?.remove();
+  const box = document.createElement('div');
+  box.id = 'ask';
+  box.innerHTML = `<div class="menu-box ask-box"><p></p><div class="ask-buttons"><button type="button" data-no></button><button type="button" data-yes class="danger"></button></div></div>`;
+  box.querySelector('p')!.textContent = text;
+  box.querySelector('[data-yes]')!.textContent = yes;
+  box.querySelector('[data-no]')!.textContent = no;
+  document.body.appendChild(box);
+  return new Promise((done) => {
+    box.addEventListener('click', (e) => {
+      const t = e.target as HTMLElement;
+      const answer = t.closest('[data-yes]') ? true : t.closest('[data-no]') || t === box ? false : null;
+      if (answer === null) return;
+      box.remove();
+      done(answer);
+    });
   });
 }

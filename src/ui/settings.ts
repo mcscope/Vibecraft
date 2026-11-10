@@ -92,25 +92,29 @@ export const keyName = (k: string) => (k.startsWith('arrow') ? k.replace('arrow'
 /** Wire up the settings dialog in index.html. */
 export function mountSettingsDialog(): void {
   const dlg = document.getElementById('settings') as HTMLElement;
+  let kbOpen = false;
+  dlg.addEventListener('toggle', (e) => { if ((e.target as HTMLElement).matches('details.kb')) kbOpen = (e.target as HTMLDetailsElement).open; }, true);
   const render = () => {
     const s = current;
     const km = keymap();
-    dlg.querySelector('.body')!.innerHTML = `
-      ${TOUCH ? `<h3>Touch</h3>${TOUCH_HELP}` : ''}
-      <h3>${TOUCH ? 'Keyboard' : 'Controls'}</h3>
+    const controls = `
+      <h3>Controls</h3>
       ${Object.entries(SCHEMES).map(([id, m]) => `
         <label class="opt"><input type="radio" name="scheme" value="${id}" ${s.scheme === id ? 'checked' : ''}>
           <b>${m.label}</b><span>${m.description}</span></label>`).join('')}
       <label class="opt inline"><input type="checkbox" name="edge" ${s.edgeScroll ? 'checked' : ''}> Scroll at screen edges</label>
-      <label class="opt inline">Scroll speed <input type="range" name="speed" min="0.4" max="2.5" step="0.1" value="${s.scrollSpeed}"> <span>${s.scrollSpeed.toFixed(1)}×</span></label>
+      <label class="opt inline">Scroll speed <input type="range" name="speed" min="0.4" max="2.5" step="0.1" value="${s.scrollSpeed}"> <span>${s.scrollSpeed.toFixed(1)}×</span></label>`;
+    const misc = `
       <label class="opt inline"><input type="checkbox" name="perf" ${s.perf ? 'checked' : ''}> Show performance readout</label>
-      <label class="opt inline"><input type="checkbox" name="cartDebug" ${s.cartDebug ? 'checked' : ''}> Cart debug overlay (<kbd>9</kbd>)</label>
+      <label class="opt inline"><input type="checkbox" name="cartDebug" ${s.cartDebug ? 'checked' : ''}> Cart debug overlay (<kbd>9</kbd>)</label>`;
+    const sound = `
       <h3>Sound</h3>
       <label class="opt inline">Master <input type="range" name="volume" min="0" max="1" step="0.05" value="${s.volume}"> <span>${Math.round(s.volume * 100)}%</span></label>
       <label class="opt inline">Effects <input type="range" name="sfxVolume" min="0" max="1" step="0.05" value="${s.sfxVolume}"> <span>${Math.round(s.sfxVolume * 100)}%</span></label>
       <label class="opt inline">Music <input type="range" name="musicVolume" min="0" max="1" step="0.05" value="${s.musicVolume}"> <span>${Math.round(s.musicVolume * 100)}%</span></label>
       <label class="opt inline"><input type="checkbox" name="voices" ${s.voices ? 'checked' : ''}> Unit voices</label>
-      <label class="opt inline"><input type="checkbox" name="muted" ${s.muted ? 'checked' : ''}> Mute (<kbd>M</kbd>)</label>
+      <label class="opt inline"><input type="checkbox" name="muted" ${s.muted ? 'checked' : ''}> Mute (<kbd>M</kbd>)</label>`;
+    const keys = `
       <h3>Keys</h3>
       <table class="keys">
         <tr><td>Scroll</td><td>${[km.pan.up, km.pan.left, km.pan.down, km.pan.right].map((k) => k.map(keyName).join('/')).join(' · ')}</td></tr>
@@ -128,6 +132,10 @@ export function mountSettingsDialog(): void {
         <tr><td>Groups</td><td><kbd>Ctrl</kbd>+<kbd>1–8</kbd> set · <kbd>1–8</kbd> select · double-tap to jump</td></tr>
         <tr><td>Other</td><td><kbd>Space</kbd> center · <kbd>P</kbd> pause · <kbd>[</kbd> <kbd>]</kbd> speed · <kbd>9</kbd> cart debug · <kbd>F10</kbd> settings</td></tr>
       </table>`;
+    // (a touch screen: its own controls first, and the keyboard's folded away for when one is plugged in)
+    dlg.querySelector('.body')!.innerHTML = TOUCH
+      ? `<h3>Touch</h3>${TOUCH_HELP}${(sound + misc).replace(/ \(<kbd>\w<\/kbd>\)/g, '')}<details class="kb"${kbOpen ? ' open' : ''}><summary>Keyboard and mouse</summary>${controls}${keys}</details>`
+      : `${controls}${misc}${sound}${keys}`;
   };
   dlg.addEventListener('input', (e) => {
     const t = e.target as HTMLInputElement;

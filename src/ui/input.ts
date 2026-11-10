@@ -28,7 +28,7 @@ export class Input {
   private mouse = { x: -1, y: -1, inside: false };
   private drag: { x: number; y: number; button: number; moved: boolean } | null = null;
   private groups = new Map<string, number[]>();
-  private lastClick = { t: 0, id: 0 };
+  private lastClick = { t: 0, id: 0, x: 0, y: 0, specId: '' };
   private lastGroupKey = { t: 0, key: '' };
   /** Each unit's formation (what it was last set to with the group it was in); block if never set. */
   private formations = new Map<number, Formation>();
@@ -308,11 +308,18 @@ export class Input {
     const id = this.renderer.pick(sx, sy, this.alpha);
     const now = performance.now();
     const u = this.world.units.get(id);
-    if (u && u.owner === this.player && this.lastClick.id === id && now - this.lastClick.t < 350) {
-      // double-click: all of this type on screen
+    const last = this.lastClick;
+    // a double-click: the same unit twice. A double-tap: two taps close in time and place (units walk, and a finger
+    // is broad), the type taken from the first tap
+    const double = this.viaTouch
+      ? !!last.specId && now - last.t < 400 && Math.hypot(sx - last.x, sy - last.y) <= 30
+      : !!u && u.owner === this.player && last.id === id && now - last.t < 350;
+    if (double) {
+      // all of this type on screen
+      const specId = this.viaTouch ? last.specId : u!.specId;
       const cam = this.renderer.cam;
       const same = [...this.world.units.values()].filter((o) => {
-        if (o.owner !== this.player || o.specId !== u.specId) return false;
+        if (o.owner !== this.player || o.specId !== specId) return false;
         const [sx, sy] = cam.toScreen(o.x, o.y);
         return sx >= 0 && sy >= 0 && sx <= cam.width && sy <= cam.height;
       });
@@ -322,7 +329,8 @@ export class Input {
         if (this.rs.selected.has(id)) this.rs.selected.delete(id); else this.rs.selected.add(id);
       } else this.setSelection([id]);
     } else if (!shift) this.setSelection([]);
-    this.lastClick = { t: now, id };
+    // (after a double-tap, a third tap starts over)
+    this.lastClick = { t: double ? 0 : now, id, x: sx, y: sy, specId: !double && u && u.owner === this.player ? u.specId : '' };
   }
 
   /** With units selected, clicks pick targets: other players' units win over ours. */
@@ -624,6 +632,15 @@ export class Input {
     this.centerOnSelection();
     return true;
   }
+
+  /** Select every fighting unit you have (not workers or carts): the touch bar's Army. */
+  selectArmy(): void {
+    const w = this.world, worker = w.factionOf(this.player).workerId;
+    this.setSelection(w.unitsOf(this.player).filter((u) => u.stats.canAttack && u.specId !== worker && !u.carter && !u.dummy).map((u) => u.id), true);
+  }
+
+  /** How many of your workers stand idle. */
+  idleWorkers(): number { return this.world.unitsOf(this.player).filter((u) => this.world.idleWorker(u)).length; }
 
   centerOnSelection(): void {
     let x = 0, y = 0, n = 0;
