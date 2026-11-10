@@ -11,6 +11,7 @@
 // bake, hand-drawn sheets, generated images — is up to the faction.
 
 import type { ArtLoader, BiomeLoader } from '../art/contract';
+import type { ModelBuilder } from '../kits/bake3d/types';
 
 export type AttackStyle = 'strike' | 'throw';
 
@@ -292,9 +293,17 @@ export interface WildSpec extends UnitSpec {
 export type BandCandidate = BandStaging | 'line-up';
 
 export interface BandStaging {
+  /** A short name for it on the review sheet. */
+  name?: string;
   /** The sky (top, then at the horizon) and the ground's colour, if not the usual dusk over grass. */
   sky?: [string, string];
   ground?: string;
+  /** Raised ground: smooth mounds at (x, z), `r` in radius, `h` high (a negative `h`: a hollow). Everyone stands on it. */
+  hills?: Array<{ at: [number, number]; r: number; h: number }>;
+  /** Still water: flat pools at (x, z), `r` in radius, at the height of the ground at their middle (fill a hollow). */
+  water?: Array<{ at: [number, number]; r: number }>;
+  /** Scenery: any model (a homeworld's reeds, trees, stones), at (x, z), turned `face` degrees, `scale` times its size. */
+  props?: Array<{ model: (b: ModelBuilder) => void; at: [number, number]; face?: number; scale?: number }>;
   /** Where the camera stands and the point it looks at; its vertical field of view in degrees. */
   camera: { from: [number, number, number]; to: [number, number, number]; fov: number };
   /** Everyone in the picture (and a building or two): a unit's or a building's id. */

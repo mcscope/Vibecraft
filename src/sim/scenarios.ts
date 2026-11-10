@@ -174,9 +174,9 @@ export function provingGrounds(): Scenario {
  */
 const SE = { fwd: [1, 0], across: [0, 1], facing: 0 }, SW = { fwd: [0, 1], across: [1, 0], facing: 2 };
 const FACEOFF_SEATS: Array<{ depth: number; wings: Array<{ at: number[]; fwd: number[]; across: number[]; facing: number }> }> = [
-  { depth: 9, wings: [{ at: [16.75, 35.25], ...SE }] }, // left, facing south-east
-  { depth: 9, wings: [{ at: [35.25, 16.25], ...SW }] }, // right, facing south-west
-  { depth: 5, wings: [{ at: [17.5, 25], ...SE }, { at: [25, 17.5], ...SW }] }, // behind them, wrapped round the field's far side
+  { depth: 9, wings: [{ at: [13.25, 36.75], ...SE }] }, // left, facing south-east
+  { depth: 9, wings: [{ at: [36.75, 12.75], ...SW }] }, // right, facing south-west
+  { depth: 5, wings: [{ at: [10.25, 29.75], ...SE }, { at: [29.75, 10.25], ...SW }] }, // split in two, behind the other two
 ];
 
 export function faceoff(): Scenario {

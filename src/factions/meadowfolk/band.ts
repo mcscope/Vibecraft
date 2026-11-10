@@ -73,4 +73,4 @@ export const bands: BandCandidate[] = [
 ];
 
 /** The one on the card. */
-export const pick = 1;
+export const pick = 5;

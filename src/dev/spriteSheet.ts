@@ -14,6 +14,7 @@ const teamOf = (params: URLSearchParams) => TEAM_COLORS[+(params.get('team') ?? 
 
 export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
   if (params.get('teams')) return teamsPage(params);
+  if (params.get('game')) return (await import('./gameBand')).runGameBand(params); // (the whole game's band pictures)
   if (params.get('faction') && params.get('pose')) return pose(params);
   if (params.get('faction')) return roster(params);
   if (params.get('tunnels')) return tunnels(params.get('tunnels')!, Number(params.get('frames') ?? 30));
@@ -102,9 +103,10 @@ async function pose(params: URLSearchParams): Promise<void> {
   if (params.get('take') && !staged) { document.title = 'sprites ready: none'; return; } // (no such candidate)
   if (staged && staged !== 'line-up') {
     const { renderBand } = await import('./bandScene');
-    const c = renderBand(faction, staged, team, (await ART_MODULES[`../factions/${faction.id}/art.ts`]?.())?.bakeOpts, W, H);
+    const c = renderBand([{ f: faction, team, opts: (await ART_MODULES[`../factions/${faction.id}/art.ts`]?.())?.bakeOpts }], staged, W, H);
     c.style.cssText = 'position:fixed;left:0;top:0;z-index:20';
     document.body.appendChild(c);
+    document.body.dataset.label = staged.name ?? ''; // (for the review sheet)
     document.title = 'sprites ready';
     return;
   }

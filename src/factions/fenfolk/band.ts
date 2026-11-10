@@ -1,5 +1,6 @@
 // The Fenfolk's pictures for the front page (BandCandidate): five ways to show the fen's army, staged in 3D.
 import { bandRank as rank, type BandCandidate } from '../types';
+import { DOODADS, tree } from './homeworld';
 
 export const bands: BandCandidate[] = [
   // 1. the whole army drawn up in ranks before the Stilt Hall, the Great Siege Heron towering at the back
@@ -86,7 +87,38 @@ export const bands: BandCandidate[] = [
       ...rank('fenling', 12, 1.1, 5.5),
     ],
   },
+  // 6. (new) the attack up the hill: the army charging up the slope at us, bullfrogs bounding in front, the heron
+  //    flying in low overhead; behind and below them their home, huts on stilts round a reedy pond
+  {
+    name: 'new: up the hill',
+    sky: ['#56708e', '#f4dcae'],
+    camera: { from: [1.5, 6.3, 12.5], to: [-0.5, 0.4, -8], fov: 50 },
+    hills: [{ at: [0, 13], r: 15, h: 4.5 }, { at: [-5, -16], r: 7, h: -0.5 }],
+    water: [{ at: [-5, -16], r: 5.2 }],
+    props: [
+      ...[[-10, -15], [-1, -12.5], [-7.5, -11.5], [0.5, -19], [-11, -19]].map(([x, z], i) => ({ model: (b: Parameters<typeof tree>[0]) => tree(b, i * 3), at: [x, z] as [number, number], face: i * 70 })),
+      { model: (b: Parameters<typeof tree>[0]) => tree(b, 1), at: [14, -20], scale: 1.1 },
+      { model: (b: Parameters<typeof tree>[0]) => tree(b, 5), at: [-17, -22], scale: 1.1 },
+      { model: (b: Parameters<typeof tree>[0]) => tree(b, 4), at: [8, -9] },
+      ...DOODADS.flowers.map((m, i) => ({ model: m, at: [-8 + i * 2.2, -10.5 - (i % 2)] as [number, number], scale: 2 })),
+      ...DOODADS.grass.map((m, i) => ({ model: m, at: [(i % 2 ? 1 : -1) * (6.5 + i), 8 - i * 1.5] as [number, number], scale: 2 })),
+    ],
+    cast: [
+      { id: 'stilt-hall', at: [6, -23], face: -15 },
+      { id: 'reed-hut', at: [-14, -11], face: 35 },
+      { id: 'reed-hut', at: [12, -13], face: -30 },
+      { id: 'toad-wallow', at: [-3, -26], face: 0 },
+      { id: 'great-siege-heron', at: [-2, -1.5], lift: 3.6, face: 15, anim: 'fly', phase: 0.3 },
+      { id: 'bog-toad', at: [-1.6, 7.6], lift: 0.7, face: 0, anim: 'leap', phase: 0.5 },
+      { id: 'bog-toad', at: [3.4, 6.2], lift: 0.3, face: -15, anim: 'leap', phase: 0.3 },
+      { id: 'pack-tortoise', at: [6.5, -1], face: -20, anim: 'walk', phase: 0.4 },
+      ...rank('fenling', 6, 1.4, 6.6, { anim: 'charge', alt: 'attack', turn: 1 }),
+      ...rank('reedguard', 7, 1.5, 4.6, { anim: 'charge', turn: 1, phase: 0.2 }),
+      ...rank('fenling', 9, 1.3, 2.6, { anim: 'charge', turn: 1, phase: 0.4 }),
+      ...rank('fenling', 8, 1.35, 0.6, { x: -1, anim: 'charge', turn: 1 }),
+    ],
+  },
 ];
 
 /** The one on the card. */
-export const pick = 1;
+export const pick = 6;

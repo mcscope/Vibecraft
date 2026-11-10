@@ -28,10 +28,10 @@ export const SHOTS = [
   { what: 'Battle on The Mesa: Meadowfolk against Wildwelds', q: 'mode=battle&you=meadowfolk&foe=wildwelds&map=mesa&budget=4000', zoom: 0.85, battle: true,
     go: async () => { const [x, y] = B.middle(1); B.charge(0, x, y); await B.play(22); return B.fight(); } },
   { what: 'Fliers of all three armies in the air', q: 'mode=faceoff&you=fenfolk&foe=meadowfolk&third=wildwelds', zoom: 1.25,
-    go: async () => { B.wake(B.fliers()); B.send(B.fliers(), 26, 30); await B.play(4); return B.middleOf(B.fliers()); } },
-  { what: 'Two champions meet: the biggest Fenfolk and Meadowfolk bodies', q: 'mode=faceoff&you=fenfolk&foe=meadowfolk', zoom: 2.2,
-    go: async () => { const a = B.biggest(0), b = B.biggest(1); B.wake([a, b]); B.attack(a, b); B.attack(b, a); await B.play(5); return B.middleOf([a, b]); } },
-  { what: 'A big fight late in a game on Sunken Temple', q: 'mode=spectate&you=meadowfolk&foe=wildwelds&map=sunken-temple&ai=hard&skip=900', zoom: 0.85,
+    go: async () => { B.wake(B.fliers()); B.send(B.fliers(), 34, 34); await B.play(6); return B.middleOf(B.fliers().filter((id) => window.world.units.get(id)?.airborne)); } },
+  { what: 'Two champions meet: the biggest Fenfolk and Meadowfolk fighters, close up', q: 'mode=faceoff&you=fenfolk&foe=meadowfolk', zoom: 1.7,
+    go: async () => { const a = B.biggest(0), b = B.biggest(1); B.wake([a, b]); B.attack(a, b); B.attack(b, a); for (let i = 0; i < 40 && B.apart(a, b) > 2.5; i++) await B.play(0.5); await B.play(0.6); return B.middleOf([a, b]); } },
+  { what: 'A big fight late in a game on Sunken Temple', q: 'mode=spectate&you=meadowfolk&foe=wildwelds&map=sunken-temple&ai=hard&skip=600', zoom: 0.85,
     go: async () => { for (let i = 0; i < 12 && !B.fighting(); i++) await B.play(5); return B.fight(); } },
 ];
 
@@ -46,10 +46,12 @@ const helpers = () => {
     send: (ids, x, y) => { for (const u of units()) if (ids.includes(u.id)) w.enqueue({ player: u.owner, cmd: { type: 'move', units: [u.id], x, y } }); },
     attack: (id, target) => w.enqueue({ player: w.units.get(id).owner, cmd: { type: 'attack', units: [id], target } }),
     fliers: () => units().filter((u) => u.stats.flight).map((u) => u.id),
-    biggest: (p) => w.unitsOf(p).reduce((a, u) => (u.stats.mass > a.stats.mass ? u : a)).id,
+    // its heaviest fighter on foot that fights up close
+    biggest: (p) => w.unitsOf(p).filter((u) => u.stats.canAttack && !u.stats.flight && u.stats.range < 3).reduce((a, u) => (u.stats.mass > a.stats.mass ? u : a)).id,
+    apart: (a, b) => { const u = w.units.get(a), v = w.units.get(b); return u && v ? Math.hypot(u.x - v.x, u.y - v.y) : 0; },
     middle: (p) => mid(w.unitsOf(p)),
     middleOf: (ids) => mid(units().filter((u) => ids.includes(u.id))),
-    base: (p) => { const b = w.baseOf(p); return b ? [b.x + b.spec.size / 2 + 1, b.y + b.spec.size / 2 + 1] : mid(w.unitsOf(p)); },
+    base: (p) => { const b = w.baseOf(p); return b ? [b.ox + b.spec.size / 2, b.oy + b.spec.size / 2] : mid(w.unitsOf(p)); },
     fighting: () => units().filter((u) => u.engage).length >= 8,
     // the middle of the thickest fight: the engaged unit with the most engaged units near it, and those around it
     fight: () => {
@@ -78,7 +80,10 @@ for (const n of which) {
   await page.goto(`${base}/?${shot.q}&seed=7`, { timeout: 900000 });
   if (shot.battle) { // the draft: a few of everything it can afford, then deploy and start
     await page.waitForSelector('[data-add]', { timeout: 900000 });
-    for (let round = 0; round < 6; round++) for (const b of await page.$$('[data-add][data-d="1"]:not([disabled])')) await b.click();
+    await page.evaluate(() => { // (each click redraws the list, so look each button up afresh)
+      const ids = [...document.querySelectorAll('[data-add][data-d="1"]')].map((b) => b.dataset.add);
+      for (let round = 0; round < 6; round++) for (const id of ids) document.querySelector(`[data-add="${id}"][data-d="1"]:not([disabled])`)?.click();
+    });
     await page.click('[data-go]');
   }
   await page.waitForFunction(() => document.getElementById('loading')?.style.display === 'none' && window.world, null, { timeout: 900000 });
@@ -87,8 +92,13 @@ for (const n of which) {
   await page.evaluate(helpers);
   await page.evaluate(() => { window.world.isBearer = () => false; }); // (no supply bars over the ammo bearers)
   const at = await page.evaluate(`(${shot.go.toString()})()`);
-  // hold the moment (speed 0), then frame it
-  await page.evaluate(([x, y, z]) => { window.input.speed = 0; const cam = window.renderer.cam; cam.zoom = z; cam.centerOn(x, y); }, [...at, shot.zoom]);
+  // hold the moment (speed 0), hide the health bars (full health shows none), then frame it
+  await page.evaluate(([x, y, z, lift]) => {
+    window.input.speed = 0;
+    for (const u of window.world.units.values()) if (u.hp > 0) u.hp = u.stats.maxHp;
+    const cam = window.renderer.cam; cam.zoom = z; cam.centerOn(x, y);
+    if (lift) cam.cy += (0.15 * cam.height) / z; // the subject a little above the middle: the title sits below it
+  }, [...at, shot.zoom, n > 0]);
   await page.waitForTimeout(1500);
   const dir = process.env.OUT ?? (n ? 'docs/review/banners' : null);
   if (dir) mkdirSync(dir, { recursive: true });

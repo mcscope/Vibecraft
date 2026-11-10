@@ -1,9 +1,22 @@
 // The Wildwelds' pictures for the front page (BandCandidate): their life cycle and their swarm, staged in 3D. A bright
 // sky behind, so their strange bodies stand out against it.
 import { bandRank as rank, type BandCandidate, type BandStaging } from '../types';
+import { fern, grassClump, stones, tree } from '../../biomes/meadow/models';
+import type { ModelBuilder } from '../../kits/bake3d/types';
 
 const SKY: [string, string] = ['#4f7298', '#f3e3bd'];
 type Cast = BandStaging['cast'];
+type Props = NonNullable<BandStaging['props']>;
+/** Light and warm behind them: their dark glossy bodies stand out against it (a dusk-blue sky swallows them). */
+const BRIGHT: [string, string] = ['#8ea8c2', '#f7e8c8'];
+/** Scenery from the meadow they live in: trees far off, ferns, grass and stones nearer. */
+const trees = (spots: Array<[number, number]>, scale = 1): Props => spots.map((at, i) => ({ model: (b: ModelBuilder) => tree(b, i * 5 + 2), at, face: i * 50, scale }));
+const ground = (spots: Array<[number, number]>): Props => spots.map((at, i) => ({ model: (b: ModelBuilder) => [fern, grassClump, stones][i % 3](b, i), at, face: i * 40, scale: 1.4 }));
+/** `n` along a gentle curve from `a` to `b`: a line the eye follows. */
+const along = (id: string, n: number, a: [number, number], b: [number, number], bend: number, anims: string[]): Cast => Array.from({ length: n }, (_, i) => {
+  const t = n > 1 ? i / (n - 1) : 0, x = a[0] + (b[0] - a[0]) * t, z = a[1] + (b[1] - a[1]) * t + Math.sin(t * Math.PI) * bend;
+  return { id, at: [x, z], face: (i * 47) % 360, anim: anims[i % anims.length], phase: 0.3 + ((i * 3) % 5) / 10 };
+});
 /** A ring of `n` around (x, z), `r` across, each facing out from the middle. */
 const ring = (id: string, n: number, r: number, x: number, z: number, anim = 'walk', turn = 0): Cast => Array.from({ length: n }, (_, i) => {
   const a = (i / n) * Math.PI * 2 + turn;
@@ -110,7 +123,85 @@ export const bands: BandCandidate[] = [
       ...rank('micropike', 3, 1.5, -0.6),
     ],
   },
+  // 6. (new) the brood mother. RULE: one focal subject on a third: the great mother on the right third, the
+  //    biggest and best lit, seen from low against a plain bright sky. A LEADING LINE of eggs curves from the near
+  //    left corner to her feet, larvae crawling along it. Three layers: eggs near, mother middle, web walls, a Mimic
+  //    Mine and trees far. Empty sky on the left, left on purpose; one dragon fly small and far for depth.
+  {
+    name: 'new: the brood mother',
+    sky: BRIGHT,
+    camera: { from: [0, 0.9, 7], to: [0.6, 0.85, -2], fov: 44 },
+    props: [...trees([[-12, -20], [10, -22], [16, -16]], 1.1), ...ground([[-4.5, 3.5], [4.8, 4.2], [-6, -1], [6.5, 0.5]])],
+    cast: [
+      { id: 'mother3', at: [2.2, 0], face: -50, anim: 'lay', phase: 0.55 },
+      ...along('egg1', 6, [-2.8, 3.8], [0.9, 1.4], 0.6, ['grow', 'hungry', 'grow', 'hatch']),
+      { id: 'cocoon', at: [-0.9, 1.2], anim: 'grow', phase: 0.4 },
+      { id: 'larva1', at: [-1.7, 3.3], face: -40, anim: 'walk', phase: 0.2 },
+      { id: 'larva1', at: [0, 2.2], face: -60, anim: 'walk', phase: 0.6 },
+      { id: 'web-wall', at: [-4, -10], face: 10 },
+      { id: 'web-wall', at: [-2, -10.4], face: 10 },
+      { id: 'web-tower', at: [-7.5, -12], face: 30 },
+      { id: 'dragon-fly', at: [-4, -16], lift: 5, face: 60, anim: 'glide', phase: 0.2 },
+    ],
+  },
+  // 7. (new) the Goliath's bound. RULE: the subject's direction of travel is the leading line: the Goliath Charger
+  //    mid-bound on the left third, side on so its long banded body reads, heading right; a SUPPORTING MASS of
+  //    chargers runs the same way behind it, small and many, so it reads as one body leading the swarm. Low camera:
+  //    it stands against the sky. Room ahead of it on the right, where it is going; a Vimmer up on the right third.
+  {
+    name: 'new: the Goliath\'s bound',
+    sky: BRIGHT,
+    camera: { from: [1.2, 0.8, 11], to: [0.6, 0.95, -2], fov: 44 },
+    hills: [{ at: [-6, -14], r: 10, h: 2.5 }],
+    props: [...trees([[-9, -16], [-4, -19], [9, -20]], 1.2), ...ground([[5, -4], [-5.5, 3], [7, -6]])],
+    cast: [
+      { id: 'ground-attacker3', at: [-2.2, -0.6], lift: 0.25, face: 70, anim: 'walk', phase: 0.25 },
+      ...rank('charger', 6, 0.9, -1.8, { x: -4.6, anim: 'charge', alt: 'attack', face: 70, turn: 0 }),
+      ...rank('charger', 5, 1, -3.4, { x: -5.6, anim: 'charge', face: 70, turn: 0, phase: 0.2 }),
+      ...rank('micropike', 3, 1.7, -5.2, { x: -6.5, anim: 'charge', face: 70, turn: 0 }),
+      { id: 'flier', at: [4.2, -6], lift: 3.6, face: 75, anim: 'glide', phase: 0.3 },
+    ],
+  },
+  // 8. (new) the life cycle, read left to right, few subjects: RULE: three to five bodies that matter, each with its
+  //    own space and a clean silhouette (never body on body): the mother at the back left with her larvae, a
+  //    cocoon and eggs close in the foreground centre (near, so they read big), then a Vimmer and the Goliath out to
+  //    the right, a dragon fly in the sky above them. The eye travels mother, eggs, fighters, flier.
+  {
+    name: 'new: the life cycle',
+    sky: BRIGHT,
+    camera: { from: [0, 0.8, 8.5], to: [0.3, 0.75, -2], fov: 46 },
+    props: [...trees([[-14, -18], [12, -20]], 1.1), ...ground([[-6.5, -1], [6, -5], [-2, -7]])],
+    cast: [
+      { id: 'mother3', at: [-3.6, -4.5], face: 30, anim: 'lay', phase: 0.5 },
+      { id: 'larva1', at: [-2.4, -2.6], face: -10, anim: 'walk', phase: 0.3 },
+      { id: 'larva1', at: [-4.6, -2.2], face: 20, anim: 'walk', phase: 0.7 },
+      { id: 'cocoon', at: [-0.8, 2.6], anim: 'grow', phase: 0.5 },
+      { id: 'egg3', at: [0.2, 3.3], anim: 'hatch', phase: 0.65 },
+      { id: 'egg2', at: [-1.8, 3.4], anim: 'grow', phase: 0.3 },
+      { id: 'flier', at: [1.8, -0.5], face: -30 },
+      { id: 'ground-attacker3', at: [4, -2.5], face: -75, anim: 'slam', phase: 0.3 },
+      { id: 'dragon-fly', at: [2.2, -7], lift: 3.6, face: -50, anim: 'fly', phase: 0.3 },
+    ],
+  },
+  // 9. (new) sky hunters. RULE: simple silhouettes against a plain, lighter area: the Dragon Fly large on the upper
+  //    left third against open sky, two Vimmers smaller and further (size falling off with distance), the swarm a
+  //    dark low band on the horizon, a Mimic Mine at its end. Low camera tilted up; the right of the sky left empty.
+  {
+    name: 'new: sky hunters',
+    sky: ['#7d9cbf', '#f8ecd2'],
+    camera: { from: [0, 0.4, 6], to: [0, 2.6, -4], fov: 54 },
+    props: trees([[10, -18], [-14, -22]], 1.2),
+    cast: [
+      { id: 'dragon-fly', at: [-1.8, -0.5], lift: 2.3, face: 35, anim: 'fly', phase: 0.3 },
+      { id: 'flier', at: [2.2, -5], lift: 4, face: 50, anim: 'glide', phase: 0.3 },
+      { id: 'flier', at: [4.5, -10], lift: 5, face: 40, anim: 'fly', phase: 0.7 },
+      ...rank('micropike', 5, 1.8, -7, { x: 2, face: 40, turn: 0, anim: 'walk', alt: 'idle' }),
+      ...rank('charger', 7, 1.1, -6, { x: 1, face: 40, turn: 0, anim: 'charge' }),
+      { id: 'whipweld', at: [6, -8.5], face: 30 },
+      { id: 'web-tower', at: [10, -11], face: -20 },
+    ],
+  },
 ];
 
 /** The one on the card. */
-export const pick = 1;
+export const pick = 6;
