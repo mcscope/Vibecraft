@@ -453,10 +453,15 @@ export class Baker {
 
   /** Bake a static object (building, tree, mine...). Origin = footprint centre. */
   bakeStatic(build: (b: ModelBuilder) => void, team: TeamColors, shadow = true, opts: BuildOpts = {}, minRadius = 0): Sprite {
-    this.ground.visible = shadow;
     const pose: Pose = { anim: 'idle', phase: 0, team, armed: true, cargo: null };
-    let { r, h } = this.measure((b) => build(b), team, [pose]);
-    r = Math.max(r, minRadius);
+    const { r, h } = this.measure((b) => build(b), team, [pose]);
+    const { canvas, ax, ay } = this.shootStatic(build, team, Math.max(r, minRadius), h, shadow, opts);
+    return { img: canvas, sx: 0, sy: 0, sw: canvas.width, sh: canvas.height, ax, ay, q: this.q };
+  }
+
+  /** A static object's picture, framed for a bounding cylinder (radius `r`, height `h`), and its anchor. */
+  private shootStatic(build: (b: ModelBuilder) => void, team: TeamColors, r: number, h: number, shadow = true, opts: BuildOpts = {}): { canvas: HTMLCanvasElement; ax: number; ay: number } {
+    this.ground.visible = shadow;
     const ext = this.extent(r, h);
     const canvas = document.createElement('canvas');
     canvas.width = Math.ceil((ext.left + ext.right) * this.q);
@@ -470,7 +475,7 @@ export class Baker {
     occlude(canvas.getContext('2d')!, dctx, canvas.width, canvas.height, Math.max(3, Math.round(this.q * 5)));
     polish(canvas.getContext('2d')!, canvas.width, canvas.height);
     this.ground.visible = true;
-    return { img: canvas, sx: 0, sy: 0, sw: canvas.width, sh: canvas.height, ax: ext.left * this.q, ay: ext.top * this.q, q: this.q };
+    return { canvas, ax: ext.left * this.q, ay: ext.top * this.q };
   }
 
   /**
@@ -505,14 +510,35 @@ export class Baker {
     return { construction, complete, damaged, joined };
   }
 
-  /** A tower's throw (BuildingArt.attack): `frames` evenly through it, in each of 8 facings. Yields between facings. */
+  /**
+   * A tower's throw (BuildingArt.attack): `frames` evenly through it, in each of 8 facings, baked apart (ThrowArt.under):
+   * each frame's still look (the model drawn with `attack.still`; alike frames share one), and over it only what the
+   * whole frame changes, cropped tight. Laid one over the other they give back the whole frame. Yields between facings.
+   */
   async bakeBuildingThrow(model: BuildingModel, size: number, team: TeamColors, timing: ThrowTiming): Promise<ThrowArt> {
-    const reach = size * Math.SQRT2 + 1.1, out: Sprite[][] = [], frames = timing.frames;
+    const n = timing.frames, pose: Pose = { anim: 'idle', phase: 0, team, armed: true, cargo: null };
+    const at = (o: number, i: number, still: boolean) => (b: ModelBuilder) => model(b, { phase: 'complete', level: 0, attack: { t: i / n, facing: o * (Math.PI / 4), still } });
+    // one framing for the whole throw (every way it faces), so its still parts sit alike from frame to frame
+    let r = size * Math.SQRT2 + 1.1, h = 0;
+    for (let o = 0; o < 8; o++) for (let i = 0; i < n; i++) { const m = this.measure(at(o, i, false), team, [pose]); r = Math.max(r, m.r); h = Math.max(h, m.h); }
+    const sheet = new Sheet(this.q), bases: Array<{ px: Uint8ClampedArray; s: Sprite }> = [];
+    const frames: Sprite[][] = [], under: Sprite[][] = [];
     for (let o = 0; o < 8; o++) {
-      out.push(Array.from({ length: frames }, (_, i) => this.bakeStatic((b) => model(b, { phase: 'complete', level: 0, attack: { t: i / frames, facing: o * (Math.PI / 4) } }), team, true, {}, reach)));
-      await new Promise((r) => setTimeout(r, 0));
+      const fs: Sprite[] = [], us: Sprite[] = [];
+      for (let i = 0; i < n; i++) {
+        const still = this.shootStatic(at(o, i, true), team, r, h), whole = this.shootStatic(at(o, i, false), team, r, h);
+        const { width: w, height: hh } = still.canvas, { ax, ay } = still;
+        const B = still.canvas.getContext('2d')!.getImageData(0, 0, w, hh).data, F = whole.canvas.getContext('2d')!.getImageData(0, 0, w, hh).data;
+        let base = bases.find((x) => same(x.px, B));
+        if (!base) { base = { px: B, s: sheet.add(B, w, hh, ax, ay) }; bases.push(base); }
+        us.push(base.s);
+        fs.push(sheet.add(overlay(B, F), w, hh, ax, ay));
+      }
+      frames.push(fs); under.push(us);
+      await new Promise((res) => setTimeout(res, 0));
     }
-    return { frames: out, from: timing.from, release: timing.release, to: timing.to };
+    sheet.pack();
+    return { frames, under, from: timing.from, release: timing.release, to: timing.to };
   }
 
   /** Bake every animation × facing for a unit. Yields between rows so the page stays responsive. */
@@ -733,5 +759,67 @@ function rubble(b: ModelBuilder, size: number, level: number, h: number): void {
       b.limb([size * 0.9, 0.1, z], [size * 0.35, h * 0.45, z + 0.3], 0.07, { color: '#3a2a1c', tex: 'wood' });
     }
     b.rock([0.5, 0.35, 0.6], [size * 0.85, 0.15, -size * 0.3], { color: '#6f6a62', tex: 'stone' }, 3);
+  }
+}
+
+const same = (a: Uint8ClampedArray, b: Uint8ClampedArray): boolean => {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+};
+
+/**
+ * What to draw over `under` (straight-alpha RGBA, the same size) to give `whole`: nothing where they match; elsewhere
+ * the colour and coverage that, laid over `under`, make `whole`'s pixel. (Exact, unless `whole` is the more see-through
+ * there: then `whole`'s own pixel.)
+ */
+export function overlay(under: Uint8ClampedArray, whole: Uint8ClampedArray): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(whole.length);
+  for (let i = 0; i < whole.length; i += 4) {
+    if (Math.abs(whole[i] - under[i]) <= 1 && Math.abs(whole[i + 1] - under[i + 1]) <= 1 && Math.abs(whole[i + 2] - under[i + 2]) <= 1 && Math.abs(whole[i + 3] - under[i + 3]) <= 1) continue;
+    const aW = whole[i + 3] / 255, aU = under[i + 3] / 255;
+    if (aU > 0.998 || aW <= aU) { out.set(whole.subarray(i, i + 4), i); continue; }
+    const a = (aW - aU) / (1 - aU); // (laid over `under`: aW = a + aU (1 − a))
+    for (let c = 0; c < 3; c++) out[i + c] = (whole[i + c] * aW - under[i + c] * aU * (1 - a)) / a;
+    out[i + 3] = Math.round(a * 255);
+  }
+  return out;
+}
+
+/** Sprites cropped to what they show and packed onto a few shared pages (fewer, smaller images to load and upload). */
+class Sheet {
+  private items: Array<{ s: Sprite; px: ImageData }> = [];
+  constructor(private q: number) {}
+
+  /** A sprite of straight-alpha RGBA `px` (`w` × `h`, anchored at `ax`, `ay`), cropped; its page comes with pack(). */
+  add(px: Uint8ClampedArray, w: number, h: number, ax: number, ay: number): Sprite {
+    let x0 = w, y0 = h, x1 = -1, y1 = -1;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (px[(y * w + x) * 4 + 3]) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    if (x1 < 0) { x0 = x1 = Math.max(0, Math.min(w - 1, Math.floor(ax))); y0 = y1 = Math.max(0, Math.min(h - 1, Math.floor(ay))); } // (nothing: one clear pixel)
+    const cw = x1 - x0 + 1, ch = y1 - y0 + 1, crop = new ImageData(cw, ch);
+    for (let y = 0; y < ch; y++) crop.data.set(px.subarray(((y0 + y) * w + x0) * 4, ((y0 + y) * w + x1 + 1) * 4), y * cw * 4);
+    const s: Sprite = { img: null as unknown as CanvasImageSource, sx: 0, sy: 0, sw: cw, sh: ch, ax: ax - x0, ay: ay - y0, q: this.q };
+    this.items.push({ s, px: crop });
+    return s;
+  }
+
+  /** Lay them out in shelves on pages 2048 wide, tallest first, and draw them there. */
+  pack(): void {
+    const W = 2048, pad = 2, pages: Array<{ h: number; at: Array<{ s: Sprite; px: ImageData; x: number; y: number }> }> = [];
+    let x = 0, y = 0, row = 0;
+    for (const it of [...this.items].sort((a, b) => b.s.sh - a.s.sh)) {
+      if (pages.length && x + it.s.sw > W) { x = 0; y += row + pad; row = 0; }
+      if (!pages.length || y + it.s.sh > W) { pages.push({ h: 0, at: [] }); x = y = row = 0; }
+      const p = pages[pages.length - 1];
+      p.at.push({ ...it, x, y }); p.h = Math.max(p.h, y + it.s.sh);
+      x += it.s.sw + pad; row = Math.max(row, it.s.sh);
+    }
+    for (const p of pages) {
+      const c = document.createElement('canvas');
+      c.width = W; c.height = Math.max(1, p.h);
+      const g = c.getContext('2d')!;
+      for (const { s, px, x, y } of p.at) { g.putImageData(px, x, y); Object.assign(s, { img: c, sx: x, sy: y }); }
+    }
+    this.items = [];
   }
 }

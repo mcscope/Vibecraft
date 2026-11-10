@@ -61,7 +61,15 @@ export interface UnitArt {
   sounds?: UnitSounds;
 }
 
-export interface ThrowArt { frames: Sprite[][]; from: number; release: number; to: number }
+export interface ThrowArt {
+  frames: Sprite[][];
+  /**
+   * The still look under each frame (same layout as `frames`), which then hold only what moves, cropped tight and
+   * drawn over it: a few still looks and small moving parts cost far fewer pixels than every whole frame.
+   */
+  under?: Sprite[][];
+  from: number; release: number; to: number;
+}
 
 export interface BuildingArt {
   /** Construction looks, earliest first (1+). */
@@ -195,10 +203,11 @@ function frameOf(an: AnimArt, set: Sprite[][], octant: number, t: FrameTime): Sp
 /**
  * A tower's throw frame (BuildingArt.attack), or null at rest. `aimed`: seconds since it began winding up at a target
  * (null: it isn't); `thrown`: seconds since its last throw (null: none yet); `windup`, `follow`: the sim's seconds
- * before and after the throw; `dir`: which way it aims (radians, map axes). Winding up it plays to `release` (out of
+ * before and after the throw; `dir`: which way it aims (radians, map axes). Its `look` replaces the building's, with
+ * `over` (its moving part, if baked apart) drawn on top. Winding up it plays to `release` (out of
  * rest first, unless it's still out from its last throw); after, on to `to`, holds there a little, then goes to rest.
  */
-export function throwFrame(art: ThrowArt, dir: number, windup: number, follow: number, aimed: number | null, thrown: number | null): Sprite | null {
+export function throwFrame(art: ThrowArt, dir: number, windup: number, follow: number, aimed: number | null, thrown: number | null): { look: Sprite; over?: Sprite } | null {
   const HOLD = 0.6, BACK = 0.6; // (seconds it stays out after a shot, and takes to go back)
   const out = (s: number) => s < follow + HOLD + BACK * 0.5; // (still out, `s` after a throw)
   let t: number | null = null;
@@ -211,8 +220,9 @@ export function throwFrame(art: ThrowArt, dir: number, windup: number, follow: n
     else if (thrown < follow + HOLD + BACK) t = art.to + ((thrown - follow - HOLD) / BACK) * (1 - art.to);
   }
   if (t === null) return null;
-  const facing = art.frames[((Math.round(dir / (Math.PI / 4)) % 8) + 8) % 8];
-  return facing[Math.min(facing.length - 1, Math.floor(t * facing.length))];
+  const o = ((Math.round(dir / (Math.PI / 4)) % 8) + 8) % 8, facing = art.frames[o];
+  const i = Math.min(facing.length - 1, Math.floor(t * facing.length));
+  return art.under ? { look: art.under[o][i], over: facing[i] } : { look: facing[i] };
 }
 
 export function buildingSprite(art: BuildingArt, complete: boolean, built: number, hp: number, maxHp: number): Sprite {
