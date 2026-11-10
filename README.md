@@ -1,6 +1,6 @@
 <h1 align="center">VibeCraft</h1>
 
-<p align="center"><b>A real-time strategy game in your browser. Play a ready-made army, or build your own with an AI. Physics keeps every fight fair.</b></p>
+<p align="center"><b>A real-time strategy game in your browser. Play one of three armies, or make your own with an AI. The game works out every unit's stats and cost from its body.</b></p>
 
 <p align="center">
   <a href="http://mcscope.com/game/vibecraft/"><b>▶ Play it now</b></a> ·
@@ -16,10 +16,10 @@
 
 ## What makes it different
 
-### 🛡️ Bring your own army
-Play one of the two shipped factions, or make your own. You describe your people in code, usually by chatting with an AI coding assistant ("vibecoding"). That covers their units, buildings, techs, art, homeworld and wildlife. Then take them online: your faction travels to your opponent as data, and their game checks it against the rules.
+### Bring your own army
+Play one of the three shipped factions, or make your own. You describe your people in code, usually by chatting with an AI coding assistant. That covers their units, buildings, techs, art, homeworld and wildlife. Then take them online: your faction travels to your opponent as data, and their game checks it against the rules.
 
-### ⚖️ Physics keeps it fair
+### Physics sets the stats
 You design **bodies**, and the engine works out each unit's health, damage, speed and cost. A body is:
 - its mass;
 - how that mass splits between muscle, frame (bone, shell, plate) and reserve;
@@ -29,14 +29,14 @@ The same rules apply to every body:
 
 ![What physics decides: muscle drives speed and blows, frame health and plate, reserve calories, length stride and turns; a blow adds the bodies' collision, throws fly ballistic arcs, and cost follows the kilos](docs/diagrams/physics.svg)
 
-Counters come straight out of the physics: spears beat cavalry, and cavalry runs down infantry and throwers. The **Arena** scores every matchup.
+Counters come from the physics: pikes counter chargers, and chargers run down infantry. The **Arena** scores every matchup.
 
 ![The arena: lynx lancers charge a block of macemen, with the matchup matrix alongside](docs/screenshots/arena.png)
 
-### 🍖 Resources are physical: calories, crystals, carts
-- **Calories.** Every unit carries a calorie tank, sized by its body. Walking, sprinting and fighting burn it. An empty unit slows down and can't fight until it eats. Units eat at buildings, from packs, or from food bearers. So supply decides how far your army can reach, and every charge has a cost.
-- **Crystals.** Every weapon's tip is crystal. A striker keeps its crystal. A thrower spends one each throw, and the spent stones lie where they land for anyone to pick up. Towers and garrisons throw from their building's stock, and ammo bearers carry crystal into the field.
-- **Carts.** Resources stay in the building that gathered them. Carts and hauling workers move them where they're needed, most urgent first. Where you build, and how you keep supplies flowing, is part of the strategy.
+### Resources are physical: calories, crystals, carts
+- **Calories.** Every unit burns calories, and a bigger body carries more. Walking drains them slowly, sprinting and fighting fast. A unit on empty is slow and too weak to fight until it eats. Units eat at buildings, from packs, or from food bearers. So supply decides how far your army can reach, and every charge has a cost.
+- **Crystals.** Crystal is ammo. A striker keeps the crystal on its weapon. A thrower spends one each throw, and the spent stones lie where they land for anyone to pick up. Towers and garrisons throw from their building's stock, and ammo bearers act as mobile restock points in the field.
+- **Carts.** Each building has its own stock. Carts and haulers move resources to where they're needed, most urgent first. Build close together and keep supplies flowing to train faster.
 
 ---
 
@@ -44,13 +44,13 @@ Counters come straight out of the physics: spears beat cavalry, and cavalry runs
 
 Three factions ship with the game. Each roster below shows every unit to scale.
 
-**The Meadowfolk:** farmers and knights of the green country. They fight with crystal maces, pikes, lancers on great lynxes, and the siege beast Hurlhorn.
+**The Meadowfolk** (simple): the most traditional army, farmers and knights. They fight with lance, mace, cavalry and siege. Automatic carts simplify resource management, so they play most like a traditional RTS.
 ![The Meadowfolk: villager, slinger, crystal maceman, pikeman, lynx lancer, hurlhorn and mule cart](docs/screenshots/roster-meadowfolk.png)
 
-**The Fenfolk:** frog-folk of the marsh. They fight with slingers, reed-spear guards, ridden bog toads, and a great siege heron.
+**The Fenfolk** (medium): frog-folk from deep in the marsh. Large bog creatures, herons and toads, reinforce the armies of little fenling worker-fighters. Expect heavy micro, and a tricky balance of economy and military.
 ![The Fenfolk: fenling, reedguard, bog toad, pack tortoise and great siege heron](docs/screenshots/roster-fenfolk.png)
 
-**The Wildwelds:** a brood of bugs with no halls. Mothers lay eggs, larvae tend the nest and change in cocoons into fighters, and big larvae lay their own bodies down as web walls and the Mimic Mine.
+**The Wildwelds** (complex): a living swarm of insectile larvae, who evolve and grow into ferocious beasts. Units make units: mothers lay eggs, larvae tend the nest and change in cocoons into fighters, and big larvae lay their own bodies down as web walls and the Mimic Mine. It's a production system unique in an RTS, with a steep learning curve.
 
 ---
 
@@ -60,13 +60,13 @@ Play the shipped factions in your browser at **[mcscope.com/game/vibecraft](http
 
 | Mode | What you do |
 |---|---|
-| **Tutorial** | Nine hands-on lessons: calories, crystals, carts, Fen hauling, charges, groupings, birds, high ground and playing the Wildwelds. |
-| **Skirmish** | Build an economy and fight the computer. |
-| **Pitched Battle** | Draft an army to a food budget, deploy it on a battlefield (river fords, a broken ridge, lake lanes, twin woods or open steppe), and fight. No economy, no reinforcements. |
+| **Tutorial** | A track of short lessons for each army: calories, crystals, supply, charges, groupings, and that army's own speciality. Each lesson has a checklist that ticks itself off as you play. |
+| **Skirmish** | Build a base and fight the computer. |
+| **Pitched Battle** | Draft an army to a food budget, deploy it on a battlefield (river fords, a broken ridge, lake lanes, twin woods, open steppe or the Mesa), and fight with what you drafted. |
 | **Spectate** | Watch two computer players fight. |
 | **Arena** | Watch any two units fight on an equal budget, and see every matchup scored. Tick *You command blue* to fight it yourself. |
 | **Proving Grounds** | Command a full army against training dummies and a target fort. |
-| **Online game** | Play a friend, one on one. |
+| **Online game** | Play against a friend, one on one. |
 | **Codex** / **Unit Lab** | Browse every faction's tech tree, and see how each body turns into stats. |
 
 **Maps:** Woodlands, Steppe (after AoE2's Arabia), Water Donut, Cliff Maze, and Sunken Temple (after StarCraft's Lost Temple). Pick one in the menu. Online, the host picks.
@@ -125,7 +125,7 @@ Both players need the same version of the engine, since both games must follow i
 
 **Fairness.** Your opponent's game works out every stat and cost from your faction itself. So every unit costs what its body is worth. Both players start from the same pool of resources (`START_POOL`), and your starting base and workers come out of it. A grand base means a lean start. A few things sit outside physics, like how much wildlife roams your half, and the game limits those too. The rules live in `src/sim/fairness.ts`.
 
-**Determinism.** Only commands travel between players. Each game then simulates the same world in step ("lockstep"). So the simulation must give identical results everywhere: use `world.rng` for randomness, never `Math.random` or the clock. `tests/factions.test.ts` checks this: it plays the same AI game twice and compares the worlds throughout.
+**Determinism.** Only commands travel between players. Each game then simulates the same world in step ("lockstep"). So the simulation must give identical results everywhere: take all randomness from `world.rng`, and keep `Math.random` and the clock out of `src/sim/`. `tests/factions.test.ts` checks this: it plays the same AI game twice and compares the worlds throughout.
 
 ---
 
@@ -153,6 +153,7 @@ npm run build:fast   # production build, art baked in the browser
 - `?mode=sprites&unit=lynx&anim=attack&facing=3` shows every frame of one animation.
 - `?mode=sprites&faction=fenfolk` shows a faction's roster.
 - `?mode=faceoff&you=fenfolk&foe=meadowfolk&third=wildwelds` lines up two or three armies, as in the header image.
+- `?mode=tutorial&track=wildwelds&lesson=1` opens one lesson of an army's track.
 - `&sounddebug=1` (any mode) lists the last sounds played, with ✕ to strike a bad clip.
 - `/voicelab/index.html` sorts recorded clips into unit voices and combat sounds. `npm run voices` imports its newest saved labels into `public/voices/`.
 
