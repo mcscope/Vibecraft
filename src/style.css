@@ -728,7 +728,7 @@ html.touch, .touch body {
   .touch .side-rally.left { left: 2px; }
   .touch .side-rally.right { right: 2px; }
   .touch #panel { height: 166px; padding: 6px calc(8px + env(safe-area-inset-right)) 6px calc(8px + env(safe-area-inset-left)); }
-  .touch #bottom.expanded #panel { height: min(64vh, calc(100dvh - 160px)); }
+  .touch #bottom.expanded #panel { height: auto; min-height: 166px; max-height: min(64vh, calc(100dvh - 160px)); }
   .touch .armed-banner { bottom: calc(53px + env(safe-area-inset-bottom) + 166px + 48px); }
   .touch #speed { top: calc(146px + env(safe-area-inset-top)); left: 96px; }
   .touch #chat { bottom: calc(53px + 166px + 56px); }
@@ -768,7 +768,6 @@ html.touch, .touch body {
   .touch #chat { left: 70px; bottom: 60px; width: calc(100vw - 62px - 300px - 16px); }
   .touch #help { top: calc(44px + env(safe-area-inset-top)); left: calc(224px + env(safe-area-inset-left)); right: calc(306px + env(safe-area-inset-right)); width: auto; font-size: 14px; }
   .touch #help:not(.folded) { left: calc(66px + env(safe-area-inset-left)); max-height: calc(100dvh - 52px); overflow-y: auto; }
-  .touch #help.folded .help-next { display: none; }
 }
 
 /* phones, either way up: smaller panel parts */

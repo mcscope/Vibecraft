@@ -279,6 +279,8 @@ async function run(g: GameSetup): Promise<void> {
   // a pitched battle opens on deployment: the world holds still until Ready
   const deploy = m === 'battle' ? new BattleDeploy(world, renderer, canvas, input.rs, (ids) => input.setSelection(ids), () => { if (battleAI) battleAI.started = true; }) : null;
   if (deploy) touch.intercept = (x, y, button) => deploy.press(x, y, button);
+  // (a phone sees a small patch of field: start a little zoomed out, as a player would pinch to anyway)
+  if (TOUCH && Math.min(window.innerWidth, window.innerHeight) <= 520) renderer.cam.zoom = 0.75;
   if (m === 'faceoff') renderer.cam.centerOn(23.5, 23.5);
   else if (m === 'battle') { /* (the deploy step framed the camera) */ }
   else if (m === 'tutorial') {
