@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>VibeCraft</title>
+    <meta name="description" content="A real-time strategy game that runs in your browser. Play one of three armies or make your own." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Alegreya+Sans:wght@400;500;700&display=swap" rel="stylesheet" />
   </head>
@@ -11,23 +12,44 @@
     <canvas id="game"></canvas>
 
     <div id="menu">
-      <div class="menu-box">
+      <header class="menu-hero">
         <h1>VibeCraft</h1>
-        <p class="sub">Every army is built by its player. Physics keeps it fair.</p>
-        <button data-href="./?mode=tutorial&lesson=0"><b>Tutorial</b><span>Hands-on lessons: calories, crystals, carts, charges, groupings and birds.</span></button>
-        <button data-mode="demo"><b>Proving Grounds</b><span>Command a full army against training dummies and a target fort.</span></button>
-        <div class="menu-factions">You <select data-pick="you"></select> vs <select data-pick="foe"></select></div>
-        <div class="menu-factions">Map <select data-map></select> AI <select data-ai></select></div>
-        <button data-mode="skirmish"><b>Skirmish</b><span>Build an economy and fight the AI.</span></button>
-        <button data-mode="spectate"><b>Spectate</b><span>Watch two AIs fight it out.</span></button>
-        <button data-mode="battle"><b>Pitched Battle</b><span>Draft an army, deploy it on a battlefield, and fight: no economy, no reinforcements.</span></button>
-        <button data-mode="arena"><b>Arena</b><span>Watch any two units fight on an equal budget, with every matchup scored.</span></button>
-        <button data-online><b>Online game</b><span>Play a friend, each bringing your own faction.</span></button>
-        <button data-href="./codex.html"><b>Codex</b><span>Every faction's tech tree, units and abilities.</span></button>
-        <button data-href="./make.html"><b>Make your army</b><span>How to vibecode your own faction and bring it online.</span></button>
-        <button data-open-settings><b>Settings</b><span>Controls, scrolling.</span></button>
-        <div class="menu-links"><a href="./lab.html">Unit Lab →</a><a href="https://github.com/mcscope/Vibecraft" target="_blank" rel="noopener">GitHub →</a></div>
-      </div>
+        <p class="sub">A strategy game in your browser. Play one of three armies, or make your own.</p>
+      </header>
+      <main class="menu-main">
+        <section class="menu-card">
+          <h2>Play</h2>
+          <div class="matchup">
+            <label>You <select data-pick="you"></select></label>
+            <span class="vs">vs</span>
+            <label>Foe <select data-pick="foe"></select></label>
+          </div>
+          <div class="matchup">
+            <label>Map <select data-map></select></label>
+            <label>AI <select data-ai></select></label>
+          </div>
+          <button class="mode primary" data-mode="skirmish"><b>▶ Play Skirmish</b><span>Build a base and fight the computer.</span></button>
+          <div class="mode-grid">
+            <button class="mode" data-mode="battle"><b>Pitched Battle</b><span>Pick an army and fight. No base building.</span></button>
+            <button class="mode" data-online><b>Online</b><span>Play against a friend.</span></button>
+            <button class="mode" data-mode="spectate"><b>Spectate</b><span>Watch the computer play itself.</span></button>
+            <button class="mode" data-mode="arena"><b>Arena</b><span>Watch any two units fight.</span></button>
+          </div>
+        </section>
+        <section class="menu-card">
+          <h2>New here?</h2>
+          <button class="mode" data-href="./?mode=tutorial&lesson=0"><b>Tutorial</b><span>Short lessons on food, crystals, carts and charging.</span></button>
+          <button class="mode" data-mode="demo"><b>Proving Grounds</b><span>Test a full army on training dummies.</span></button>
+          <h2>More</h2>
+          <button class="mode" data-href="./codex.html"><b>Codex</b><span>Look up every unit, building and tech.</span></button>
+          <button class="mode" data-href="./make.html"><b>Make your army</b><span>How to make your own faction.</span></button>
+        </section>
+      </main>
+      <footer class="menu-links">
+        <a href="#" data-open-settings>Settings</a>
+        <a href="./lab.html">Unit Lab</a>
+        <a href="https://github.com/mcscope/Vibecraft" target="_blank" rel="noopener">GitHub</a>
+      </footer>
     </div>
 
     <div id="lobby">
