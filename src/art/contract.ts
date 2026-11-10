@@ -28,7 +28,22 @@ export interface Sprite {
 /** Model units a map tile spans (art is modelled in units of ~1 m; a tile is 2 m). */
 export const UNITS_PER_TILE = 2;
 
-export type ArtAnim = 'idle' | 'walk' | 'give' | 'slam' | 'charge' | 'brace' | 'stagger' | 'fly' | 'leap' | 'climb' | 'soar' | 'glide' | 'land' | 'bankL' | 'bankR' | 'swoop' | 'rise' | 'reload' | 'lay' | 'grow' | 'hungry' | 'hatch' | 'attack' | 'cut' | 'gather' | 'eat' | 'tired' | 'die' | 'carryFood' | 'carryWood' | 'carryCrystal';
+/**
+ * A hopper's 'slam' (UnitBakeOptions.slam: its bound is its blow) comes in three parts, each played by the sim's own
+ * numbers: up to SLAM.air it's crouched, winding up to spring (how far through its wait); up to SLAM.hit it's in the air
+ * before its blow lands (how far through the bound's air time; a blow landed as it comes down makes contact at the end);
+ * after SLAM.hit, its blow has landed in the air and the bound carries on (again by air time): follow-through, recovery.
+ */
+export const SLAM = { air: 0.35, hit: 0.675 } as const;
+
+/** A slam's baked phase as its part and how far through that part (0..1). */
+export function slamPart(phase: number): { part: 'crouch' | 'air' | 'after'; k: number } {
+  if (phase < SLAM.air) return { part: 'crouch', k: phase / SLAM.air };
+  if (phase < SLAM.hit) return { part: 'air', k: (phase - SLAM.air) / (SLAM.hit - SLAM.air) };
+  return { part: 'after', k: Math.min(1, (phase - SLAM.hit) / (1 - SLAM.hit)) };
+}
+
+export type ArtAnim ='idle' | 'walk' | 'give' | 'slam' | 'charge' | 'brace' | 'stagger' | 'fly' | 'leap' | 'climb' | 'soar' | 'glide' | 'land' | 'bankL' | 'bankR' | 'swoop' | 'rise' | 'reload' | 'lay' | 'grow' | 'hungry' | 'hatch' | 'attack' | 'cut' | 'gather' | 'eat' | 'tired' | 'die' | 'carryFood' | 'carryWood' | 'carryCrystal';
 
 export interface AnimArt {
   /**

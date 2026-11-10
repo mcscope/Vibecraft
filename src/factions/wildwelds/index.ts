@@ -15,6 +15,7 @@ import { SHOT_FROM, SHOT_TO, THROW_AT, webTower } from './mimic';
 import type { Section, ModelBuilder, Pose, Vec3 as V3 } from '../../kits/bake3d/types';
 import { aim, footAt, jointBetween, shapedLimb, span } from '../../kits/bake3d/gait';
 import type { Mat } from '../../kits/bake3d/types';
+import { slamPart } from '../../art/contract';
 
 type Unit = UnitSpec & { model: (b: ModelBuilder, p: Pose) => void };
 const TAU = Math.PI * 2;
@@ -1026,10 +1027,12 @@ function gHopper(b: ModelBuilder, p: Pose, gait = HOPPER_GAIT): void {
   const strikePitch = (crouchC: number, sxC: number) => -Math.asin(Math.max(0, Math.min(0.95, (1.28 - 0.55 * crouchC - STRIKE_H) / (0.7 * 1.12 * sxC + 0.22))));
   let o: Pose5 = { crouch: 0.65 + 0.03 * Math.sin(t), height: 0, pitch: 0, footX: 0, footY: 0, thrust: 0, sx: 1, sy: 1 + 0.02 * Math.sin(t) }, bend = 0;
   if (moving) { o = bound(ph); bend = Math.max(-0.3, Math.min(0.3, (o.pitch - bound(ph - 0.04).pitch) * 2)); }
-  else if (p.anim === 'slam') { // its bound is the blow: crouching (to 0.35), then the bound (its arc the sim's), coming
-    // over ram first, stretched into the impact, squashed by it at contact (the end)
-    const a = p.phase, f = Math.max(0, (a - 0.35) / 0.65);
-    if (a < 0.35) { const c = a < 0.28 ? sm(a / 0.25) : 1 - sm((a - 0.28) / 0.07); o = { ...o, crouch: c, pitch: 0.22 * c - 0.08 * Math.sin((Math.PI * a) / 0.35), sy: 1 - 0.2 * c, sx: 1 + 0.07 * c + (a > 0.28 ? 0.2 * sm((a - 0.28) / 0.07) : 0) }; }
+  else if (p.anim === 'slam') { // its bound is the blow (the art contract's SLAM parts): crouching, then the bound (its
+    // arc the sim's), coming over ram first, stretched into the impact, squashed by it at contact (the end); struck in the
+    // air, the rest of the bound is its bound, the ram drawing back in
+    const { part, k } = slamPart(p.phase), a = k * 0.35, f = k;
+    if (part === 'crouch') { const c = a < 0.28 ? sm(a / 0.25) : 1 - sm((a - 0.28) / 0.07); o = { ...o, crouch: c, pitch: 0.22 * c - 0.08 * Math.sin((Math.PI * a) / 0.35), sy: 1 - 0.2 * c, sx: 1 + 0.07 * c + (a > 0.28 ? 0.2 * sm((a - 0.28) / 0.07) : 0) }; }
+    else if (part === 'after') { const q = UP + AIR * Math.min(0.999, k); o = bound(q); o.thrust = 0.42 * (1 - sm(k / 0.6)); bend = Math.max(-0.3, Math.min(0.3, (o.pitch - bound(q - 0.04).pitch) * 2)); }
     else {
       const hitPitch = strikePitch(0.8, 0.87);
       o = { ...o, crouch: 0.8 * sm((f - 0.8) / 0.2), height: 4 * f * (1 - f) * APEX, pitch: 0.35 + (hitPitch - 0.35) * sm((f - 0.1) / 0.9), thrust: 0.42 * sm((f - 0.15) / 0.4) };
@@ -1037,7 +1040,7 @@ function gHopper(b: ModelBuilder, p: Pose, gait = HOPPER_GAIT): void {
       o.sy = f < 0.85 ? 1 : 1 - 0.2 * sm((f - 0.85) / 0.15); // (and squashed at contact)
       o.footX = -0.25 - 0.3 * sm(f / 0.5) + 0.12 * sm((f - 0.7) / 0.3); o.footY = o.height * 0.5;
     }
-    bend = a > 0.35 ? -0.2 * Math.sin(Math.PI * Math.min(1, (a - 0.35) / 0.5)) : 0; // (its tail dragging after the lunge)
+    if (part === 'air') bend = -0.2 * Math.sin(Math.PI * Math.min(1, f * 1.3)); // (its tail dragging after the lunge)
   } else if (p.anim === 'attack') { // standing, it strikes without leaving the ground: crouching (squashed), then lunging
     // ram first (stretched, the fastest moment), then settling back past level
     const a = p.phase;

@@ -14,6 +14,7 @@
 import { footAt, jointBetween, shapedLimb } from '../../kits/bake3d/gait';
 import type { BuildingSpec, FactionSpec, TechSpec, UnitSpec } from '../types';
 import type { BuildingModel, Mat, ModelBuilder, UnitModel } from '../../kits/bake3d/types';
+import { slamPart } from '../../art/contract';
 import { fenWildlife } from './wildlife';
 import { fenArm, fenLoad, fenling as body, hop, type FenLook } from './rig';
 import * as models from './buildings';
@@ -93,6 +94,60 @@ const reedguard: FenUnit = {
 const toadSkin: Mat = { color: '#5e6e3a', tex: 'leather' };
 const toadBelly: Mat = { color: '#c8b87a', tex: 'leather' };
 const riderLook: FenLook = { skin: '#7aa05a', wrap: { color: '#5a4a30', tex: 'leather' }, hat: 'crest', mounted: true };
+/** The toad's bound (its UnitSpec.gait, shared with its art so the two always match): great lumbering leaps. */
+const TOAD_GAIT = { hop: 0.5, period: 1.1 }; // (airborne 1/3–5/6 of each stride)
+/** Its drawn scale: drawn at its old 150 kg proportions, scaled up by the cube root of its mass (the rider stays fenling-sized). */
+const TOAD_K = Math.cbrt(200 / 150);
+/** Its bound as the sim plays it (sim/abilities/gait.ts): off the ground UP through each stride, in the air for AIR of it,
+ *  flying as a thrown body does, its apex g·t²/8 up (in metres, which a baked unit is: ÷ its scale into model units). */
+const TOAD_UP = (1 - TOAD_GAIT.hop) * (2 / 3), TOAD_AIR = TOAD_GAIT.hop;
+const TOAD_APEX = (9.8 * (TOAD_GAIT.hop * TOAD_GAIT.period) ** 2) / 8 / TOAD_K;
+const smooth = (x: number) => { const c = Math.max(0, Math.min(1, x)); return c * c * (3 - 2 * c); };
+const arc = (a: number) => 4 * a * (1 - a) * TOAD_APEX; // (its height a way through its time in the air)
+
+/**
+ * The toad's pose. `y` lifts it, `x` drives it forward, `pitch` tips its nose (+ up), `gape` opens its jaw (1 its bite; wider in a slam), `crouch`
+ * sinks it on its haunches, `tuck` takes its feet off the ground with it (0 planted, 1 in the air), `reach` throws its
+ * forelegs forward, `kick` its hind legs out behind; its rider `lean`s (+ back) and swings its `arm` (undefined: its own).
+ */
+type ToadPose = { y: number; x: number; pitch: number; gape: number; crouch: number; tuck: number; reach: number; kick: number; lean: number; arm?: number };
+
+/**
+ * Its slam (its bound is its blow; the art contract's SLAM parts). Crouched: it sinks and gathers, then springs nose up.
+ * In the air before the blow: its jaw gapes, and its head and the crystal-studded jaw drive down and forward, the rider
+ * hauling back, switch raised; landing its blow as it comes down, the jaw clamps shut at the landing, the rider thrown
+ * forward. After a blow landed in the air: jaw clamped, head driven down, rider pitched forward, then all of it
+ * recovering for the landing as the bound carries on.
+ */
+function toadSlam(phase: number): ToadPose {
+  const { part, k } = slamPart(phase);
+  if (part === 'crouch') {
+    const c = smooth(k / 0.75), u = smooth((k - 0.75) / 0.25); // (sinking and gathering, then the push)
+    return { y: 0.04 * u, x: -0.06 * c * (1 - u), pitch: 0.18 * c + 0.08 * u, gape: 0.4 * u, crouch: 0.24 * c * (1 - u), tuck: 0, reach: 0, kick: 0.5 * u, lean: -0.2 * c + 0.25 * u, arm: 0.35 + 1.6 * c };
+  }
+  if (part === 'air') {
+    const a = k, shut = smooth((a - 0.85) / 0.15); // (clamping shut on the target as it comes down)
+    return {
+      y: arc(a), x: 0.32 * smooth((a - 0.1) / 0.6), pitch: 0.24 - 0.74 * smooth(a), gape: 1.1 * smooth(a / 0.3) * (1 - shut), crouch: 0, tuck: 1,
+      reach: smooth(a / 0.45), kick: 1 - 0.7 * smooth((a - 0.3) / 0.7), lean: 0.25 - 0.6 * smooth((a - 0.55) / 0.45), arm: 1.95 - 1.3 * smooth((a - 0.6) / 0.4),
+    };
+  }
+  const a = k, r = smooth(a / 0.85); // (struck: clamped and driven down, then recovering for the landing)
+  return { y: arc(a), x: 0.32 * (1 - r), pitch: -0.5 * (1 - r), gape: 0, crouch: 0, tuck: 1 - smooth((a - 0.8) / 0.2), reach: 1 - 0.8 * r, kick: 0.3 * (1 - r), lean: -0.15 * (1 - r), arm: 0.65 - 0.3 * r };
+}
+
+/** Its pose for any animation: the slam; walking (played by stride: its bound, the sim's arc); biting standing; at rest. */
+function toadPose(p: { anim: string; phase: number }): ToadPose {
+  const ph = p.phase, rest: ToadPose = { y: 0, x: 0, pitch: 0, gape: 0, crouch: 0, tuck: 0, reach: 0, kick: 0, lean: 0 };
+  if (p.anim === 'slam') return toadSlam(ph);
+  if (p.anim === 'walk') { const a = (ph - TOAD_UP) / TOAD_AIR; return { ...rest, y: a > 0 && a < 1 ? arc(a) : 0 }; }
+  if (p.anim === 'attack') {
+    const lunge = Math.sin(Math.min(1, ph * 1.3) * Math.PI) * 0.3; // (to its sim reach)
+    return { ...rest, x: lunge, pitch: -lunge * 0.3, gape: Math.sin(Math.min(1, ph * 1.6) * Math.PI) };
+  }
+  return rest;
+}
+
 const bogToad: FenUnit = {
   id: 'bog-toad',
   name: 'Bog Toad',
@@ -103,33 +158,35 @@ const bogToad: FenUnit = {
   physique: { muscle: 0.5, frame: 0.4, reserve: 0.1 },
   attack: { style: 'strike', crystalMass: 2.5 },
   refinement: 2.0, // as refined as the Toad Wallow allows (2.05): a big body bred well
-  gait: { hop: 0.5, period: 1.1 }, // great lumbering leaps: airborne 1/3–5/6 of each stride
+  gait: TOAD_GAIT,
   model(outer, p) {
-    // drawn at its old 150 kg proportions, scaled up by the cube root of its mass (the rider stays fenling-sized)
-    const K = Math.cbrt(200 / 150);
+    const K = TOAD_K;
     outer.joint([0, 0, 0], [0, 0, 0], (b) => {
-    const ph = p.phase;
-    const hop = p.anim === 'walk' && ph > 1 / 3 && ph < 5 / 6 ? Math.sin(((ph - 1 / 3) / 0.5) * Math.PI) * 0.32 : 0;
-    const lunge = p.anim === 'attack' ? Math.sin(Math.min(1, p.phase * 1.3) * Math.PI) * 0.3 : 0; // (to its sim reach)
-    // haunches and forelegs
+    const o = toadPose(p);
+    // haunches and legs: on the ground its feet stay planted; in the air (`tuck`) they leave the ground with it, the hind
+    // legs kicked out behind, the forelegs thrown forward
+    // (in the air its haunches and shoulders go wherever its body goes: forward with it, tipped with its pitch)
+    const foot = 0.05 + o.y * o.tuck, hx = o.x * (0.3 + 0.7 * o.tuck), cs = Math.cos(o.pitch) - 1, sn = Math.sin(o.pitch);
+    const tx = (x: number, y: number) => (x * cs - y * sn) * o.tuck, ty = (x: number, y: number) => (x * sn + y * cs) * o.tuck; // (a body point's shift as it tips)
     for (const z of [1, -1]) {
-      b.sphere([0.32, 0.28, 0.24], [-0.35, 0.3 + hop * 0.4, 0.42 * z], toadSkin);
-      b.limb([-0.1, 0.12, 0.6 * z], [-0.55, 0.05, 0.72 * z], 0.07, toadSkin, 0.05);
-      b.limb([0.4 + lunge * 0.3, 0.45 + hop, 0.3 * z], [0.55 + lunge * 0.5, 0.05, 0.4 * z], 0.07, toadSkin, 0.06);
+      b.sphere([0.32, 0.28, 0.24], [-0.35 + hx + tx(-0.35, 0.3), 0.3 + o.y * (0.4 + 0.6 * o.tuck) - o.crouch + ty(-0.35, 0.3), 0.42 * z], toadSkin);
+      b.limb([-0.1 + hx + tx(-0.1, 0.12), 0.12 + o.y * o.tuck - o.crouch * 0.5 + ty(-0.1, 0.12), 0.6 * z], [-0.55 - 0.35 * o.kick + hx * o.tuck, foot + 0.12 * o.kick, 0.72 * z], 0.07, toadSkin, 0.05);
+      b.limb([0.4 + hx + tx(0.4, 0.45), 0.45 + o.y - o.crouch * 0.5 + ty(0.4, 0.45), 0.3 * z], [0.55 + o.x * 0.5 + 0.3 * o.reach, foot + 0.1 * o.reach, 0.4 * z], 0.07, toadSkin, 0.06);
     }
-    b.joint([lunge, hop, 0], [0, 0, -lunge * 0.3], (c) => {
+    b.joint([o.x, o.y - o.crouch * 0.6, 0], [0, 0, o.pitch], (c) => {
       c.sphere([0.75, 0.48, 0.62], [0, 0.6, 0], toadSkin);
       c.sphere([0.6, 0.3, 0.5], [0.05, 0.4, 0], toadBelly);
       for (const [x, z] of [[-0.2, 0.3], [0.1, -0.35], [-0.4, -0.1], [0.25, 0.15]]) c.sphere(0.07, [x, 0.98, z], { color: '#4a5a2e', tex: 'leather' }); // warts
       c.sphere([0.36, 0.26, 0.44], [0.62, 0.7, 0], toadSkin); // head
       for (const z of [1, -1]) c.sphere([0.1, 0.1, 0.1], [0.7, 0.92, 0.22 * z], { color: '#d8b84a', rough: 0.3 }); // eyes
-      // the bite: on the lunge its jaw drops wide open, then snaps shut on the target
-      const gape = Math.sin(Math.min(1, p.phase * 1.6) * Math.PI) * (p.anim === 'attack' ? 1 : 0);
-      c.box([0.05, 0.05 + gape * 0.32, 0.62], [0.92, 0.6 - gape * 0.16, 0], { color: '#5a2420' }); // the pink-dark of its mouth
+      // the bite: its jaw drops wide open, then snaps shut on the target
+      const gape = o.gape;
+      c.box([0.05, 0.05 + gape * 0.22, 0.56], [0.84, 0.6 - gape * 0.11, 0], { color: '#5a2420' }); // the pink-dark of its mouth
       c.joint([0.4, 0.55, 0], [0, 0, -gape * 0.55], (jaw) => jaw.sphere([0.32, 0.1, 0.4], [0.24, -0.04, 0], toadSkin)); // lower jaw
       if (p.armed) c.crystal(0.18, [0.95, 0.75, 0], [0, 0, -1.2]); // crystal-studded jaw
       c.box([0.4, 0.05, 0.5], [-0.05, 1.08, 0], { team: 'primary', tex: 'cloth' });
-      c.joint([-0.05, 0.6, 0], [0, 0, 0], (r) => body(r, { ...p, anim: p.anim === 'walk' ? 'idle' : p.anim }, riderLook, fenArm(p, 'jab') * 0.6, (h) => {
+      // the rider: in a slam it hauls back as the toad leaps, is thrown forward as it strikes, its switch raised and whipped down
+      c.joint([-0.05, 0.6, 0], [0, 0, o.lean], (r) => body(r, { ...p, anim: p.anim === 'walk' || p.anim === 'slam' ? 'idle' : p.anim }, riderLook, o.arm ?? fenArm(p, 'jab') * 0.6, (h) => {
         h.limb([0, 0.2, 0], [0, -0.5, 0], 0.014, WILLOW);
       }), 0.9 / K);
     });
