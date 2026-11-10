@@ -40,7 +40,7 @@ export async function runSpriteSheet(params: URLSearchParams): Promise<void> {
   // &turn=4: a turn-around, that many facings side by side (one frame each)
   const turn = +(params.get('turn') ?? 0);
   if (turn > 0) { const all = a.frames, step = Math.max(1, Math.round(all.length / turn)); a.frames.splice(0, all.length, all.filter((_, i) => i % step === 0).map((row) => row[0])); }
-  const cell = Math.max(...a.frames.flat().map((s) => Math.max(s.sw, s.sh) / s.q)) * scale * (turn > 0 ? 1.7 : 1); // (a turn-around: room for a wide body either side)
+  const cell = Math.max(...a.frames.flat().map((s) => Math.max(s.sw, s.sh) / s.q)) * scale * (turn > 0 ? 1.7 : 1) * +(params.get('pad') ?? 1); // (a turn-around: room for a wide body either side; &pad=1.5: roomier cells, for a pose that reaches out of its sprite's box)
   const cols = Math.max(...a.frames.map((f) => f.length));
   const c = document.createElement('canvas');
   c.width = cols * cell; c.height = a.frames.length * cell;

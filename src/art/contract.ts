@@ -34,7 +34,7 @@ export const UNITS_PER_TILE = 2;
  * before its blow lands (how far through the bound's air time; a blow landed as it comes down makes contact at the end);
  * after SLAM.hit, its blow has landed in the air and the bound carries on (again by air time): follow-through, recovery.
  */
-export const SLAM = { air: 0.35, hit: 0.675 } as const;
+export const SLAM = { air: 0.2, hit: 0.62 } as const;
 
 /** A slam's baked phase as its part and how far through that part (0..1). */
 export function slamPart(phase: number): { part: 'crouch' | 'air' | 'after'; k: number } {
