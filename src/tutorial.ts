@@ -186,7 +186,7 @@ export const LESSONS: Lesson[] = [
   {
     title: 'High ground',
     you: meadowfolk, foe: meadowfolk, look: [20, 25], map: hillField, fog: true,
-    text: `<p>The ground has <b>levels</b>. A <b>cliff</b> is a rock face where the ground drops a level, and nothing walks up it. A <b>ramp</b> is a smooth slope that joins two levels. The hill ahead has a ramp on each side.</p>
+    text: `<p>The ground has <b>levels</b>, joined by <b>ramps</b>. The hill ahead has a ramp on each side.</p>
 <p><b>Try:</b> send one hurlhorn round the hill to the macemen on the low ground beyond it. From down there, each stone does about 110 damage, so a maceman takes two. Then walk the other hurlhorn up the ramp, to the hill's edge above the macemen. A stone thrown down gains the energy of its fall: about 145 damage, and one stone drops a maceman.</p>
 <p>High ground also <b>sees further</b>: 2 tiles more for each level. Watch the fog pull back as your hurlhorn climbs.</p>`,
     steps: [{ text: 'Throw from the low ground', done: (w) => thrown(w, 'hurlhorn') }, { text: 'Walk a hurlhorn up onto the hill', done: (w) => yours(w, 'hurlhorn').some((u) => u.x >= HILL.x0 && u.x <= HILL.x1 + 1 && u.y >= HILL.y0 && u.y <= HILL.y1 + 1) }, { text: 'Drop a maceman', done: (w) => theirs(w, 'maceman') < 6 }],
@@ -216,7 +216,7 @@ export const LESSONS: Lesson[] = [
     you: fenfolk, foe: meadowfolk, look: [20, 26],
     text: `<p>Every weapon's tip is <b>crystal</b>. A striker keeps its crystal, but a thrower spends one with every throw. Each fenling carries 6 sling stones.</p>
 <p><b>Try:</b> select your fenlings and right-click a maceman. Count the throws. Spent stones lie on the ground as <b>shards</b>, and anyone can pick them up.</p>
-<p>A fenling that runs dry goes to restock. The <b>pack tortoise</b> is a walking crystal store. Move it up behind your fenlings. It sweeps up the shards it can see and rearms fenlings near it, so they don't walk home. The Stilt Hall restocks them too (${key('resupply')}).</p>`,
+<p>A fenling that runs dry goes to restock. The <b>pack tortoise</b> is a walking crystal store. Move it up behind your fenlings. It sweeps up the shards it can see and acts as a mobile restock point for fenlings, who can quickly run out of ammo. The Stilt Hall restocks them too (${key('resupply')}).</p>`,
     steps: [{ text: 'Sling at a maceman', done: (w) => thrown(w, 'fenling') }, { text: 'Move the pack tortoise up behind them', done: (w) => yours(w, 'pack-tortoise').some((u) => u.x > 14) }, { text: 'A fenling restocks', done: (w) => yours(w, 'fenling').some((u) => u.order.kind === 'rearm' || u.order.kind === 'resupply') }],
     setup(w) {
       const hall = base(w, 0, 'stilt-hall', 6, 24, { food: 1500, crystal: 300 });
@@ -229,7 +229,7 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Fen hauling',
     you: fenfolk, foe: meadowfolk, look: [16, 26],
-    text: `<p>The Fenfolk have <b>no carts</b>. Each little <b>reed hut</b> is its own base. Fenlings drop what they gather at the nearest one, and each hut trains from its own stock.</p>
+    text: `<p>For resources to get around your base, you must assign a fenling as a <b>hauler</b>. Each little <b>reed hut</b> is its own base. Fenlings drop what they gather at the nearest one, and each hut trains from its own stock.</p>
 <p><b>Try:</b> the Stilt Hall is stocked, but both reed huts are empty. Click a hut and queue some reedguards: now it needs food and crystal. Then select all your fenlings and right-click that hut. They <b>haul</b> what it needs from the Stilt Hall. Each fenling carries only about 9 kg a trip.</p>
 <p>So Fen players build huts where the work is. Gather beside a hut and train beside it, and nothing travels far.</p>`,
     steps: [{ text: 'Queue reedguards at a reed hut', done: (w) => built(w, 'reed-hut').some((b) => b.queue.length > 0) || yours(w, 'reedguard').length > 0 }, { text: 'Haul food to that hut', done: (w) => built(w, 'reed-hut').some((b) => b.stock.food > 0) || yours(w, 'reedguard').length > 0 }],
