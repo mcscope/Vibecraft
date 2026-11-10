@@ -821,6 +821,8 @@ html.touch, .touch body {
   .touch #bottom:not(.expanded) :is(.building-panel, .unit-panel:has(.trains)) .info { flex: 0 0 132px; }
   .touch #bottom:not(.expanded) :is(.building-panel, .unit-panel:has(.trains)) .actions { flex: 1 1 0; }
   .touch #bottom:not(.expanded) .unit-panel:has(.trains) .portrait.big { display: none; }
+  .touch #bottom:not(.expanded) .info .bar.train { height: auto; min-height: 13px; }
+  .touch #bottom:not(.expanded) .info .bar.train span { white-space: normal; line-height: 1.25; padding: 1px 4px; }
   .touch #bottom:not(.expanded) .building-panel :is(.capital, .bar.stock, .techs, .garrison-btn, [data-carts], .sow, .hint) { display: none; }
   .touch #bottom:not(.expanded) .trains { flex-wrap: nowrap; overflow-x: auto; }
   .touch #bottom:not(.expanded) .trains > * { flex: none; }
