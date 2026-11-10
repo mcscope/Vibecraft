@@ -98,9 +98,9 @@ const groupingSteps: Step[] = [
 ];
 
 /** The opening every army's Calories lesson shares. */
-const CALORIES = '<p>Every unit has a <b>calorie tank</b>: the orange bar under its health. Walking burns it. Sprinting burns it about four times as fast, and every blow costs some. A big body holds more, and moves each kilo more cheaply.</p>';
+const CALORIES = '<p>Every unit burns <b>calories</b>: the orange bar under its health. Walking drains it slowly, sprinting about four times as fast, and every blow costs some. Big units carry more.</p>';
 /** And every Charges lesson's. */
-const CHARGE = 'A charge turns speed into damage. A running body adds the energy of the <b>collision</b> to its blow, and that grows with the square of its speed.';
+const CHARGE = 'A <b>charge</b> turns speed into damage: the faster and heavier the unit, the harder it hits.';
 
 /** A Groupings lesson: the other side charges after 30 s (time to read, and to rearrange your units). */
 function chargeAfter30(w: World): void {
@@ -116,8 +116,8 @@ export const LESSONS: Lesson[] = [
     title: 'Calories',
     you: meadowfolk, foe: fenfolk, look: [16, 26],
     text: `${CALORIES}
-<p><b>Try:</b> select the lancers, press ${key('charge')} (Charge) and right-click a fenling. They sprint in to charge: watch their bars drain. Charge again and again until they run low.</p>
-<p>An empty unit is <b>exhausted</b>: it's slow and too weak to fight. Select your units and press ${key('resupply')} (Resupply). They walk home to the Town Center to eat.</p>`,
+<p>Select the lancers, press ${key('charge')} (Charge) and right-click a fenling. A charge is a sprint, so watch their bars drain. Keep charging until they run low.</p>
+<p>A unit on empty is <b>exhausted</b>: slow and too weak to fight. Select your units and press ${key('resupply')} (Resupply) to send them home to the Town Center to eat.</p>`,
     steps: calorieSteps('lancers', eatAtHome),
     setup(w) {
       base(w, 0, 'town-center', 6, 24, { food: 3000, crystal: 200 });
@@ -130,9 +130,9 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Crystals',
     you: meadowfolk, foe: fenfolk, look: [20, 26],
-    text: `<p>Every weapon's tip is <b>crystal</b>. A maceman keeps his mace head, but a thrower spends a crystal with every throw. Each slinger carries 12 stones.</p>
-<p><b>Try:</b> select your slingers and right-click a bog toad. Count the throws. Spent stones lie on the ground as <b>shards</b>, and anyone can pick them up. </p>
-<p>A slinger that runs low walks back to the Town Center by itself and restocks from its crystal. Press ${key('resupply')} (Resupply) to send them all back early, before a fight. The <b>Hurlhorn</b> throws 9 kg crystals, a dozen to a load, so a full load costs 108 crystal. Save its throws for big targets.</p>`,
+    text: `<p><b>Crystal</b> is ammo. A maceman keeps his mace head, but a thrower spends a crystal with every throw. Each slinger carries 12 stones.</p>
+<p>Select your slingers and right-click a bog toad. Spent stones land as <b>shards</b>, and anyone can pick them up.</p>
+<p>A slinger low on ammo walks back to the Town Center and restocks by itself. Press ${key('resupply')} (Resupply) to restock everyone before a fight. The <b>Hurlhorn</b> is your siege unit: a full load of 12 throws costs 108 crystal, so save it for big targets.</p>`,
     steps: [{ text: 'Throw at a bog toad', done: (w) => thrown(w, 'slinger') }, { text: 'A slinger goes home to restock', done: (w) => yours(w, 'slinger').some((u) => u.order.kind === 'resupply' || u.order.kind === 'rearm') }],
     setup(w) {
       base(w, 0, 'town-center', 6, 24, { food: 1500, crystal: 600 });
@@ -143,9 +143,9 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Carts',
     you: meadowfolk, foe: fenfolk, look: [18, 26],
-    text: `<p>Resources stay in the <b>building</b> that gathered them. There's no shared bank. Here the Town Center is full, but the Barracks and the Lynx Den across the field are empty.</p>
-<p>Both already have units queued. Watch the <b>mule carts</b>: they load where there's spare and drive it where it's needed, most urgent first. Your queued units come first.</p>
-<p><b>Try:</b> click a building to see its stock. Queue more units at the far ones. Train extra carts at the Town Center for faster supply. Where you build matters, and so do clear roads.</p>`,
+    text: `<p>Each <b>building</b> has its own stock. Here the Town Center is full, and the Barracks and the Lynx Den across the field are empty, with units queued.</p>
+<p><b>Mule carts</b> are your haulers, and they work by themselves. They load where there's spare and deliver where it's needed, most urgent first.</p>
+<p>Click a building to see its stock. Queue more units at the far ones, and train extra carts at the Town Center to speed up supply. Build close together and keep the roads clear to shorten each trip.</p>`,
     steps: [{ text: 'A cart brings a far building what it needs', done: (w) => yours(w, 'maceman', 'lynx').length > 0 }, { text: 'Train another cart at the Town Center', done: (w) => yours(w, 'mule').length > 3 || built(w, 'town-center').some((b) => b.queue.some((q) => q.kind === 'unit' && q.specId === 'mule')) }],
     setup(w) {
       base(w, 0, 'town-center', 6, 24, { food: 4000, wood: 1500, crystal: 800 });
@@ -158,9 +158,9 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Charges',
     you: meadowfolk, foe: fenfolk, look: [24, 26],
-    text: `<p>${CHARGE} A lance held level takes the whole impact, so a charging lancer hits many times harder than a standing one.</p>
-<p><b>Try:</b> select the lancers, press ${key('charge')} and right-click the fenlings (top). The lancers sprint in, strike, and ride on through. Standing in a fight, they only swing, so pull them out: right-click open ground. They run clear, sprinting while enemies are close. Then charge again.</p>
-<p>Now try the <b>reedguards</b> (bottom). <b>Spears counter chargers</b>: your charge runs onto their planted points, and the impact comes back into your lynx. Up close, your lancers cut with their swords instead.</p>`,
+    text: `<p>${CHARGE} A lancer at full charge hits many times harder than one standing still.</p>
+<p>Select the lancers, press ${key('charge')} (Charge) and right-click the fenlings (top). They sprint in, strike and ride on through. Right-click open ground to pull them clear, then charge again: every run-up is another big hit.</p>
+<p>Now charge the <b>reedguards</b> (bottom). <b>Spears counter chargers</b>: your lancers run onto the planted points and take the impact themselves.</p>`,
     steps: chargeSteps('fenling', 'reedguard', 'lynx', 4),
     setup(w) {
       wait(w, block(w, 0, 'lynx', 4, 14, 26, 2));
@@ -171,9 +171,9 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Groupings',
     you: meadowfolk, foe: meadowfolk, look: [26, 26],
-    text: `<p>Who wins depends on <b>how bodies meet</b>. Enemy lancers will charge you in <b>30 seconds</b>.</p>
-<p>Your pikemen stand in a tight block in front, with the slingers behind. Pikemen plant their pikes by themselves when they see a charge coming. So the lancers run onto set points and take the whole collision. <b>Watch</b> it play out.</p>
-<p><b>Then try:</b> press Restart. In those 30 seconds, scatter the pikemen across the field, or move the slingers out in front. Same units, different grouping, and now the same lancers win. The <b>Arena</b> scores every matchup if you want the numbers.</p>`,
+    text: `<p>How you <b>group</b> your units decides the fight. Enemy lancers will charge you in <b>30 seconds</b>.</p>
+<p>Your pikemen stand in a tight block in front, with slingers behind. Pikemen brace by themselves when a charge comes, so the lancers run onto their pikes. <b>Watch</b> it play out.</p>
+<p>Then press Restart. This time, scatter the pikemen or move the slingers out in front before the charge. Same units, different grouping, and the lancers win. The <b>Arena</b> has the numbers for every matchup.</p>`,
     steps: groupingSteps,
     setup(w) {
       block(w, 0, 'pikeman', 8, 20, 26, 4);
@@ -186,9 +186,9 @@ export const LESSONS: Lesson[] = [
   {
     title: 'High ground',
     you: meadowfolk, foe: meadowfolk, look: [20, 25], map: hillField, fog: true,
-    text: `<p>The ground has <b>levels</b>, joined by <b>ramps</b>. The hill ahead has a ramp on each side.</p>
-<p><b>Try:</b> send one hurlhorn round the hill to the macemen on the low ground beyond it. From down there, each stone does about 110 damage, so a maceman takes two. Then walk the other hurlhorn up the ramp, to the hill's edge above the macemen. A stone thrown down gains the energy of its fall: about 145 damage, and one stone drops a maceman.</p>
-<p>High ground also <b>sees further</b>: 2 tiles more for each level. Watch the fog pull back as your hurlhorn climbs.</p>`,
+    text: `<p>The ground has <b>levels</b>, joined by <b>ramps</b>. <b>High ground</b> gives your throwers more damage and more sight.</p>
+<p>Send one hurlhorn round the hill to the macemen on the low ground. From there each stone does about 110 damage: two to kill a maceman. Then walk the other hurlhorn up the ramp to the hill's edge above them. Thrown down, a stone does about 145: one kills.</p>
+<p>Each level up also adds 2 tiles of sight. Watch the fog pull back as your hurlhorn climbs.</p>`,
     steps: [{ text: 'Throw from the low ground', done: (w) => thrown(w, 'hurlhorn') }, { text: 'Walk a hurlhorn up onto the hill', done: (w) => yours(w, 'hurlhorn').some((u) => u.x >= HILL.x0 && u.x <= HILL.x1 + 1 && u.y >= HILL.y0 && u.y <= HILL.y1 + 1) }, { text: 'Drop a maceman', done: (w) => theirs(w, 'maceman') < 6 }],
     setup(w) {
       wait(w, block(w, 0, 'hurlhorn', 2, 10, 27, 2));
@@ -199,8 +199,8 @@ export const LESSONS: Lesson[] = [
     title: 'Calories',
     you: fenfolk, foe: meadowfolk, look: [16, 26],
     text: `${CALORIES}
-<p><b>Try:</b> select the bog toads, press ${key('charge')} (Charge) and right-click a maceman. They sprint in and slam: watch their bars drain. Charge again and again until they run low.</p>
-<p>An empty unit is <b>exhausted</b>: it's slow and too weak to fight. Select your toads and press ${key('resupply')} (Resupply). They go to eat at the nearest building with food in it. In the fen that can be any reed hut, so a stocked hut near the fight keeps your toads fighting.</p>`,
+<p>Select the bog toads, press ${key('charge')} (Charge) and right-click a maceman. A charge is a sprint, so watch their bars drain. Keep charging until they run low.</p>
+<p>A unit on empty is <b>exhausted</b>: slow and too weak to fight. Select your toads and press ${key('resupply')} (Resupply): they eat at the nearest building with food. Any stocked reed hut will do, so build one near the fight to keep your toads fighting.</p>`,
     steps: calorieSteps('bog toads', eatAtHome),
     setup(w) {
       base(w, 0, 'stilt-hall', 6, 24, { food: 3000, crystal: 200 });
@@ -214,9 +214,9 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Crystals',
     you: fenfolk, foe: meadowfolk, look: [20, 26],
-    text: `<p>Every weapon's tip is <b>crystal</b>. A striker keeps its crystal, but a thrower spends one with every throw. Each fenling carries 6 sling stones.</p>
-<p><b>Try:</b> select your fenlings and right-click a maceman. Count the throws. Spent stones lie on the ground as <b>shards</b>, and anyone can pick them up.</p>
-<p>A fenling that runs dry goes to restock. The <b>pack tortoise</b> is a walking crystal store. Move it up behind your fenlings. It sweeps up the shards it can see and acts as a mobile restock point for fenlings, who can quickly run out of ammo. The Stilt Hall restocks them too (${key('resupply')}).</p>`,
+    text: `<p><b>Crystal</b> is ammo. A striker keeps its crystal, but a thrower spends one with every throw. Each fenling carries 6 sling stones.</p>
+<p>Select your fenlings and right-click a maceman. Spent stones land as <b>shards</b>, and anyone can pick them up.</p>
+<p>The <b>pack tortoise</b> is a walking crystal store. Move it up behind your fenlings. It sweeps up the shards it can see and acts as a mobile restock point for fenlings, who can quickly run out of ammo. Press ${key('resupply')} (Resupply) to restock at the Stilt Hall.</p>`,
     steps: [{ text: 'Sling at a maceman', done: (w) => thrown(w, 'fenling') }, { text: 'Move the pack tortoise up behind them', done: (w) => yours(w, 'pack-tortoise').some((u) => u.x > 14) }, { text: 'A fenling restocks', done: (w) => yours(w, 'fenling').some((u) => u.order.kind === 'rearm' || u.order.kind === 'resupply') }],
     setup(w) {
       const hall = base(w, 0, 'stilt-hall', 6, 24, { food: 1500, crystal: 300 });
@@ -229,9 +229,9 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Fen hauling',
     you: fenfolk, foe: meadowfolk, look: [16, 26],
-    text: `<p>For resources to get around your base, you must assign a fenling as a <b>hauler</b>. Each little <b>reed hut</b> is its own base. Fenlings drop what they gather at the nearest one, and each hut trains from its own stock.</p>
-<p><b>Try:</b> the Stilt Hall is stocked, but both reed huts are empty. Click a hut and queue some reedguards: now it needs food and crystal. Then select all your fenlings and right-click that hut. They <b>haul</b> what it needs from the Stilt Hall. Each fenling carries only about 9 kg a trip.</p>
-<p>So Fen players build huts where the work is. Gather beside a hut and train beside it, and nothing travels far.</p>`,
+    text: `<p>For resources to get around your base, you must assign a fenling as a <b>hauler</b>. Each <b>reed hut</b> is its own little base: fenlings drop what they gather at the nearest one, and each hut trains from its own stock.</p>
+<p>The Stilt Hall is stocked and both reed huts are empty. Click a hut and queue some reedguards. Then select your fenlings and right-click that hut: they <b>haul</b> what it needs from the Stilt Hall, about 9 kg a trip.</p>
+<p>Build huts where the work is. Gather and train beside the same hut to keep hauling short.</p>`,
     steps: [{ text: 'Queue reedguards at a reed hut', done: (w) => built(w, 'reed-hut').some((b) => b.queue.length > 0) || yours(w, 'reedguard').length > 0 }, { text: 'Haul food to that hut', done: (w) => built(w, 'reed-hut').some((b) => b.stock.food > 0) || yours(w, 'reedguard').length > 0 }],
     setup(w) {
       base(w, 0, 'stilt-hall', 6, 24, { food: 2500, wood: 800, crystal: 400 });
@@ -243,9 +243,9 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Charges',
     you: fenfolk, foe: meadowfolk, look: [24, 26],
-    text: `<p>${CHARGE} A bog toad weighs 200 kg, so a toad at full tilt hits far harder than one standing and biting.</p>
-<p><b>Try:</b> select the toads, press ${key('charge')} and right-click the slingers (top). The toads sprint in, slam, and carry on through. Standing in a fight, they only bite, so pull them out: right-click open ground. Then charge again.</p>
-<p>Now try the <b>pikemen</b> (bottom). <b>Pikes counter chargers</b>: your charge runs onto the planted points, and the toad's own weight drives them in. Send your fenlings to sling at the pikemen.</p>`,
+    text: `<p>${CHARGE} A bog toad weighs 200 kg, so at full charge it hits far harder than it does standing and biting.</p>
+<p>Select the toads, press ${key('charge')} (Charge) and right-click the slingers (top). They sprint in, slam and carry on through. Right-click open ground to pull them clear, then charge again.</p>
+<p>Now charge the <b>pikemen</b> (bottom). <b>Pikes counter chargers</b>: your toads run onto the planted points, and their own weight drives them in. Send your fenlings to sling at the pikemen.</p>`,
     steps: chargeSteps('slinger', 'pikeman', 'bog-toad', 4),
     setup(w) {
       wait(w, [...block(w, 0, 'bog-toad', 4, 14, 26, 2), ...block(w, 0, 'fenling', 6, 11, 26, 3)]);
@@ -256,9 +256,9 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Groupings',
     you: fenfolk, foe: meadowfolk, look: [26, 26],
-    text: `<p>Who wins depends on <b>how bodies meet</b>. Enemy lancers will charge you in <b>30 seconds</b>.</p>
-<p>Your reedguards stand in a tight block in front, with the fenlings behind. Reedguards plant their spears by themselves when they see a charge coming. So the lancers run onto set points and take the whole collision, while the fenlings sling over the top. <b>Watch</b> it play out.</p>
-<p><b>Then try:</b> press Restart. In those 30 seconds, scatter the reedguards across the field, or move the fenlings out in front. Same units, different grouping, and now the lancers do far better. The <b>Arena</b> scores every matchup if you want the numbers.</p>`,
+    text: `<p>How you <b>group</b> your units decides the fight. Enemy lancers will charge you in <b>30 seconds</b>.</p>
+<p>Your reedguards stand in a tight block in front, with fenlings behind. Reedguards brace by themselves when a charge comes, so the lancers run onto their spears while the fenlings sling over the top. <b>Watch</b> it play out.</p>
+<p>Then press Restart. This time, scatter the reedguards or move the fenlings out in front before the charge. Same units, different grouping, and the lancers do far better. The <b>Arena</b> has the numbers for every matchup.</p>`,
     steps: groupingSteps,
     setup(w) {
       block(w, 0, 'reedguard', 12, 20, 26, 4);
@@ -270,9 +270,9 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Birds',
     you: fenfolk, foe: meadowfolk, look: [24, 26],
-    text: `<p><b>Siege herons</b> fly. In the air they wheel round in wide turns, as birds do, instead of stopping on a spot. A crystal dropped from higher up falls further, so it hits harder.</p>
-<p><b>Try:</b> select the herons and right-click a maceman. They take off, climb and bomb from overhead, out of reach of maces. Now right-click a slinger. Thrown stones can hit a flier, and a heron flying low can even be struck from the ground.</p>
-<p>Climbing costs a heron a lot of calories, but once up high it soars cheaply. It lands by itself when it stops or runs low. Press ${key('resupply')} to send them home to eat.</p>`,
+    text: `<p><b>Siege herons</b> are your flying bombers. The higher they climb, the harder their crystals hit.</p>
+<p>Select the herons and right-click a maceman. They take off, climb and bomb from overhead, out of a mace's reach. Only throwers can hit a flier: now right-click a slinger and watch the stones come up at you.</p>
+<p>Climbing burns a lot of calories, and soaring up high is cheap. A heron lands by itself when it stops or runs low. Press ${key('resupply')} (Resupply) to send them home to eat.</p>`,
     steps: [{ text: 'Send the herons at a maceman', done: (w) => yours(w, 'great-siege-heron').some((u) => u.airborne) }, { text: 'Bomb one', done: (w) => theirs(w, 'maceman') < 6 }, { text: 'Send them home to eat (Resupply)', done: (w) => yours(w, 'great-siege-heron').some((u) => u.order.kind === 'resupply') }],
     setup(w) {
       base(w, 0, 'stilt-hall', 6, 24, { food: 3000, crystal: 400 });
@@ -284,14 +284,14 @@ export const LESSONS: Lesson[] = [
   {
     title: 'The brood',
     you: wildwelds, foe: meadowfolk, look: [16, 25],
-    text: `<p>The <b>Wildwelds</b> have no buildings to train from. Mothers lay eggs, eggs hatch into larvae, and larvae change into everything else. It all runs on food.</p>
+    text: `<p>The <b>Wildwelds</b> are their own production: mothers lay eggs, eggs hatch into larvae, and larvae change into every other unit. It all runs on food.</p>
 <ol>
-<li>Select the mother and click <b>T1 Egg</b> in her panel. She lays an egg beside her. Hold the click on <b>T1 Egg</b> and she keeps laying them, one after another.</li>
-<li>An egg hatches once it's fed. Select the green larvae and press ${key('tend')} (Tend). They carry food to whoever is waiting for it.</li>
-<li>Short of food? Select a green larva and right-click a tree. It turns the whole tree into food, and is gone into it.</li>
-<li>Select a larva and click a tile marked →. It changes inside a cocoon, and tenders feed it.</li>
-<li>Select the cyan T2 larva and click <b>↓ Web Wall</b>. Right-drag a line: its body becomes the wall, which grows on food. A T3 larva lays a <b>Mimic Mine</b> instead: a tower that throws crystal.</li>
-<li>Click the basket in the minimap's top-left corner, then right-click a spot. Tenders look for food near it. The sword (top-right) sets where new fighters go.</li>
+<li>Select the mother and click <b>T1 Egg</b>. She lays an egg beside her. Hold the click and she keeps laying.</li>
+<li>Feed an egg to hatch it. Select the green larvae and press ${key('tend')} (Tend): they carry food to whoever is waiting for it.</li>
+<li>For a quick pile of food, select a green larva and right-click a tree. The larva turns the whole tree into food and is used up.</li>
+<li>Select a larva and click a tile marked → to change it. It becomes a cocoon, and your tenders feed it.</li>
+<li>Select the cyan T2 larva and click <b>↓ Web Wall</b>, then right-drag a line. Its body becomes the wall, which grows on food. A T3 larva lays a <b>Mimic Mine</b>: a tower that throws crystal.</li>
+<li>Set your rally points on the minimap. Click the basket (top-left), then right-click a spot: tenders gather food near it. The sword (top-right) sets where new fighters gather.</li>
 </ol>`,
     steps: [{ text: 'Lay an egg', done: (w) => yours(w, 'egg1').length > 0 || yours(w, 'mother1').some((u) => u.brood.length > 0) || yours(w, 'larva1').length > 3 }, { text: 'Tend it until it hatches', done: (w) => yours(w, 'larva1', 'cocoon').length > 3 }, { text: 'Turn a tree into food', done: (w) => [...w.nodes.values()].some((n) => n.digested) }, { text: 'Change a larva into something', done: (w) => yours(w, 'cocoon').length > 0 }, { text: 'Lay a web wall', done: (w) => built(w, 'web-wall').length > 0 || [...w.buildings.values()].some((b) => b.owner === 0) }],
     setup(w) {
@@ -308,9 +308,9 @@ export const LESSONS: Lesson[] = [
     title: 'Calories',
     you: wildwelds, foe: meadowfolk, look: [16, 28],
     text: `${CALORIES}
-<p>For the Wildwelds, food does everything else too: it hatches eggs and finishes cocoons. Two larvae here are changing into fighters, and their cocoons are waiting for food. Your green larvae <b>tend</b> by themselves: they gather berries and carry them to whoever is waiting, whether a cocoon, an egg, or a mother with an egg to lay. A larva you've given another order stops tending. Select it and press ${key('tend')} (Tend) to send it back. Keep most of your larvae tending.</p>
-<p>Watch the fighters come out. Each is born <b>unarmed</b>, and walks off to pick up its own crystal before it fights. There are some shards lying beside the cocoons.</p>
-<p>Fighters get hungry too, and Wildwelds eat in the field. Select the tired whipwelds and right-click a berry bush: they eat straight from it until they're full.</p>`,
+<p>Wildwelds spend food on growth too: it hatches eggs and finishes cocoons. Your green larvae <b>tend</b> by themselves: they gather berries and feed whoever is waiting, here two cocoons. Give a larva another order and it stops tending. Press ${key('tend')} (Tend) to send it back. Keep most of your larvae tending.</p>
+<p>Watch the fighters hatch. Each is born <b>unarmed</b> and walks off to pick up its own crystal before it fights. Some shards lie beside the cocoons.</p>
+<p>Fighters eat in the field. Select the tired whipwelds and right-click a berry bush: they eat until they're full.</p>`,
     steps: [{ text: 'A fighter comes out of its cocoon', done: (w) => yours(w, 'charger', 'micropike').length > 0 }, { text: 'It picks up its own crystal', done: (w) => yours(w, 'charger', 'micropike').some((u) => u.ammo > 0) }, { text: 'Feed a tired whipweld at a berry bush', done: (w) => yours(w, 'whipweld').some((u) => u.order.kind === 'graze') }],
     setup(w) {
       const yours = block(w, 0, 'whipweld', 3, 18, 24, 3);
@@ -328,9 +328,9 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Crystals',
     you: wildwelds, foe: meadowfolk, look: [20, 26],
-    text: `<p>Every weapon's tip is <b>crystal</b>. A whipweld keeps the crystal on its whip, but a thrower spends one with every throw. Each slinger carries 14.</p>
-<p><b>Try:</b> select your slingers and right-click a maceman. Count the throws. Spent stones lie on the ground as <b>shards</b>, and anyone can pick them up.</p>
-<p>Wildwelds restock in the field. A slinger that runs dry picks crystal up off the ground: its own spent stones, or any shards lying nearby. There are some just behind your slingers.</p>`,
+    text: `<p><b>Crystal</b> is ammo. A whipweld keeps the crystal on its whip, but a thrower spends one with every throw. Each slinger carries 14.</p>
+<p>Select your slingers and right-click a maceman. Spent stones land as <b>shards</b>, and anyone can pick them up.</p>
+<p>Wildwelds restock in the field: a slinger out of ammo picks up the nearest shards by itself. Some lie just behind your slingers.</p>`,
     steps: [{ text: 'Throw at a maceman', done: (w) => thrown(w, 'slinger') }, { text: 'A slinger picks crystal up off the ground', done: (w) => yours(w, 'slinger').some((u) => u.order.kind === 'gather' && u.order.nodeType === 'crystal') }],
     setup(w) {
       wait(w, block(w, 0, 'slinger', 2, 14, 26, 2));
@@ -341,10 +341,10 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Charges',
     you: wildwelds, foe: meadowfolk, look: [24, 26],
-    text: `<p>A charge turns speed into damage. The faster and heavier the body, the harder it hits. Your <b>Goliath Chargers</b> weigh 600 kg each.</p>
+    text: `<p>${CHARGE} Your <b>Goliath Chargers</b> weigh 600 kg each.</p>
 <ol>
 <li>Select the Goliaths. Press ${key('charge')} (Charge), then right-click the <b>slingers</b> at the top.</li>
-<li>After they hit, right-click open ground to pull them back. Then charge again. A Goliath standing still hits far less hard.</li>
+<li>After they hit, right-click open ground to pull them clear, then charge again. Every run-up is another big hit.</li>
 <li>Now charge the <b>pikemen</b> at the bottom. <b>Pikes counter chargers</b>: a Goliath that runs onto a set pike is hurt by its own weight.</li>
 </ol>
 <p>So charge throwers and workers, and send your slingers at the pikes.</p>`,
@@ -358,9 +358,9 @@ export const LESSONS: Lesson[] = [
   {
     title: 'Groupings',
     you: wildwelds, foe: meadowfolk, look: [26, 26],
-    text: `<p>Who wins depends on <b>how bodies meet</b>. Enemy lancers will charge you in <b>30 seconds</b>.</p>
-<p>Your micropikes stand in a block in front, with three slingers behind. The micropikes will lose this: a lance reaches twice as far as their pikes, and most of them will die. The slingers do the killing. <b>Watch</b> it play out.</p>
-<p><b>Then try:</b> press Restart. In those 30 seconds, move the slingers well out in front of the micropikes. Same units, different grouping: now they start throwing sooner, the lancers fall before they arrive, and nearly every micropike lives. The <b>Arena</b> scores every matchup if you want the numbers.</p>`,
+    text: `<p>How you <b>group</b> your units decides the fight. Enemy lancers will charge you in <b>30 seconds</b>.</p>
+<p>Your micropikes stand in a block in front, with three slingers behind. <b>Lances outreach micropikes</b>, so the micropikes will lose and most will die. Your slingers do the killing. <b>Watch</b> it play out.</p>
+<p>Then press Restart. This time, move the slingers well out in front before the charge. They start throwing sooner, the lancers fall on the way in, and nearly every micropike lives. The <b>Arena</b> has the numbers for every matchup.</p>`,
     steps: groupingSteps,
     setup(w) {
       block(w, 0, 'micropike', 24, 20, 26, 4);
