@@ -1732,8 +1732,8 @@ export class World {
           // (only while that weapon is pointed at it: one turned away, breaking off or coming round, it charges)
           const outreached = !tu.throws && tu.stats.canAttack && tu.stats.range > range + 0.1 && !charging && this.facingWithin(tu, u.x - tu.x, u.y - tu.y, Math.PI * 0.2);
           if (outreached && edge < tu.stats.range + 2) { this.moveTo(u, tx, ty, 0.05, false, false, u.stats.speed * K.closeInPace); return true; }
-          if (sprint && !outreached) this.runPast(u, tu);
-          else this.moveTo(u, tx, ty, 0.05, false, !outreached);
+          if (sprint && !outreached && !tu.airborne) this.runPast(u, tu);
+          else this.moveTo(u, tx, ty, 0.05, sprint && !outreached, !outreached); // (one in the air, it chases)
         }
         return true;
       }
@@ -1827,7 +1827,7 @@ export class World {
     const g = midStride(u, this.tick) || midStride(u, this.tick - 1) ? u.stats.gait : undefined, air = !!g && u.strideMul > 0; // (only one on its way bounds its blow)
     if (!u.airborne && g) {
       const wait = takeoffIn(u);
-      // (it lands at the end of this bound, the blow with it: the bound is shortened to bring it down there)
+      // (at the latest it lands at the end of this bound, the blow with it; the bound keeps its full speed)
       down = Math.max(DT, wait + (air ? boundLeft(u) : g.hop * g.period));
       u.swing = down;
     }
