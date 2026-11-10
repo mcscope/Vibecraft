@@ -1,7 +1,10 @@
 // Starting an online game: the host picks the seed and seats, everyone bakes
 // and sends their own faction as a bundle, and the game begins once every seat's
-// faction has arrived and passed the checks.
+// faction has arrived and passed the checks. A shipped faction loads the art its
+// build pre-baked (art/prebaked.ts) instead of baking it again.
 import type { FactionArt, BiomeArt } from '../art/contract';
+import { biomeKey, loadPrebaked, teamKey } from '../art/prebaked';
+import { PLAYABLE } from '../factions';
 import type { FactionSpec } from '../factions/types';
 import { TEAM_COLORS } from '../render/artbank';
 import { checkBundle, fromBundle, packArt, packBiome, specData, type FactionBundle } from './bundle';
@@ -59,11 +62,16 @@ export class Handshake {
     const me = m.seats.indexOf(this.relay.you);
     if (me < 0) { this.reject(new Error('This game is full (online games are 1v1).')); return; }
     try {
-      // bake our own faction here, with our own code, in our seat's colours; then send it as data
-      this.status(`Baking ${this.local.name} for seat ${me + 1}…`);
+      // bake our own faction here, with our own code, in our seat's colours; then send it as data.
+      // A shipped faction in a production build was baked with the build: load that (a few seconds, not minutes).
       const team = TEAM_COLORS[me % TEAM_COLORS.length];
-      this.ownArt = this.local.art ? await this.local.art(team, (f, label) => this.status(`${label} (${Math.round(f * 100)}%)`)) : undefined;
-      this.ownBiome = this.local.biome ? await this.local.biome((f, label) => this.status(`${label} (${Math.round(f * 100)}%)`)) : undefined;
+      const shipped = import.meta.env.PROD && PLAYABLE.includes(this.local);
+      const progress = (f: number, label: string) => this.status(`${label} (${Math.round(f * 100)}%)`);
+      const own = async <T>(key: string, bake: () => Promise<T>): Promise<T> => (shipped && (await loadPrebaked<T>(key))) || bake();
+      this.status(`${shipped ? 'Loading' : 'Baking'} ${this.local.name} for seat ${me + 1}…`);
+      const { art, biome } = this.local;
+      this.ownArt = art ? await own(teamKey(this.local.id, team), () => art(team, progress)) : undefined;
+      this.ownBiome = biome ? await own(biomeKey(this.local.id), () => biome(progress)) : undefined;
       this.status('Packing your faction…');
       const bundle: FactionBundle = { v: 1, spec: specData(this.local), art: this.ownArt && packArt(this.ownArt), biome: this.ownBiome && packBiome(this.ownBiome) };
       this.status(`Sending your faction (${(JSON.stringify(bundle).length / 1e6).toFixed(1)} MB)…`);
