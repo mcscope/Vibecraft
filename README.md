@@ -77,6 +77,26 @@ Play the shipped factions in your browser at **[mcscope.com/game/vibecraft](http
 
 **Shortcut:** start a game straight from a URL, for example `?mode=skirmish&you=fenfolk&foe=meadowfolk&map=cliff-maze&seed=5&ai=easy`.
 
+### Controls
+
+One rule runs the game: **one action selects, the other does.** An order tile or hotkey (Attack, Move, a building to place) only changes what the next "do" does.
+
+| | Mouse and keyboard | Touch screen (phone or tablet) |
+|---|---|---|
+| Select | Left-click. Drag a box. Double-click selects that type. | Tap. Turn on **Box**, then drag. Double-tap selects that type. |
+| Do (move, attack, gather, build) | Right-click | Long-press |
+| Form a front line | Right-drag | Long-press, then drag |
+| Armed tile (Attack, Move, a building) | Then right-click | Then tap. **Cancel** in the banner drops it. |
+| Add to selection, queue orders | Hold Shift | Turn on **Add** |
+| Move the map | Arrow keys, WASD or screen edge | Drag with one finger |
+| Zoom | Mouse wheel | Pinch |
+| Minimap | Click to look, right-click to send | Tap or drag to look, long-press to send |
+| Read a button | Hover | Press and hold |
+
+On a touch screen, a bar above the bottom panel holds what the keyboard does: **Box**, **Add**, **Panel** (hide it), **Center**, **Home**, groups **1–3** (hold to store, tap to select), **Pause**, speed, **Full** screen and **Delete**. Settings (⚙) lists every control. Add `?touch=1` to the URL to try the touch layout on a desktop.
+
+**Play on your phone.** Run `npm run dev -- --host`, then open the "Network" address it prints on your phone. For a full-screen game, add the page to your home screen.
+
 ---
 
 ## Making your own army

@@ -306,8 +306,8 @@ export class Renderer {
     return src;
   }
 
-  resize(w: number, h: number, _dpr: number): void {
-    this.app.renderer.resize(w, h);
+  resize(w: number, h: number, resolution: number): void {
+    this.app.renderer.resize(w, h, resolution);
     this.cam.width = w;
     this.cam.height = h;
   }

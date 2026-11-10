@@ -15,6 +15,7 @@ import { blit, drawable, fitCanvas, spriteIcon, spriteToCanvas } from '../art/dr
 import { unitSprite } from '../art/contract';
 import type { ArtBank } from '../render/artbank';
 import { keymap, onSettings } from './settings';
+import { TOUCH, words } from './touch';
 
 export interface HudActions {
   train(buildingId: number, specId: string): void;
@@ -131,15 +132,33 @@ export class Hud {
     const release = () => { if (hold) { clearTimeout(hold.timer); hold.el.classList.remove('holding'); hold = null; } };
     window.addEventListener('pointerup', release);
     this.panel.addEventListener('pointerleave', release);
+    let finger = false;
+    root.addEventListener('pointerdown', (e) => { finger = e.pointerType === 'touch'; }, true);
     this.panel.addEventListener('contextmenu', (e) => {
       e.preventDefault();
+      if (finger) return; // (a long-press on a touch screen: that's the hold, not a right-click)
       const el = (e.target as HTMLElement).closest('[data-train],[data-research],[data-morph]') as HTMLElement | null;
       if (el?.dataset.unit) { this.actions.cancelSpawn(); return; } // a unit's training: cancel its last
       if (el?.dataset.morph) return;
       if (el) this.actions.cancelTrain(+el.dataset.building!);
     });
-    this.panel.addEventListener('mousemove', (e) => this.onHover(e));
+    // (a mouse only: a tap's mouse events would hide the touch tooltip)
+    this.panel.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') this.showTip(e.target as HTMLElement); });
     this.panel.addEventListener('mouseleave', () => (this.tooltip.style.display = 'none'));
+    if (TOUCH) {
+      // no hover on a touch screen: pressing a button shows what it does, for a moment after you let go
+      let hide = 0;
+      root.addEventListener('pointerdown', (e) => {
+        if (e.pointerType !== 'touch') return;
+        clearTimeout(hide);
+        this.showTip(e.target as HTMLElement, true);
+      });
+      window.addEventListener('pointerup', (e) => {
+        if (e.pointerType !== 'touch') return;
+        clearTimeout(hide);
+        hide = window.setTimeout(() => (this.tooltip.style.display = 'none'), 2500);
+      });
+    }
     onSettings(() => { this.sig = ''; }); // rebuild panels so key hints update
   }
 
@@ -176,15 +195,20 @@ export class Hud {
     else if (el.dataset.place) this.actions.place(el.dataset.place);
   }
 
-  private onHover(e: MouseEvent): void {
-    const el = (e.target as HTMLElement).closest('[data-train],[data-research],[data-place]') as HTMLElement | null;
+  /** The tooltip for a panel button (`any`: on a touch screen, any element with a title shows that). */
+  private showTip(target: HTMLElement, any = false): void {
+    let el = target.closest('[data-train],[data-research],[data-place]') as HTMLElement | null;
+    const titled = any && !el ? target.closest<HTMLElement>('[title]') : null;
+    if (titled) el = titled;
     if (!el) { this.tooltip.style.display = 'none'; return; }
     const w = this.world;
-    if (el.dataset.train) {
+    if (titled) {
+      this.tooltip.innerHTML = `<p>${words(titled.title)}</p>`;
+    } else if (el.dataset.train) {
       const s = w.specOf(this.player, el.dataset.train)!;
       const parent = el.dataset.unit ? w.units.get(+el.dataset.unit) : undefined, ps = parent && w.specOf(parent.owner, parent.specId);
       const paid = ps ? `${fmt(metamorphCost(ps.stats, s.stats, true).sec)} s · paid from its pack, a food bearer in reach or a building beside it` : `${fmt(s.stats.trainTime)} s · paid from this building's stock`;
-      this.tooltip.innerHTML = `<h3>${s.spec.name}</h3><p>${s.spec.description}</p>${statsTable(s.spec, s.stats, this.names().food.toLowerCase())}<p class="hint">${paid} · Click: train · Hold: auto-train on/off · Right-click: cancel last</p>`;
+      this.tooltip.innerHTML = words(`<h3>${s.spec.name}</h3><p>${s.spec.description}</p>${statsTable(s.spec, s.stats, this.names().food.toLowerCase())}<p class="hint">${paid} · Click: train · Hold: auto-train on/off · Right-click: cancel last</p>`);
     } else if (el.dataset.research) {
       const t = w.techOf(this.player, el.dataset.research)!;
       const b = w.buildings.get(+el.dataset.building!);
@@ -221,7 +245,10 @@ export class Hud {
     this.tooltip.style.display = 'block';
     const r = el.getBoundingClientRect();
     this.tooltip.style.left = `${Math.max(8, Math.min(window.innerWidth - 420, r.left))}px`;
-    this.tooltip.style.bottom = `${window.innerHeight - r.top + 8}px`;
+    // (above the button; one in the top half of the screen, the top bar's say, gets it below)
+    const below = TOUCH && r.top < window.innerHeight / 2;
+    this.tooltip.style.bottom = below ? '' : `${window.innerHeight - r.top + 8}px`;
+    this.tooltip.style.top = below ? `${r.bottom + 8}px` : '';
   }
 
   update(dt: number, selected: Set<number>, fps: number): void {
@@ -256,9 +283,10 @@ export class Hud {
     if (sig !== this.sig) {
       this.sig = sig;
       this.portraits = [];
-      if (units.length === 1) this.panel.innerHTML = this.unitPanel(units[0]);
-      else if (building) this.panel.innerHTML = this.buildingPanel(building);
-      else if (units.length > 1) this.panel.innerHTML = this.groupPanel(units);
+      if (units.length === 1) this.panel.innerHTML = words(this.unitPanel(units[0]));
+      else if (building) this.panel.innerHTML = words(this.buildingPanel(building));
+      else if (units.length > 1) this.panel.innerHTML = words(this.groupPanel(units));
+      else if (TOUCH) this.panel.innerHTML = '<div class="empty">Tap to select · Long-press to command · Drag to move the map · Pinch to zoom · Settings (⚙) lists every touch control</div>';
       else {
         const km = keymap();
         this.panel.innerHTML = `<div class="empty">Drag to select · Right-click to command · <kbd>${km.attackMove.toUpperCase()}</kbd> attack-move · <kbd>${km.stop.toUpperCase()}</kbd> stop · <kbd>${km.resupply.toUpperCase()}</kbd> resupply (hold + click: go there after) · <kbd>${km.give.toUpperCase()}</kbd> give · <kbd>${km.home.toUpperCase()}</kbd> ${baseName(this.world.factionOf(this.player)).toLowerCase()} · <kbd>F10</kbd> settings</div>`;

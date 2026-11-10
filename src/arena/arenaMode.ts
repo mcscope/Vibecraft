@@ -11,6 +11,7 @@ import { Input } from '../ui/input';
 import { Minimap } from '../ui/minimap';
 import { AudioEngine } from '../audio/engine';
 import { soundDebug } from '../ui/soundDebug';
+import { renderScale } from '../ui/touch';
 
 const BUDGETS = [600, 1200, 2400];
 /** The panel overlays the left of the (full-window) field. */
@@ -55,7 +56,7 @@ export async function runArena(params: URLSearchParams): Promise<void> {
   });
   input.onSelect = (ids, group) => audio.answerSelect(ids, group, input.player);
   let control = params.get('control') === '1';
-  const resize = () => renderer.resize(window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
+  const resize = () => renderer.resize(window.innerWidth, window.innerHeight, renderScale(window.innerWidth, window.innerHeight));
   window.addEventListener('resize', resize);
   loading.style.display = 'none';
 

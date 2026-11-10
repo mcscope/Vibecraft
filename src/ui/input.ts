@@ -43,9 +43,11 @@ export class Input {
     private send: (cmd: Command) => void,
   ) {
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-    canvas.addEventListener('mousedown', (e) => this.down(e));
-    window.addEventListener('mousemove', (e) => this.move(e));
-    window.addEventListener('mouseup', (e) => this.up(e));
+    canvas.addEventListener('mousedown', (e) => this.press(e.clientX, e.clientY, e.button));
+    window.addEventListener('mousemove', (e) => this.pointerMove(e.clientX, e.clientY));
+    // (a real mouse: a tap on a button also sends mouse events, so only a pointer that says it's a mouse counts)
+    window.addEventListener('pointermove', (e) => { if (e.pointerType === 'mouse') this.viaTouch = false; });
+    window.addEventListener('mouseup', (e) => this.release(e.clientX, e.clientY, e.shiftKey));
     // (record where it came in: until the first move the position is unknown, and (-1, -1) would edge-scroll up-left)
     canvas.addEventListener('mouseenter', (e) => { this.mouse.x = e.clientX; this.mouse.y = e.clientY; this.mouse.inside = true; });
     canvas.addEventListener('mouseleave', () => (this.mouse.inside = false));
@@ -59,14 +61,27 @@ export class Input {
     window.addEventListener('blur', () => this.keys.clear());
     const mm = minimap;
     const onMini = (e: MouseEvent) => {
-      const r = mm.canvas.getBoundingClientRect();
-      const [wx, wy] = minimap.toWorld(e.clientX - r.left, e.clientY - r.top);
+      const [wx, wy] = this.miniToWorld(e.clientX, e.clientY);
       if (e.button === 2 || e.buttons === 2) this.contextCommand(wx, wy, 0, e.shiftKey);
       else this.renderer.cam.centerOn(wx, wy);
     };
     mm.canvas.addEventListener('mousedown', (e) => { e.preventDefault(); onMini(e); });
     mm.canvas.addEventListener('mousemove', (e) => { if (e.buttons === 1) onMini(e); });
     mm.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    this.minimap = minimap;
+  }
+
+  private minimap: Minimap;
+  /** The pointer is a finger (ui/touch.ts): no edge scroll, and an armed command shows as a banner. */
+  viaTouch = false;
+  /** The on-screen Shift (touch): add to the selection, queue orders, keep a command armed. */
+  shiftLatch = false;
+
+  /** A point on the minimap (client pixels) in world tiles (the minimap may be drawn smaller than its size). */
+  miniToWorld(cx: number, cy: number): [number, number] {
+    const mm = this.minimap, r = mm.canvas.getBoundingClientRect();
+    const k = r.width ? mm.size / r.width : 1;
+    return mm.toWorld((cx - r.left) * k, (cy - r.top) * k);
   }
 
   get selected(): Set<number> { return this.rs.selected; }
@@ -96,7 +111,7 @@ export class Input {
     if (held(km.right)) dx += pan;
     if (held(km.up)) dy -= pan;
     if (held(km.down)) dy += pan;
-    if (this.mouse.inside && !this.drag && settings().edgeScroll && !settingsOpen()) {
+    if (this.mouse.inside && !this.viaTouch && !this.drag && settings().edgeScroll && !settingsOpen()) {
       const m = 10;
       if (this.mouse.x < m) dx -= pan;
       if (this.mouse.x > cam.width - m) dx += pan;
@@ -111,77 +126,96 @@ export class Input {
     this.rs.hoverId = this.mouse.inside ? this.renderer.pick(this.mouse.x, this.mouse.y, this.alpha, this.orderPicker()) : 0;
     this.canvas.style.cursor = this.mode === 'attackMove' ? 'crosshair' : this.mode === 'move' ? 'pointer' : this.mode === 'give' ? 'copy' : this.mode === 'resupplyDest' ? 'alias' : this.mode === 'place' ? 'cell' : 'default';
     // building placement preview follows the cursor
-    if (this.mode === 'place' && this.mouse.inside) {
-      const spec = this.world.buildingSpecOf(this.player, this.placeSpec);
-      if (spec) {
-        const [wx, wy] = cam.toWorld(this.mouse.x, this.mouse.y);
-        const ox = Math.round(wx - spec.size / 2), oy = Math.round(wy - spec.size / 2);
-        this.rs.ghost = { specId: spec.id, ox, oy, size: spec.size, ok: this.world.placeable(ox, oy, spec.size) && !this.world.buildBlocker(this.player, spec.id) };
-        // dragging a wall, canal or road lays a line of it
-        const d = this.drag;
-        if (d && d.button === 2 && d.moved && spec.size === 1 && isWall(spec)) {
-          const [sx, sy] = cam.toWorld(d.x, d.y);
-          this.rs.ghost.line = this.lineTiles(Math.floor(sx), Math.floor(sy), ox, oy).map(([x, y]) => [x, y, this.world.placeable(x, y, 1)]);
-        }
-      }
-    } else this.rs.ghost = null;
+    if (this.mode === 'place' && this.mouse.inside) this.placeGhost(this.mouse.x, this.mouse.y);
+    else this.rs.ghost = null;
   }
 
-  private down(e: MouseEvent): void {
-    this.drag = { x: e.clientX, y: e.clientY, button: e.button, moved: false };
-  }
-
-  private move(e: MouseEvent): void {
-    this.mouse.x = e.clientX;
-    this.mouse.y = e.clientY;
+  /** The building being placed, drawn where the pointer is (dragging a wall, canal or road: a line of it). */
+  private placeGhost(px: number, py: number): void {
+    const cam = this.renderer.cam;
+    const spec = this.world.buildingSpecOf(this.player, this.placeSpec);
+    if (!spec) return;
+    const [wx, wy] = cam.toWorld(px, py);
+    const ox = Math.round(wx - spec.size / 2), oy = Math.round(wy - spec.size / 2);
+    this.rs.ghost = { specId: spec.id, ox, oy, size: spec.size, ok: this.world.placeable(ox, oy, spec.size) && !this.world.buildBlocker(this.player, spec.id) };
     const d = this.drag;
-    if (!d) return;
-    if (Math.abs(e.clientX - d.x) + Math.abs(e.clientY - d.y) > 5) d.moved = true;
-    if (d.button === 1) {
-      this.renderer.cam.pan(d.x - e.clientX, d.y - e.clientY);
-      d.x = e.clientX; d.y = e.clientY;
-    } else if (d.button === 0 && d.moved) {
-      this.rs.box = { x0: d.x, y0: d.y, x1: e.clientX, y1: e.clientY };
+    if (d && d.button === 2 && d.moved && spec.size === 1 && isWall(spec)) {
+      const [sx, sy] = cam.toWorld(d.x, d.y);
+      this.rs.ghost.line = this.lineTiles(Math.floor(sx), Math.floor(sy), ox, oy).map(([x, y]) => [x, y, this.world.placeable(x, y, 1)]);
     }
   }
 
-  private up(e: MouseEvent): void {
-    const d = this.drag;
+  /** A button goes down at (sx, sy): 0 selects, 1 pans, 2 does (the mouse, or a gesture standing in for one). */
+  press(sx: number, sy: number, button: number): void {
+    this.drag = { x: sx, y: sy, button, moved: false };
+    this.mouse.x = sx; this.mouse.y = sy;
+  }
+
+  /** Drop a press without doing anything (a second finger came down). */
+  cancelPress(): void {
     this.drag = null;
+    this.rs.box = null;
+  }
+
+  /** The pointer moved (a finger: only while it's down). */
+  pointerMove(sx: number, sy: number): void {
+    this.mouse.x = sx;
+    this.mouse.y = sy;
+    const d = this.drag;
     if (!d) return;
+    if (Math.abs(sx - d.x) + Math.abs(sy - d.y) > 5) d.moved = true;
+    if (d.button === 1) {
+      this.renderer.cam.pan(d.x - sx, d.y - sy);
+      d.x = sx; d.y = sy;
+    } else if (d.button === 0 && d.moved) {
+      this.rs.box = { x0: d.x, y0: d.y, x1: sx, y1: sy };
+    }
+  }
+
+  /** Where a finger is, or that it's lifted: hover, the placing ghost and the formation preview follow it. */
+  setPointer(sx: number, sy: number, inside: boolean): void {
+    this.mouse.x = sx; this.mouse.y = sy; this.mouse.inside = inside;
+  }
+
+  /** The press ends at (sx, sy). `shift`: add to the selection, queue the order. */
+  release(sx: number, sy: number, shift: boolean): void {
+    const d = this.drag;
+    if (!d) return;
+    if (this.mode === 'place') this.placeGhost(sx, sy); // (where it's let go, even if no frame drew it there yet)
+    this.drag = null;
     const box = this.rs.box;
     this.rs.box = null;
     // one rule: left-click always selects, right-click always does. A hotkey or tile (C, A, E, Q, a building to place)
     // only sets what the next right-click does.
     if (d.button === 2) {
       if (this.mode && (!d.moved || this.mode === 'place')) { // the armed command (placing: a right-drag lays a wall line)
-        this.queueing = e.shiftKey && this.mode !== 'place';
-        try { this.modeClick(e, d); } finally { this.queueing = false; }
+        this.queueing = shift && this.mode !== 'place';
+        try { this.modeClick(sx, sy, d, shift); } finally { this.queueing = false; }
         return;
       }
       if (d.moved) { // a right-drag lays out the front line: the group forms up along it, facing away from you
         // (with Attack or Charge armed, that's how they go there; otherwise a move)
-        const front = this.dragFront(d, e.clientX, e.clientY);
+        const front = this.dragFront(d, sx, sy);
         const kind = this.mode === 'attackMove' || this.mode === 'charge' ? this.mode : 'move';
-        if (front) { this.queueing = e.shiftKey; this.formationOrder(kind, this.selectedUnits(), ...front); this.queueing = false; }
-        if (!e.shiftKey) this.mode = null;
+        if (front) { this.queueing = shift; this.formationOrder(kind, this.selectedUnits(), ...front); this.queueing = false; }
+        if (!shift) this.mode = null;
         return;
       }
-      const [wx, wy] = this.renderer.cam.toWorld(e.clientX, e.clientY);
-      this.queueing = e.shiftKey;
-      this.contextCommand(wx, wy, this.renderer.pick(e.clientX, e.clientY, this.alpha, this.orderPicker()), e.shiftKey);
+      const [wx, wy] = this.renderer.cam.toWorld(sx, sy);
+      this.queueing = shift;
+      this.contextCommand(wx, wy, this.renderer.pick(sx, sy, this.alpha, this.orderPicker()), shift);
       this.queueing = false;
       return;
     }
     if (d.button !== 0) return;
     this.mode = null; // a left-click selects (and drops whatever was armed)
-    this.selectClick(e, d, box);
+    this.selectClick(sx, sy, d, box, shift);
   }
 
-  private modeClick(e: MouseEvent, d: { moved: boolean }): void {
+  private modeClick(sx: number, sy: number, d: { moved: boolean }, shift: boolean): void {
     {
-      const [wx, wy] = this.renderer.cam.toWorld(e.clientX, e.clientY);
-      const target = this.renderer.pick(e.clientX, e.clientY, this.alpha, this.orderPicker());
+      const [wx, wy] = this.renderer.cam.toWorld(sx, sy);
+      const target = this.renderer.pick(sx, sy, this.alpha, this.orderPicker());
       const units = this.selectedUnits();
       if (this.mode === 'place') {
         const g = this.rs.ghost;
@@ -199,13 +233,13 @@ export class Input {
             }
           } else tiles.forEach(([x, y], i) => this.issue({ type: 'build', units: i === 0 ? this.workers(units) : [], specId: g.specId, ox: x, oy: y }));
           if (tiles.length) this.ping(tiles[0][0] + 0.5, tiles[0][1] + 0.5, '#7aff7a');
-          if (!e.shiftKey) this.mode = null;
+          if (!shift) this.mode = null;
           return;
         }
         if (g && g.ok) {
           this.issue({ type: 'build', units: this.builders(units, g.specId), specId: g.specId, ox: g.ox, oy: g.oy });
           this.ping(g.ox + g.size / 2, g.oy + g.size / 2, '#7aff7a');
-          if (!e.shiftKey) this.mode = null;
+          if (!shift) this.mode = null;
         }
         return;
       }
@@ -218,7 +252,7 @@ export class Input {
       if (this.mode === 'garrison') {
         const b = this.world.buildings.get(target);
         if (b && b.owner === this.player) { this.issue({ type: 'garrison', units, building: b.id }); this.ping(b.ox + b.size / 2, b.oy + b.size / 2, '#ffd23f'); }
-        if (!e.shiftKey) this.mode = null;
+        if (!shift) this.mode = null;
         return;
       }
       if (this.mode === 'move') {
@@ -251,12 +285,12 @@ export class Input {
         else if (b && b.owner === this.player) this.issue({ type: 'resupply', units, building: b.id });
         this.ping(wx, wy, '#7ae7c7');
       }
-      if (!e.shiftKey) this.mode = null;
+      if (!shift) this.mode = null;
       return;
     }
   }
 
-  private selectClick(e: MouseEvent, d: { moved: boolean }, box: RenderState['box']): void {
+  private selectClick(sx: number, sy: number, d: { moved: boolean }, box: RenderState['box'], shift: boolean): void {
     if (box && d.moved) {
       const x0 = Math.min(box.x0, box.x1), x1 = Math.max(box.x0, box.x1), y0 = Math.min(box.y0, box.y1), y1 = Math.max(box.y0, box.y1);
       const hits: number[] = [];
@@ -266,12 +300,12 @@ export class Input {
         const mid = sy - ((this.renderer.bank.unit(u.owner, u.specId)?.height ?? 36) / 2) * this.renderer.cam.zoom;
         if (sx >= x0 && sx <= x1 && ((sy >= y0 && sy <= y1) || (mid >= y0 && mid <= y1))) hits.push(u.id);
       }
-      if (e.shiftKey) for (const id of hits) this.rs.selected.add(id);
+      if (shift) for (const id of hits) this.rs.selected.add(id);
       else this.setSelection(hits);
       return;
     }
     // click select
-    const id = this.renderer.pick(e.clientX, e.clientY, this.alpha);
+    const id = this.renderer.pick(sx, sy, this.alpha);
     const now = performance.now();
     const u = this.world.units.get(id);
     if (u && u.owner === this.player && this.lastClick.id === id && now - this.lastClick.t < 350) {
@@ -284,10 +318,10 @@ export class Input {
       });
       this.setSelection(same.map((o) => o.id), true);
     } else if (id && (this.world.units.has(id) || this.world.buildings.has(id))) {
-      if (e.shiftKey && u?.owner === this.player) {
+      if (shift && u?.owner === this.player) {
         if (this.rs.selected.has(id)) this.rs.selected.delete(id); else this.rs.selected.add(id);
       } else this.setSelection([id]);
-    } else if (!e.shiftKey) this.setSelection([]);
+    } else if (!shift) this.setSelection([]);
     this.lastClick = { t: now, id };
   }
 
@@ -458,6 +492,8 @@ export class Input {
       place: 'Place: right-click where to build (right-drag: a line)', resupplyDest: 'Resupply, then: right-click where to go after',
       rallyWork: 'Work rally point: right-click where tenders look for food', rallyArmy: 'Army rally point: right-click where new fighters go',
     };
+    if (this.viaTouch) { this.showArmedBanner(this.mode ? what[this.mode] : undefined); return; }
+    if (this.banner) this.banner.style.display = 'none';
     const text = this.mode && this.mouse.inside ? what[this.mode] : undefined;
     if (!text) { if (this.armedEl) this.armedEl.style.display = 'none'; return; }
     if (!this.armedEl) { this.armedEl = document.createElement('div'); this.armedEl.className = 'armed-hint'; document.body.appendChild(this.armedEl); }
@@ -466,6 +502,25 @@ export class Input {
     this.armedEl.style.display = 'block';
     this.armedEl.style.left = `${this.mouse.x + 18}px`;
     this.armedEl.style.top = `${this.mouse.y + 18}px`;
+  }
+
+  /** On a touch screen: the armed command as a banner at the top, with a Cancel button (there's no cursor to follow). */
+  private banner: HTMLElement | null = null;
+  private showArmedBanner(text: string | undefined): void {
+    if (this.armedEl) this.armedEl.style.display = 'none';
+    if (!text) { if (this.banner) this.banner.style.display = 'none'; return; }
+    if (!this.banner) {
+      this.banner = document.createElement('div');
+      this.banner.className = 'armed-banner';
+      this.banner.innerHTML = '<span></span><button type="button">Cancel</button>';
+      this.banner.querySelector('button')!.addEventListener('click', () => { this.mode = null; });
+      document.getElementById('hud')!.appendChild(this.banner);
+    }
+    const full = this.mode === 'resupplyDest' ? 'Resupply, then: tap where they go after. Cancel: they come back.'
+      : text.replace('(right-drag: a line)', '(drag: a line)').replace(/right-click/g, 'tap');
+    const span = this.banner.querySelector('span')!;
+    if (span.textContent !== full) span.textContent = full;
+    this.banner.style.display = 'flex';
   }
 
   /** The formation to draw under the cursor: while choosing where to send the group, or dragging out its front. */
@@ -497,14 +552,8 @@ export class Input {
     const tcSelected = [...this.rs.selected].map((id) => w.buildings.get(id)).find((b) => b && b.owner === this.player && b.complete);
 
     if (/^[0-8]$/.test(k)) { // 9 toggles the cart debug overlay
-      if (e.ctrlKey || e.metaKey) { e.preventDefault(); this.groups.set(k, [...this.rs.selected]); return; }
-      const g = this.groups.get(k);
-      if (g) {
-        this.setSelection(g.filter((id) => w.units.has(id) || w.buildings.has(id)));
-        const now = performance.now();
-        if (this.lastGroupKey.key === k && now - this.lastGroupKey.t < 400) this.centerOnSelection();
-        this.lastGroupKey = { t: now, key: k };
-      }
+      if (e.ctrlKey || e.metaKey) { e.preventDefault(); this.saveGroup(k); return; }
+      this.recallGroup(k);
       return;
     }
     if (tcSelected && units.length === 0) {
@@ -513,9 +562,7 @@ export class Input {
       if (specId) { this.issue({ type: 'train', building: tcSelected.id, specId }); return; }
     }
     if (k === 'backspace' || k === 'delete') {
-      // kill the selected units / knock down the selected building (your own only)
-      const mine = [...this.rs.selected].filter((id) => (w.units.get(id) ?? w.buildings.get(id))?.owner === this.player);
-      if (mine.length) { e.preventDefault(); this.issue({ type: 'destroy', ids: mine }); }
+      if (this.destroySelected()) e.preventDefault();
       return;
     }
     if (units.length) {
@@ -533,8 +580,7 @@ export class Input {
         return;
       }
     }
-    const base = w.baseOf(this.player);
-    if (k === km.home && base) { this.setSelection([base.id]); this.centerOnSelection(); return; }
+    if (k === km.home && this.goHome()) return;
     switch (k) {
       case ' ': e.preventDefault(); this.centerOnSelection(); break;
       case '.': this.nextIdleWorker(); break;
@@ -546,6 +592,37 @@ export class Input {
       case '=': case '+': this.renderer.cam.zoomAt(1.15, this.renderer.cam.width / 2, this.renderer.cam.height / 2); break;
       case '-': this.renderer.cam.zoomAt(1 / 1.15, this.renderer.cam.width / 2, this.renderer.cam.height / 2); break;
     }
+  }
+
+  /** Remember the selection as group `k` (Ctrl+number). */
+  saveGroup(k: string): void { this.groups.set(k, [...this.rs.selected]); }
+
+  /** Select group `k` (a number key); twice quickly also jumps the camera to it. False if there's no such group. */
+  recallGroup(k: string): boolean {
+    const g = this.groups.get(k), w = this.world;
+    if (!g) return false;
+    this.setSelection(g.filter((id) => w.units.has(id) || w.buildings.has(id)));
+    const now = performance.now();
+    if (this.lastGroupKey.key === k && now - this.lastGroupKey.t < 400) this.centerOnSelection();
+    this.lastGroupKey = { t: now, key: k };
+    return true;
+  }
+
+  /** Kill the selected units and knock down the selected buildings (your own only). False if none are yours. */
+  destroySelected(): boolean {
+    const w = this.world;
+    const mine = [...this.rs.selected].filter((id) => (w.units.get(id) ?? w.buildings.get(id))?.owner === this.player);
+    if (mine.length) this.issue({ type: 'destroy', ids: mine });
+    return mine.length > 0;
+  }
+
+  /** Select your base and look at it. */
+  goHome(): boolean {
+    const base = this.world.baseOf(this.player);
+    if (!base) return false;
+    this.setSelection([base.id]);
+    this.centerOnSelection();
+    return true;
   }
 
   centerOnSelection(): void {
@@ -646,6 +723,8 @@ export class Input {
     else if (kind === 'resupply') {
       const tc = this.supplyBuilding(units);
       if (tc) this.issue({ type: 'resupply', units, building: tc.id });
+      // (on a touch screen, which can't hold the key: the next tap picks where they go after, Cancel brings them back)
+      if (tc && this.viaTouch) this.mode = 'resupplyDest';
     }
     else this.mode = kind;
   }
