@@ -40,6 +40,8 @@ const w = await manifoldKit();
 const minSize = Number(flags.get('min-size') ?? 36);
 /** The thinnest a part should be, mm, for the thickness check (parts are thickened to `--thick`, a little more). */
 const THIN = 1.2;
+/** Foot-pad insets to try, mm, if a file comes out unclean (see flatten). */
+const PAD_INSETS = [-0.03, 0.03, -0.08];
 const base: Omit<PrintOptions, 'mmPerUnit'> = { ...DEFAULT_PRINT, minThick: Number(flags.get('thick') ?? DEFAULT_PRINT.minThick) };
 
 type Unit = FactionSpec['units'][number] & { model?: UnitModel };
@@ -93,7 +95,14 @@ async function exportPose(id: string, pose: PrintPose, mmGiven: number | undefin
     ({ solid, report } = printPose(w, u.model, pose, { ...base, mmPerUnit: mm }, bake));
     warnings.push('on a base: it tips over without one');
   }
-  const file = `${u.id}-${pose.name}.stl`, check = write(dir, file, solid, THIN);
+  const file = `${u.id}-${pose.name}.stl`;
+  let check = write(dir, file, solid, THIN);
+  // (where its feet's pads meet them edge on edge a seam can be left: tried again with the pads a hair inside, or out)
+  for (const inset of PAD_INSETS) {
+    if (ok(check)) break;
+    ({ solid, report } = printPose(w, u.model, pose, { ...base, mmPerUnit: mm, padInset: inset }, bake));
+    check = write(dir, file, solid, THIN);
+  }
   if (!ok(check)) warnings.push('not a clean solid');
   if (!report.stands) warnings.push('tips over');
   if ((check.thin?.under ?? 0) > 0.03) warnings.push(`${Math.round((check.thin?.under ?? 0) * 100)}% of its surface under ${THIN} mm thick (edges and points)`);
@@ -108,11 +117,16 @@ async function exportArticulated(id: string, dir: string): Promise<void> {
   const { f, u } = findUnit(id), bake = await bakeOptsOf(f, u);
   const spec = (await printsOf(f)).find((p) => p.unit === u.id)?.articulated;
   if (!spec) throw new Error(`${u.id} has no articulated figure in ${f.id}/prints.ts`);
-  const t0 = Date.now();
-  const fig = articulate(w, u.model, spec, base, bake);
-  const lay = `${u.id}-articulated.stl`, check = write(dir, lay, fig.plate);
+  const t0 = Date.now(), lay = `${u.id}-articulated.stl`;
+  let fig = articulate(w, u.model, spec, base, bake), check = write(dir, lay, fig.plate);
   // (the plate is several parts: one shell each is right)
-  const plateOk = check.watertight && check.oriented && !check.degenerate && check.shells === fig.parts.length;
+  const clean = (c: MeshCheck) => c.watertight && c.oriented && !c.degenerate && c.shells === fig.parts.length;
+  for (const inset of PAD_INSETS) {
+    if (clean(check)) break;
+    fig = articulate(w, u.model, spec, { ...base, padInset: inset }, bake);
+    check = write(dir, lay, fig.plate);
+  }
+  const plateOk = clean(check);
   console.log(`${lay}: ${fig.parts.length} parts laid out, ${fmt(check).replace(/solid OK|PROBLEM.*?\)/, plateOk ? 'plate OK' : 'PLATE PROBLEM')} [${((Date.now() - t0) / 1000).toFixed(1)} s]`);
   reports.push({ file: lay, unit: u.id, pose: 'articulated', anim: spec.pose.anim, phase: spec.pose.phase, armed: spec.pose.armed ?? true, air: false, base: !!spec.baseOn, mmPerUnit: spec.mmPerUnit, scale: 'given', label: `${u.name}: poseable figure, ${fig.parts.length} parts on one plate, ${check.size.map((x) => x.toFixed(0)).join('x')} mm at ${spec.mmPerUnit} mm/m, ${check.triangles} tris`, size: check.size, check, warnings: [...fig.notes, ...(plateOk ? [] : ['plate is not clean'])] });
   // (all the parts in place, as posed: for looking at, not printing)

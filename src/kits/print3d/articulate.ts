@@ -110,7 +110,7 @@ export function articulate(w: ManifoldToplevel, model: UnitModel, a: Articulatio
   const pieces = new Map<string, Manifold>();
   for (const name of ['body', ...a.joints.map((k) => k.part)]) { const m = solidOf(name); if (m) pieces.set(name, m); else notes.push(`${name}: no part of the model lies along its bones`); }
   const lo = Math.max(0, Math.min(...[...pieces.values()].map((m) => m.boundingBox().min[1])));
-  for (const [name, m] of pieces) if (m.boundingBox().min[1] < lo + o.flat) pieces.set(name, flatten(w, m.translate([0, -lo, 0]), o.flat, 0).translate([0, lo, 0]));
+  for (const [name, m] of pieces) if (m.boundingBox().min[1] < lo + o.flat) pieces.set(name, flatten(w, m.translate([0, -lo, 0]), o.flat, 0, o.padInset).translate([0, lo, 0]));
   const joints: Figure['joints'] = [];
   const ball = (r: number, at: THREE.Vector3) => Manifold.sphere(r, 32).translate(at.toArray());
   for (const j of a.joints) {

@@ -51,6 +51,8 @@ export interface PrintOptions extends SolidOptions {
   postRadius: number;
   /** How far off the ground a part may be and still be cut flat onto the bed, mm. */
   flat: number;
+  /** The foot pads drawn this far inside their outline, mm (0: on it). */
+  padInset?: number;
 }
 
 export const DEFAULT_PRINT: Omit<PrintOptions, 'mmPerUnit'> = { minThick: 1.4, facet: 0.35, baseThick: 2, postRadius: 1.6, flat: 0.3 };
@@ -86,12 +88,17 @@ const mat = (m: THREE.Matrix4) => Array.from(m.elements) as unknown as import('m
 /**
  * Set a standing solid (Y up, ground at y = 0) flat on the ground: whatever reaches the ground (or its lowest point,
  * if nothing does) stands on a flat pad, its own outline `flat` mm up, run straight down. A foot keeps its height:
- * nothing is shaved off it. Anything below the ground is cut away. (`ground`: where the ground is, if not its lowest point or 0.)
+ * nothing is shaved off it. Anything below the ground is cut away. (`ground`: where the ground is, if not its lowest point
+ * or 0; `inset`: the pad drawn that much inside the outline, mm, where its walls meeting the foot's edge on edge would
+ * leave a seam.)
  */
-export function flatten(w: ManifoldToplevel, m: Manifold, flat: number, ground?: number): Manifold {
+export function flatten(w: ManifoldToplevel, m: Manifold, flat: number, ground?: number, inset = 0): Manifold {
   const toZ = mat(Z_UP), back = mat(Z_UP.clone().invert());
   const z = m.transform(toZ), lo = ground ?? Math.max(0, z.boundingBox().min[2]), cut = lo + flat;
-  const pad = w.Manifold.extrude(z.slice(cut).offset(-0.03, 'Miter'), flat + 0.05).translate([0, 0, lo]); // (a hair inside the outline, so its walls and the foot's don't meet edge on edge)
+  const section = z.slice(cut), floor = z.slice(lo + 0.02);
+  // (already flat underneath, as a disc or a block is: just the ground cut away, no pad to meet its walls)
+  if (floor.area() >= 0.9 * section.area()) return z.trimByPlane([0, 0, 1], lo).translate([0, 0, -lo]).transform(back);
+  const pad = w.Manifold.extrude(inset ? section.offset(inset, 'Miter') : section, flat + 0.05).translate([0, 0, lo]);
   return w.Manifold.union([z.trimByPlane([0, 0, 1], cut), pad]).translate([0, 0, -lo]).transform(back);
 }
 
@@ -101,7 +108,7 @@ export function printPose(w: ManifoldToplevel, model: UnitModel, pose: PrintPose
   const [fused, rep] = connect(w, fuse(w, rec, o), (o.minThick / 2) * 1.15, o.minThick ** 3 * 0.2);
   let m = fused;
   const whole = m.volume(), below = pose.air ? 0 : Math.max(0, whole - m.trimByPlane([0, 1, 0], 0).volume());
-  m = onBed(w, m, pose, o);
+  m = connect(w, onBed(w, m, pose, o), (o.minThick / 2) * 1.15, o.minThick ** 3 * 0.2)[0]; // (a claw tip the ground cut left loose)
   const report = { connect: rep, prims: rec.prims.length, belowGround: below / whole, ...standing(w, m) };
   return { solid: m, report, marks: rec.marks };
 }
@@ -134,7 +141,7 @@ export function onBed(w: ManifoldToplevel, m: Manifold, pose: Pick<PrintPose, 'a
     const disc = Manifold.cylinder(o.baseThick, r, r - o.baseThick * 0.6, 64).transform(mat(new THREE.Matrix4().makeTranslation(top[0], 0, top[2]).multiply(new THREE.Matrix4().makeRotationX(-Math.PI / 2))));
     m = Manifold.union([m, post, disc]);
   } else {
-    m = flatten(w, m, o.flat);
+    m = flatten(w, m, o.flat, undefined, o.padInset);
     if (base) {
       // a disc under where it stands, round its feet and its centre of mass (so it can't tip), the solid sunk a little into it
       const mesh = m.getMesh(), P = mesh.vertProperties, n = mesh.numProp, c = centroid(m), feet: THREE.Vector2[] = [];
