@@ -615,7 +615,7 @@ function larvaStripe(c: ModelBuilder, seg: number, x0: number, lift: number, ris
   const skin = (x: number) => Math.max(0, ...balls.map((b) => b.y + b.r * Math.sqrt(Math.max(0, 1 - ((x - b.x) / (1.05 * b.r)) ** 2))));
   const rad = 0.026, pts: V3[] = [];
   for (let x = -0.15; x <= (seg === 0 ? 0.27 : 0.15) + 1e-6; x += 0.05) pts.push([x0 + x, skin(x0 + x) - rad * 0.4, 0]);
-  for (let i = 1; i < pts.length; i++) c.limb(pts[i - 1], pts[i], rad, TEAM);
+  for (let i = 1; i < pts.length; i++) c.limb(pts[i - 1], pts[i], rad, BRIGHT);
 }
 
 /**

@@ -586,7 +586,7 @@ export class Renderer {
         if (Math.abs(sp.scale.x * frame.q - k) > 1e-3) sp.scale.set(k / frame.q);
       }
       // no crystal to fight with: visibly greyed out
-      const disarmed = !u.dummy && !u.carter && !this.world.armed(u) && u.specId !== this.world.factionOf(u.owner).workerId;
+      const disarmed = !u.dummy && !u.carter && u.stats.canAttack && !this.world.armed(u) && u.specId !== this.world.factionOf(u.owner).workerId; // (a fighter out of crystal; never one with no weapon, like a larva)
       sp.tint = disarmed ? 0x707070 : 0xffffff;
       sp.visible = this.seen(u.owner, u.x, u.y); // fog of war
       if (art?.segments) this.drawSegments(u, art, x, y, sp);
