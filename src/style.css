@@ -58,7 +58,9 @@ kbd {
 .menu-hero {
   flex: none; width: 100%; height: clamp(190px, 29vw, 42vh); padding: 0 16px 36px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
-  background: linear-gradient(180deg, rgba(11, 10, 8, 0.1) 35%, #0b0a08 100%), url('./assets/menu-bg.jpg') center / cover;
+  /* (a soft shadow pooled behind the title and subtitle, so they read on any picture) */
+  background: radial-gradient(ellipse 36% 30% at 50% 46%, rgba(11, 10, 8, 0.5), rgba(11, 10, 8, 0) 100%),
+    linear-gradient(180deg, rgba(11, 10, 8, 0.1) 35%, #0b0a08 100%), url('./assets/menu-bg.jpg') center / cover;
 }
 .menu-hero h1 { margin: 0; font-size: clamp(44px, 8vw, 96px); line-height: 1; color: #f0d48a; text-shadow: 0 2px 0 #3a2a10, 0 4px 18px #000, 0 0 40px rgba(0, 0, 0, 0.8); }
 .menu-hero .sub { margin: 10px 0 0; font-size: clamp(15px, 1.6vw, 20px); font-weight: 500; color: var(--text); text-shadow: 0 1px 4px #000, 0 0 14px #000; }
