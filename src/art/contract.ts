@@ -79,6 +79,7 @@ export interface BuildingArt {
   attack?: ThrowArt;
   /** Its picture for icons, as UnitArt.still. */
   still?: Sprite;
+  /** `complete`: when it is finished (a building laid down by a body finishes as it is laid). */
   sounds?: { placed?: SoundSpec; complete?: SoundSpec; destroyed?: SoundSpec };
 }
 
@@ -126,12 +127,39 @@ export type ArtLoader = (team: TeamColors, onProgress?: (fraction: number, label
 
 export type SoundSpec =
   | { synth: SynthRecipe }
-  | { clip: string; gain?: number };
+  | { clip: string; gain?: number }
+  /** Several sounds laid over each other, each at its own moment: one sound. `name` shows in the sound debug panel. */
+  | { layers: SoundLayer[]; name?: string }
+  /**
+   * TEMPORARY (an audition: delete once the owner picks): one of `options`, chosen by the page's URL parameter
+   * `param` (1, 2, 3 … ; the first when it is missing).
+   */
+  | { audition: string; options: Array<{ name: string; sound: SoundSpec }> };
+
+/** One part of a layered sound: a recorded clip (by Voice Lab id, public/voices) or a synth recipe. */
+export interface SoundLayer {
+  /** A recorded clip's Voice Lab id (played through its own treatment from the lab). */
+  voice?: string;
+  synth?: SynthRecipe;
+  /** Seconds after the sound starts. */
+  at?: number;
+  /** Pitch shift (a clip's playback slows with it): semitones. */
+  semis?: number;
+  /** Volume, 0 … 1. */
+  gain?: number;
+  /** A recorded clip: cut everything above this (Hz), to soften it. */
+  highcut?: number;
+}
 
 export interface SynthRecipe {
-  kind: 'voice' | 'pluck' | 'hit' | 'whoosh' | 'chime';
+  /** `strand`: noise in a narrow band that glides from `pitch` to `pitch × glide`, fluttering `flutter` times a second. */
+  kind: 'voice' | 'pluck' | 'hit' | 'whoosh' | 'chime' | 'strand';
   /** Hz. */
   pitch?: number;
+  /** `strand`: where its band ends, as a multiple of `pitch`. */
+  glide?: number;
+  /** `strand`: flutters a second (its little clicks). */
+  flutter?: number;
   vowel?: 'a' | 'e' | 'i' | 'o' | 'u';
   timbre?: 'saw' | 'square' | 'triangle' | 'sine';
   /** Seconds. */

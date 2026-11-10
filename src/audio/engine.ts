@@ -4,12 +4,12 @@
 // Whatever a faction leaves out is derived from physics — voices pitch down
 // with mass, impacts get heavier with energy — so every faction sounds like
 // something. Everything is synthesised; clips (URLs / data: URIs) also work.
-import type { MusicSpec, SoundSpec, SynthRecipe } from '../art/contract';
+import type { MusicSpec, SoundLayer, SoundSpec, SynthRecipe } from '../art/contract';
 import type { Camera } from '../render/camera';
 import type { ArtBank } from '../render/artbank';
 import type { World, WorldEvent } from '../sim/world';
 import { settings, onSettings } from '../ui/settings';
-import { playCombat, preloadVoices, sayLine, setMassOf, voicesOn } from './clips';
+import { log, playClip, playCombat, preloadVoices, sayLine, setMassOf, voicesOn } from './clips';
 import type { Command } from '../sim/commands';
 
 const FORMANTS: Record<NonNullable<SynthRecipe['vowel']>, [number, number]> = {
@@ -156,9 +156,14 @@ export class AudioEngine {
             setTimeout(() => { if (this.ctx) void sayLine(this.ctx, this.out(at, 0.6), faction, e.intoSpec, 'select'); }, secs * 1000 + 80));
           break;
         }
-        case 'built':
-          if (e.owner === this.player) this.chord([0, 4, 7, 12], 330, 0.5);
+        case 'built': {
+          if (e.owner !== this.player) break;
+          // the building's own sound (its faction's art), else a bright chord
+          const b = this.world.buildings.get(e.id), own = b && this.bank.building(b.owner, b.specId)?.sounds?.complete;
+          if (!own) { this.chord([0, 4, 7, 12], 330, 0.5); break; }
+          if (this.allow('built', 2, 250)) this.play(own, this.where(cam, b.ox + b.size / 2, b.oy + b.size / 2), 0.5);
           break;
+        }
         case 'researched':
           if (e.owner === this.player) this.chord([0, 7, 12, 16, 19], 392, 0.45, 0.12);
           break;
@@ -212,7 +217,30 @@ export class AudioEngine {
 
   play(s: SoundSpec, at: Where, gain = 1): void {
     if ('synth' in s) this.synth(s.synth, at, gain);
-    else this.clip(s.clip, at, gain * (s.gain ?? 1));
+    else if ('clip' in s) this.clip(s.clip, at, gain * (s.gain ?? 1));
+    else if ('layers' in s) this.layered(s.layers, at, gain, s.name ?? 'layered sound');
+    else {
+      // TEMPORARY (an audition: delete with SoundSpec's `audition` once the owner picks)
+      const n = Number(new URLSearchParams(location.search).get(s.audition) ?? 1), pick = s.options[n - 1] ?? s.options[0];
+      if (!pick) return;
+      log(`${s.audition}=${s.options.indexOf(pick) + 1}`, `audition: ${pick.name}`);
+      this.play(pick.sound, at, gain);
+    }
+  }
+
+  /** A layered sound (SoundSpec `layers`): each recorded clip or synth recipe at its own moment. */
+  private layered(layers: SoundLayer[], at: Where, gain: number, name: string): void {
+    const ctx = this.ctx;
+    if (!ctx || at.gain <= 0.01) return;
+    for (const l of layers) {
+      const g = gain * (l.gain ?? 1), when = l.at ?? 0;
+      if (l.voice) void playClip(ctx, this.out(at, g), l.voice, name, { semis: l.semis, highcut: l.highcut, delay: when });
+      else if (l.synth) {
+        const r = l.semis ? { ...l.synth, pitch: (l.synth.pitch ?? 440) * Math.pow(2, l.semis / 12) } : l.synth;
+        log(`synth:${r.kind}`, name);
+        this.synth(r, at, g, undefined, when);
+      }
+    }
   }
 
   private out(at: Where, gain: number, bus: GainNode = this.sfx, wet = 0.25): GainNode {
@@ -331,6 +359,27 @@ export class AudioEngine {
         e.gain.exponentialRampToValueAtTime(0.0001, t0 + len);
         nz.connect(bp); bp.connect(e); e.connect(out);
         nz.start(t0);
+        break;
+      }
+      case 'strand': {
+        // a strand pulled out: noise in a narrow band gliding from `pitch` to `pitch × glide`, its loudness fluttering
+        // (little clicks) and swelling then fading
+        const f0 = r.pitch ?? 900, f1 = f0 * (r.glide ?? 0.5);
+        const nz = this.noise(len);
+        const bp = ctx.createBiquadFilter();
+        bp.type = 'bandpass'; bp.Q.value = 4;
+        bp.frequency.setValueAtTime(f0, t0);
+        bp.frequency.exponentialRampToValueAtTime(f1, t0 + len);
+        const e = ctx.createGain();
+        e.gain.setValueAtTime(0.0001, t0);
+        e.gain.exponentialRampToValueAtTime(4, t0 + len * 0.2); // (a narrow band of noise is quiet: brought up to sit with the others)
+        e.gain.exponentialRampToValueAtTime(0.0001, t0 + len);
+        const flutter = ctx.createGain(); flutter.gain.value = 0.55;
+        const lfo = ctx.createOscillator(), depth = ctx.createGain();
+        lfo.type = 'square'; lfo.frequency.setValueAtTime(r.flutter ?? 24, t0); lfo.frequency.linearRampToValueAtTime((r.flutter ?? 24) * 0.6, t0 + len);
+        depth.gain.value = 0.45; lfo.connect(depth).connect(flutter.gain);
+        nz.connect(bp).connect(flutter).connect(e).connect(out);
+        nz.start(t0); lfo.start(t0); lfo.stop(t0 + len + 0.05);
         break;
       }
       case 'chime': {

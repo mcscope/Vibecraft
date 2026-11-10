@@ -1,5 +1,5 @@
 // A faction's art: bake each of its unit and building models into contract sprites, reporting progress as it goes.
-import type { FactionArt, MusicSpec, Sprite, TeamColors } from '../../art/contract';
+import type { BuildingArt, FactionArt, MusicSpec, Sprite, TeamColors } from '../../art/contract';
 import { Baker, type UnitBakeOptions } from './baker';
 import { toBitmaps } from './bitmaps';
 import type { BuildingModel, ThrowTiming, UnitModel } from './types';
@@ -12,6 +12,8 @@ export interface FactionBake<U extends { id: string; name: string; model: UnitMo
   flag(baker: Baker): Sprite;
   wantFlag?(baker: Baker): Sprite;
   music: MusicSpec;
+  /** Its buildings' own sounds, by building id. */
+  buildingSounds?: Record<string, BuildingArt['sounds']>;
   /** The loading line while a unit bakes ("Mustering Macemen"). */
   label(name: string): string;
 }
@@ -31,6 +33,7 @@ export async function bakeFaction<U extends { id: string; name: string; model: U
   for (const b of buildings) {
     onProgress?.(done / total, `Raising the ${b.name}`);
     art.buildings[b.id] = baker.bakeBuilding(b.model, b.size, team, false, b.wall ? (b.looks ?? 1) : 0);
+    art.buildings[b.id].sounds = f.buildingSounds?.[b.id];
     if (b.throws) art.buildings[b.id].attack = await baker.bakeBuildingThrow(b.model, b.size, team, b.throws);
     done += 6 + (b.wall ? (b.looks ?? 1) * 16 : 0) + (b.throws?.frames ?? 0) * 8;
     await new Promise((r) => setTimeout(r, 0));

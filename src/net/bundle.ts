@@ -151,7 +151,12 @@ function checkSprites(images: unknown, sprites: PackedSprite[], e: string[]): vo
     if (!s || !Number.isInteger(s.i) || s.i < 0 || s.i >= images.length || ![s.sx, s.sy, s.sw, s.sh, s.ax, s.ay, s.q].every(isNum) || s.sw <= 0 || s.sh <= 0 || s.q <= 0 || s.q > 8) { e.push('bad sprite'); return; }
   }
 }
-const sounds = (x: SoundSpec | undefined): SoundSpec | undefined => (x && 'clip' in x ? (DATA_AUDIO.test(x.clip) ? x : undefined) : x); // never fetch URLs from someone else's bundle
+// never fetch URLs from someone else's bundle: a layer's recorded clip is one of ours, by its plain id
+const sounds = (x: SoundSpec | undefined): SoundSpec | undefined => !x ? undefined
+  : 'clip' in x ? (DATA_AUDIO.test(x.clip) ? x : undefined)
+  : 'layers' in x ? (Array.isArray(x.layers) ? { name: x.name, layers: x.layers.filter((l) => l?.voice === undefined || /^[\w-]+$/.test(l.voice)) } : undefined)
+  : 'audition' in x ? undefined // (an audition is our own factions' only, and temporary)
+  : x;
 const unitSounds = (s?: UnitSounds): UnitSounds | undefined => s && { select: sounds(s.select), acknowledge: sounds(s.acknowledge), attack: sounds(s.attack), death: sounds(s.death) };
 
 function allSprites(a: PackedArt | PackedBiome): PackedSprite[] {
