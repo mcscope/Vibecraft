@@ -626,6 +626,8 @@ html.touch, .touch body {
 .touch input, .touch select, .touch textarea { font-size: 16px; } /* (iOS zooms into smaller text fields) */
 .touch .settings-box, .touch .lobby-box { max-height: calc(100dvh - 32px); }
 .touch #battle-draft .draft-units button { width: 44px; min-height: 40px; }
+.touch #battle-draft select { min-height: 44px; }
+.touch #battle-draft .back { display: inline-block; padding: 12px 4px; }
 .touch .matchup select, .touch .lobby-form select, .touch .lobby-form input { min-height: 44px; }
 .touch .army-learn { min-height: 44px; padding: 12px 8px; }
 .touch .menu-links a { display: inline-block; padding: 13px 6px; }
@@ -706,7 +708,7 @@ html.touch, .touch body {
 #help .help-head { position: static; display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; margin: 0; padding: 4px 6px; text-align: left; background: none; box-shadow: none; border: 0; }
 #help .help-head b { flex: none; font-family: 'Cinzel', serif; color: var(--gold); font-size: 14px; }
 #help .help-head .help-next { flex: 1; min-width: 0; color: var(--dim); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#help .help-head i { flex: none; font-style: normal; font-size: 13px; color: var(--gold); padding: 4px 6px; border: 1px solid var(--bronze); border-radius: 3px; }
+#help .help-head i { flex: none; margin-left: auto; font-style: normal; font-size: 13px; color: var(--gold); padding: 4px 6px; border: 1px solid var(--bronze); border-radius: 3px; }
 #help.folding { padding: 2px 6px 8px; }
 #help.folding .help-body { padding: 0 6px; }
 #help.folded { padding-bottom: 2px; }

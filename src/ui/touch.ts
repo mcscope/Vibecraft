@@ -6,6 +6,7 @@ import type { Input } from './input';
 
 /** Is this a touch screen? (?touch=1 or ?touch=0 forces it, to try the touch layout on a desktop.) */
 export const TOUCH = ((): boolean => {
+  if (typeof window === 'undefined') return false; // (tests run without a page)
   const q = new URLSearchParams(location.search).get('touch');
   if (q === '1' || q === '0') return q === '1';
   if (matchMedia('(pointer: coarse)').matches || (navigator.maxTouchPoints > 0 && matchMedia('(hover: none)').matches)) return true;
