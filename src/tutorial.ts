@@ -246,7 +246,7 @@ export const LESSONS: Lesson[] = [
     you: wildwelds, foe: meadowfolk, look: [16, 25],
     text: `<p>The <b>Wildwelds</b> have no buildings to train from. Mothers lay eggs, eggs hatch into larvae, and larvae change into everything else. It all runs on food.</p>
 <ol>
-<li>Select the mother and click <b>T1 Egg</b> in her panel. She lays an egg beside her.</li>
+<li>Select the mother and click <b>T1 Egg</b> in her panel. She lays an egg beside her. Hold the click on <b>T1 Egg</b> and she keeps laying them, one after another.</li>
 <li>An egg hatches once it's fed. Select the green larvae and press ${key('tend')} (Tend). They carry food to whoever is waiting for it.</li>
 <li>Short of food? Select a green larva and right-click a tree. It turns the whole tree into food, and is gone into it.</li>
 <li>Select a larva and click a tile marked →. It changes inside a cocoon, and tenders feed it.</li>
