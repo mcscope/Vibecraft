@@ -15,6 +15,7 @@ import { SHOT_FROM, SHOT_TO, THROW_AT, webTower } from './mimic';
 import type { Section, ModelBuilder, Pose, Vec3 as V3 } from '../../kits/bake3d/types';
 import { aim, footAt, jointBetween, shapedLimb, span } from '../../kits/bake3d/gait';
 import type { Mat } from '../../kits/bake3d/types';
+import { slamPart } from '../../art/contract';
 
 type Unit = UnitSpec & { model: (b: ModelBuilder, p: Pose) => void };
 const TAU = Math.PI * 2;
@@ -999,7 +1000,7 @@ function gHopper(b: ModelBuilder, p: Pose, gait = HOPPER_GAIT): void {
   // springs), squash and stretch keeping its volume (sx along its body, sy up and down, its width 1 ÷ both), stretched
   // through its fastest moments (as a smear frame), slow in and out round the top and the settle, its body along its
   // arc, and follow-through (it rocks past level after it lands; its tail lags its turns, below). Timing is the sim's
-  type Pose5 = { crouch: number; height: number; pitch: number; footX: number; footY: number; thrust: number; sx: number; sy: number };
+  type Pose5 = { crouch: number; height: number; pitch: number; footX: number; footY: number; thrust: number; sx: number; sy: number; trail?: number }; // (trail: its leg swept straight back in line with its body, 0..1)
   const bound = (q0: number): Pose5 => {
     const q = ((q0 % 1) + 1) % 1, o: Pose5 = { crouch: 0, height: 0, pitch: 0, footX: 0, footY: 0, thrust: 0, sx: 1, sy: 1 };
     if (q < UP) {
@@ -1023,21 +1024,25 @@ function gHopper(b: ModelBuilder, p: Pose, gait = HOPPER_GAIT): void {
   // (it strikes the middle of an average body, half a 70 kg body's height up, where the sim has blows meet: at contact
   // it's crouched into the blow, nose down just so far as puts its crystal's tip there)
   const STRIKE_H = 0.85 / GOLIATH_G;
-  const strikePitch = (crouchC: number, sxC: number) => -Math.asin(Math.max(0, Math.min(0.95, (1.28 - 0.55 * crouchC - STRIKE_H) / (0.7 * 1.12 * sxC + 0.22))));
+  const strikePitch = (crouchC: number, sxC: number, up = 0) => -Math.asin(Math.max(0, Math.min(0.95, (1.28 - 0.55 * crouchC + up - STRIKE_H) / (0.7 * 1.12 * sxC + 0.22))));
   let o: Pose5 = { crouch: 0.65 + 0.03 * Math.sin(t), height: 0, pitch: 0, footX: 0, footY: 0, thrust: 0, sx: 1, sy: 1 + 0.02 * Math.sin(t) }, bend = 0;
   if (moving) { o = bound(ph); bend = Math.max(-0.3, Math.min(0.3, (o.pitch - bound(ph - 0.04).pitch) * 2)); }
-  else if (p.anim === 'slam') { // its bound is the blow: crouching (to 0.35), then the bound (its arc the sim's), coming
-    // over ram first, stretched into the impact, squashed by it at contact (the end)
-    const a = p.phase, f = Math.max(0, (a - 0.35) / 0.65);
-    if (a < 0.35) { const c = a < 0.28 ? sm(a / 0.25) : 1 - sm((a - 0.28) / 0.07); o = { ...o, crouch: c, pitch: 0.22 * c - 0.08 * Math.sin((Math.PI * a) / 0.35), sy: 1 - 0.2 * c, sx: 1 + 0.07 * c + (a > 0.28 ? 0.2 * sm((a - 0.28) / 0.07) : 0) }; }
+  else if (p.anim === 'slam') { // its bound is the blow (the art contract's SLAM parts), and it commits to it: a short,
+    // deep wind-up (squashed flat, nose dipped), then the bound (its arc the sim's) as one long spear, its leg swept straight
+    // back in line with its body. The sim lands the blow as the bound comes down (World.swingAt), or sooner if its reach
+    // meets the target in the air: so as it falls it dives, its nose pitched to put the crystal's tip at a standing body's
+    // middle (STRIKE_H) wherever it is, and it lands the blow coming down onto its target, its leg unfolding under it,
+    // crouched deep into the impact, ram driven forward (struck sooner, in the air, it plays on the same way). Its tip
+    // dips no steeper than 0.75 rad: a dive, not a dart
+    const { part, k } = slamPart(p.phase), f = k;
+    if (part === 'crouch') { const c = sm(k / 0.75), u = sm((k - 0.75) / 0.25); o = { ...o, crouch: 1.35 * c * (1 - u) + 0.2 * u, pitch: -0.22 * c * (1 - u) + 0.35 * u, sy: 1 - 0.32 * c * (1 - u), sx: 1 + 0.1 * c + 0.2 * u, trail: 0.4 * u }; }
     else {
-      const hitPitch = strikePitch(0.8, 0.87);
-      o = { ...o, crouch: 0.8 * sm((f - 0.8) / 0.2), height: 4 * f * (1 - f) * APEX, pitch: 0.35 + (hitPitch - 0.35) * sm((f - 0.1) / 0.9), thrust: 0.42 * sm((f - 0.15) / 0.4) };
-      o.sx = f < 0.85 ? 1.27 - 0.1 * sm(f / 0.4) + 0.12 * sm((f - 0.5) / 0.35) : 1.29 - 0.42 * sm((f - 0.85) / 0.15); // (stretched into it)
-      o.sy = f < 0.85 ? 1 : 1 - 0.2 * sm((f - 0.85) / 0.15); // (and squashed at contact)
-      o.footX = -0.25 - 0.3 * sm(f / 0.5) + 0.12 * sm((f - 0.7) / 0.3); o.footY = o.height * 0.5;
+      const height = 4 * f * (1 - f) * APEX, dive = sm((f - 0.62) / 0.3), crouch = 1.2 * sm((f - 0.8) / 0.14);
+      const sx = 1.27 - 0.1 * sm(f / 0.4) + 0.12 * sm((f - 0.5) / 0.3) - 0.3 * sm((f - 0.8) / 0.12); // (stretched into it, squashed by it)
+      o = { ...o, crouch, height, sx, sy: 1 - 0.18 * sm((f - 0.8) / 0.12), thrust: 0.42 * sm((f - 0.15) / 0.4) + 0.13 * dive, footX: -0.1, footY: height * 0.4,
+        pitch: 0.38 * (1 - 2 * f) * (1 - dive) + Math.max(-0.75, strikePitch(crouch, sx, height)) * dive, trail: (0.4 + 0.6 * sm(f / 0.2)) * (1 - sm((f - 0.8) / 0.14)) };
     }
-    bend = a > 0.35 ? -0.2 * Math.sin(Math.PI * Math.min(1, (a - 0.35) / 0.5)) : 0; // (its tail dragging after the lunge)
+    if (part === 'air') bend = -0.2 * Math.sin(Math.PI * Math.min(1, f * 1.3)); // (its tail dragging after the lunge)
   } else if (p.anim === 'attack') { // standing, it strikes without leaving the ground: crouching (squashed), then lunging
     // ram first (stretched, the fastest moment), then settling back past level
     const a = p.phase;
@@ -1050,7 +1055,7 @@ function gHopper(b: ModelBuilder, p: Pose, gait = HOPPER_GAIT): void {
     o.sx = a < 0.2 ? 1 + 0.05 * sm(a / 0.2) : a < 0.4 ? 1.05 + 0.2 * Math.sin((Math.PI * (a - 0.2)) / 0.2) : 1;
     bend = a > 0.2 && a < 0.6 ? -0.18 * Math.sin((Math.PI * (a - 0.2)) / 0.4) : 0;
   }
-  const { crouch, height, pitch, footX, footY, thrust, sx, sy } = o, sz = 1 / (sx * sy); // (its volume kept)
+  const { crouch, height, pitch, footX, footY, thrust, sx, sy } = o, trail = o.trail ?? 0, sz = 1 / (sx * sy); // (its volume kept)
   b.joint([0, 0, 0], [0, 0, 0], (c) => {
     const hipY = 1.18 - 0.55 * crouch + height, hip: V3 = [thrust * 0.6, hipY, 0];
     // (lanky, the user's: a thinner barrel, a little longer, on a longer, leaner leg; the same size overall)
@@ -1073,17 +1078,25 @@ function gHopper(b: ModelBuilder, p: Pose, gait = HOPPER_GAIT): void {
       bd.crystal(0.24, [0.7 * L, 0, 0], [0, 0, -Math.PI / 2]); // its crystal, capping the boss, point forward
       for (const [y, z] of [[0.1, 0.1], [0.1, -0.1], [-0.08, 0.1], [-0.08, -0.1]] as const) bd.crystal(0.09, [0.66 * L, y * W * sy, z * W * sz], [z * 2.5, 0, -Math.PI / 2 + y * 1.5]); // and a ring of smaller ones round it
     });
-    // the one leg: a long lean thigh from its haunch, its knee forward, a long shin, the ankle back, a broad foot
-    const foot: V3 = [footX, footY, 0], ankle: V3 = [foot[0] - 0.16, foot[1] + 0.22, 0];
-    const knee = jointBetween(hip, ankle, 0.76, 0.8, [1, 0.35, 0]); // (long legs: long bounds)
-    c.sphere([0.11, 0.09, 0.11], [hip[0], hip[1] + 0.03, 0], plate); // the haunch, under the ram
-    shapedLimb(c, hip, knee, 0.085, [1.2, 1.35, 1.2, 0.9, 0.7], leg, { flat: 0.2 });
-    c.sphere(0.06, knee, edge);
-    shapedLimb(c, knee, ankle, 0.055, [1.0, 0.85, 0.7, 0.6, 0.65], leg, { flat: 0.3, keel: 0.4 });
-    c.sphere(0.042, ankle, edge);
-    shapedLimb(c, ankle, foot, 0.04, [1.0, 0.9, 0.8, 0.9], leg, { flat: 0.4 });
+    // the one leg, a bird's (a spring folded in a Z): a short thick thigh held forward under the ram, its knee high by
+    // the body, a long shin running down and back to the ankle, then a long foot bone forward and down to the toes. The
+    // ankle is the joint you see bend, backward; crouching, the Z folds flat and the ankle sinks behind
+    // (trailing, its leg sweeps back along its body from the hip, nearly straight, its foot pointed behind like a diver's)
+    const back: V3 = [-Math.cos(pitch), -Math.sin(pitch), 0], mix = (a: V3, b: V3): V3 => [a[0] + (b[0] - a[0]) * trail, a[1] + (b[1] - a[1]) * trail, 0];
+    const THIGH = 0.46, SHIN = 0.8, TARSUS = 0.58;
+    const planted: V3 = [footX, footY, 0], fold = sm((1.18 + 0.1 - (hip[1] - planted[1])) / 0.85), lean = 0.3 + 0.95 * fold; // (the foot bone's lean back from upright)
+    const foot = mix(planted, [hip[0] + back[0] * 1.7, hip[1] + back[1] * 1.7, 0]);
+    const ankle = mix([planted[0] - TARSUS * Math.sin(lean), planted[1] + TARSUS * Math.cos(lean), 0], [hip[0] + back[0] * 1.2, hip[1] + back[1] * 1.2, 0]);
+    const toe = mix([0.95, 0, 0], [back[0] * 0.95, back[1] * 0.95, 0]); // (its toes' way, × their length)
+    const knee = jointBetween(hip, ankle, THIGH, SHIN, [1, 0.2, 0]);
+    c.sphere([0.13, 0.11, 0.12], [hip[0], hip[1] + 0.03, 0], plate); // the haunch, under the ram
+    shapedLimb(c, hip, knee, 0.1, [1.2, 1.45, 1.3, 0.95, 0.7], leg, { flat: 0.2 }); // the drumstick
+    c.sphere(0.065, knee, edge);
+    shapedLimb(c, knee, ankle, 0.06, [1.1, 0.95, 0.75, 0.6, 0.6], leg, { flat: 0.3, keel: 0.4 });
+    c.sphere(0.045, ankle, edge);
+    shapedLimb(c, ankle, foot, 0.04, [1.0, 0.85, 0.8, 0.95], leg, { flat: 0.4 });
     for (const [dz, l] of [[-0.11, 0.17], [0, 0.22], [0.11, 0.17]] as const) // three broad toes, splayed, to balance on
-      shapedLimb(c, foot, [foot[0] + l * 0.95, Math.max(0.01, foot[1] - 0.02), dz + dz * 0.6], 0.035, [1.0, 0.9, 0.6, 0.3], edge, { flat: 0.6 });
+      shapedLimb(c, foot, [foot[0] + l * toe[0], Math.max(0.01, foot[1] - 0.02 + l * toe[1]), dz + dz * 0.6], 0.035, [1.0, 0.9, 0.6, 0.3], edge, { flat: 0.6 });
     c.cone(0.03, 0.12, [foot[0] - 0.08, foot[1] + 0.02, 0], edge, [0, 0, Math.PI / 2 + 0.3], 4); // a back spur
   }, GOLIATH_G);
 }

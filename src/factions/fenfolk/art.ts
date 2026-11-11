@@ -5,14 +5,17 @@ import type { UnitBakeOptions } from '../../kits/bake3d/baker';
 import { buildings, units } from './index';
 import { fenBanner, fenWantFlag } from './buildings';
 
+/** The bog toad strikes with its bound: it bakes a slam (its bite), ~13 frames a second of its stride. */
+const slams = (u: (typeof units)[number]) => u.id === 'bog-toad';
+const slamFrames = (u: (typeof units)[number]) => (slams(u) && u.gait ? { slam: Math.max(10, Math.round((u.gait.period ?? 1) * 13)) } : undefined);
+
 /** What each unit bakes (its extra animations; the great heron's own, below). */
-export const bakeOpts = (u: (typeof units)[number]): UnitBakeOptions => ({ withCarry: u.id === 'fenling', fly: !!u.flight, brace: !!u.attack?.shaft, sidearm: !!u.attack?.sidearm, ...(u.id === 'great-siege-heron' ? HERON : {}) });
+export const bakeOpts = (u: (typeof units)[number]): UnitBakeOptions => ({ withCarry: u.id === 'fenling', fly: !!u.flight, brace: !!u.attack?.shaft, sidearm: !!u.attack?.sidearm, slam: slams(u), frames: slamFrames(u), ...(u.id === 'great-siege-heron' ? HERON : {}) });
 
 /**
  * The great heron, kept inside the sprite budget (README "Sprite budget"): its model draws its whole leap itself; it
- * gathers, eats and tires standing as it idles (only its rider moves), so it shows its idle for those; its moving
- * shadows are baked apart (the tall bird and its long shadow in one frame would be mostly empty box); and, the biggest
- * body in the fen, it bakes at a little under the usual resolution.
+ * gathers, eats and tires standing as it idles (only its rider moves), so it shows its idle for those; and its moving
+ * shadows are baked apart (the tall bird and its long shadow in one frame would be mostly empty box).
  */
 const HERON: UnitBakeOptions = { ownLeap: true, without: ['gather', 'eat', 'tired'], shadowApart: ['walk', 'charge', 'attack', 'stagger'] };
 

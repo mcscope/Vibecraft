@@ -339,18 +339,18 @@ export interface ResourceNode {
   look?: number;
 }
 
-/**
- * Where a charge at `t` should aim: alongside it (the two bodies' radii plus a hand's breadth off its centre, on the
- * side `u` is already coming from), `beyond` tiles past it. A charge strikes in passing; it doesn't ram the body.
- */
 /** How far (tiles) a body's spine runs either side of its middle: half its length beyond its width (0 for a round one). */
 const spine = (u: Unit): number => Math.max(0, u.stats.length / 2 / M_PER_TILE - u.stats.radius);
 
-function passBeside(u: Unit, t: Unit, beyond: number): [number, number] {
+/**
+ * Where a charge at `t` should aim: alongside it (the two bodies' radii plus a hand's breadth off its centre, on the
+ * side `u` is already coming from). A charge strikes in passing; it doesn't ram the body.
+ */
+function passBeside(u: Unit, t: Unit): [number, number] {
   const dx = t.x - u.x, dy = t.y - u.y, d = Math.hypot(dx, dy) || 1, nx = dx / d, ny = dy / d;
   const side = (u.vx * ny - u.vy * nx) > 0 ? -1 : (u.vx * ny - u.vy * nx) < 0 ? 1 : (u.id % 2 ? 1 : -1); // the side its run already favours
   const off = u.stats.radius + t.stats.radius + 0.15;
-  return [t.x + nx * beyond - ny * off * side, t.y + ny * beyond + nx * off * side];
+  return [t.x - ny * off * side, t.y + nx * off * side];
 }
 
 /**
@@ -1151,8 +1151,8 @@ export class World {
     // (and each is reckoned from how the bodies were meeting, before any of them lands: a blow landing first doesn't
     // slow the other it's met by)
     const landing: Array<() => void> = [];
-    // (a hopper's bound-blow lands only as it comes down: in the air it's over their heads)
-    for (const u of this.units.values()) if (u.blow && (u.blow.dur ? (this.tick >= u.blow.at || (u.strideMul > 0 && this.reached(u, u.blow))) && boundLeft(u) < 0.08 : this.tick >= u.blow.at)) { const f = this.strike(u); if (f) landing.push(f); }
+    // (a hopper's bound-blow lands as its reach meets the target in the air, or as it comes down, whichever is first)
+    for (const u of this.units.values()) if (u.blow && (u.blow.dur ? (this.tick >= u.blow.at && boundLeft(u) < 0.08) || (u.strideMul > 0 && this.reached(u, u.blow)) : this.tick >= u.blow.at)) { const f = this.strike(u); if (f) landing.push(f); }
     for (const f of landing) f();
     this.runFallen();
     this.separate();
@@ -1375,8 +1375,12 @@ export class World {
     // off balance: no orders, no blows, it stumbles to a stop
     const reeling = u.staggered > 0;
     if (reeling) u.staggered = Math.max(0, u.staggered - DT);
-    const moved = reeling ? false : this.runOrder(u) || midStride(u, this.tick); // a hopper crouching between bounds is still on its way
-    if (st.gait && !midStride(u, this.tick)) u.strideMul = 0; // (a hopper that stops comes down: it isn't left in the air)
+    let moved = reeling ? false : this.runOrder(u) || midStride(u, this.tick); // a hopper crouching between bounds is still on its way
+    // a hopper in the air with nowhere to go (its target fallen, pulling up, reeling) flies on to where its bound comes down
+    if (st.gait && !midStride(u, this.tick)) {
+      if (u.strideMul > 0) { u.strideMul = strideFactor(u, this.tick, DT); u.steered = this.tick; moved = true; }
+      if (u.strideMul > 0) this.step1(u, u.vx * DT * u.strideMul, u.vy * DT * u.strideMul, 0, false);
+    }
     tickFlight(this, u, moved, DT, (fx, fy) => this.face(u, fx, fy));
     // a shaft going at an enemy is carried point-first: at any pace it moves in the charge pose (point levelled)
     const atEnemy = st.minReach > 0 && !u.breakFrom && (u.engage || u.order.kind === 'attack');
@@ -1445,7 +1449,12 @@ export class World {
         return u.x !== u.px || u.y !== u.py;
       }
       case 'attack': {
-        if (!this.canFight(u, o.target) || !this.attackTarget(u, o.target)) this.finish(u); // (one it can't get at: cut off by a cliff or water)
+        if (!this.canFight(u, o.target) || !this.attackTarget(u, o.target)) { // (one it can't get at: cut off by a cliff or water)
+          // a charge whose target falls runs on through: as far again as it takes to pull up, striking what's in its way
+          const v = Math.hypot(u.vx, u.vy), on = (v * M_PER_TILE) ** 2 / (2 * K.footBrake * K.gravity) / M_PER_TILE;
+          if (o.charge && !u.queue.length && v > u.stats.speed * 1.1) u.order = { kind: 'attackMove', x: u.x + (u.vx / v) * on, y: u.y + (u.vy / v) * on, charge: true };
+          else this.finish(u);
+        }
         return u.x !== u.px || u.y !== u.py;
       }
       case 'gather': return this.runGather(u, o);
@@ -1716,15 +1725,15 @@ export class World {
         }
         if (wpn.throws) this.moveTo(u, tx, ty, Math.max(0.05, range - 0.3), sprint, false);
         else {
-          // straight at it till the blow lands, then past alongside
+          // at a run, it runs past alongside, striking in passing (runPast); at a walk, straight at it
           // against a weapon that outreaches its own (it'll be struck first), it doesn't run onto the point: near that
           // reach it comes on at a deliberate walk, so the blow that meets it carries little of a collision, and pushes
           // inside where a long shaft can't be brought to bear
           // (only while that weapon is pointed at it: one turned away, breaking off or coming round, it charges)
           const outreached = !tu.throws && tu.stats.canAttack && tu.stats.range > range + 0.1 && !charging && this.facingWithin(tu, u.x - tu.x, u.y - tu.y, Math.PI * 0.2);
           if (outreached && edge < tu.stats.range + 2) { this.moveTo(u, tx, ty, 0.05, false, false, u.stats.speed * K.closeInPace); return true; }
-          const [px, py] = u.cooldown > 0 ? passBeside(u, tu, 0) : [tx, ty];
-          this.moveTo(u, px, py, 0.05, sprint && !outreached, !outreached);
+          if (sprint && !outreached && !tu.airborne) this.runPast(u, tu);
+          else this.moveTo(u, tx, ty, 0.05, sprint && !outreached, !outreached); // (one in the air, it chases)
         }
         return true;
       }
@@ -1753,15 +1762,10 @@ export class World {
     }
     // a melee flier striking a building, or one in the air within reach, lands to strike
     if (u.airborne && !wpn.throws && !tu) u.airborne = false; // (a building: it lands to strike)
-    // in reach at a run: a striker doesn't stop on a dime, it keeps its line and strikes in passing, carried on past
-    // alongside; at a walk it just pulls up (coasts to a stop). Riding out to come round again is the player's call
-    // (a hopper in the air finishes its bound; striking with its bound, it shortens it to come down just in front of its
-    // target: flying slower, so the blow lands as it lands, its ram coming down onto it, not over it mid-flight)
-    if (!u.airborne && !wpn.throws && tu && u.blow?.dur && u.stats.gait) { // (crouched, it keeps on: to spring)
-      const gap = Math.max(0, edge - wpn.range * 0.6), left = u.strideMul > 0 ? boundLeft(u) : u.stats.gait.hop * u.stats.gait.period;
-      this.moveTo(u, tx, ty, 0, true, true, (gap * u.stats.gait.hop) / Math.max(DT, left));
-    } else if (!u.airborne && !wpn.throws && tu && (u.blow?.dur || (u.stats.gait && u.strideMul > 0))) this.moveTo(u, tx, ty, 0, true, true);
-    else if (!u.airborne && !wpn.throws && tu && Math.hypot(u.vx, u.vy) > u.stats.speed * 1.1) { const [px, py] = passBeside(u, tu, 4); this.moveTo(u, px, py, 0, true, true); }
+    // in reach at a run: a striker doesn't stop on a dime, it keeps its line, strikes in passing and runs on past
+    // (runPast); at a walk it just pulls up (coasts to a stop). A hopper bounding, or about to spring with its blow, runs
+    // on the same way at full speed: its bound-blow lands as its reach meets the target
+    if (!u.airborne && !wpn.throws && tu && (Math.hypot(u.vx, u.vy) > u.stats.speed * 1.1 || u.blow?.dur || (u.stats.gait && u.strideMul > 0))) this.runPast(u, tu);
     if (!u.airborne) this.face(u, tx - u.x, ty - u.y); // (in the air it faces the way it's flying: a swoop strikes in passing)
     if (u.cooldown > 0 || u.exhausted) return true;
     if (!u.airborne && !this.facingWithin(u, tx - u.x, ty - u.y, Math.PI * 0.2)) return true; // still swinging round to bear on it
@@ -1794,6 +1798,18 @@ export class World {
     return true;
   }
 
+  /**
+   * A striker at a run on `tu` runs through, not into it: flat out for the spot alongside it, never braking, so its blow
+   * lands in passing with its whole speed behind it. Once past, it pulls up as hard as its feet grip, sliding on along its
+   * line (the coast in tickUnit; a hopper in the air finishes its bound), then comes round for the next run.
+   */
+  private runPast(u: Unit, tu: Unit): void {
+    const past = (tu.x - u.x) * u.vx + (tu.y - u.y) * u.vy <= 0 && Math.hypot(u.vx, u.vy) > u.stats.speed * 1.1;
+    if (past) return;
+    const [px, py] = passBeside(u, tu);
+    this.moveTo(u, px, py, 0, true, true);
+  }
+
   /** Share of a swing at which the weapon meets its target (where the strike animations make contact). */
   private static readonly CONTACT = 0.4;
 
@@ -1811,7 +1827,7 @@ export class World {
     const g = midStride(u, this.tick) || midStride(u, this.tick - 1) ? u.stats.gait : undefined, air = !!g && u.strideMul > 0; // (only one on its way bounds its blow)
     if (!u.airborne && g) {
       const wait = takeoffIn(u);
-      // (it lands at the end of this bound, the blow with it: the bound is shortened to bring it down there)
+      // (at the latest it lands at the end of this bound, the blow with it; the bound keeps its full speed)
       down = Math.max(DT, wait + (air ? boundLeft(u) : g.hop * g.period));
       u.swing = down;
     }
@@ -1828,16 +1844,19 @@ export class World {
   private strike(u: Unit): (() => void) | undefined {
     const b = u.blow!;
     u.blow = null;
-    if (b.dur) u.swing = 0; // (a bound-blow is done at impact: the rest of the bound is just the bound)
+    if (b.dur) u.swing = boundLeft(u); // (a bound-blow struck in the air: the slam plays on till it comes down)
     const tu = this.units.get(b.target), tb = tu ? undefined : this.buildings.get(b.target);
     if (!tu && !tb) return;
     let tx: number, ty: number, edge: number;
     if (tu) { tx = tu.x; ty = tu.y; edge = Math.hypot(tx - u.x, ty - u.y) - tu.stats.radius; }
     else { const bd = tb!; tx = bd.ox + bd.size / 2; ty = bd.oy + bd.size / 2; edge = Math.sqrt(edgeDist2(bd, u.x, u.y)); }
     if (edge > b.reach + 0.3 || (tu && !canReach(u, tu))) return; // (it got away: the blow falls short)
-    // (a hopper's bound-blow comes down with its fall: from the top of its bound, g × half its time in the air, as a
-    // diving flier's blow carries its dive)
-    if (b.dur && u.stats.gait) u.diveSpeed = (K.gravity * u.stats.gait.hop * u.stats.gait.period) / 2;
+    // (a hopper's bound-blow comes down with its fall, as a diving flier's blow carries its dive: g × the time since the
+    // top of its bound, half its time in the air as it lands; nothing on the way up)
+    if (b.dur && u.stats.gait) {
+      const g = u.stats.gait, air = g.hop * g.period;
+      u.diveSpeed = K.gravity * Math.max(0, air / 2 - boundLeft(u));
+    }
     return this.land(u, b.target, tu ?? null, tx, ty, b.damage, b.shaft);
   }
 
