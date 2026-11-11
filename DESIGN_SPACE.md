@@ -18,7 +18,7 @@ The engine already supports these abilities, but no shipped faction uses them. T
 | **Whip** | unit `attack.whip: metres` (strikers, 0–3, not with a shaft) | The crystal is lashed out at the tip of a whip-like limb: it reaches the lash's whole length, and the lash is a lever, so the crystal leaves faster in proportion to arm + lash, up to what the muscle's energy allows, all of it going into the light crystal rather than a heavy arm. Drawing the lash back in adds to each blow's recovery. | Lashers, tentacled things, a scorpion's sting, a flail |
 | **Pen** | building `pen: { radius }` | Pairs of your tamed animals within `radius` breed young, paid for from the pen's food. | Ranchers, a faction whose army is entirely bred |
 
-Already used by shipped factions, for reference: `flight` (Fenfolk Siege Heron), `gait` (Fenfolk hop), `bearer` (Pack Tortoise ammo carrier), `wall` (Fenfolk canal), `gatherBoost` and `sow` (Meadowfolk gathering camp), `wheeled`, `workRefinement`.
+Already used by shipped factions, for reference: `flight` (Fenfolk Siege Heron), `gait` (Fenfolk hop), `bearer` (Pack Tortoise ammo carrier), `wall` (Fenfolk canal, Wildweld web wall, Meadowfolk palisade), `gatherBoost` and `sow` (Meadowfolk gathering camp), `wheeled`, `workRefinement`.
 
 **Still to work out:**
 - Abilities are free beyond body physics. A flier pays in calories and a bearer in cargo, but nothing yet prices an ability itself.
