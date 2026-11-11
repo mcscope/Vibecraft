@@ -2,6 +2,7 @@
 
 Things to do later. Newest at the top.
 
+- **Placing a building while the view scrolls.** After you click to place a building, moving the view with the arrow keys should leave the building where you clicked. For a wall, the first click's tile should stay the wall's start. (2026-11-11)
 - **Wildwelds: new sound for a larva laying a web.** The current one sounds out of character, like a Mario effect. (2026-11-09)
 
 ## Done

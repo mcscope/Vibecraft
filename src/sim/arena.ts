@@ -14,15 +14,26 @@ export const ARENA_SECONDS = 120;
 
 /**
  * The arena's ground: flat; a valley (each side starts on its own high plateau, a low valley between, ramps down into
- * it); or a ridge (both sides start low and fight up and over a high ridge between them, through ramps).
+ * it); a ridge (both sides start low and fight up and over a high ridge between them, through ramps); or a cliff (the
+ * left side holds high ground, the right stands below it, a sheer cliff between the two lines, a ramp round it
+ * to one side of the fight).
  */
-export const ARENA_TERRAINS = ['flat', 'valley', 'ridge'] as const;
+export const ARENA_TERRAINS = ['flat', 'valley', 'ridge', 'cliff'] as const;
+/** The cliff arena: the high ground ends after this tile column; its ramp lies this far (rows) to the side of the fight. */
+const CLIFF_X = 27, CLIFF_RAMP = 8;
 export type ArenaTerrain = (typeof ARENA_TERRAINS)[number];
 
 /** The arena's ground for a terrain (levels in stripes across the field, the same either side of the middle). */
 function arenaGrid(terrain: ArenaTerrain, seed: number): Grid {
   if (terrain === 'flat') return new Grid(ARENA_SIZE, ARENA_SIZE);
   const m = new MapBuilder(seed, ARENA_SIZE), mid = [25, 30]; // the middle strip, between the two lines (x 22 and 34)
+  if (terrain === 'cliff') {
+    // (one side high: set straight on the grid, since MapBuilder.raise mirrors every tile across the middle)
+    for (let y = 0; y < ARENA_SIZE; y++) for (let x = 0; x <= CLIFF_X; x++) m.grid.level[y * ARENA_SIZE + x] = 1;
+    // a ramp four wide to one side of the fight (a walk round, out of line); MapBuilder mirrors it far down the field
+    for (let y = ARENA_Y - CLIFF_RAMP - 4; y < ARENA_Y - CLIFF_RAMP; y++) for (let x = CLIFF_X - 1; x <= CLIFF_X + 2; x++) m.ramp(x, y);
+    return m.done().grid;
+  }
   for (let y = 0; y < ARENA_SIZE; y++) for (let x = 0; x < ARENA_SIZE; x++) {
     const inMid = x >= mid[0] && x <= mid[1];
     m.raise(x, y, terrain === 'valley' ? (inMid ? 0 : 1) : inMid ? 1 : 0);
@@ -119,5 +130,6 @@ function fightOnce(a: ArenaEntry, b: ArenaEntry, budget: number, terrain: ArenaT
 
 /** The fight run both ways round (each side once on the left) and averaged, so formation and side don't decide it. + = a wins. */
 export function runFight(a: ArenaEntry, b: ArenaEntry, budget: number, terrain: ArenaTerrain = 'flat'): number {
+  if (terrain === 'cliff') return fightOnce(a, b, budget, terrain); // (the sides differ: `a` holds the high ground)
   return (fightOnce(a, b, budget, terrain) - fightOnce(b, a, budget, terrain)) / 2;
 }
