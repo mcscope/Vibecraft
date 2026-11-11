@@ -116,6 +116,37 @@ Put the setup in the address, for example:
 ?mode=skirmish&you=fenfolk&foe=meadowfolk&map=cliff-maze&seed=5&ai=easy
 ```
 
+### Controls
+
+One rule runs the game: **one action selects, the other does.** An order tile or hotkey (Attack, Move, a building to place) only changes what the next "do" does.
+
+| | Mouse and keyboard | Touch screen (phone or tablet) |
+|---|---|---|
+| Select | Left-click. Drag a box. Double-click selects that type. | Tap. Turn on **Box**, then drag. Double-tap selects that type. |
+| Do (move, attack, gather, build) | Right-click | Press and hold |
+| Form a front line | Right-drag | Press, hold and drag |
+| Armed tile (Attack, Move, a building) | Then right-click | Then tap. **Cancel** in the banner drops it. |
+| Add to selection, queue orders | Hold Shift | Turn on **Add** |
+| Move the map | Arrow keys, WASD or screen edge | Drag with one finger |
+| Zoom | Mouse wheel | Pinch |
+| Minimap | Click to look, right-click to send | Tap or drag to look, press and hold to send |
+| Read a button | Hover | Press and hold |
+
+On a touch screen, the touch bar holds what the keyboard does. It stays in one place: along the bottom, or down the left side when you hold a phone sideways.
+
+| Button | What it does |
+|---|---|
+| **Army** | Selects every fighting unit. |
+| **Idle** | Selects the next idle worker. |
+| **Box**, **Add** | Drag selects a box; taps add to the selection and orders queue. |
+| **Center** | Looks at the selection. |
+| **Pause** | Pauses or resumes. |
+| **More** | Your base, groups **1–3** (hold to store, tap to select), game speed, **Full** screen and **Delete**. |
+
+On a phone held upright, the panel shows a short version: who is selected and their main orders. **Show all** opens the rest, and **✕** clears the selection. Lessons fold to a title bar that names your next step. The menu (☰) holds **Resign** and lists every touch control. Add `?touch=1` to the URL to try the touch layout on a desktop.
+
+**Play on your phone.** Run `npm run dev -- --host`, then open the "Network" address it prints on your phone. For a full-screen game, add the page to your home screen.
+
 ---
 
 ## Make your own army

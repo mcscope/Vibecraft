@@ -1,0 +1,12 @@
+{
+  "name": "VibeCraft",
+  "short_name": "VibeCraft",
+  "description": "A real-time strategy game. Play a ready-made army, or build your own.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#0b0a08",
+  "theme_color": "#1c1814",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

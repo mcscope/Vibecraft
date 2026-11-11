@@ -6,6 +6,7 @@ import { placeBlock } from '../sim/battle';
 import type { World } from '../sim/world';
 import type { Renderer, RenderState } from '../render/renderer';
 import { esc } from './format';
+import { words } from './touch';
 
 export class BattleDeploy {
   deploying = true;
@@ -22,22 +23,27 @@ export class BattleDeploy {
     // as everywhere: left-click selects (on one of your units it picks that block), right-click does (moves the chosen
     // block there)
     canvas.addEventListener('mousedown', (e) => {
-      if (!this.deploying) return;
-      if (e.button === 0) {
-        const hit = this.renderer.pick(e.clientX, e.clientY, 1);
-        const mine = this.world.units.get(hit) ?? this.world.buildings.get(hit);
-        if (mine && mine.owner === 0) { e.stopImmediatePropagation(); e.preventDefault(); this.choose(mine.specId); }
-        return;
-      }
-      if (e.button !== 2) return;
-      e.stopImmediatePropagation(); e.preventDefault();
-      if (!this.chosen) return;
-      const [x, y] = intoZone(0, ...this.renderer.cam.toWorld(e.clientX, e.clientY)); // (a click past the zone lands at its edge)
-      const ids = this.ids(this.chosen);
-      this.select(placeBlock(this.world, 0, { specId: this.chosen, n: ids.length, x, y }, ids));
-      this.world.updateVision(); // (what you can see from the new spot)
+      if (this.press(e.clientX, e.clientY, e.button)) { e.stopImmediatePropagation(); e.preventDefault(); }
     }, true);
     this.draw();
+  }
+
+  /** A press at (sx, sy) with `button` (a mouse's, or a tap's / long-press's): true if deploying used it. */
+  press(sx: number, sy: number, button: number): boolean {
+    if (!this.deploying) return false;
+    if (button === 0) {
+      const hit = this.renderer.pick(sx, sy, 1);
+      const mine = this.world.units.get(hit) ?? this.world.buildings.get(hit);
+      if (mine && mine.owner === 0) { this.choose(mine.specId); return true; }
+      return false;
+    }
+    if (button !== 2) return false;
+    if (!this.chosen) return true;
+    const [x, y] = intoZone(0, ...this.renderer.cam.toWorld(sx, sy)); // (a click past the zone lands at its edge)
+    const ids = this.ids(this.chosen);
+    this.select(placeBlock(this.world, 0, { specId: this.chosen, n: ids.length, x, y }, ids));
+    this.world.updateVision(); // (what you can see from the new spot)
+    return true;
   }
 
   private types(): string[] {
@@ -59,10 +65,10 @@ export class BattleDeploy {
     const help = document.getElementById('help')!;
     help.classList.add('lesson');
     help.style.display = 'block';
-    help.innerHTML = `<b>Deploy your army</b>
+    help.innerHTML = words(`<b>Deploy your army</b>
       <p>Your zone is tinted blue. Pick a block (below, or left-click one of its units), then right-click where it should stand. Repeat for each block; the enemy is somewhere at the far end, out of sight.</p>
       <div class="deploy-blocks">${this.types().map((id) => `<button data-block="${id}" class="${this.chosen === id ? 'on' : ''}">${esc((this.world.specOf(0, id)?.spec ?? this.world.buildingSpecOf(0, id))?.name ?? id)} ×${this.ids(id).length}</button>`).join('')}</div>
-      <div class="lesson-nav"><span></span><a href="#" data-ready>Ready: to battle! ▶</a></div>`;
+      <div class="lesson-nav"><span></span><a href="#" data-ready>Ready: to battle! ▶</a></div>`);
     help.onclick = (e) => {
       const t = e.target as HTMLElement;
       if (t.dataset.block) this.choose(t.dataset.block);

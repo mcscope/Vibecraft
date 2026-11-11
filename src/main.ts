@@ -31,6 +31,7 @@ import { Input } from './ui/input';
 import { Minimap } from './ui/minimap';
 import { AudioEngine } from './audio/engine';
 import { mountSettingsDialog, onSettings, settings } from './ui/settings';
+import { TOUCH, TouchControls, ask, initTouchPage, mountPanelControls, mountTouchbar, renderScale, trackOpenMap, words } from './ui/touch';
 
 type Mode = 'demo' | 'skirmish' | 'spectate' | 'online' | 'faceoff' | 'tutorial' | 'battle';
 const params = new URLSearchParams(location.search);
@@ -43,6 +44,7 @@ const STEPS_KEY = `vibecraft.steps.${track?.id ?? 'all'}.${lessonIx}`, stepsDone
 // Seed choice happens outside the sim, so Math.random is fine here.
 const seed = Number(params.get('seed') ?? Math.floor(Math.random() * 1e9));
 
+initTouchPage();
 mountSettingsDialog();
 const menu = document.getElementById('menu')!;
 
@@ -168,6 +170,33 @@ async function startOnline(g: OnlineGame): Promise<void> {
   mountChat(document.getElementById('chat')!, g.relay, () => g.names[g.me], true, seatColor);
 }
 
+/** The Proving Grounds' help, for fingers. */
+const DEMO_TOUCH_HELP = `<p>Press and hold a dummy to attack it, or tap <b>Attack</b> and tap a spot past the range to attack-move through it.
+  Dummies rebuild after 8 s; the fort after 15 s.</p>
+  <p>Your base has a full tech tree: tap a building to train or research. Select villagers to place new buildings; they carry wood to the site.</p>
+  <p>Double-tap a unit to select all of its type. Menu (☰) lists every touch control.</p>`;
+
+/**
+ * The help box on a touch screen: a title bar you tap to fold it away or open it again (folded, it shows the `short`
+ * title and, with `steps`, the first step of the checklist still to do). The first touch on the map folds it, to open the field up.
+ */
+function foldingHelp(help: HTMLElement, title: string, body: string, steps: boolean, short: string): void {
+  help.classList.add('folding');
+  help.innerHTML = `<button type="button" class="help-head"><b class="help-title">${title}</b><b class="help-short">${short}</b><span class="help-next"></span><i>Hide ▴</i></button><div class="help-body">${words(body)}</div>`;
+  const head = help.querySelector<HTMLElement>('.help-head')!, next = help.querySelector<HTMLElement>('.help-next')!;
+  const fold = (on: boolean) => { help.classList.toggle('folded', on); head.querySelector('i')!.textContent = on ? 'Show ▾' : 'Hide ▴'; };
+  head.addEventListener('click', () => fold(!help.classList.contains('folded')));
+  document.getElementById('game')!.addEventListener('touchstart', () => fold(true), { once: true, passive: true });
+  if (!steps) return;
+  // (what's left to do, said in the title bar)
+  const show = () => {
+    const lis = [...help.querySelectorAll<HTMLElement>('.lesson-steps li')], todo = lis.find((li) => !li.classList.contains('done'));
+    next.textContent = !lis.length ? '' : todo ? `${lis.indexOf(todo) + 1}/${lis.length} · ${todo.textContent}` : `All ${lis.length} done ✓`;
+  };
+  show();
+  new MutationObserver(show).observe(help.querySelector('.lesson-steps')!, { subtree: true, attributes: true, attributeFilter: ['class'] });
+}
+
 function showNotice(text: string): void {
   const o = document.getElementById('overlay')!;
   o.textContent = text;
@@ -221,6 +250,11 @@ async function run(g: GameSetup): Promise<void> {
     audio.answerOrder(cmd, HUMAN);
   });
   input.onSelect = (ids, group) => audio.answerSelect(ids, group, HUMAN);
+  // fingers: tap selects, long-press does, drag and pinch move the camera (ui/touch.ts)
+  const touch = new TouchControls(canvas, input, renderer.cam, minimap.canvas);
+  input.viaTouch = TOUCH;
+  mountTouchbar(document.getElementById('touchbar')!, input, touch, { chat: m === 'online' });
+  mountPanelControls(document.getElementById('panel-ctl')!, document.getElementById('bottom')!, input);
   const hud = new Hud(world, HUMAN, bank, {
     train: (building, specId) => local.issue({ type: 'train', building, specId }),
     research: (building, techId) => local.issue({ type: 'research', building, techId }),
@@ -239,12 +273,15 @@ async function run(g: GameSetup): Promise<void> {
     ungarrison: (building) => local.issue({ type: 'ungarrison', building }),
   });
 
-  const resize = () => renderer.resize(window.innerWidth, window.innerHeight, window.devicePixelRatio || 1);
+  const resize = () => renderer.resize(window.innerWidth, window.innerHeight, renderScale(window.innerWidth, window.innerHeight));
   window.addEventListener('resize', resize);
   resize();
 
   // a pitched battle opens on deployment: the world holds still until Ready
   const deploy = m === 'battle' ? new BattleDeploy(world, renderer, canvas, input.rs, (ids) => input.setSelection(ids), () => { if (battleAI) battleAI.started = true; }) : null;
+  if (deploy) touch.intercept = (x, y, button) => deploy.press(x, y, button);
+  // (a phone sees a small patch of field: start a little zoomed out, as a player would pinch to anyway)
+  if (TOUCH && Math.min(window.innerWidth, window.innerHeight) <= 520) renderer.cam.zoom = 0.75;
   if (m === 'faceoff') renderer.cam.centerOn(26, 26);
   else if (m === 'battle') { /* (the deploy step framed the camera) */ }
   else if (m === 'tutorial') {
@@ -256,9 +293,12 @@ async function run(g: GameSetup): Promise<void> {
     const go = (i: number) => `?mode=tutorial${track ? `&track=${track.id}` : ''}&lesson=${i}`;
     try { for (const i of JSON.parse(sessionStorage.getItem(STEPS_KEY) ?? '[]') as number[]) stepsDone.add(i); } catch { /* private mode */ }
     help.classList.add('lesson');
-    help.innerHTML = `<b>${track ? `${track.name}, lesson` : 'Lesson'} ${ix + 1} of ${lessons.length}: ${lesson.title}</b>${lesson.text}
+    const title = `${track ? `${track.name}, lesson` : 'Lesson'} ${ix + 1} of ${lessons.length}: ${lesson.title}`;
+    const body = `${lesson.text}
       <ul class="lesson-steps">${(lesson.steps ?? []).map((st, i) => `<li${stepsDone.has(i) ? ' class="done"' : ''}>${st.text}</li>`).join('')}</ul>
       <div class="lesson-nav">${ix > 0 ? `<a href="${go(ix - 1)}">◀ Back</a>` : '<span></span>'}<a href="${go(ix)}">Restart</a>${ix < lessons.length - 1 ? `<a href="${go(ix + 1)}">Next ▶</a>` : '<a href="./">Finish</a>'}</div>`;
+    if (TOUCH) foldingHelp(help, title, body, true, `${ix + 1}/${lessons.length} ${lesson.title}`);
+    else help.innerHTML = `<b>${title}</b>${body}`;
   }
   else if (m === 'demo') {
     renderer.cam.centerOn(22, 26);
@@ -271,7 +311,12 @@ async function run(g: GameSetup): Promise<void> {
   }
   loading.style.display = 'none';
   document.getElementById('hud')!.style.display = 'block';
-  if (m === 'demo' || m === 'tutorial') document.getElementById('help')!.style.display = 'block';
+  if (m === 'demo' || m === 'tutorial') {
+    const help = document.getElementById('help')!;
+    help.style.display = 'block';
+    if (TOUCH && m === 'demo') foldingHelp(help, 'Proving Grounds', DEMO_TOUCH_HELP, false, 'Proving Grounds');
+  }
+  trackOpenMap(renderer.cam);
 
   let acc = 0;
   let last = performance.now();
@@ -287,7 +332,18 @@ async function run(g: GameSetup): Promise<void> {
   const resignBtn = document.getElementById('resign')!;
   const canResign = m === 'skirmish' || m === 'online' || m === 'battle';
   resignBtn.style.display = canResign ? '' : 'none';
-  resignBtn.onclick = () => { if (world.winner < 0 && !world.players[HUMAN].defeated && confirm('Resign this match?')) local.issue({ type: 'resign' }); };
+  const resign = () => local.issue({ type: 'resign' });
+  const playing = () => world.winner < 0 && !world.players[HUMAN].defeated;
+  resignBtn.onclick = () => { if (playing() && confirm('Resign this match?')) resign(); };
+  // on a touch screen, Resign sits in the menu (⚙) and asks in the game, away from the buttons you tap all match
+  const matchEl = document.querySelector<HTMLElement>('#settings .match')!;
+  if (TOUCH && canResign) {
+    matchEl.innerHTML = '<button type="button" class="resign-match">⚑ Resign this match</button>';
+    matchEl.querySelector('button')!.addEventListener('click', () => {
+      document.getElementById('settings')!.style.display = 'none';
+      if (playing()) void ask('Resign this match? The other side wins, and the score screen shows.', 'Resign', 'Keep playing').then((yes) => { if (yes && playing()) { input.paused = false; resign(); } }); // (a paused game takes no orders)
+    });
+  }
   let scored = false;
   const scoreBox = document.getElementById('score')!;
 
@@ -348,6 +404,7 @@ async function run(g: GameSetup): Promise<void> {
     if (world.winner >= 0 && !scored && world.scenario.victory) {
       scored = true;
       resignBtn.style.display = 'none';
+      matchEl.innerHTML = '';
       showScore(scoreBox, world, m === 'spectate' ? -1 : HUMAN, () => {});
     }
     const status = world.winner >= 0
@@ -357,7 +414,7 @@ async function run(g: GameSetup): Promise<void> {
       overlay.textContent = status;
       overlay.style.display = status ? 'flex' : 'none';
     }
-    speedEl.textContent = input.mode === 'resupplyDest' ? 'Holding R: click where they should go after resupplying' : input.speed !== 1 ? `${input.speed}× speed` : '';
+    speedEl.textContent = input.mode === 'resupplyDest' && !input.viaTouch ? 'Holding R: click where they should go after resupplying' : input.speed !== 1 ? `${input.speed}× speed` : '';
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);

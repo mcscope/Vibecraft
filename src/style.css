@@ -50,7 +50,7 @@ kbd {
 #menu, #loading {
   position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
   background: radial-gradient(ellipse at center, #2a2a1c 0%, #0b0a08 70%);
-  z-index: 10;
+  z-index: 10; overflow-y: auto;
 }
 #loading { background: linear-gradient(rgba(11, 10, 8, 0.15), rgba(11, 10, 8, 0.5)), url('./assets/art-10.jpg') center / cover; }
 /* the front page: a battle scene across the top, then what to play */
@@ -108,6 +108,8 @@ kbd {
   .menu-links a { padding: 12px 6px; }
 }
 @media (prefers-reduced-motion: reduce) { .mode { transition: none; } }
+/* (centred while it fits; scrolls from the top when the screen is shorter than the menu) */
+#menu > .menu-box, #loading > .menu-box { margin: auto; }
 .menu-box { width: min(480px, calc(100vw - 32px)); padding: 28px 30px; border-radius: 6px; text-align: center; }
 .menu-box h1 { margin: 0; font-size: 44px; }
 .menu-box h2 { margin: 0 0 16px; }
@@ -337,7 +339,8 @@ button:active { background: linear-gradient(180deg, #2a231b, #3a3026); }
 }
 
 @media (max-width: 760px) {
-  #minimap-wrap, #panel .stats, #tooltip .stats, #help { display: none !important; }
+  /* (a small desktop window; a touch screen has its own small layout, at the end of this file) */
+  html:not(.touch) #minimap-wrap, #panel .stats, #tooltip .stats, html:not(.touch) #help { display: none !important; }
   .unit-panel .info, .building-panel .info, .group-panel .info { width: auto; flex: 1; }
 }
 
@@ -618,3 +621,220 @@ button.garrison-btn span { font-size: 11.5px; color: var(--dim); }
 .side-rally.left { left: 8px; color: #9ad06a; }
 .side-rally.right { right: 8px; color: #ff8a7a; }
 .side-rally svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ── touch screens (html.touch, set by ui/touch.ts). A desktop never gets these. ── */
+#touchbar, #panel-ctl { display: none; }
+.armed-banner { display: none; }
+html.touch, .touch body {
+  overscroll-behavior: none; touch-action: pan-x pan-y; /* no page zoom or bounce; panels still scroll */
+  -webkit-tap-highlight-color: transparent; -webkit-touch-callout: none; -webkit-user-select: none; -webkit-text-size-adjust: 100%;
+}
+.touch #game, .touch #minimap { touch-action: none; }
+.touch #hud img { pointer-events: none; -webkit-user-drag: none; }
+.touch input, .touch select, .touch textarea { font-size: 16px; } /* (iOS zooms into smaller text fields) */
+.touch .settings-box, .touch .lobby-box { max-height: calc(100dvh - 32px); }
+.touch #battle-draft .draft-units button { width: 44px; min-height: 40px; }
+.touch #battle-draft select { min-height: 44px; }
+.touch #battle-draft .back { display: inline-block; padding: 12px 4px; }
+.touch .matchup select, .touch .lobby-form select, .touch .lobby-form input { min-height: 44px; }
+.touch .army-learn { min-height: 44px; padding: 12px 8px; }
+.touch .menu-links a { display: inline-block; padding: 13px 6px; }
+/* (a phone: the matchup and Play Skirmish first, the army cards under them) */
+@media (max-width: 720px) {
+  .touch #menu .menu-card:first-child { display: flex; flex-direction: column; }
+  .touch #menu .menu-card:first-child .armies { order: 1; margin: 12px 0 0; }
+  .touch #menu .menu-card:first-child .mode-grid { order: 2; }
+}
+
+/* tap targets: 44 px */
+.touch #hud button { min-height: 44px; min-width: 44px; }
+.touch #hud button kbd { display: none; }
+.touch .cmds button { padding: 6px 12px 6px 8px; }
+.touch .q { padding: 8px 10px; }
+.touch .sow button { padding: 4px 12px; }
+
+/* the top bar: resources, the clock and the menu (☰: settings and Resign). Idle is on the touch bar. */
+.touch #topbar {
+  height: calc(44px + env(safe-area-inset-top)); padding: env(safe-area-inset-top) calc(58px + env(safe-area-inset-right)) 0 calc(12px + env(safe-area-inset-left));
+  gap: 14px; overflow: hidden;
+}
+.touch #topbar .idle-btn, .touch #resign { display: none !important; }
+.touch #gear { top: calc(3px + env(safe-area-inset-top)); right: calc(6px + env(safe-area-inset-right)); width: 44px; height: 38px; min-height: 38px; font-size: 20px; }
+.touch #speed { top: calc(56px + env(safe-area-inset-top)); }
+.touch #tooltip { max-width: calc(100vw - 16px); max-height: 60vh; overflow: hidden; z-index: 6; }
+.touch .settings-box .match button { display: block; width: 100%; margin: 0 0 8px; padding: 12px; text-align: center; font-size: 16px; color: #ffb4a8; }
+.touch .settings-box details.kb { margin-top: 16px; }
+.touch .settings-box details.kb summary { padding: 12px 4px; font-family: 'Cinzel', serif; color: var(--gold); cursor: pointer; }
+.touch .settings-box .close { min-height: 44px; }
+
+/* an in-game yes-or-no (Resign, Delete) */
+#ask { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.55); }
+#ask .ask-box { text-align: center; }
+#ask p { margin: 0 0 16px; font-size: 17px; line-height: 1.4; }
+.ask-buttons { display: flex; gap: 12px; }
+.ask-buttons button { flex: 1; margin: 0; min-height: 48px; text-align: center; font-size: 16px; font-weight: 700; }
+.ask-buttons .danger { color: #ffb4a8; box-shadow: inset 0 0 0 1px #b04030; }
+
+/* the touch bar: always in one place, along the bottom; More opens a second row above it */
+.touch #touchbar {
+  display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 4;
+  padding: 4px calc(4px + env(safe-area-inset-right)) calc(4px + env(safe-area-inset-bottom)) calc(4px + env(safe-area-inset-left));
+  background: linear-gradient(180deg, var(--panel-a), var(--panel-b)); border-top: 1px solid var(--bronze);
+}
+.touch .tb-main { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 4px; max-width: 640px; margin: 0 auto; }
+.touch #touchbar button { min-width: 0; height: 44px; padding: 0 2px; font-size: 13.5px; font-weight: 700; white-space: nowrap; overflow: hidden; }
+.touch #touchbar button b { color: var(--gold); }
+.touch #touchbar button.none b { color: var(--dim); }
+.touch #touchbar button.on { color: var(--gold); box-shadow: inset 0 0 0 2px var(--gold); }
+.touch #touchbar button.set { color: var(--gold); }
+.touch .tb-more {
+  display: none; position: absolute; left: 0; right: 0; bottom: 100%; padding: 6px calc(4px + env(safe-area-inset-right)) 6px calc(4px + env(safe-area-inset-left));
+  grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); gap: 4px;
+  background: rgba(28, 24, 20, 0.97); border-top: 1px solid var(--bronze);
+}
+.touch #touchbar.more .tb-more { display: grid; }
+
+/* the bottom panel sits on the touch bar, one height whatever is selected (so nothing on it moves); ✕ and Show all
+   are tabs on its top edge */
+.touch #bottom { bottom: calc(53px + env(safe-area-inset-bottom)); }
+.touch #panel { height: 200px; min-height: 0; overflow-y: auto; padding-right: calc(10px + env(safe-area-inset-right)); }
+.touch #bottom.expanded #panel { height: min(62vh, 560px); }
+.touch #minimap-wrap { padding-left: calc(10px + env(safe-area-inset-left)); }
+.touch #panel-ctl { display: flex; position: absolute; right: calc(6px + env(safe-area-inset-right)); bottom: 100%; gap: 4px; }
+.touch #panel-ctl button { min-height: 40px; height: 40px; padding: 0 12px; font-size: 14px; font-weight: 700; border-radius: 4px 4px 0 0; }
+.touch #panel-ctl [data-pc="clear"] { width: 48px; font-size: 18px; }
+
+/* an armed order: what the next tap does, and Cancel, just above the panel */
+.armed-banner {
+  position: absolute; bottom: calc(53px + env(safe-area-inset-bottom) + 200px + 48px); left: 50%; transform: translateX(-50%); z-index: 5;
+  align-items: center; gap: 10px; padding: 3px 3px 3px 12px; width: max-content; max-width: calc(100vw - 16px);
+  font-size: 14px; color: var(--gold); background: rgba(20, 16, 10, 0.92); border: 1px solid var(--bronze);
+}
+.armed-banner button { flex: none; padding: 0 14px; }
+
+/* the help and lesson box: a title bar that folds the text away (tap it to open again) */
+#help .help-head { position: static; display: flex; align-items: center; gap: 8px; width: 100%; min-height: 40px; margin: 0; padding: 4px 6px; text-align: left; background: none; box-shadow: none; border: 0; }
+#help .help-head b { flex: none; font-family: 'Cinzel', serif; color: var(--gold); font-size: 14px; }
+#help .help-head .help-next { flex: 1; min-width: 0; color: var(--dim); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#help .help-head i { flex: none; margin-left: auto; font-style: normal; font-size: 13px; color: var(--gold); padding: 4px 6px; border: 1px solid var(--bronze); border-radius: 3px; }
+#help.folding { padding: 2px 6px 8px; }
+#help.folding .help-body { padding: 0 6px; }
+#help.folded { padding-bottom: 2px; }
+#help.folded .help-body, #help.folding:not(.folded) .help-next, #help.folded .help-title, #help.folding:not(.folded) .help-short { display: none; }
+.touch #help { z-index: 3; }
+#help.folded .help-head b { max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.touch #help .lesson-nav a { padding: 10px 14px; }
+
+/* ── phones held upright: a short panel (who is selected and their main orders; Show all opens the rest) ── */
+@media (max-width: 760px) and (orientation: portrait) {
+  .touch #topbar { font-size: 14px; gap: 9px; }
+  .touch .res { gap: 4px; }
+  .touch .res .icon { width: 22px; height: 22px; }
+  .touch .res small, .touch .res.fps { display: none; }
+  .touch #minimap-wrap { position: fixed; top: calc(48px + env(safe-area-inset-top)); left: calc(4px + env(safe-area-inset-left)); padding: 4px; }
+  .touch #minimap, .touch .minimap-static { width: 172px !important; height: 86px !important; }
+  .touch .minimap-static { left: 5px; }
+  .touch .side-rally { top: 2px; width: 34px; height: 34px; min-width: 0 !important; min-height: 0 !important; }
+  .touch .side-rally.left { left: 2px; }
+  .touch .side-rally.right { right: 2px; }
+  .touch #panel { height: 166px; padding: 6px calc(8px + env(safe-area-inset-right)) 6px calc(8px + env(safe-area-inset-left)); }
+  .touch #bottom.expanded #panel { height: auto; min-height: 166px; max-height: min(64vh, calc(100dvh - 160px)); }
+  .touch .armed-banner { bottom: calc(53px + env(safe-area-inset-bottom) + 166px + 48px); }
+  .touch #speed { top: calc(146px + env(safe-area-inset-top)); left: 96px; }
+  .touch #chat { bottom: calc(53px + 166px + 56px); }
+  .touch #help { top: calc(48px + env(safe-area-inset-top)); left: calc(190px + env(safe-area-inset-left)); right: calc(6px + env(safe-area-inset-right)); width: auto; font-size: 14px; }
+  .touch #help:not(.folded) { left: calc(6px + env(safe-area-inset-left)); max-height: calc(100dvh - 48px - 53px - 166px - 56px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); overflow-y: auto; }
+  .touch #help.folded .help-head { flex-wrap: wrap; row-gap: 0; }
+  .touch #help.folded .help-head b { max-width: calc(100% - 20px); font-size: 13px; }
+  .touch #help.folded .help-head .help-next { display: block; order: 3; flex: 1 0 100%; font-size: 12.5px; }
+}
+
+/* ── phones on their side: the touch bar down the left, the panel down the right, the map between ── */
+@media (max-height: 520px) and (orientation: landscape) {
+  .touch #topbar { height: calc(40px + env(safe-area-inset-top)); font-size: 15px; gap: 12px; padding-left: calc(12px + env(safe-area-inset-left)); }
+  .touch .res .icon { width: 24px; height: 24px; }
+  .touch .res.fps { display: none; }
+  .touch #gear { top: calc(1px + env(safe-area-inset-top)); }
+  .touch #touchbar { top: calc(40px + env(safe-area-inset-top)); right: auto; width: calc(62px + env(safe-area-inset-left)); padding: 4px 4px calc(4px + env(safe-area-inset-bottom)) calc(4px + env(safe-area-inset-left)); border-top: 0; border-right: 1px solid var(--bronze); }
+  .touch .tb-main { grid-auto-flow: row; grid-auto-rows: minmax(0, 1fr); height: 100%; }
+  .touch #touchbar button { height: auto; min-height: 0 !important; font-size: 12.5px; }
+  .touch .tb-more { left: 100%; right: auto; bottom: 0; top: auto; width: 116px; grid-template-columns: 1fr 1fr; padding: 6px; border-top: 0; border-right: 1px solid var(--bronze); }
+  .touch .tb-more button { height: 44px !important; }
+  .touch #bottom { top: calc(40px + env(safe-area-inset-top)); left: auto; right: 0; bottom: 0; width: calc(300px + env(safe-area-inset-right)); flex-direction: column; }
+  .touch #panel, .touch #bottom.expanded #panel { height: auto; flex: 1; padding: 6px calc(8px + env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) 8px; }
+  .touch #panel :is(.groups, h3, .empty) { margin-right: 46px; }
+  .touch #panel .army .tile { width: 52px; }
+  .touch #panel-ctl { top: 4px; bottom: auto; right: calc(4px + env(safe-area-inset-right)); z-index: 1; }
+  .touch #panel-ctl [data-pc="expand"] { display: none; }
+  .touch #panel-ctl button { border-radius: 4px; }
+  .touch #minimap-wrap { position: fixed; top: calc(44px + env(safe-area-inset-top)); left: calc(66px + env(safe-area-inset-left)); padding: 4px; }
+  .touch #minimap, .touch .minimap-static { width: 150px !important; height: 75px !important; }
+  .touch .minimap-static { left: 5px; }
+  .touch .side-rally { top: 2px; width: 32px; height: 32px; min-width: 0 !important; min-height: 0 !important; }
+  .touch .side-rally.left { left: 2px; }
+  .touch .side-rally.right { right: 2px; }
+  .touch .armed-banner { bottom: 8px; left: calc(62px + (100vw - 62px - 300px) / 2); max-width: calc(100vw - 62px - 300px - 16px); white-space: normal; }
+  .touch #speed { top: calc(126px + env(safe-area-inset-top)); left: calc(62px + (100vw - 62px - 300px) / 2); }
+  .touch #chat { left: 70px; bottom: 60px; width: calc(100vw - 62px - 300px - 16px); }
+  .touch #help { top: calc(44px + env(safe-area-inset-top)); left: calc(224px + env(safe-area-inset-left)); right: calc(306px + env(safe-area-inset-right)); width: auto; font-size: 14px; }
+  .touch #help:not(.folded) { left: calc(66px + env(safe-area-inset-left)); max-height: calc(100dvh - 52px); overflow-y: auto; }
+}
+
+/* phones, either way up: smaller panel parts */
+@media (max-width: 760px) and (orientation: portrait), (max-height: 520px) and (orientation: landscape) {
+  .touch #panel .army { padding: 0; background: none; border: 0; }
+  .touch #panel .empty { padding: 12px 4px; }
+  .touch #panel .stats, .touch #tooltip .stats { display: none; }
+  .touch .unit-panel, .touch .building-panel, .touch .group-panel { flex-wrap: wrap; }
+  .touch .unit-panel .info, .touch .building-panel .info, .touch .group-panel .info { flex: 1 1 220px; width: auto; min-width: 0; }
+  .touch .portrait.big { width: 56px; height: 62px; }
+  .touch .build, .touch .army, .touch .actions { flex: 1 1 100%; min-width: 0; }
+  .touch .army .tiles { gap: 4px; }
+  .touch .army .tile { width: 54px; height: 52px; }
+  .touch .army .tile svg { width: 24px; height: 24px; }
+  .touch .army .tile span { font-size: 12px; }
+  .touch .army .ftile { width: 80px; height: 64px; }
+  .touch .army .ftile svg { width: 66px; height: 42px; }
+  .touch .bld { width: 86px; }
+  .touch .bld .art { width: 60px; height: 56px; }
+  .touch .bld .trainsrow { display: none; }
+  .touch .train { width: 78px; }
+  .touch .train .portrait { width: 70px; height: 54px; }
+  .touch .train .name { font-size: 11.5px; }
+  .touch .train .cost { font-size: 10.5px; }
+  .touch #overlay { font-size: 36px; }
+  .touch .menu-box { padding: 20px 18px; }
+  .touch .menu-box h1 { font-size: 34px; }
+}
+
+/* the short panel (upright phone, until Show all): one row of who is selected, one row of orders, each scrolling sideways */
+@media (max-width: 760px) and (orientation: portrait) {
+  .touch #bottom:not(.expanded) .groups { flex-wrap: nowrap; overflow-x: auto; max-height: none; }
+  .touch #bottom:not(.expanded) .group-panel { flex-direction: column; flex-wrap: nowrap; gap: 6px; align-items: stretch; }
+  .touch #bottom:not(.expanded) .group-panel .info { flex: none; }
+  .touch #bottom:not(.expanded) .army { flex-direction: row; gap: 4px; overflow-x: auto; }
+  .touch #bottom:not(.expanded) .army > * { flex: none; flex-wrap: nowrap; margin: 0; }
+  .touch #bottom:not(.expanded) .army .forms { display: none; }
+  .touch #bottom:not(.expanded) .army .cmds.small button { height: 52px; }
+  .touch #bottom:not(.expanded) .cmds { flex-wrap: nowrap; overflow-x: auto; margin-top: 6px; }
+  .touch #bottom:not(.expanded) .cmds.small { margin-top: 4px; }
+  .touch #bottom:not(.expanded) .cmds > * { flex: none; }
+  /* (a worker's short panel shows what it builds, and a unit that lays or changes shows that: their orders are under Show all) */
+  .touch #bottom:not(.expanded) :is(.unit-panel, .group-panel):has(.build, .trains) .cmds { display: none; }
+  .touch #bottom:not(.expanded) .bar.cal, .touch #bottom:not(.expanded) .bar.pack, .touch #bottom:not(.expanded) .ammo { display: none; }
+  .touch #bottom:not(.expanded) .build .label { display: none; }
+  .touch #bottom:not(.expanded) .bld .art { width: 52px; height: 46px; }
+  /* (a building, or a unit that lays or changes: its name and queue beside what it trains) */
+  .touch #bottom:not(.expanded) :is(.building-panel, .unit-panel:has(.trains)) { flex-wrap: nowrap; }
+  .touch #bottom:not(.expanded) :is(.building-panel, .unit-panel:has(.trains)) .info { flex: 0 0 132px; }
+  .touch #bottom:not(.expanded) :is(.building-panel, .unit-panel:has(.trains)) .actions { flex: 1 1 0; }
+  .touch #bottom:not(.expanded) .unit-panel:has(.trains) .portrait.big { display: none; }
+  .touch #bottom:not(.expanded) .info .bar.train { height: auto; min-height: 13px; }
+  .touch #bottom:not(.expanded) .info .bar.train span { white-space: normal; line-height: 1.25; padding: 1px 4px; }
+  .touch #bottom:not(.expanded) .building-panel :is(.capital, .bar.stock, .techs, .garrison-btn, [data-carts], .sow, .hint) { display: none; }
+  .touch #bottom:not(.expanded) .trains { flex-wrap: nowrap; overflow-x: auto; }
+  .touch #bottom:not(.expanded) .trains > * { flex: none; }
+}
+
+/* errors on a phone (no console to read): tap to dismiss */
+#touch-errors { position: fixed; left: 8px; right: 8px; top: calc(8px + env(safe-area-inset-top)); z-index: 100; padding: 8px 10px; font: 12px/1.35 ui-monospace, Menlo, monospace; color: #ffd0c8; background: rgba(60, 10, 6, 0.92); border: 1px solid #a33; overflow-wrap: anywhere; }
