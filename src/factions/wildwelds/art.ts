@@ -3,6 +3,7 @@ import type { FactionArt, TeamColors } from '../../art/contract';
 import { bakeFaction } from '../../kits/bake3d/bakeFaction';
 import type { UnitBakeOptions } from '../../kits/bake3d/baker';
 import { buildings, caterpillarSegments, units } from './index';
+import { buildingSounds } from './sounds';
 
 /** A hopper's bounds, ~12 frames a second of each (its walk and charge are played by its bound: 8 frames of a long one jerk). */
 const hopFrames = (u: (typeof units)[number]) => {
@@ -30,6 +31,7 @@ export function bakeArt(team: TeamColors, onProgress?: (f: number, label: string
       b.cylinder(0.008, 0.008, 0.6, [0, 1.05, 0.8], { color: '#e8e4d8', tex: 'none' }, undefined, 4);
     }, team),
     music: { scale: [0, 2, 3, 7, 8], root: 196, tempo: 76, lead: 'triangle', drone: 'sine' },
+    buildingSounds,
     label: (name) => `Hatching the ${name}s`,
   }, team, onProgress, only);
 }

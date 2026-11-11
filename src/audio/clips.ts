@@ -48,7 +48,8 @@ export function strike(id: string): void {
 }
 /** Every clip played, newest last (for the sound debug panel). */
 export const played: Array<{ id: string; what: string; t: number }> = [];
-const log = (id: string, what: string) => { played.push({ id, what, t: performance.now() }); if (played.length > 30) played.shift(); };
+/** Note a sound in the sound debug panel's list (`id`: the clip, or a synthesized sound's name). */
+export const log = (id: string, what: string) => { played.push({ id, what, t: performance.now() }); if (played.length > 30) played.shift(); };
 
 const load = (): Promise<Manifest | null> => (manifest ??= fetch(BASE + 'manifest.json').then((r) => (r.ok ? r.json() : null)).catch(() => null));
 
@@ -140,6 +141,20 @@ export async function sayLine(ctx: AudioContext, out: AudioNode, factionId: stri
     if (k === 0) s.onended = () => { playing--; };
   });
   return bufs[0]?.duration ?? 0;
+}
+
+/**
+ * One recorded clip by its Voice Lab id (a layer of a faction's sound: SoundLayer), through its own treatment, into
+ * `out`: shifted `semis`, softened above `highcut` Hz, `delay` seconds from now. False if it is missing or struck out.
+ */
+export async function playClip(ctx: AudioContext, out: AudioNode, id: string, what: string, o: { semis?: number; gain?: number; highcut?: number; delay?: number } = {}): Promise<boolean> {
+  const m = await load();
+  if (!m || struck.has(id)) return false;
+  const t = fxFor(m, id, ''), buf = await clip(ctx, id).catch(() => null);
+  if (!buf) return false;
+  log(id, what);
+  treated(ctx, out, buf, { ...t, highcut: Math.min(t.highcut, o.highcut ?? 20000) }, o);
+  return true;
 }
 
 /**
