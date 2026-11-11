@@ -52,7 +52,7 @@ export const bands: BandCandidate[] = [
   },
   // 5. the village from the hill: the Great Hall and its houses, villagers and mule carts at work, the army mustered
   {
-    camera: { from: [0, 9, 22], to: [0, 0.5, -5], fov: 40 },
+    camera: { from: [0, 9, 22], to: [0, 2.3, -5], fov: 26 }, // (zoomed in on the mustered army, the Great Hall behind it)
     cast: [
       { id: 'great-hall', at: [0, -15], face: 0 },
       { id: 'town-center', at: [-12, -12], face: 25 },
@@ -106,4 +106,4 @@ export const bands: BandCandidate[] = [
 ];
 
 /** The one on the card. */
-export const pick = 6;
+export const pick = 5;
