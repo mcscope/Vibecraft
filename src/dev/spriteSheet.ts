@@ -95,13 +95,35 @@ async function roster(params: URLSearchParams): Promise<void> {
  * back in the middle, the smaller in a crescent in front, in twos and threes when small, turned in toward the middle,
  * every other one mid-blow; fliers in the air above, their shadows on the ground.
  */
+async function soloStaging(faction: FactionSpec, params: URLSearchParams): Promise<BandCandidate> {
+  const THREE = await import('three'), { Builder } = await import('../kits/bake3d/builder'), { bakedPose } = await import('../kits/bake3d/baker');
+  const id = params.get('solo')!, anim = params.get('anim') ?? 'idle', phase = +(params.get('phase') ?? 0.3), face = +(params.get('face') ?? -40);
+  // its size, from the model itself: the camera stands back far enough to fit it
+  const unit = faction.units.find((u) => u.id === id) as UnitSpec & { model?: UnitModel }, g = new THREE.Group();
+  unit?.model?.(new Builder(teamOf(params), g), bakedPose(anim as never, phase, teamOf(params)));
+  g.rotation.y = (face * Math.PI) / 180 - Math.PI / 2; // (turned as the picture turns it)
+  g.updateMatrixWorld(true);
+  // (framed on its body: where most of its parts are, so a long whip or tail trailing off it doesn't pull the picture away)
+  const parts: Array<{ x: number; y: number; z: number }> = [];
+  g.traverse((o) => { if ((o as { isMesh?: boolean }).isMesh) parts.push(new THREE.Box3().setFromObject(o).getCenter(new THREE.Vector3())); });
+  const span = (k: 'x' | 'y' | 'z') => { const v = parts.map((p) => p[k]).sort((a, b) => a - b); return [v[Math.floor(v.length * 0.1)], v[Math.ceil(v.length * 0.9) - 1]]; };
+  const full = new THREE.Box3().setFromObject(g), [x0, x1] = span('x'), [z0, z1] = span('z');
+  const mid = (k: 'x' | 'y' | 'z') => parts.map((p) => p[k]).sort((a, b) => a - b)[parts.length >> 1];
+  const c = new THREE.Vector3(mid('x'), Math.max(mid('y'), (full.min.y + full.max.y) / 2), mid('z')), h = Math.max(0.3, full.max.y - full.min.y);
+  const r = Math.max(h, (x1 - x0) * 1.3, (z1 - z0) * 1.3), d = (r * 1.7 + 0.3) / +(params.get('zoom') ?? 1); // (&zoom=2: twice as close)
+  return { sky: ['#8ea8c2', '#f7e8c8'], camera: { from: [c.x, Math.max(0.1, h * 0.18), c.z + d], to: [c.x, c.y, c.z], fov: 34 }, cast: [{ id, at: [0, 0], face, anim, phase }] };
+}
+
 async function pose(params: URLSearchParams): Promise<void> {
   const faction = PLAYABLE.find((f) => f.id === params.get('faction'));
   if (!faction?.art) return;
   const team = teamOf(params), W = 960, H = 720, HORIZON = H * 0.5;
   // a faction that stages its own picture (its band.ts): that, shot in 3D
   const m = await BAND_MODULES[`../factions/${faction.id}/band.ts`]?.(), take = +(params.get('take') ?? m?.pick ?? 1);
-  const staged = m?.bands?.[take - 1];
+  // &solo=<id>: one unit alone, from low down and in front, three-quarters on (&face=<deg>, &anim=, &phase=, &zoom=): its
+  // underside, front and legs, for checking a body reads from any angle
+  const solo = params.get('solo') ? await soloStaging(faction, params) : null;
+  const staged = solo ?? m?.bands?.[take - 1];
   if (params.get('take') && !staged) { document.title = 'sprites ready: none'; return; } // (no such candidate)
   if (staged && staged !== 'line-up') {
     const { renderBand } = await import('./bandScene');
